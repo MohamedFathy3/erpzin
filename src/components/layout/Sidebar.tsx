@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useSidebarContext } from '@/contexts/SidebarContext';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -49,7 +50,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
   const { t, direction } = useLanguage();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, toggle } = useSidebarContext();
 
   const navItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('nav.dashboard') },
@@ -74,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   return (
     <aside
       className={cn(
-        'h-screen bg-sidebar flex flex-col transition-all duration-300 relative',
+        'h-screen bg-sidebar flex flex-col transition-all duration-300 relative flex-shrink-0',
         collapsed ? 'w-[72px]' : 'w-64'
       )}
       style={{ background: 'linear-gradient(180deg, hsl(217 47% 14%) 0%, hsl(217 47% 10%) 100%)' }}
@@ -99,10 +100,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
 
       {/* Collapse Button */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={toggle}
         className={cn(
-          'absolute top-20 -right-3 w-6 h-6 rounded-full bg-primary flex items-center justify-center',
-          'text-primary-foreground shadow-md hover:bg-primary/90 transition-colors z-10'
+          'absolute top-20 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center',
+          'text-primary-foreground shadow-md hover:bg-primary/90 transition-colors',
+          direction === 'rtl' ? '-left-3' : '-right-3'
         )}
       >
         <CollapseIcon size={14} />
