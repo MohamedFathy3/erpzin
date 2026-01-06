@@ -143,10 +143,12 @@ export type Database = {
           default_currency: string | null
           email: string | null
           id: string
+          logo_icon_url: string | null
           logo_url: string | null
           name: string
           name_ar: string | null
           phone: string | null
+          phones: string[] | null
           tax_number: string | null
           tax_rate: number | null
           updated_at: string
@@ -159,10 +161,12 @@ export type Database = {
           default_currency?: string | null
           email?: string | null
           id?: string
+          logo_icon_url?: string | null
           logo_url?: string | null
           name?: string
           name_ar?: string | null
           phone?: string | null
+          phones?: string[] | null
           tax_number?: string | null
           tax_rate?: number | null
           updated_at?: string
@@ -175,10 +179,12 @@ export type Database = {
           default_currency?: string | null
           email?: string | null
           id?: string
+          logo_icon_url?: string | null
           logo_url?: string | null
           name?: string
           name_ar?: string | null
           phone?: string | null
+          phones?: string[] | null
           tax_number?: string | null
           tax_rate?: number | null
           updated_at?: string
