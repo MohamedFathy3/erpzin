@@ -226,15 +226,15 @@ const Inventory: React.FC = () => {
                 {language === 'ar' ? 'إدارة المخزون' : 'Stock Management'}
               </span>
               <TabsList className="h-9 bg-muted/50 p-1">
-                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
                   <ArrowRightLeft size={14} />
                   {language === 'ar' ? 'التحويلات' : 'Transfers'}
                 </TabsTrigger>
-                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
                   <ClipboardList size={14} />
                   {language === 'ar' ? 'الجرد' : 'Count'}
                 </TabsTrigger>
-                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
                   <Wallet size={14} />
                   {language === 'ar' ? 'أول المدة' : 'Opening'}
                 </TabsTrigger>
@@ -247,15 +247,15 @@ const Inventory: React.FC = () => {
                 {language === 'ar' ? 'التقارير والمراقبة' : 'Reports & Monitoring'}
               </span>
               <TabsList className="h-9 bg-muted/50 p-1">
-                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
                   <BarChart3 size={14} />
                   {language === 'ar' ? 'التقارير' : 'Reports'}
                 </TabsTrigger>
-                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
                   <ArrowUpDown size={14} />
                   {language === 'ar' ? 'الحركات' : 'Movements'}
                 </TabsTrigger>
-                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
                   <Bell size={14} />
                   {language === 'ar' ? 'التنبيهات' : 'Alerts'}
                 </TabsTrigger>
@@ -391,13 +391,27 @@ const Inventory: React.FC = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="transfers" className="flex-1 mt-4"><StockTransfer /></TabsContent>
-          <TabsContent value="reports" className="flex-1 mt-4"><InventoryReports /></TabsContent>
-          <TabsContent value="alerts" className="flex-1 mt-4"><LowStockAlerts /></TabsContent>
-          <TabsContent value="count" className="flex-1 mt-4"><InventoryCount /></TabsContent>
-          <TabsContent value="movements" className="flex-1 mt-4"><InventoryMovements /></TabsContent>
-          <TabsContent value="opening" className="flex-1 mt-4"><OpeningBalances /></TabsContent>
-          <TabsContent value="import" className="flex-1 mt-4"><ExcelImport /></TabsContent>
+          <TabsContent value="transfers" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><StockTransfer /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="reports" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryReports /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="alerts" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><LowStockAlerts /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="count" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryCount /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="movements" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryMovements /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="opening" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><OpeningBalances /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="import" className="flex-1 mt-4">
+            <Card className="shadow-md border-border"><CardContent className="p-4"><ExcelImport /></CardContent></Card>
+          </TabsContent>
           <TabsContent value="variants" className="flex-1 mt-0"><SizeColorManager /></TabsContent>
         </Tabs>
       </div>
