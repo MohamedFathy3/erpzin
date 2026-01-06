@@ -174,6 +174,36 @@ export type Database = {
           },
         ]
       }
+      colors: {
+        Row: {
+          code: string
+          created_at: string
+          hex_code: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          hex_code?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          hex_code?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+        }
+        Relationships: []
+      }
       company_settings: {
         Row: {
           address: string | null
@@ -677,12 +707,83 @@ export type Database = {
         }
         Relationships: []
       }
+      product_variants: {
+        Row: {
+          barcode: string | null
+          color_id: string | null
+          cost_adjustment: number | null
+          created_at: string
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          price_adjustment: number | null
+          product_id: string
+          size_id: string | null
+          sku: string
+          stock: number
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          color_id?: string | null
+          cost_adjustment?: number | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          price_adjustment?: number | null
+          product_id: string
+          size_id?: string | null
+          sku: string
+          stock?: number
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          color_id?: string | null
+          cost_adjustment?: number | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          price_adjustment?: number | null
+          product_id?: string
+          size_id?: string | null
+          sku?: string
+          stock?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_color_id_fkey"
+            columns: ["color_id"]
+            isOneToOne: false
+            referencedRelation: "colors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_size_id_fkey"
+            columns: ["size_id"]
+            isOneToOne: false
+            referencedRelation: "sizes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           barcode: string | null
           category_id: string | null
           cost: number | null
           created_at: string
+          has_variants: boolean | null
           id: string
           image_url: string | null
           is_active: boolean | null
@@ -699,6 +800,7 @@ export type Database = {
           category_id?: string | null
           cost?: number | null
           created_at?: string
+          has_variants?: boolean | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
@@ -715,6 +817,7 @@ export type Database = {
           category_id?: string | null
           cost?: number | null
           created_at?: string
+          has_variants?: boolean | null
           id?: string
           image_url?: string | null
           is_active?: boolean | null
@@ -981,6 +1084,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sizes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+          sort_order?: number | null
+        }
+        Relationships: []
       }
       stock_transfer_items: {
         Row: {
