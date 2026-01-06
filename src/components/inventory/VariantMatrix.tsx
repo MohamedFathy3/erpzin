@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useSizes, useColors, Size, Color } from '@/hooks/useVariantData';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, Barcode } from 'lucide-react';
 
 export interface VariantOption {
   id: string;
@@ -19,7 +21,9 @@ export interface ProductVariant {
   sizeId: string;
   sku: string;
   barcode: string;
+  customBarcode: boolean;
   stock: number;
+  cost: number;
   price: number;
   enabled: boolean;
 }
@@ -28,6 +32,7 @@ interface VariantMatrixProps {
   variants: ProductVariant[];
   baseSku: string;
   basePrice: number;
+  baseCost: number;
   onVariantChange: (variants: ProductVariant[]) => void;
   selectedSizes?: string[];
   selectedColors?: string[];
@@ -47,6 +52,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   variants,
   baseSku,
   basePrice,
+  baseCost,
   onVariantChange,
   selectedSizes = [],
   selectedColors = [],
@@ -98,7 +104,9 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
         sizeId,
         sku: generateSKU(baseSku, color?.value || '', size?.value || ''),
         barcode: generateBarcode(),
+        customBarcode: false,
         stock: 0,
+        cost: baseCost,
         price: basePrice,
         enabled: true
       };
@@ -119,6 +127,30 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     onVariantChange(variants.map(v =>
       v.colorId === colorId && v.sizeId === sizeId
         ? { ...v, price }
+        : v
+    ));
+  };
+
+  const updateVariantCost = (colorId: string, sizeId: string, cost: number) => {
+    onVariantChange(variants.map(v =>
+      v.colorId === colorId && v.sizeId === sizeId
+        ? { ...v, cost }
+        : v
+    ));
+  };
+
+  const updateVariantBarcode = (colorId: string, sizeId: string, barcode: string, customBarcode: boolean) => {
+    onVariantChange(variants.map(v =>
+      v.colorId === colorId && v.sizeId === sizeId
+        ? { ...v, barcode, customBarcode }
+        : v
+    ));
+  };
+
+  const regenerateVariantBarcode = (colorId: string, sizeId: string) => {
+    onVariantChange(variants.map(v =>
+      v.colorId === colorId && v.sizeId === sizeId
+        ? { ...v, barcode: generateBarcode(), customBarcode: false }
         : v
     ));
   };
@@ -285,6 +317,57 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                             
                             {isEnabled && variant && (
                               <div className="space-y-2">
+                                {/* Barcode */}
+                                <div>
+                                  <label className="text-xs text-muted-foreground">
+                                    {language === 'ar' ? 'الباركود' : 'Barcode'}
+                                  </label>
+                                  <div className="flex gap-1">
+                                    <Input
+                                      type="text"
+                                      value={variant.barcode}
+                                      onChange={(e) => updateVariantBarcode(color.id, size.id, e.target.value, true)}
+                                      className="h-8 text-center font-mono text-xs"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-8 w-8 shrink-0"
+                                      onClick={() => regenerateVariantBarcode(color.id, size.id)}
+                                      title={language === 'ar' ? 'توليد باركود جديد' : 'Generate new barcode'}
+                                    >
+                                      <RefreshCw size={12} />
+                                    </Button>
+                                  </div>
+                                </div>
+                                {/* Cost */}
+                                <div>
+                                  <label className="text-xs text-muted-foreground">
+                                    {language === 'ar' ? 'التكلفة' : 'Cost'}
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={variant.cost}
+                                    onChange={(e) => updateVariantCost(color.id, size.id, parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-center"
+                                    min={0}
+                                  />
+                                </div>
+                                {/* Price */}
+                                <div>
+                                  <label className="text-xs text-muted-foreground">
+                                    {language === 'ar' ? 'سعر البيع' : 'Selling Price'}
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={variant.price}
+                                    onChange={(e) => updateVariantPrice(color.id, size.id, parseFloat(e.target.value) || 0)}
+                                    className="h-8 text-center"
+                                    min={0}
+                                  />
+                                </div>
+                                {/* Stock */}
                                 <div>
                                   <label className="text-xs text-muted-foreground">
                                     {language === 'ar' ? 'المخزون' : 'Stock'}
@@ -296,21 +379,6 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                                     className="h-8 text-center"
                                     min={0}
                                   />
-                                </div>
-                                <div>
-                                  <label className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'السعر' : 'Price'}
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    value={variant.price}
-                                    onChange={(e) => updateVariantPrice(color.id, size.id, parseFloat(e.target.value) || 0)}
-                                    className="h-8 text-center"
-                                    min={0}
-                                  />
-                                </div>
-                                <div className="text-xs text-muted-foreground text-center">
-                                  {variant.barcode}
                                 </div>
                               </div>
                             )}
