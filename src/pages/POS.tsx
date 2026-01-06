@@ -8,6 +8,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useCategories, useProducts, Product } from '@/hooks/usePOSData';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import POSProductGrid from '@/components/pos/POSProductGrid';
 import POSCart from '@/components/pos/POSCart';
 import POSPaymentModal from '@/components/pos/POSPaymentModal';
@@ -58,6 +59,7 @@ interface DeliveryPerson {
 
 const POS: React.FC = () => {
   const { language, t } = useLanguage();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -309,6 +311,11 @@ const POS: React.FC = () => {
     });
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
+
   const isLoading = categoriesLoading || productsLoading;
 
   return (
@@ -421,7 +428,12 @@ const POS: React.FC = () => {
               <Home size={20} />
             </Button>
           </Link>
-          <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleLogout}
+            className="text-white/80 hover:text-white hover:bg-white/10"
+          >
             <LogOut size={20} />
           </Button>
         </div>
