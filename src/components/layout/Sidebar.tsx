@@ -83,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     >
       {/* Logo */}
       <div className={cn(
-        'flex items-center p-4 border-b border-sidebar-border',
+        'flex items-center p-4 border-b border-sidebar-border bg-white',
         collapsed ? 'justify-center' : 'justify-center'
       )}>
         {collapsed ? (
