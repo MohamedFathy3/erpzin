@@ -13,10 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, RotateCcw, Eye, Filter, ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
+import { Search, RotateCcw, Eye, FileText, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 import SalesReturnForm from "./SalesReturnForm";
 
 interface ReturnItem {
@@ -35,7 +35,7 @@ interface ReturnItem {
 const SalesReturns = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const [showFilters, setShowFilters] = useState(false);
+  
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [showNewReturnForm, setShowNewReturnForm] = useState(false);
@@ -426,117 +426,8 @@ const SalesReturns = () => {
                   <Search className="h-4 w-4 mr-2" />
                   {language === 'ar' ? 'بحث' : 'Search'}
                 </Button>
-                <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
-                  <Filter className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'فلاتر' : 'Filters'}
-                  {showFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
-                </Button>
               </div>
             </div>
-
-            {/* Advanced Filters */}
-            <Collapsible open={showFilters}>
-              <CollapsibleContent className="mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t">
-                  <div>
-                    <Label>{language === 'ar' ? 'اسم العميل' : 'Customer Name'}</Label>
-                    <Input
-                      value={filters.customerName}
-                      onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
-                      placeholder={language === 'ar' ? 'ابحث باسم العميل' : 'Search by name'}
-                    />
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</Label>
-                    <Input
-                      value={filters.customerPhone}
-                      onChange={(e) => setFilters({ ...filters, customerPhone: e.target.value })}
-                      placeholder={language === 'ar' ? 'رقم الهاتف' : 'Phone number'}
-                    />
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
-                    <Select value={filters.branchId} onValueChange={(value) => setFilters({ ...filters, branchId: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={language === 'ar' ? 'جميع الفروع' : 'All Branches'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{language === 'ar' ? 'جميع الفروع' : 'All Branches'}</SelectItem>
-                        {branches?.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'المخزن' : 'Warehouse'}</Label>
-                    <Select value={filters.warehouseId} onValueChange={(value) => setFilters({ ...filters, warehouseId: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={language === 'ar' ? 'جميع المخازن' : 'All Warehouses'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}</SelectItem>
-                        {warehouses?.map((wh) => (
-                          <SelectItem key={wh.id} value={wh.id}>
-                            {language === 'ar' ? wh.name_ar || wh.name : wh.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'نوع الفاتورة' : 'Invoice Type'}</Label>
-                    <Select value={filters.invoiceType} onValueChange={(value) => setFilters({ ...filters, invoiceType: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={language === 'ar' ? 'جميع الأنواع' : 'All Types'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{language === 'ar' ? 'جميع الأنواع' : 'All Types'}</SelectItem>
-                        <SelectItem value="standard">{language === 'ar' ? 'قياسية' : 'Standard'}</SelectItem>
-                        <SelectItem value="pos">{language === 'ar' ? 'نقاط البيع' : 'POS'}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'حالة الدفع' : 'Payment Status'}</Label>
-                    <Select value={filters.paymentStatus} onValueChange={(value) => setFilters({ ...filters, paymentStatus: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={language === 'ar' ? 'جميع الحالات' : 'All Statuses'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</SelectItem>
-                        <SelectItem value="paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</SelectItem>
-                        <SelectItem value="pending">{language === 'ar' ? 'معلق' : 'Pending'}</SelectItem>
-                        <SelectItem value="partial">{language === 'ar' ? 'جزئي' : 'Partial'}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'من تاريخ' : 'From Date'}</Label>
-                    <Input
-                      type="date"
-                      value={filters.dateFrom}
-                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>{language === 'ar' ? 'إلى تاريخ' : 'To Date'}</Label>
-                    <Input
-                      type="date"
-                      value={filters.dateTo}
-                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end mt-4">
-                  <Button variant="ghost" onClick={clearFilters}>
-                    {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
-                  </Button>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
           </CardContent>
         </Card>
 
