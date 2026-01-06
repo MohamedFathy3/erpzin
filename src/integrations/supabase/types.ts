@@ -718,6 +718,239 @@ export type Database = {
           },
         ]
       }
+      pos_return_items: {
+        Row: {
+          created_at: string
+          id: string
+          original_sale_item_id: string | null
+          product_id: string | null
+          product_name: string
+          product_variant_id: string | null
+          quantity: number
+          reason: string | null
+          return_id: string
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_sale_item_id?: string | null
+          product_id?: string | null
+          product_name: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id: string
+          total_price?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_sale_item_id?: string | null
+          product_id?: string | null
+          product_name?: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id?: string
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_return_items_original_sale_item_id_fkey"
+            columns: ["original_sale_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_return_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_return_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_return_items_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "pos_returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_returns: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          notes: string | null
+          original_invoice_number: string | null
+          original_sale_id: string | null
+          processed_by: string | null
+          reason: string | null
+          refund_method: string | null
+          return_date: string
+          return_number: string
+          return_type: string
+          shift_id: string | null
+          status: string
+          subtotal: number
+          tax_amount: number | null
+          total_amount: number
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          notes?: string | null
+          original_invoice_number?: string | null
+          original_sale_id?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          return_date?: string
+          return_number: string
+          return_type?: string
+          shift_id?: string | null
+          status?: string
+          subtotal?: number
+          tax_amount?: number | null
+          total_amount?: number
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          notes?: string | null
+          original_invoice_number?: string | null
+          original_sale_id?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          return_date?: string
+          return_number?: string
+          return_type?: string
+          shift_id?: string | null
+          status?: string
+          subtotal?: number
+          tax_amount?: number | null
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_returns_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_returns_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_returns_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "pos_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_shifts: {
+        Row: {
+          branch_id: string | null
+          card_sales: number | null
+          cash_sales: number | null
+          cashier_id: string | null
+          closed_at: string | null
+          closing_amount: number | null
+          created_at: string
+          expected_amount: number | null
+          id: string
+          notes: string | null
+          opened_at: string
+          opening_amount: number
+          other_sales: number | null
+          shift_number: string
+          status: string
+          total_returns: number | null
+          total_sales: number | null
+          transactions_count: number | null
+          updated_at: string
+          variance: number | null
+          variance_notes: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          card_sales?: number | null
+          cash_sales?: number | null
+          cashier_id?: string | null
+          closed_at?: string | null
+          closing_amount?: number | null
+          created_at?: string
+          expected_amount?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_amount?: number
+          other_sales?: number | null
+          shift_number: string
+          status?: string
+          total_returns?: number | null
+          total_sales?: number | null
+          transactions_count?: number | null
+          updated_at?: string
+          variance?: number | null
+          variance_notes?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          card_sales?: number | null
+          cash_sales?: number | null
+          cashier_id?: string | null
+          closed_at?: string | null
+          closing_amount?: number | null
+          created_at?: string
+          expected_amount?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_amount?: number
+          other_sales?: number | null
+          shift_number?: string
+          status?: string
+          total_returns?: number | null
+          total_sales?: number | null
+          transactions_count?: number | null
+          updated_at?: string
+          variance?: number | null
+          variance_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_shifts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_imports: {
         Row: {
           completed_at: string | null
@@ -1763,6 +1996,8 @@ export type Database = {
       generate_count_number: { Args: never; Returns: string }
       generate_payment_number: { Args: never; Returns: string }
       generate_purchase_invoice_number: { Args: never; Returns: string }
+      generate_return_number: { Args: never; Returns: string }
+      generate_shift_number: { Args: never; Returns: string }
       generate_transfer_number: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
