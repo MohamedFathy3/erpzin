@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
 import CategoryManager from '@/components/inventory/CategoryManager';
@@ -16,10 +16,14 @@ import SizeColorManager from '@/components/inventory/SizeColorManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+
+const ITEMS_PER_PAGE = 10;
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
@@ -31,14 +35,33 @@ const Inventory: React.FC = () => {
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
   const [selectedProductForPrint, setSelectedProductForPrint] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [stockFilter, setStockFilter] = useState<string>('all');
+  const [priceRange, setPriceRange] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('*, categories(name, name_ar)')
+        .select('*, categories(id, name, name_ar)')
         .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories-filter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, name_ar')
+        .order('name');
       if (error) throw error;
       return data;
     }
@@ -52,21 +75,72 @@ const Inventory: React.FC = () => {
     barcode: p.barcode,
     category: p.categories?.name || 'Uncategorized',
     categoryAr: p.categories?.name_ar || 'غير مصنف',
+    categoryId: p.categories?.id || '',
     price: Number(p.price),
     cost: Number(p.cost || 0),
     stock: p.stock,
     variants: 0,
+    image: p.image_url,
     status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active'
   }));
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = searchQuery === '' ||
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.nameAr.includes(searchQuery) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.barcode && product.barcode.includes(searchQuery));
-    return matchesSearch;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      // Search filter
+      const matchesSearch = searchQuery === '' ||
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.nameAr.includes(searchQuery) ||
+        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (product.barcode && product.barcode.includes(searchQuery));
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
+
+      // Stock filter
+      let matchesStock = true;
+      if (stockFilter === 'in_stock') matchesStock = product.stock > 10;
+      else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
+      else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
+
+      // Price range filter
+      let matchesPrice = true;
+      if (priceRange === '0-10000') matchesPrice = product.price <= 10000;
+      else if (priceRange === '10000-50000') matchesPrice = product.price > 10000 && product.price <= 50000;
+      else if (priceRange === '50000-100000') matchesPrice = product.price > 50000 && product.price <= 100000;
+      else if (priceRange === '100000+') matchesPrice = product.price > 100000;
+
+      // Category filter
+      const matchesCategory = categoryFilter === 'all' || (product as any).categoryId === categoryFilter;
+
+      return matchesSearch && matchesStatus && matchesStock && matchesPrice && matchesCategory;
+    });
+  }, [products, searchQuery, statusFilter, stockFilter, priceRange, categoryFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, stockFilter, priceRange, categoryFilter]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setStockFilter('all');
+    setPriceRange('all');
+    setCategoryFilter('all');
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || priceRange !== 'all' || categoryFilter !== 'all' || searchQuery !== '';
 
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
   const handleEditProduct = (product: Product) => {
@@ -120,24 +194,119 @@ const Inventory: React.FC = () => {
           </TabsList>
 
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
+            {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
               <Button variant="outline" size="sm" onClick={() => setShowBarcodeScanner(true)}><ScanBarcode size={16} className="me-2" />{language === 'ar' ? 'مسح الباركود' : 'Scan'}</Button>
               <Button variant="outline" size="sm" onClick={() => { setSelectedProductForPrint(null); setShowBarcodePrinter(true); }}><Printer size={16} className="me-2" />{language === 'ar' ? 'طباعة' : 'Print'}</Button>
               <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
             </div>
+
+            {/* Filters Card */}
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Filter size={18} className="text-muted-foreground" />
+                  <span className="font-medium text-foreground">{language === 'ar' ? 'تصفية المنتجات' : 'Filter Products'}</span>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="ms-auto text-destructive hover:text-destructive">
+                      <X size={14} className="me-1" />
+                      {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {/* Search */}
+                  <div className="col-span-2 md:col-span-1">
+                    <div className="relative">
+                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                      <Input 
+                        placeholder={language === 'ar' ? 'بحث...' : 'Search...'} 
+                        value={searchQuery} 
+                        onChange={(e) => setSearchQuery(e.target.value)} 
+                        className="ps-9 h-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Category Filter */}
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={language === 'ar' ? 'التصنيف' : 'Category'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'ar' ? 'جميع التصنيفات' : 'All Categories'}</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {language === 'ar' ? cat.name_ar || cat.name : cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Status Filter */}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={language === 'ar' ? 'الحالة' : 'Status'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'ar' ? 'جميع الحالات' : 'All Status'}</SelectItem>
+                      <SelectItem value="active">{language === 'ar' ? 'نشط' : 'Active'}</SelectItem>
+                      <SelectItem value="inactive">{language === 'ar' ? 'غير نشط' : 'Inactive'}</SelectItem>
+                      <SelectItem value="low_stock">{language === 'ar' ? 'مخزون منخفض' : 'Low Stock'}</SelectItem>
+                      <SelectItem value="out_of_stock">{language === 'ar' ? 'نفذ المخزون' : 'Out of Stock'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Stock Filter */}
+                  <Select value={stockFilter} onValueChange={setStockFilter}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={language === 'ar' ? 'المخزون' : 'Stock'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'ar' ? 'جميع المخزون' : 'All Stock'}</SelectItem>
+                      <SelectItem value="in_stock">{language === 'ar' ? 'متوفر (+10)' : 'In Stock (+10)'}</SelectItem>
+                      <SelectItem value="low_stock">{language === 'ar' ? 'منخفض (1-10)' : 'Low (1-10)'}</SelectItem>
+                      <SelectItem value="out_of_stock">{language === 'ar' ? 'نفذ (0)' : 'Out (0)'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Price Range Filter */}
+                  <Select value={priceRange} onValueChange={setPriceRange}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={language === 'ar' ? 'السعر' : 'Price'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'ar' ? 'جميع الأسعار' : 'All Prices'}</SelectItem>
+                      <SelectItem value="0-10000">{language === 'ar' ? 'أقل من 10,000' : 'Under 10,000'}</SelectItem>
+                      <SelectItem value="10000-50000">10,000 - 50,000</SelectItem>
+                      <SelectItem value="50000-100000">50,000 - 100,000</SelectItem>
+                      <SelectItem value="100000+">{language === 'ar' ? 'أكثر من 100,000' : 'Over 100,000'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Products Grid */}
             <div className="flex-1 flex gap-4 min-h-0">
               <div className="w-64 flex-shrink-0 hidden lg:block">
                 <CategoryManager selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
               </div>
               <div className="flex-1 flex flex-col min-w-0">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                    <Input placeholder={language === 'ar' ? 'بحث...' : 'Search...'} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-10" />
-                  </div>
-                </div>
                 <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
-                  <ProductList products={filteredProducts} onEdit={handleEditProduct} onDelete={handleDeleteProduct} onDuplicate={handleDuplicateProduct} onView={handleViewProduct} onPrintBarcode={handlePrintBarcode} />
+                  <ProductList 
+                    products={paginatedProducts} 
+                    onEdit={handleEditProduct} 
+                    onDelete={handleDeleteProduct} 
+                    onDuplicate={handleDuplicateProduct} 
+                    onView={handleViewProduct} 
+                    onPrintBarcode={handlePrintBarcode}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    totalProducts={filteredProducts.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                  />
                 </div>
               </div>
             </div>
