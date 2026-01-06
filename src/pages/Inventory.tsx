@@ -6,6 +6,7 @@ import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
 import ProductVariantsModal from '@/components/inventory/ProductVariantsModal';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
+import BarcodePrintingCenter from '@/components/inventory/BarcodePrintingCenter';
 import StockTransfer from '@/components/inventory/StockTransfer';
 import InventoryReports from '@/components/inventory/InventoryReports';
 import LowStockAlerts from '@/components/inventory/LowStockAlerts';
@@ -19,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X } from 'lucide-react';
+import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -204,16 +205,20 @@ const Inventory: React.FC = () => {
               <span className="text-xs font-medium text-muted-foreground px-1">
                 {language === 'ar' ? 'المنتجات' : 'Products'}
               </span>
-              <TabsList className="h-9 bg-muted/50 p-1">
-                <TabsTrigger value="products" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <TabsList className="h-10 bg-muted/60 p-1 rounded-lg shadow-sm">
+                <TabsTrigger value="products" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <Package size={14} />
-                  {language === 'ar' ? 'قائمة المنتجات' : 'Product List'}
+                  {language === 'ar' ? 'قائمة المنتجات' : 'Products'}
                 </TabsTrigger>
-                <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <Palette size={14} />
-                  {language === 'ar' ? 'المقاسات والألوان' : 'Sizes & Colors'}
+                  {language === 'ar' ? 'المقاسات والألوان' : 'Variants'}
                 </TabsTrigger>
-                <TabsTrigger value="import" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="barcode" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
+                  <Tag size={14} />
+                  {language === 'ar' ? 'طباعة الباركود' : 'Barcode'}
+                </TabsTrigger>
+                <TabsTrigger value="import" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <FileSpreadsheet size={14} />
                   {language === 'ar' ? 'استيراد' : 'Import'}
                 </TabsTrigger>
@@ -225,16 +230,16 @@ const Inventory: React.FC = () => {
               <span className="text-xs font-medium text-muted-foreground px-1">
                 {language === 'ar' ? 'إدارة المخزون' : 'Stock Management'}
               </span>
-              <TabsList className="h-9 bg-muted/50 p-1">
-                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
+              <TabsList className="h-10 bg-emerald-50/80 dark:bg-emerald-950/30 p-1 rounded-lg shadow-sm">
+                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <ArrowRightLeft size={14} />
                   {language === 'ar' ? 'التحويلات' : 'Transfers'}
                 </TabsTrigger>
-                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
+                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <ClipboardList size={14} />
                   {language === 'ar' ? 'الجرد' : 'Count'}
                 </TabsTrigger>
-                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
+                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <Wallet size={14} />
                   {language === 'ar' ? 'أول المدة' : 'Opening'}
                 </TabsTrigger>
@@ -246,16 +251,16 @@ const Inventory: React.FC = () => {
               <span className="text-xs font-medium text-muted-foreground px-1">
                 {language === 'ar' ? 'التقارير والمراقبة' : 'Reports & Monitoring'}
               </span>
-              <TabsList className="h-9 bg-muted/50 p-1">
-                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
+              <TabsList className="h-10 bg-violet-50/80 dark:bg-violet-950/30 p-1 rounded-lg shadow-sm">
+                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <BarChart3 size={14} />
                   {language === 'ar' ? 'التقارير' : 'Reports'}
                 </TabsTrigger>
-                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
+                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <ArrowUpDown size={14} />
                   {language === 'ar' ? 'الحركات' : 'Movements'}
                 </TabsTrigger>
-                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
+                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <Bell size={14} />
                   {language === 'ar' ? 'التنبيهات' : 'Alerts'}
                 </TabsTrigger>
@@ -413,6 +418,9 @@ const Inventory: React.FC = () => {
             <Card className="shadow-md border-border"><CardContent className="p-4"><ExcelImport /></CardContent></Card>
           </TabsContent>
           <TabsContent value="variants" className="flex-1 mt-0"><SizeColorManager /></TabsContent>
+          <TabsContent value="barcode" className="flex-1 mt-4">
+            <BarcodePrintingCenter />
+          </TabsContent>
         </Tabs>
       </div>
 
