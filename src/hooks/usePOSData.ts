@@ -19,6 +19,7 @@ export interface Product {
   category_id: string | null;
   image_url: string | null;
   is_active: boolean | null;
+  has_variants: boolean | null;
 }
 
 export const useCategories = () => {
@@ -42,7 +43,7 @@ export const useProducts = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, name_ar, sku, barcode, price, stock, category_id, image_url, is_active')
+        .select('id, name, name_ar, sku, barcode, price, stock, category_id, image_url, is_active, has_variants')
         .eq('is_active', true)
         .order('name');
       
