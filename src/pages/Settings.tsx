@@ -35,10 +35,12 @@ import {
   Upload,
   X,
   Image,
-  Warehouse
+  Warehouse,
+  Cog
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
+import ModuleSettings from '@/components/settings/ModuleSettings';
 
 const Settings = () => {
   const { language, direction, setLanguage } = useLanguage();
@@ -311,7 +313,7 @@ const Settings = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
             <TabsTrigger value="company" className="flex items-center gap-2">
               <Building2 size={16} />
               <span className="hidden sm:inline">{t.company}</span>
@@ -319,6 +321,10 @@ const Settings = () => {
             <TabsTrigger value="branches" className="flex items-center gap-2">
               <Store size={16} />
               <span className="hidden sm:inline">{t.branches}</span>
+            </TabsTrigger>
+            <TabsTrigger value="modules" className="flex items-center gap-2">
+              <Cog size={16} />
+              <span className="hidden sm:inline">{language === 'ar' ? 'الموديولات' : 'Modules'}</span>
             </TabsTrigger>
             <TabsTrigger value="currency" className="flex items-center gap-2">
               <DollarSign size={16} />
@@ -628,6 +634,11 @@ const Settings = () => {
           {/* Branches & Warehouses Tab */}
           <TabsContent value="branches" className="mt-6">
             <BranchesWarehouses />
+          </TabsContent>
+
+          {/* Module Settings Tab */}
+          <TabsContent value="modules" className="mt-6">
+            <ModuleSettings />
           </TabsContent>
 
           {/* Currency & Taxes Tab */}
