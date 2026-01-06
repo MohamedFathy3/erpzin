@@ -398,7 +398,7 @@ const Inventory: React.FC = () => {
           <TabsContent value="movements" className="flex-1 mt-4"><InventoryMovements /></TabsContent>
           <TabsContent value="opening" className="flex-1 mt-4"><OpeningBalances /></TabsContent>
           <TabsContent value="import" className="flex-1 mt-4"><ExcelImport /></TabsContent>
-          <TabsContent value="variants" className="flex-1 mt-4"><SizeColorManager /></TabsContent>
+          <TabsContent value="variants" className="flex-1 mt-0"><SizeColorManager /></TabsContent>
         </Tabs>
       </div>
 
