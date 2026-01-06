@@ -62,10 +62,13 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
                 src={product.image} 
                 alt={language === 'ar' ? product.nameAr : product.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
               />
-            ) : (
-              <div className="text-4xl text-muted-foreground/30">👕</div>
-            )}
+            ) : null}
+            <div className={cn("text-4xl text-muted-foreground/30", product.image && "hidden")}>👕</div>
           </div>
           
           {/* Stock Badge */}
@@ -87,7 +90,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
             </p>
             <p className="text-xs text-muted-foreground mt-1">{product.sku}</p>
             <p className="font-bold text-primary mt-2 text-base">
-              {product.price.toLocaleString()} <span className="text-xs">YER</span>
+              {product.price.toLocaleString()} <span className="text-xs">SAR</span>
             </p>
           </div>
         </button>
