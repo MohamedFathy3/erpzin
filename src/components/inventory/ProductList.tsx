@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Edit2, Trash2, Copy, Eye, MoreVertical, Package } from 'lucide-react';
+import { Edit2, Trash2, Copy, Eye, MoreVertical, Package, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ export interface Product {
   name: string;
   nameAr: string;
   sku: string;
+  barcode?: string;
   category: string;
   categoryAr: string;
   price: number;
@@ -32,6 +33,7 @@ interface ProductListProps {
   onDelete: (productId: string) => void;
   onDuplicate: (product: Product) => void;
   onView: (product: Product) => void;
+  onPrintBarcode?: (product: Product) => void;
 }
 
 const ProductList: React.FC<ProductListProps> = ({
@@ -39,7 +41,8 @@ const ProductList: React.FC<ProductListProps> = ({
   onEdit,
   onDelete,
   onDuplicate,
-  onView
+  onView,
+  onPrintBarcode
 }) => {
   const { language } = useLanguage();
 
@@ -77,7 +80,7 @@ const ProductList: React.FC<ProductListProps> = ({
               {language === 'ar' ? 'المنتج' : 'Product'}
             </th>
             <th className="text-start p-4 font-medium text-muted-foreground">
-              {language === 'ar' ? 'SKU' : 'SKU'}
+              {language === 'ar' ? 'SKU / الباركود' : 'SKU / Barcode'}
             </th>
             <th className="text-start p-4 font-medium text-muted-foreground">
               {language === 'ar' ? 'التصنيف' : 'Category'}
@@ -128,9 +131,16 @@ const ProductList: React.FC<ProductListProps> = ({
                   </div>
                 </td>
                 <td className="p-4">
-                  <code className="px-2 py-1 bg-muted rounded text-sm font-mono">
-                    {product.sku}
-                  </code>
+                  <div>
+                    <code className="px-2 py-1 bg-muted rounded text-sm font-mono">
+                      {product.sku}
+                    </code>
+                    {product.barcode && (
+                      <p className="text-xs text-muted-foreground mt-1 font-mono">
+                        {product.barcode}
+                      </p>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 text-muted-foreground">
                   {language === 'ar' ? product.categoryAr : product.category}
@@ -188,6 +198,12 @@ const ProductList: React.FC<ProductListProps> = ({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-popover border border-border z-50">
+                        {onPrintBarcode && (
+                          <DropdownMenuItem onClick={() => onPrintBarcode(product)}>
+                            <Printer size={14} className="me-2" />
+                            {language === 'ar' ? 'طباعة الباركود' : 'Print Barcode'}
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => onDuplicate(product)}>
                           <Copy size={14} className="me-2" />
                           {language === 'ar' ? 'نسخ' : 'Duplicate'}
