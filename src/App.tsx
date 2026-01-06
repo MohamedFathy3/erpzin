@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Purchasing from "./pages/Purchasing";
 import Sales from "./pages/Sales";
+import POS from "./pages/POS";
 import Finance from "./pages/Finance";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
@@ -31,6 +32,7 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
               <Route path="/purchasing" element={<ProtectedRoute><Purchasing /></ProtectedRoute>} />
               <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
