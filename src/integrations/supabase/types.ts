@@ -716,6 +716,62 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouses: {
+        Row: {
+          address: string | null
+          branch_id: string | null
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_main: boolean | null
+          manager_name: string | null
+          name: string
+          name_ar: string | null
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          manager_name?: string | null
+          name: string
+          name_ar?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          manager_name?: string | null
+          name?: string
+          name_ar?: string | null
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
