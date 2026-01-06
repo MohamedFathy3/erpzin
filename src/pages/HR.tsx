@@ -10,8 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
 import { 
   Plus, 
   Search, 
@@ -20,20 +22,53 @@ import {
   DollarSign,
   Calendar,
   UserCheck,
-  UserX,
-  Briefcase,
-  Building
+  Truck,
+  Building,
+  Phone
 } from 'lucide-react';
 
 const HR = () => {
   const { language, direction } = useLanguage();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('employees');
+  const [showEmployeeDialog, setShowEmployeeDialog] = useState(false);
+  const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    employee_code: '',
+    name: '',
+    name_ar: '',
+    position: '',
+    department: '',
+    phone: '',
+    email: '',
+    salary: ''
+  });
+  const [newDelivery, setNewDelivery] = useState({
+    name: '',
+    name_ar: '',
+    phone: '',
+    vehicle_type: '',
+    vehicle_number: ''
+  });
 
   // Fetch employees
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
       const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch delivery persons
+  const { data: deliveryPersons = [] } = useQuery({
+    queryKey: ['delivery-persons'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('delivery_persons')
+        .select('*, employees(name, name_ar)')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     }
@@ -53,16 +88,100 @@ const HR = () => {
     }
   });
 
+  // Add employee mutation
+  const addEmployeeMutation = useMutation({
+    mutationFn: async (employee: typeof newEmployee) => {
+      const { data, error } = await supabase
+        .from('employees')
+        .insert({
+          employee_code: employee.employee_code,
+          name: employee.name,
+          name_ar: employee.name_ar || null,
+          position: employee.position || null,
+          department: employee.department || null,
+          phone: employee.phone || null,
+          email: employee.email || null,
+          salary: employee.salary ? parseFloat(employee.salary) : 0
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      setShowEmployeeDialog(false);
+      setNewEmployee({ employee_code: '', name: '', name_ar: '', position: '', department: '', phone: '', email: '', salary: '' });
+      toast({ title: language === 'ar' ? 'تم إضافة الموظف بنجاح' : 'Employee added successfully' });
+    },
+    onError: () => {
+      toast({ title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', variant: 'destructive' });
+    }
+  });
+
+  // Add delivery person mutation
+  const addDeliveryMutation = useMutation({
+    mutationFn: async (delivery: typeof newDelivery) => {
+      const { data, error } = await supabase
+        .from('delivery_persons')
+        .insert({
+          name: delivery.name,
+          name_ar: delivery.name_ar || null,
+          phone: delivery.phone || null,
+          vehicle_type: delivery.vehicle_type || null,
+          vehicle_number: delivery.vehicle_number || null
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+      setShowDeliveryDialog(false);
+      setNewDelivery({ name: '', name_ar: '', phone: '', vehicle_type: '', vehicle_number: '' });
+      toast({ title: language === 'ar' ? 'تم إضافة مندوب التوصيل بنجاح' : 'Delivery person added successfully' });
+    },
+    onError: () => {
+      toast({ title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', variant: 'destructive' });
+    }
+  });
+
+  const handleAddEmployee = () => {
+    if (!newEmployee.employee_code || !newEmployee.name) {
+      toast({ 
+        title: language === 'ar' ? 'الكود والاسم مطلوبان' : 'Code and name are required', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    addEmployeeMutation.mutate(newEmployee);
+  };
+
+  const handleAddDelivery = () => {
+    if (!newDelivery.name) {
+      toast({ 
+        title: language === 'ar' ? 'الاسم مطلوب' : 'Name is required', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    addDeliveryMutation.mutate(newDelivery);
+  };
+
   const translations = {
     en: {
       title: 'HR & Payroll',
       employees: 'Employees',
+      deliveryPersons: 'Delivery Persons',
       attendance: 'Attendance',
       payroll: 'Payroll',
       newEmployee: 'New Employee',
+      newDelivery: 'New Delivery Person',
       search: 'Search...',
       code: 'Code',
       name: 'Name',
+      nameAr: 'Name (Arabic)',
       position: 'Position',
       department: 'Department',
       salary: 'Salary',
@@ -82,17 +201,28 @@ const HR = () => {
       present: 'Present',
       absent: 'Absent',
       late: 'Late',
-      leave: 'On Leave'
+      leave: 'On Leave',
+      vehicleType: 'Vehicle Type',
+      vehicleNumber: 'Vehicle Number',
+      motorcycle: 'Motorcycle',
+      car: 'Car',
+      bicycle: 'Bicycle',
+      available: 'Available',
+      unavailable: 'Unavailable',
+      add: 'Add'
     },
     ar: {
       title: 'الموارد البشرية والرواتب',
       employees: 'الموظفين',
+      deliveryPersons: 'مناديب التوصيل',
       attendance: 'الحضور',
       payroll: 'الرواتب',
       newEmployee: 'موظف جديد',
+      newDelivery: 'مندوب توصيل جديد',
       search: 'بحث...',
       code: 'الكود',
       name: 'الاسم',
+      nameAr: 'الاسم (عربي)',
       position: 'المنصب',
       department: 'القسم',
       salary: 'الراتب',
@@ -112,7 +242,15 @@ const HR = () => {
       present: 'حاضر',
       absent: 'غائب',
       late: 'متأخر',
-      leave: 'إجازة'
+      leave: 'إجازة',
+      vehicleType: 'نوع المركبة',
+      vehicleNumber: 'رقم المركبة',
+      motorcycle: 'دراجة نارية',
+      car: 'سيارة',
+      bicycle: 'دراجة هوائية',
+      available: 'متاح',
+      unavailable: 'غير متاح',
+      add: 'إضافة'
     }
   };
 
@@ -136,16 +274,16 @@ const HR = () => {
       color: 'bg-accent/10' 
     },
     { 
+      label: t.deliveryPersons, 
+      value: deliveryPersons.filter(d => d.is_active).length, 
+      icon: <Truck className="text-success" size={24} />,
+      color: 'bg-success/10' 
+    },
+    { 
       label: t.totalSalaries, 
       value: `${totalSalaries.toLocaleString()} YER`, 
       icon: <DollarSign className="text-warning" size={24} />,
       color: 'bg-warning/10' 
-    },
-    { 
-      label: t.presentToday, 
-      value: presentToday, 
-      icon: <Clock className="text-info" size={24} />,
-      color: 'bg-info/10' 
     }
   ];
 
@@ -160,11 +298,10 @@ const HR = () => {
     return <Badge variant={c.variant}>{c.label}</Badge>;
   };
 
-  const departments = [
-    { value: 'sales', label: language === 'ar' ? 'المبيعات' : 'Sales' },
-    { value: 'finance', label: language === 'ar' ? 'المالية' : 'Finance' },
-    { value: 'operations', label: language === 'ar' ? 'العمليات' : 'Operations' },
-    { value: 'hr', label: language === 'ar' ? 'الموارد البشرية' : 'HR' }
+  const vehicleTypes = [
+    { value: 'motorcycle', label: t.motorcycle },
+    { value: 'car', label: t.car },
+    { value: 'bicycle', label: t.bicycle }
   ];
 
   return (
@@ -173,52 +310,169 @@ const HR = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gradient-success">
-                <Plus size={18} className="me-2" />
-                {t.newEmployee}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{t.newEmployee}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.code}</Label>
-                    <Input placeholder="EMP004" />
+          <div className="flex gap-2">
+            <Dialog open={showDeliveryDialog} onOpenChange={setShowDeliveryDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Truck size={18} className="me-2" />
+                  {t.newDelivery}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{t.newDelivery}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.name}</Label>
+                      <Input 
+                        value={newDelivery.name}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Name" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.nameAr}</Label>
+                      <Input 
+                        value={newDelivery.name_ar}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name_ar: e.target.value }))}
+                        placeholder="الاسم" 
+                        dir="rtl"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>{t.name}</Label>
-                    <Input placeholder={t.name} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.position}</Label>
-                    <Input placeholder={t.position} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.department}</Label>
-                    <Input placeholder={t.department} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t.phone}</Label>
-                    <Input placeholder={t.phone} />
+                    <Input 
+                      value={newDelivery.phone}
+                      onChange={(e) => setNewDelivery(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="777123456" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.vehicleType}</Label>
+                      <Select 
+                        value={newDelivery.vehicle_type}
+                        onValueChange={(value) => setNewDelivery(prev => ({ ...prev, vehicle_type: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t.vehicleType} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vehicleTypes.map(type => (
+                            <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.vehicleNumber}</Label>
+                      <Input 
+                        value={newDelivery.vehicle_number}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                        placeholder="ABC-123" 
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleAddDelivery}
+                    disabled={addDeliveryMutation.isPending}
+                    className="w-full gradient-success"
+                  >
+                    {addDeliveryMutation.isPending ? '...' : t.add}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={showEmployeeDialog} onOpenChange={setShowEmployeeDialog}>
+              <DialogTrigger asChild>
+                <Button className="gradient-success">
+                  <Plus size={18} className="me-2" />
+                  {t.newEmployee}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{t.newEmployee}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.code}</Label>
+                      <Input 
+                        value={newEmployee.employee_code}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, employee_code: e.target.value }))}
+                        placeholder="EMP004" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.name}</Label>
+                      <Input 
+                        value={newEmployee.name}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder={t.name} 
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>{t.salary}</Label>
-                    <Input type="number" placeholder="0" />
+                    <Label>{t.nameAr}</Label>
+                    <Input 
+                      value={newEmployee.name_ar}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, name_ar: e.target.value }))}
+                      placeholder="الاسم بالعربي" 
+                      dir="rtl"
+                    />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.position}</Label>
+                      <Input 
+                        value={newEmployee.position}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, position: e.target.value }))}
+                        placeholder={t.position} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.department}</Label>
+                      <Input 
+                        value={newEmployee.department}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, department: e.target.value }))}
+                        placeholder={t.department} 
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.phone}</Label>
+                      <Input 
+                        value={newEmployee.phone}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder={t.phone} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.salary}</Label>
+                      <Input 
+                        type="number" 
+                        value={newEmployee.salary}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, salary: e.target.value }))}
+                        placeholder="0" 
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={handleAddEmployee}
+                    disabled={addEmployeeMutation.isPending}
+                    className="w-full gradient-success"
+                  >
+                    {addEmployeeMutation.isPending ? '...' : t.add}
+                  </Button>
                 </div>
-                <Button className="w-full gradient-success">{t.newEmployee}</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Stats */}
@@ -244,6 +498,7 @@ const HR = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="employees">{t.employees}</TabsTrigger>
+            <TabsTrigger value="delivery">{t.deliveryPersons}</TabsTrigger>
             <TabsTrigger value="attendance">{t.attendance}</TabsTrigger>
           </TabsList>
 
@@ -301,6 +556,74 @@ const HR = () => {
                           <TableCell>
                             <Badge variant={employee.is_active ? 'default' : 'secondary'}>
                               {employee.is_active ? t.active : t.inactive}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="delivery" className="mt-4">
+            <Card className="card-elevated">
+              <CardHeader className="pb-3">
+                <div className="relative max-w-sm">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input placeholder={t.search} className="ps-10" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t.name}</TableHead>
+                      <TableHead>{t.phone}</TableHead>
+                      <TableHead>{t.vehicleType}</TableHead>
+                      <TableHead>{t.vehicleNumber}</TableHead>
+                      <TableHead>{t.status}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deliveryPersons.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          {language === 'ar' ? 'لا يوجد مناديب توصيل' : 'No delivery persons yet'}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      deliveryPersons.map((person) => (
+                        <TableRow key={person.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-success/10 text-success text-sm">
+                                  <Truck size={16} />
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-medium">
+                                {language === 'ar' ? person.name_ar || person.name : person.name}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Phone size={14} className="text-muted-foreground" />
+                              {person.phone || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {person.vehicle_type 
+                              ? vehicleTypes.find(v => v.value === person.vehicle_type)?.label || person.vehicle_type
+                              : '-'
+                            }
+                          </TableCell>
+                          <TableCell>{person.vehicle_number || '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant={person.is_available ? 'default' : 'secondary'}>
+                              {person.is_available ? t.available : t.unavailable}
                             </Badge>
                           </TableCell>
                         </TableRow>

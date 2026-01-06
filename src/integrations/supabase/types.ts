@@ -303,6 +303,56 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_persons: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          id: string
+          is_active: boolean | null
+          is_available: boolean | null
+          name: string
+          name_ar: string | null
+          phone: string | null
+          updated_at: string
+          vehicle_number: string | null
+          vehicle_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_available?: boolean | null
+          name: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          vehicle_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_available?: boolean | null
+          name?: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          vehicle_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_persons_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string

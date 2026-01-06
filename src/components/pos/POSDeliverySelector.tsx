@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Truck, User, Phone, Check } from 'lucide-react';
+import { X, Truck, User, Phone, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DeliveryPerson {
   id: string;
@@ -19,13 +21,6 @@ interface POSDeliverySelectorProps {
   selectedDelivery: DeliveryPerson | null;
 }
 
-// Mock delivery persons - in production, this would come from the database
-const mockDeliveryPersons: DeliveryPerson[] = [
-  { id: '1', name: 'Ahmed Ali', nameAr: 'أحمد علي', phone: '777123456' },
-  { id: '2', name: 'Mohammed Hassan', nameAr: 'محمد حسن', phone: '771234567' },
-  { id: '3', name: 'Khalid Omar', nameAr: 'خالد عمر', phone: '773456789' },
-];
-
 const POSDeliverySelector: React.FC<POSDeliverySelectorProps> = ({
   isOpen,
   onClose,
@@ -35,7 +30,28 @@ const POSDeliverySelector: React.FC<POSDeliverySelectorProps> = ({
   const { language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredDeliveryPersons = mockDeliveryPersons.filter(person =>
+  const { data: deliveryPersons = [], isLoading } = useQuery({
+    queryKey: ['delivery-persons-pos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('delivery_persons')
+        .select('id, name, name_ar, phone')
+        .eq('is_active', true)
+        .eq('is_available', true)
+        .order('name');
+      
+      if (error) throw error;
+      return data.map(d => ({
+        id: d.id,
+        name: d.name,
+        nameAr: d.name_ar || d.name,
+        phone: d.phone || ''
+      }));
+    },
+    enabled: isOpen
+  });
+
+  const filteredDeliveryPersons = deliveryPersons.filter(person =>
     person.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     person.nameAr.includes(searchQuery) ||
     person.phone.includes(searchQuery)
@@ -65,11 +81,15 @@ const POSDeliverySelector: React.FC<POSDeliverySelectorProps> = ({
         </div>
 
         <div className="p-4 border-b border-border">
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={language === 'ar' ? 'بحث...' : 'Search...'}
-          />
+          <div className="relative">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={language === 'ar' ? 'بحث...' : 'Search...'}
+              className="ps-10"
+            />
+          </div>
         </div>
 
         <div className="p-2 max-h-80 overflow-y-auto">
@@ -100,40 +120,57 @@ const POSDeliverySelector: React.FC<POSDeliverySelectorProps> = ({
             {!selectedDelivery && <Check size={20} className="text-primary" />}
           </button>
 
-          {/* Delivery Persons */}
-          <div className="space-y-2">
-            {filteredDeliveryPersons.map((person) => (
-              <button
-                key={person.id}
-                onClick={() => {
-                  onSelectDelivery(person);
-                  onClose();
-                }}
-                className={cn(
-                  'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
-                  selectedDelivery?.id === person.id
-                    ? 'bg-primary/10 border-primary'
-                    : 'bg-background border-border hover:border-primary'
-                )}
-              >
-                <div className="w-10 h-10 bg-success/10 rounded-full flex items-center justify-center">
-                  <Truck size={20} className="text-success" />
-                </div>
-                <div className="flex-1 text-start">
-                  <p className="font-medium text-foreground">
-                    {language === 'ar' ? person.nameAr : person.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Phone size={12} />
-                    {person.phone}
-                  </p>
-                </div>
-                {selectedDelivery?.id === person.id && (
-                  <Check size={20} className="text-primary" />
-                )}
-              </button>
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredDeliveryPersons.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Truck size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">
+                {language === 'ar' ? 'لا يوجد مناديب توصيل' : 'No delivery persons available'}
+              </p>
+              <p className="text-xs mt-1">
+                {language === 'ar' ? 'أضف مناديب من الموارد البشرية' : 'Add from HR section'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredDeliveryPersons.map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() => {
+                    onSelectDelivery(person);
+                    onClose();
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
+                    selectedDelivery?.id === person.id
+                      ? 'bg-primary/10 border-primary'
+                      : 'bg-background border-border hover:border-primary'
+                  )}
+                >
+                  <div className="w-10 h-10 bg-success/10 rounded-full flex items-center justify-center">
+                    <Truck size={20} className="text-success" />
+                  </div>
+                  <div className="flex-1 text-start">
+                    <p className="font-medium text-foreground">
+                      {language === 'ar' ? person.nameAr : person.name}
+                    </p>
+                    {person.phone && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Phone size={12} />
+                        {person.phone}
+                      </p>
+                    )}
+                  </div>
+                  {selectedDelivery?.id === person.id && (
+                    <Check size={20} className="text-primary" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border bg-muted/30">
