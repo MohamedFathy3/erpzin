@@ -913,6 +913,57 @@ export type Database = {
           },
         ]
       }
+      payment_methods: {
+        Row: {
+          code: string
+          created_at: string
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string
+          reference_label: string | null
+          reference_label_ar: string | null
+          requires_reference: boolean | null
+          sort_order: number | null
+          supported_currencies: string[] | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar: string
+          reference_label?: string | null
+          reference_label_ar?: string | null
+          requires_reference?: boolean | null
+          sort_order?: number | null
+          supported_currencies?: string[] | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string
+          reference_label?: string | null
+          reference_label_ar?: string | null
+          requires_reference?: boolean | null
+          sort_order?: number | null
+          supported_currencies?: string[] | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_return_items: {
         Row: {
           created_at: string
