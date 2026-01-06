@@ -39,28 +39,14 @@ export interface ProductFormData {
   cost: number;
   hasVariants: boolean;
   variants: ProductVariant[];
+  selectedSizes: string[];
+  selectedColors: string[];
   stock: number;
   reorderPoint: number;
   status: 'active' | 'inactive';
 }
 
-const defaultColors: VariantOption[] = [
-  { id: 'black', value: 'Black', valueAr: 'أسود' },
-  { id: 'white', value: 'White', valueAr: 'أبيض' },
-  { id: 'navy', value: 'Navy', valueAr: 'كحلي' },
-  { id: 'red', value: 'Red', valueAr: 'أحمر' },
-  { id: 'blue', value: 'Blue', valueAr: 'أزرق' },
-  { id: 'gray', value: 'Gray', valueAr: 'رمادي' },
-];
-
-const defaultSizes: VariantOption[] = [
-  { id: 'xs', value: 'XS', valueAr: 'XS' },
-  { id: 's', value: 'S', valueAr: 'S' },
-  { id: 'm', value: 'M', valueAr: 'M' },
-  { id: 'l', value: 'L', valueAr: 'L' },
-  { id: 'xl', value: 'XL', valueAr: 'XL' },
-  { id: 'xxl', value: 'XXL', valueAr: 'XXL' },
-];
+// Default sizes and colors are now loaded from database via VariantMatrix
 
 const generateSKU = (): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -146,6 +132,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     cost: 0,
     hasVariants: false,
     variants: [],
+    selectedSizes: [],
+    selectedColors: [],
     stock: 0,
     reorderPoint: 5,
     status: 'active'
@@ -352,12 +340,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
           {/* Variant Matrix */}
           {formData.hasVariants && (
             <VariantMatrix
-              colors={defaultColors}
-              sizes={defaultSizes}
               variants={formData.variants}
               baseSku={formData.sku}
               basePrice={formData.price}
               onVariantChange={(variants) => handleChange('variants', variants)}
+              selectedSizes={formData.selectedSizes}
+              selectedColors={formData.selectedColors}
+              onSizeSelectionChange={(sizes) => handleChange('selectedSizes', sizes)}
+              onColorSelectionChange={(colors) => handleChange('selectedColors', colors)}
             />
           )}
 

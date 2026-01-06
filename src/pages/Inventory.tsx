@@ -12,10 +12,11 @@ import InventoryCount from '@/components/inventory/InventoryCount';
 import InventoryMovements from '@/components/inventory/InventoryMovements';
 import OpeningBalances from '@/components/inventory/OpeningBalances';
 import ExcelImport from '@/components/inventory/ExcelImport';
+import SizeColorManager from '@/components/inventory/SizeColorManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,7 +73,9 @@ const Inventory: React.FC = () => {
     setEditProduct({
       id: product.id, name: product.name, nameAr: product.nameAr, description: '', descriptionAr: '',
       sku: product.sku, barcode: product.barcode || '', categoryId: '', price: product.price,
-      cost: product.cost, hasVariants: product.variants > 0, variants: [], stock: product.stock,
+      cost: product.cost, hasVariants: product.variants > 0, variants: [], 
+      selectedSizes: [], selectedColors: [],
+      stock: product.stock,
       reorderPoint: 5, status: product.status === 'inactive' ? 'inactive' : 'active'
     });
     setShowProductForm(true);
@@ -112,6 +115,7 @@ const Inventory: React.FC = () => {
             <TabsTrigger value="movements" className="flex items-center gap-1.5"><ArrowUpDown size={14} />{language === 'ar' ? 'الحركات' : 'Movements'}</TabsTrigger>
             <TabsTrigger value="opening" className="flex items-center gap-1.5"><Wallet size={14} />{language === 'ar' ? 'أول المدة' : 'Opening'}</TabsTrigger>
             <TabsTrigger value="import" className="flex items-center gap-1.5"><FileSpreadsheet size={14} />{language === 'ar' ? 'استيراد' : 'Import'}</TabsTrigger>
+            <TabsTrigger value="variants" className="flex items-center gap-1.5"><Palette size={14} />{language === 'ar' ? 'المقاسات والألوان' : 'Sizes & Colors'}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
@@ -145,6 +149,7 @@ const Inventory: React.FC = () => {
           <TabsContent value="movements" className="flex-1 mt-4"><InventoryMovements /></TabsContent>
           <TabsContent value="opening" className="flex-1 mt-4"><OpeningBalances /></TabsContent>
           <TabsContent value="import" className="flex-1 mt-4"><ExcelImport /></TabsContent>
+          <TabsContent value="variants" className="flex-1 mt-4"><SizeColorManager /></TabsContent>
         </Tabs>
       </div>
 
