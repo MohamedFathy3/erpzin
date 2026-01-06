@@ -4,12 +4,15 @@ import MainLayout from '@/components/layout/MainLayout';
 import CategoryTree, { Category } from '@/components/inventory/CategoryTree';
 import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
+import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Download, Upload, Filter } from 'lucide-react';
+import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
-// Mock data
+// Mock categories
 const mockCategories: Category[] = [
   {
     id: 'boys',
@@ -74,32 +77,52 @@ const mockCategories: Category[] = [
   }
 ];
 
-const mockProducts: Product[] = [
-  { id: '1', name: 'Boys Classic Jeans', nameAr: 'جينز أولاد كلاسيك', sku: 'BJ-001', category: 'Boys > Pants > Jeans', categoryAr: 'أولاد > بناطيل > جينز', price: 4500, cost: 2800, stock: 125, variants: 18, status: 'active' },
-  { id: '2', name: 'Girls Summer Dress', nameAr: 'فستان صيفي بنات', sku: 'GD-002', category: 'Girls > Dresses', categoryAr: 'بنات > فساتين', price: 6000, cost: 3500, stock: 45, variants: 12, status: 'active' },
-  { id: '3', name: 'Women Elegant Blouse', nameAr: 'بلوزة نسائية أنيقة', sku: 'WB-003', category: 'Women > Blouses', categoryAr: 'نساء > بلوزات', price: 8500, cost: 5000, stock: 8, variants: 15, status: 'low_stock' },
-  { id: '4', name: 'Men Formal Shirt', nameAr: 'قميص رجالي رسمي', sku: 'MS-004', category: 'Men > Shirts', categoryAr: 'رجال > قمصان', price: 7000, cost: 4200, stock: 67, variants: 24, status: 'active' },
-  { id: '5', name: 'Boys Sport T-Shirt', nameAr: 'تيشيرت رياضي أولاد', sku: 'BT-005', category: 'Boys > T-Shirts', categoryAr: 'أولاد > تيشيرتات', price: 2500, cost: 1500, stock: 0, variants: 12, status: 'out_of_stock' },
-  { id: '6', name: 'Girls Floral Skirt', nameAr: 'تنورة زهور بنات', sku: 'GS-006', category: 'Girls > Skirts', categoryAr: 'بنات > تنانير', price: 3800, cost: 2200, stock: 32, variants: 8, status: 'active' },
-  { id: '7', name: 'Women Casual Pants', nameAr: 'بنطال نسائي كاجوال', sku: 'WP-007', category: 'Women > Pants', categoryAr: 'نساء > بناطيل', price: 5500, cost: 3300, stock: 56, variants: 20, status: 'active' },
-  { id: '8', name: 'Leather Classic Belt', nameAr: 'حزام جلد كلاسيك', sku: 'AC-008', category: 'Accessories > Belts', categoryAr: 'إكسسوارات > أحزمة', price: 2000, cost: 1000, stock: 89, variants: 6, status: 'active' },
-];
-
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
   const [editProduct, setEditProduct] = useState<ProductFormData | null>(null);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
+  const [selectedProductForPrint, setSelectedProductForPrint] = useState<any>(null);
+
+  // Fetch products from database
+  const { data: dbProducts = [], refetch } = useQuery({
+    queryKey: ['inventory-products'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, categories(name, name_ar)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Transform DB products to match component interface
+  const products: Product[] = dbProducts.map(p => ({
+    id: p.id,
+    name: p.name,
+    nameAr: p.name_ar || p.name,
+    sku: p.sku,
+    barcode: p.barcode,
+    category: p.categories?.name || 'Uncategorized',
+    categoryAr: p.categories?.name_ar || 'غير مصنف',
+    price: Number(p.price),
+    cost: Number(p.cost || 0),
+    stock: p.stock,
+    variants: 0,
+    status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active'
+  }));
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = searchQuery === '' ||
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.nameAr.includes(searchQuery) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+      product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (product.barcode && product.barcode.includes(searchQuery));
     
-    // For simplicity, we're not filtering by category in mock data
     return matchesSearch;
   });
 
@@ -116,7 +139,7 @@ const Inventory: React.FC = () => {
       description: '',
       descriptionAr: '',
       sku: product.sku,
-      barcode: '',
+      barcode: product.barcode || '',
       categoryId: '',
       price: product.price,
       cost: product.cost,
@@ -130,22 +153,14 @@ const Inventory: React.FC = () => {
   };
 
   const handleDeleteProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
     toast({
       title: language === 'ar' ? 'تم الحذف' : 'Deleted',
       description: language === 'ar' ? 'تم حذف المنتج بنجاح' : 'Product deleted successfully'
     });
+    refetch();
   };
 
   const handleDuplicateProduct = (product: Product) => {
-    const newProduct: Product = {
-      ...product,
-      id: Date.now().toString(),
-      sku: product.sku + '-COPY',
-      name: product.name + ' (Copy)',
-      nameAr: product.nameAr + ' (نسخة)'
-    };
-    setProducts(prev => [...prev, newProduct]);
     toast({
       title: language === 'ar' ? 'تم النسخ' : 'Duplicated',
       description: language === 'ar' ? 'تم نسخ المنتج بنجاح' : 'Product duplicated successfully'
@@ -156,59 +171,47 @@ const Inventory: React.FC = () => {
     handleEditProduct(product);
   };
 
+  const handlePrintBarcode = (product: Product) => {
+    setSelectedProductForPrint({
+      id: product.id,
+      name: product.name,
+      name_ar: product.nameAr,
+      sku: product.sku,
+      barcode: product.barcode,
+      price: product.price,
+      stock: product.stock
+    });
+    setShowBarcodePrinter(true);
+  };
+
   const handleSaveProduct = (productData: ProductFormData) => {
-    if (productData.id) {
-      // Update existing
-      setProducts(prev => prev.map(p => 
-        p.id === productData.id 
-          ? {
-              ...p,
-              name: productData.name,
-              nameAr: productData.nameAr,
-              sku: productData.sku,
-              price: productData.price,
-              cost: productData.cost,
-              stock: productData.hasVariants 
-                ? productData.variants.reduce((sum, v) => sum + v.stock, 0)
-                : productData.stock,
-              variants: productData.variants.length,
-              status: productData.status === 'inactive' ? 'inactive' : 
-                     (productData.stock === 0 ? 'out_of_stock' : 
-                     (productData.stock <= productData.reorderPoint ? 'low_stock' : 'active'))
-            }
-          : p
-      ));
-      toast({
-        title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-        description: language === 'ar' ? 'تم تحديث المنتج بنجاح' : 'Product updated successfully'
-      });
-    } else {
-      // Add new
-      const newProduct: Product = {
-        id: Date.now().toString(),
-        name: productData.name,
-        nameAr: productData.nameAr,
-        sku: productData.sku,
-        category: 'Uncategorized',
-        categoryAr: 'غير مصنف',
-        price: productData.price,
-        cost: productData.cost,
-        stock: productData.hasVariants 
-          ? productData.variants.reduce((sum, v) => sum + v.stock, 0)
-          : productData.stock,
-        variants: productData.variants.length,
-        status: 'active'
-      };
-      setProducts(prev => [...prev, newProduct]);
-      toast({
-        title: language === 'ar' ? 'تمت الإضافة' : 'Added',
-        description: language === 'ar' ? 'تم إضافة المنتج بنجاح' : 'Product added successfully'
-      });
+    toast({
+      title: language === 'ar' ? 'تم الحفظ' : 'Saved',
+      description: language === 'ar' ? 'تم حفظ المنتج بنجاح' : 'Product saved successfully'
+    });
+    refetch();
+  };
+
+  const handleBarcodeProductFound = (product: any) => {
+    const found = products.find(p => p.id === product.id);
+    if (found) {
+      handleEditProduct(found);
     }
   };
 
+  // Products for barcode system
+  const barcodeProducts = dbProducts.map(p => ({
+    id: p.id,
+    name: p.name,
+    name_ar: p.name_ar,
+    sku: p.sku,
+    barcode: p.barcode,
+    price: Number(p.price),
+    stock: p.stock
+  }));
+
   return (
-    <MainLayout>
+    <MainLayout activeItem="inventory">
       <div className="h-full flex flex-col gap-4">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -220,7 +223,26 @@ const Inventory: React.FC = () => {
               {language === 'ar' ? 'إدارة المنتجات والتصنيفات والمتغيرات' : 'Manage products, categories, and variants'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowBarcodeScanner(true)}
+            >
+              <ScanBarcode size={16} className="me-2" />
+              {language === 'ar' ? 'قارئ الباركود' : 'Scan Barcode'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                setSelectedProductForPrint(null);
+                setShowBarcodePrinter(true);
+              }}
+            >
+              <Printer size={16} className="me-2" />
+              {language === 'ar' ? 'طباعة باركود' : 'Print Barcode'}
+            </Button>
             <Button variant="outline" size="sm">
               <Download size={16} className="me-2" />
               {language === 'ar' ? 'تصدير' : 'Export'}
@@ -257,7 +279,7 @@ const Inventory: React.FC = () => {
               <div className="relative flex-1">
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                 <Input
-                  placeholder={language === 'ar' ? 'بحث بالاسم أو SKU...' : 'Search by name or SKU...'}
+                  placeholder={language === 'ar' ? 'بحث بالاسم أو SKU أو الباركود...' : 'Search by name, SKU or barcode...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="ps-10"
@@ -276,6 +298,7 @@ const Inventory: React.FC = () => {
                 onDelete={handleDeleteProduct}
                 onDuplicate={handleDuplicateProduct}
                 onView={handleViewProduct}
+                onPrintBarcode={handlePrintBarcode}
               />
             </div>
 
@@ -307,6 +330,25 @@ const Inventory: React.FC = () => {
         onSave={handleSaveProduct}
         categories={mockCategories}
         editProduct={editProduct}
+      />
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        isOpen={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onProductFound={handleBarcodeProductFound}
+        products={barcodeProducts}
+      />
+
+      {/* Barcode Printer Modal */}
+      <BarcodeLabelPrinter
+        isOpen={showBarcodePrinter}
+        onClose={() => {
+          setShowBarcodePrinter(false);
+          setSelectedProductForPrint(null);
+        }}
+        products={barcodeProducts}
+        selectedProduct={selectedProductForPrint}
       />
     </MainLayout>
   );
