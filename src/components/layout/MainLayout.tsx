@@ -34,7 +34,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
     const routes: Record<string, string> = {
       dashboard: '/',
       inventory: '/inventory',
-      pos: '/pos',
+      sales: '/sales',
       purchasing: '/purchasing',
       finance: '/finance',
       hr: '/hr',
