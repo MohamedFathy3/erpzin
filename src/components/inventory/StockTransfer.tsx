@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -466,7 +466,7 @@ const StockTransfer = () => {
 
       {/* Transfers Table */}
       <Card className="card-elevated">
-        <CardHeader>
+        <CardHeader className="border-b">
           <div className="flex items-center justify-between">
             <CardTitle>{t.allTransfers}</CardTitle>
             <div className="relative w-64">
@@ -480,53 +480,58 @@ const StockTransfer = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t.transferNumber}</TableHead>
-                <TableHead>{t.fromWarehouse}</TableHead>
-                <TableHead>{t.toWarehouse}</TableHead>
-                <TableHead>{t.date}</TableHead>
-                <TableHead>{t.items}</TableHead>
-                <TableHead>{t.quantity}</TableHead>
-                <TableHead>{t.status}</TableHead>
-                <TableHead className="w-[100px]">{t.actions}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransfers.map((transfer) => (
-                <TableRow key={transfer.id}>
-                  <TableCell className="font-mono font-medium">{transfer.transfer_number}</TableCell>
-                  <TableCell>{getWarehouseName(transfer.from_warehouse_id)}</TableCell>
-                  <TableCell>{getWarehouseName(transfer.to_warehouse_id)}</TableCell>
-                  <TableCell>{new Date(transfer.transfer_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}</TableCell>
-                  <TableCell>{transfer.total_items}</TableCell>
-                  <TableCell>{transfer.total_quantity}</TableCell>
-                  <TableCell>{getStatusBadge(transfer.status)}</TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedTransfer(transfer);
-                        setViewTransferOpen(true);
-                      }}
-                    >
-                      <Eye size={16} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredTransfers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    {t.noTransfers}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-0">
+          <ScrollArea className="h-[400px] w-full">
+            <div className="min-w-[800px]">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead className="min-w-[150px]">{t.transferNumber}</TableHead>
+                    <TableHead className="min-w-[150px]">{t.fromWarehouse}</TableHead>
+                    <TableHead className="min-w-[150px]">{t.toWarehouse}</TableHead>
+                    <TableHead className="min-w-[120px]">{t.date}</TableHead>
+                    <TableHead className="min-w-[80px]">{t.items}</TableHead>
+                    <TableHead className="min-w-[80px]">{t.quantity}</TableHead>
+                    <TableHead className="min-w-[120px]">{t.status}</TableHead>
+                    <TableHead className="w-[80px]">{t.actions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransfers.map((transfer) => (
+                    <TableRow key={transfer.id}>
+                      <TableCell className="font-mono font-medium">{transfer.transfer_number}</TableCell>
+                      <TableCell>{getWarehouseName(transfer.from_warehouse_id)}</TableCell>
+                      <TableCell>{getWarehouseName(transfer.to_warehouse_id)}</TableCell>
+                      <TableCell>{new Date(transfer.transfer_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}</TableCell>
+                      <TableCell>{transfer.total_items}</TableCell>
+                      <TableCell>{transfer.total_quantity}</TableCell>
+                      <TableCell>{getStatusBadge(transfer.status)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedTransfer(transfer);
+                            setViewTransferOpen(true);
+                          }}
+                        >
+                          <Eye size={16} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredTransfers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        {t.noTransfers}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
         </CardContent>
       </Card>
 
@@ -588,8 +593,8 @@ const StockTransfer = () => {
 
             {/* Product Selection */}
             <Card>
-              <CardHeader className="py-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="py-3 border-b">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base">{t.selectProducts}</CardTitle>
                   <div className="flex items-center gap-2">
                     <div className="relative w-64">
@@ -613,58 +618,61 @@ const StockTransfer = () => {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[200px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[40px]"></TableHead>
-                        <TableHead>{t.product}</TableHead>
-                        <TableHead>{t.sku}</TableHead>
-                        <TableHead>{t.availableStock}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredProducts.map((product) => (
-                        <TableRow 
-                          key={product.id} 
-                          className={`cursor-pointer ${transferItems.some(i => i.product_id === product.id) ? 'opacity-50' : ''}`}
-                          onClick={() => !transferItems.some(i => i.product_id === product.id) && toggleProductSelection(product.id)}
-                        >
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedProducts.has(product.id)}
-                              disabled={transferItems.some(i => i.product_id === product.id)}
-                              onCheckedChange={() => toggleProductSelection(product.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {language === 'ar' ? product.name_ar || product.name : product.name}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{product.sku}</TableCell>
-                          <TableCell>
-                            <Badge variant={product.stock > 0 ? 'default' : 'destructive'}>
-                              {product.stock}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredProducts.length === 0 && (
+                <ScrollArea className="h-[200px] w-full">
+                  <div className="min-w-[500px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
-                            {t.noProducts}
-                          </TableCell>
+                          <TableHead className="w-[50px]"></TableHead>
+                          <TableHead className="min-w-[200px]">{t.product}</TableHead>
+                          <TableHead className="min-w-[120px]">{t.sku}</TableHead>
+                          <TableHead className="min-w-[100px]">{t.availableStock}</TableHead>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredProducts.map((product) => (
+                          <TableRow 
+                            key={product.id} 
+                            className={`cursor-pointer ${transferItems.some(i => i.product_id === product.id) ? 'opacity-50' : ''}`}
+                            onClick={() => !transferItems.some(i => i.product_id === product.id) && toggleProductSelection(product.id)}
+                          >
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedProducts.has(product.id)}
+                                disabled={transferItems.some(i => i.product_id === product.id)}
+                                onCheckedChange={() => toggleProductSelection(product.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {language === 'ar' ? product.name_ar || product.name : product.name}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                            <TableCell>
+                              <Badge variant={product.stock > 0 ? 'default' : 'destructive'}>
+                                {product.stock}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredProducts.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                              {t.noProducts}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
                 </ScrollArea>
               </CardContent>
             </Card>
 
             {/* Selected Items */}
             <Card>
-              <CardHeader className="py-3">
-                <div className="flex items-center justify-between">
+              <CardHeader className="py-3 border-b">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Package size={16} />
                     {t.transferItems} ({transferItems.length})
@@ -683,67 +691,70 @@ const StockTransfer = () => {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[200px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t.product}</TableHead>
-                        <TableHead>{t.sku}</TableHead>
-                        <TableHead>{t.availableStock}</TableHead>
-                        <TableHead className="w-[120px]">{t.transferQty}</TableHead>
-                        <TableHead>{t.notes}</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transferItems.map((item) => (
-                        <TableRow key={item.product_id}>
-                          <TableCell className="font-medium">
-                            {language === 'ar' ? item.product.name_ar || item.product.name : item.product.name}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{item.product.sku}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{item.product.stock}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={item.product.stock}
-                              value={item.quantity}
-                              onChange={(e) => updateItemQuantity(item.product_id, parseInt(e.target.value) || 1)}
-                              className="w-20 h-8"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              placeholder={t.notes}
-                              value={item.notes}
-                              onChange={(e) => updateItemNotes(item.product_id, e.target.value)}
-                              className="h-8"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => removeItem(item.product_id)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {transferItems.length === 0 && (
+                <ScrollArea className="h-[200px] w-full">
+                  <div className="min-w-[700px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                            {t.noItems}
-                          </TableCell>
+                          <TableHead className="min-w-[180px]">{t.product}</TableHead>
+                          <TableHead className="min-w-[100px]">{t.sku}</TableHead>
+                          <TableHead className="min-w-[80px]">{t.availableStock}</TableHead>
+                          <TableHead className="min-w-[100px]">{t.transferQty}</TableHead>
+                          <TableHead className="min-w-[150px]">{t.notes}</TableHead>
+                          <TableHead className="w-[50px]"></TableHead>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {transferItems.map((item) => (
+                          <TableRow key={item.product_id}>
+                            <TableCell className="font-medium">
+                              {language === 'ar' ? item.product.name_ar || item.product.name : item.product.name}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{item.product.sku}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{item.product.stock}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={item.product.stock}
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.product_id, parseInt(e.target.value) || 1)}
+                                className="w-20 h-8"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                placeholder={t.notes}
+                                value={item.notes}
+                                onChange={(e) => updateItemNotes(item.product_id, e.target.value)}
+                                className="h-8"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => removeItem(item.product_id)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {transferItems.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                              {t.noItems}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
                 </ScrollArea>
               </CardContent>
             </Card>
@@ -865,33 +876,42 @@ const StockTransfer = () => {
               )}
 
               {/* Transfer Items */}
-              <div>
-                <Label className="text-muted-foreground text-xs mb-2 block">{t.transferItems}</Label>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t.product}</TableHead>
-                      <TableHead>{t.sku}</TableHead>
-                      <TableHead>{t.quantity}</TableHead>
-                      <TableHead>{t.notes}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transferItemsData.map((item: any) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">
-                          {language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{item.products?.sku}</TableCell>
-                        <TableCell>
-                          <Badge>{item.quantity}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{item.notes || '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <Card>
+                <CardHeader className="py-3 border-b">
+                  <CardTitle className="text-base">{t.transferItems}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[200px] w-full">
+                    <div className="min-w-[500px]">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead className="min-w-[200px]">{t.product}</TableHead>
+                            <TableHead className="min-w-[120px]">{t.sku}</TableHead>
+                            <TableHead className="min-w-[80px]">{t.quantity}</TableHead>
+                            <TableHead className="min-w-[150px]">{t.notes}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {transferItemsData.map((item: any) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-medium">
+                                {language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">{item.products?.sku}</TableCell>
+                              <TableCell>
+                                <Badge>{item.quantity}</Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{item.notes || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             </div>
           )}
 
