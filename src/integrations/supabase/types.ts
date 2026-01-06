@@ -1794,6 +1794,405 @@ export type Database = {
           },
         ]
       }
+      sales_invoice_items: {
+        Row: {
+          created_at: string
+          discount_amount: number | null
+          discount_percent: number | null
+          id: string
+          invoice_id: string
+          notes: string | null
+          product_id: string | null
+          product_name: string
+          product_variant_id: string | null
+          quantity: number
+          sku: string | null
+          tax_amount: number | null
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          id?: string
+          invoice_id: string
+          notes?: string | null
+          product_id?: string | null
+          product_name: string
+          product_variant_id?: string | null
+          quantity?: number
+          sku?: string | null
+          tax_amount?: number | null
+          total_price?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          id?: string
+          invoice_id?: string
+          notes?: string | null
+          product_id?: string | null
+          product_name?: string
+          product_variant_id?: string | null
+          quantity?: number
+          sku?: string | null
+          tax_amount?: number | null
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "sales_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoice_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoice_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_invoices: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          due_date: string | null
+          id: string
+          invoice_date: string
+          invoice_number: string
+          invoice_type: string
+          notes: string | null
+          paid_amount: number | null
+          payment_method: string | null
+          payment_status: string | null
+          remaining_amount: number | null
+          salesman_id: string | null
+          status: string | null
+          subtotal: number
+          tax_amount: number | null
+          tax_percent: number | null
+          total_amount: number
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number: string
+          invoice_type?: string
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          remaining_amount?: number | null
+          salesman_id?: string | null
+          status?: string | null
+          subtotal?: number
+          tax_amount?: number | null
+          tax_percent?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          invoice_type?: string
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          remaining_amount?: number | null
+          salesman_id?: string | null
+          status?: string | null
+          subtotal?: number
+          tax_amount?: number | null
+          tax_percent?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_invoices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_salesman_id_fkey"
+            columns: ["salesman_id"]
+            isOneToOne: false
+            referencedRelation: "salesmen"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_invoices_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_return_items: {
+        Row: {
+          created_at: string
+          id: string
+          original_item_id: string | null
+          product_id: string | null
+          product_name: string
+          product_variant_id: string | null
+          quantity: number
+          reason: string | null
+          return_id: string
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_item_id?: string | null
+          product_id?: string | null
+          product_name: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id: string
+          total_price?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_item_id?: string | null
+          product_id?: string | null
+          product_name?: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id?: string
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_return_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_return_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_return_items_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "sales_returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_returns: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          customer_id: string | null
+          id: string
+          invoice_type: string | null
+          notes: string | null
+          original_invoice_id: string | null
+          original_invoice_number: string | null
+          processed_by: string | null
+          reason: string | null
+          refund_method: string | null
+          return_date: string
+          return_number: string
+          status: string | null
+          subtotal: number
+          tax_amount: number | null
+          total_amount: number
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          invoice_type?: string | null
+          notes?: string | null
+          original_invoice_id?: string | null
+          original_invoice_number?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          return_date?: string
+          return_number: string
+          status?: string | null
+          subtotal?: number
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          invoice_type?: string | null
+          notes?: string | null
+          original_invoice_id?: string | null
+          original_invoice_number?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          return_date?: string
+          return_number?: string
+          status?: string | null
+          subtotal?: number
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_returns_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_returns_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_returns_original_invoice_id_fkey"
+            columns: ["original_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "sales_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_returns_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      salesmen: {
+        Row: {
+          branch_id: string | null
+          commission_rate: number | null
+          created_at: string
+          email: string | null
+          employee_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          commission_rate?: number | null
+          created_at?: string
+          email?: string | null
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          commission_rate?: number | null
+          created_at?: string
+          email?: string | null
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salesmen_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "salesmen_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sizes: {
         Row: {
           code: string
@@ -2358,6 +2757,8 @@ export type Database = {
       generate_payment_number: { Args: never; Returns: string }
       generate_purchase_invoice_number: { Args: never; Returns: string }
       generate_return_number: { Args: never; Returns: string }
+      generate_sales_invoice_number: { Args: never; Returns: string }
+      generate_sales_return_number: { Args: never; Returns: string }
       generate_shift_number: { Args: never; Returns: string }
       generate_transfer_number: { Args: never; Returns: string }
       get_user_role: {
