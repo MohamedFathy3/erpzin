@@ -14,10 +14,11 @@ import SupplierDetails from '@/components/purchasing/SupplierDetails';
 import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
 import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
 import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
+import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import { cn } from '@/lib/utils';
 import { 
   Plus, Search, Truck, Package, FileText, Building2, Phone, Mail, User, 
-  Eye, Edit2, Wallet, CreditCard, TrendingUp, Receipt, ShoppingCart
+  Eye, Edit2, Wallet, CreditCard, TrendingUp, Receipt, ShoppingCart, RotateCcw
 } from 'lucide-react';
 
 const Purchasing = () => {
@@ -69,11 +70,27 @@ const Purchasing = () => {
     }
   });
 
+  // Fetch purchase returns
+  const { data: purchaseReturns = [] } = useQuery({
+    queryKey: ['purchase-returns'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('purchase_returns')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
   const refetchAll = () => {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     queryClient.invalidateQueries({ queryKey: ['purchase_invoices'] });
     queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
+    queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
   };
+
+  const totalReturns = purchaseReturns.reduce((sum, ret) => sum + Number(ret.total_amount || 0), 0);
 
   const totalBalance = suppliers.reduce((sum, s) => sum + Number(s.balance || 0), 0);
   const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
@@ -133,6 +150,10 @@ const Purchasing = () => {
             <TabsTrigger value="orders" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
               <ShoppingCart size={16} className="me-2" />
               {language === 'ar' ? 'أوامر الشراء' : 'Orders'}
+            </TabsTrigger>
+            <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 dark:data-[state=active]:bg-orange-900 dark:data-[state=active]:text-orange-100">
+              <RotateCcw size={16} className="me-2" />
+              {language === 'ar' ? 'المرتجعات' : 'Returns'}
             </TabsTrigger>
             <TabsTrigger value="suppliers" className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
               <Building2 size={16} className="me-2" />
@@ -235,6 +256,10 @@ const Purchasing = () => {
                 <PurchaseOrderList />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="returns" className="mt-4">
+            <PurchaseReturnsList />
           </TabsContent>
         </Tabs>
       </div>
