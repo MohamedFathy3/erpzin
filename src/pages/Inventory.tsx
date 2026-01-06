@@ -4,6 +4,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import CategoryManager from '@/components/inventory/CategoryManager';
 import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
+import ProductVariantsModal from '@/components/inventory/ProductVariantsModal';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
 import StockTransfer from '@/components/inventory/StockTransfer';
 import InventoryReports from '@/components/inventory/InventoryReports';
@@ -37,6 +38,8 @@ const Inventory: React.FC = () => {
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
   const [selectedProductForPrint, setSelectedProductForPrint] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -83,7 +86,8 @@ const Inventory: React.FC = () => {
     stock: p.stock,
     variants: 0,
     image: p.image_url,
-    status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active'
+    status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active',
+    hasVariants: p.has_variants || false
   }));
 
   const filteredProducts = useMemo(() => {
@@ -163,6 +167,17 @@ const Inventory: React.FC = () => {
   const handlePrintBarcode = (product: Product) => {
     setSelectedProductForPrint({ id: product.id, name: product.name, name_ar: product.nameAr, sku: product.sku, barcode: product.barcode, price: product.price, stock: product.stock });
     setShowBarcodePrinter(true);
+  };
+  const handleViewVariants = (product: Product) => {
+    setSelectedProductForVariants({
+      id: product.id,
+      name: product.name,
+      nameAr: product.nameAr,
+      price: product.price,
+      sku: product.sku,
+      image: product.image
+    });
+    setShowVariantsModal(true);
   };
   const handleSaveProduct = () => { toast({ title: language === 'ar' ? 'تم الحفظ' : 'Saved' }); refetch(); };
   const handleBarcodeProductFound = (product: any) => {
@@ -364,6 +379,7 @@ const Inventory: React.FC = () => {
                     onDuplicate={handleDuplicateProduct} 
                     onView={handleViewProduct} 
                     onPrintBarcode={handlePrintBarcode}
+                    onViewVariants={handleViewVariants}
                     currentPage={currentPage}
                     totalPages={totalPages}
                     onPageChange={handlePageChange}
@@ -389,6 +405,18 @@ const Inventory: React.FC = () => {
       <ProductForm isOpen={showProductForm} onClose={() => setShowProductForm(false)} onSave={handleSaveProduct} categories={[]} editProduct={editProduct} />
       <BarcodeScanner isOpen={showBarcodeScanner} onClose={() => setShowBarcodeScanner(false)} onProductFound={handleBarcodeProductFound} products={barcodeProducts} />
       <BarcodeLabelPrinter isOpen={showBarcodePrinter} onClose={() => { setShowBarcodePrinter(false); setSelectedProductForPrint(null); }} products={barcodeProducts} selectedProduct={selectedProductForPrint} />
+      <ProductVariantsModal 
+        isOpen={showVariantsModal} 
+        onClose={() => { setShowVariantsModal(false); setSelectedProductForVariants(null); }} 
+        product={selectedProductForVariants}
+        onEditProduct={() => {
+          setShowVariantsModal(false);
+          if (selectedProductForVariants) {
+            const found = products.find(p => p.id === selectedProductForVariants.id);
+            if (found) handleEditProduct(found);
+          }
+        }}
+      />
     </MainLayout>
   );
 };

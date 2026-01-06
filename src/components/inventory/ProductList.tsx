@@ -25,6 +25,7 @@ export interface Product {
   variants: number;
   image?: string;
   status: 'active' | 'inactive' | 'low_stock' | 'out_of_stock';
+  hasVariants?: boolean;
 }
 
 interface ProductListProps {
@@ -34,6 +35,7 @@ interface ProductListProps {
   onDuplicate: (product: Product) => void;
   onView: (product: Product) => void;
   onPrintBarcode?: (product: Product) => void;
+  onViewVariants?: (product: Product) => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -48,6 +50,7 @@ const ProductList: React.FC<ProductListProps> = ({
   onDuplicate,
   onView,
   onPrintBarcode,
+  onViewVariants,
   currentPage,
   totalPages,
   onPageChange,
@@ -238,9 +241,30 @@ const ProductList: React.FC<ProductListProps> = ({
                     </span>
                   </td>
                   <td className="p-4">
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                      {product.variants} {language === 'ar' ? 'متغير' : 'variants'}
-                    </Badge>
+                    <button
+                      onClick={() => product.hasVariants && onViewVariants?.(product)}
+                      disabled={!product.hasVariants}
+                      className={cn(
+                        "transition-all",
+                        product.hasVariants 
+                          ? "cursor-pointer hover:scale-105" 
+                          : "cursor-default opacity-60"
+                      )}
+                    >
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          product.hasVariants 
+                            ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20" 
+                            : "bg-muted text-muted-foreground border-muted"
+                        )}
+                      >
+                        {product.hasVariants 
+                          ? (language === 'ar' ? 'عرض المتغيرات' : 'View Variants')
+                          : (language === 'ar' ? 'بدون متغيرات' : 'No Variants')
+                        }
+                      </Badge>
+                    </button>
                   </td>
                   <td className="p-4">
                     <Badge variant={statusConfig.variant} className={statusConfig.className}>
