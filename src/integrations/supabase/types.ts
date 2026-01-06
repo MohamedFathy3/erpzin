@@ -55,6 +55,127 @@ export type Database = {
           },
         ]
       }
+      bank_transactions: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          balance_before: number | null
+          bank_id: string
+          check_number: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          reference_id: string | null
+          reference_type: string | null
+          transaction_date: string
+          transaction_type: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number | null
+          balance_before?: number | null
+          bank_id: string
+          check_number?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          transaction_date?: string
+          transaction_type: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          balance_before?: number | null
+          bank_id?: string
+          check_number?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          transaction_date?: string
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_id_fkey"
+            columns: ["bank_id"]
+            isOneToOne: false
+            referencedRelation: "banks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      banks: {
+        Row: {
+          account_number: string | null
+          address: string | null
+          balance: number | null
+          branch_id: string | null
+          contact_person: string | null
+          created_at: string
+          currency: string | null
+          iban: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_ar: string | null
+          notes: string | null
+          phone: string | null
+          swift_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_number?: string | null
+          address?: string | null
+          balance?: number | null
+          branch_id?: string | null
+          contact_person?: string | null
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_ar?: string | null
+          notes?: string | null
+          phone?: string | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string | null
+          address?: string | null
+          balance?: number | null
+          branch_id?: string | null
+          contact_person?: string | null
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_ar?: string | null
+          notes?: string | null
+          phone?: string | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "banks_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branch_warehouses: {
         Row: {
           branch_id: string
@@ -170,6 +291,59 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chart_of_accounts: {
+        Row: {
+          account_type: string
+          balance: number | null
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_header: boolean | null
+          name: string
+          name_ar: string | null
+          notes: string | null
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_type: string
+          balance?: number | null
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_header?: boolean | null
+          name: string
+          name_ar?: string | null
+          notes?: string | null
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string
+          balance?: number | null
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_header?: boolean | null
+          name?: string
+          name_ar?: string | null
+          notes?: string | null
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chart_of_accounts_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -403,7 +577,9 @@ export type Database = {
       }
       expenses: {
         Row: {
+          account_id: string | null
           amount: number
+          branch_id: string | null
           category: string
           created_at: string
           description: string | null
@@ -414,7 +590,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_id?: string | null
           amount: number
+          branch_id?: string | null
           category: string
           created_at?: string
           description?: string | null
@@ -425,7 +603,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_id?: string | null
           amount?: number
+          branch_id?: string | null
           category?: string
           created_at?: string
           description?: string | null
@@ -435,7 +615,22 @@ export type Database = {
           reference_number?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inventory_count_items: {
         Row: {
@@ -1438,6 +1633,66 @@ export type Database = {
           },
         ]
       }
+      revenues: {
+        Row: {
+          account_id: string | null
+          amount: number
+          branch_id: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          payment_method: string | null
+          reference_number: string | null
+          revenue_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          amount: number
+          branch_id?: string | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          payment_method?: string | null
+          reference_number?: string | null
+          revenue_date?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number
+          branch_id?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          payment_method?: string | null
+          reference_number?: string | null
+          revenue_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenues_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenues_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_items: {
         Row: {
           created_at: string
@@ -1873,6 +2128,112 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      treasuries: {
+        Row: {
+          balance: number | null
+          branch_id: string | null
+          code: string | null
+          created_at: string
+          currency: string | null
+          id: string
+          is_active: boolean | null
+          is_main: boolean | null
+          name: string
+          name_ar: string | null
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          balance?: number | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          name: string
+          name_ar?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          balance?: number | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          name?: string
+          name_ar?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasuries_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treasury_transactions: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          balance_before: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          reference_id: string | null
+          reference_type: string | null
+          transaction_date: string
+          transaction_type: string
+          treasury_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number | null
+          balance_before?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          transaction_date?: string
+          transaction_type: string
+          treasury_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          balance_before?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          transaction_date?: string
+          transaction_type?: string
+          treasury_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "treasury_transactions_treasury_id_fkey"
+            columns: ["treasury_id"]
+            isOneToOne: false
+            referencedRelation: "treasuries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
