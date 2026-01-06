@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck } from 'lucide-react';
+import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useCategories, useProducts, Product } from '@/hooks/usePOSData';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +16,8 @@ import POSCategories from '@/components/pos/POSCategories';
 import POSVariantSelector from '@/components/pos/POSVariantSelector';
 import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
 import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
+import POSShiftManagement from '@/components/pos/POSShiftManagement';
+import POSReturns from '@/components/pos/POSReturns';
 import { Link } from 'react-router-dom';
 
 interface CartItem {
@@ -67,6 +70,9 @@ const POS: React.FC = () => {
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<any>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
+  const [currentShift, setCurrentShift] = useState<any>(null);
+  const [showReturns, setShowReturns] = useState(false);
+  const [showShiftPanel, setShowShiftPanel] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: categories, isLoading: categoriesLoading } = useCategories();
@@ -318,6 +324,36 @@ const POS: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Shift Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowShiftPanel(true)}
+            className={cn(
+              "text-white/80 hover:text-white hover:bg-white/10",
+              currentShift && "bg-green-600/30"
+            )}
+          >
+            <DollarSign size={18} className="me-1" />
+            <span className="text-xs">
+              {currentShift 
+                ? (language === 'ar' ? 'الوردية' : 'Shift')
+                : (language === 'ar' ? 'فتح وردية' : 'Open Shift')
+              }
+            </span>
+          </Button>
+          {/* Returns Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowReturns(true)}
+            className="text-white/80 hover:text-white hover:bg-white/10"
+          >
+            <RotateCcw size={18} className="me-1" />
+            <span className="text-xs">
+              {language === 'ar' ? 'مرتجعات' : 'Returns'}
+            </span>
+          </Button>
           {/* Customer Button */}
           <Button
             variant="ghost"
@@ -474,6 +510,29 @@ const POS: React.FC = () => {
         onClose={() => setShowDeliverySelector(false)}
         onSelectDelivery={setSelectedDelivery}
         selectedDelivery={selectedDelivery}
+      />
+
+      {/* Shift Management Panel */}
+      <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
+        <DialogContent className="sm:max-w-md">
+          <POSShiftManagement
+            currentShift={currentShift}
+            onShiftChange={setCurrentShift}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Returns Modal */}
+      <POSReturns
+        isOpen={showReturns}
+        onClose={() => setShowReturns(false)}
+        currentShiftId={currentShift?.id}
+        onReturnComplete={(amount) => {
+          toast({
+            title: language === 'ar' ? 'تم الإرجاع' : 'Return completed',
+            description: `${amount.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}`
+          });
+        }}
       />
     </div>
   );
