@@ -5,9 +5,11 @@ import CategoryTree, { Category } from '@/components/inventory/CategoryTree';
 import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
+import StockTransfer from '@/components/inventory/StockTransfer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer, Package, ArrowRightLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -79,6 +81,7 @@ const mockCategories: Category[] = [
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
+  const [activeTab, setActiveTab] = useState('products');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showProductForm, setShowProductForm] = useState(false);
@@ -220,107 +223,131 @@ const Inventory: React.FC = () => {
               {language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & Products'}
             </h1>
             <p className="text-muted-foreground">
-              {language === 'ar' ? 'إدارة المنتجات والتصنيفات والمتغيرات' : 'Manage products, categories, and variants'}
+              {language === 'ar' ? 'إدارة المنتجات والتصنيفات ونقل المخزون' : 'Manage products, categories, and stock transfers'}
             </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowBarcodeScanner(true)}
-            >
-              <ScanBarcode size={16} className="me-2" />
-              {language === 'ar' ? 'قارئ الباركود' : 'Scan Barcode'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                setSelectedProductForPrint(null);
-                setShowBarcodePrinter(true);
-              }}
-            >
-              <Printer size={16} className="me-2" />
-              {language === 'ar' ? 'طباعة باركود' : 'Print Barcode'}
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download size={16} className="me-2" />
-              {language === 'ar' ? 'تصدير' : 'Export'}
-            </Button>
-            <Button variant="outline" size="sm">
-              <Upload size={16} className="me-2" />
-              {language === 'ar' ? 'استيراد' : 'Import'}
-            </Button>
-            <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90">
-              <Plus size={16} className="me-2" />
-              {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
-            </Button>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex gap-4 min-h-0">
-          {/* Category Sidebar */}
-          <div className="w-72 flex-shrink-0 hidden lg:block">
-            <CategoryTree
-              categories={mockCategories}
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              onAddCategory={() => toast({ title: 'Coming soon' })}
-              onEditCategory={() => toast({ title: 'Coming soon' })}
-              onDeleteCategory={() => toast({ title: 'Coming soon' })}
-            />
-          </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+          <TabsList className="w-fit">
+            <TabsTrigger value="products" className="flex items-center gap-2">
+              <Package size={16} />
+              {language === 'ar' ? 'المنتجات' : 'Products'}
+            </TabsTrigger>
+            <TabsTrigger value="transfers" className="flex items-center gap-2">
+              <ArrowRightLeft size={16} />
+              {language === 'ar' ? 'نقل المخزون' : 'Stock Transfers'}
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Products Area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Search & Filter Bar */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  placeholder={language === 'ar' ? 'بحث بالاسم أو SKU أو الباركود...' : 'Search by name, SKU or barcode...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="ps-10"
-                />
-              </div>
-              <Button variant="outline" size="icon" className="lg:hidden">
-                <Filter size={18} />
+          {/* Products Tab */}
+          <TabsContent value="products" className="flex-1 flex flex-col mt-4">
+            {/* Actions Bar */}
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowBarcodeScanner(true)}
+              >
+                <ScanBarcode size={16} className="me-2" />
+                {language === 'ar' ? 'قارئ الباركود' : 'Scan Barcode'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setSelectedProductForPrint(null);
+                  setShowBarcodePrinter(true);
+                }}
+              >
+                <Printer size={16} className="me-2" />
+                {language === 'ar' ? 'طباعة باركود' : 'Print Barcode'}
+              </Button>
+              <Button variant="outline" size="sm">
+                <Download size={16} className="me-2" />
+                {language === 'ar' ? 'تصدير' : 'Export'}
+              </Button>
+              <Button variant="outline" size="sm">
+                <Upload size={16} className="me-2" />
+                {language === 'ar' ? 'استيراد' : 'Import'}
+              </Button>
+              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90">
+                <Plus size={16} className="me-2" />
+                {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
               </Button>
             </div>
 
-            {/* Products Table */}
-            <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
-              <ProductList
-                products={filteredProducts}
-                onEdit={handleEditProduct}
-                onDelete={handleDeleteProduct}
-                onDuplicate={handleDuplicateProduct}
-                onView={handleViewProduct}
-                onPrintBarcode={handlePrintBarcode}
-              />
-            </div>
+            {/* Main Content */}
+            <div className="flex-1 flex gap-4 min-h-0">
+              {/* Category Sidebar */}
+              <div className="w-72 flex-shrink-0 hidden lg:block">
+                <CategoryTree
+                  categories={mockCategories}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                  onAddCategory={() => toast({ title: 'Coming soon' })}
+                  onEditCategory={() => toast({ title: 'Coming soon' })}
+                  onDeleteCategory={() => toast({ title: 'Coming soon' })}
+                />
+              </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-              <span>
-                {language === 'ar' 
-                  ? `عرض ${filteredProducts.length} من ${products.length} منتج`
-                  : `Showing ${filteredProducts.length} of ${products.length} products`
-                }
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled>
-                  {language === 'ar' ? 'السابق' : 'Previous'}
-                </Button>
-                <Button variant="outline" size="sm" disabled>
-                  {language === 'ar' ? 'التالي' : 'Next'}
-                </Button>
+              {/* Products Area */}
+              <div className="flex-1 flex flex-col min-w-0">
+                {/* Search & Filter Bar */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <Input
+                      placeholder={language === 'ar' ? 'بحث بالاسم أو SKU أو الباركود...' : 'Search by name, SKU or barcode...'}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="ps-10"
+                    />
+                  </div>
+                  <Button variant="outline" size="icon" className="lg:hidden">
+                    <Filter size={18} />
+                  </Button>
+                </div>
+
+                {/* Products Table */}
+                <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
+                  <ProductList
+                    products={filteredProducts}
+                    onEdit={handleEditProduct}
+                    onDelete={handleDeleteProduct}
+                    onDuplicate={handleDuplicateProduct}
+                    onView={handleViewProduct}
+                    onPrintBarcode={handlePrintBarcode}
+                  />
+                </div>
+
+                {/* Pagination */}
+                <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+                  <span>
+                    {language === 'ar' 
+                      ? `عرض ${filteredProducts.length} من ${products.length} منتج`
+                      : `Showing ${filteredProducts.length} of ${products.length} products`
+                    }
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled>
+                      {language === 'ar' ? 'السابق' : 'Previous'}
+                    </Button>
+                    <Button variant="outline" size="sm" disabled>
+                      {language === 'ar' ? 'التالي' : 'Next'}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </TabsContent>
+
+          {/* Stock Transfers Tab */}
+          <TabsContent value="transfers" className="flex-1 mt-4">
+            <StockTransfer />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Product Form Modal */}
