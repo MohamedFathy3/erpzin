@@ -1,40 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Grid3X3, List, Clock, Home, LogOut } from 'lucide-react';
+import { Search, Barcode, Clock, Home, LogOut, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { useCategories, useProducts, Product } from '@/hooks/usePOSData';
+import { supabase } from '@/integrations/supabase/client';
 import POSProductGrid from '@/components/pos/POSProductGrid';
 import POSCart from '@/components/pos/POSCart';
 import POSPaymentModal from '@/components/pos/POSPaymentModal';
 import POSHeldOrders from '@/components/pos/POSHeldOrders';
 import POSCategories from '@/components/pos/POSCategories';
-
-// Mock data
-const mockCategories = [
-  { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
-  { id: 'boys', name: 'Boys', nameAr: 'أولاد', icon: '👦' },
-  { id: 'girls', name: 'Girls', nameAr: 'بنات', icon: '👧' },
-  { id: 'women', name: 'Women', nameAr: 'نساء', icon: '👩' },
-  { id: 'men', name: 'Men', nameAr: 'رجال', icon: '👨' },
-  { id: 'accessories', name: 'Accessories', nameAr: 'إكسسوارات', icon: '👜' },
-];
-
-const mockProducts = [
-  { id: '1', name: 'Boys Jeans Classic', nameAr: 'جينز أولاد كلاسيك', price: 4500, sku: 'BJ-001', barcode: '1234567890123', stock: 25, category: 'boys' },
-  { id: '2', name: 'Girls Summer Dress', nameAr: 'فستان صيفي بنات', price: 6000, sku: 'GD-002', barcode: '1234567890124', stock: 15, category: 'girls' },
-  { id: '3', name: 'Women Blouse Elegant', nameAr: 'بلوزة نسائية أنيقة', price: 8500, sku: 'WB-003', barcode: '1234567890125', stock: 8, category: 'women' },
-  { id: '4', name: 'Men Formal Shirt', nameAr: 'قميص رجالي رسمي', price: 7000, sku: 'MS-004', barcode: '1234567890126', stock: 20, category: 'men' },
-  { id: '5', name: 'Boys T-Shirt Sport', nameAr: 'تيشيرت رياضي أولاد', price: 2500, sku: 'BT-005', barcode: '1234567890127', stock: 45, category: 'boys' },
-  { id: '6', name: 'Girls Skirt Floral', nameAr: 'تنورة زهور بنات', price: 3800, sku: 'GS-006', barcode: '1234567890128', stock: 3, category: 'girls' },
-  { id: '7', name: 'Women Pants Casual', nameAr: 'بنطال نسائي كاجوال', price: 5500, sku: 'WP-007', barcode: '1234567890129', stock: 12, category: 'women' },
-  { id: '8', name: 'Men Jacket Winter', nameAr: 'جاكيت شتوي رجالي', price: 15000, sku: 'MJ-008', barcode: '1234567890130', stock: 0, category: 'men' },
-  { id: '9', name: 'Leather Belt Classic', nameAr: 'حزام جلد كلاسيك', price: 2000, sku: 'AC-009', barcode: '1234567890131', stock: 30, category: 'accessories' },
-  { id: '10', name: 'Fashion Handbag', nameAr: 'حقيبة يد عصرية', price: 12000, sku: 'AC-010', barcode: '1234567890132', stock: 5, category: 'accessories' },
-  { id: '11', name: 'Boys Shorts Denim', nameAr: 'شورت جينز أولاد', price: 3200, sku: 'BS-011', barcode: '1234567890133', stock: 18, category: 'boys' },
-  { id: '12', name: 'Girls Cardigan Knit', nameAr: 'كارديجان تريكو بنات', price: 4800, sku: 'GC-012', barcode: '1234567890134', stock: 10, category: 'girls' },
-];
+import { Link } from 'react-router-dom';
 
 interface CartItem {
   id: string;
@@ -63,27 +41,70 @@ const POS: React.FC = () => {
   const [showHeldOrders, setShowHeldOrders] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const { data: categories, isLoading: categoriesLoading } = useCategories();
+  const { data: products, isLoading: productsLoading } = useProducts();
+
+  // Transform categories for the component
+  const transformedCategories = [
+    { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
+    ...(categories?.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      nameAr: cat.name_ar || cat.name,
+      icon: getIconEmoji(cat.icon)
+    })) || [])
+  ];
+
+  // Transform products for the component
+  const transformedProducts = products?.map(prod => ({
+    id: prod.id,
+    name: prod.name,
+    nameAr: prod.name_ar || prod.name,
+    price: Number(prod.price),
+    sku: prod.sku,
+    barcode: prod.barcode || '',
+    stock: prod.stock,
+    category: prod.category_id || '',
+    image: prod.image_url || undefined
+  })) || [];
+
   // Listen for barcode scanner input (rapid keystrokes)
   useEffect(() => {
     let barcodeBuffer = '';
     let lastKeyTime = 0;
 
-    const handleKeyPress = (e: KeyboardEvent) => {
+    const handleKeyPress = async (e: KeyboardEvent) => {
       const currentTime = Date.now();
       
       // If Enter is pressed and we have a buffer, it's a barcode scan
       if (e.key === 'Enter' && barcodeBuffer.length > 5) {
-        const product = mockProducts.find(p => p.barcode === barcodeBuffer);
+        const scannedBarcode = barcodeBuffer;
+        barcodeBuffer = '';
+        
+        // Search for product by barcode
+        const { data: product, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('barcode', scannedBarcode)
+          .eq('is_active', true)
+          .maybeSingle();
+
         if (product) {
-          addToCart(product);
+          addToCart({
+            id: product.id,
+            name: product.name,
+            nameAr: product.name_ar || product.name,
+            price: Number(product.price),
+            sku: product.sku,
+            stock: product.stock
+          });
         } else {
           toast({
             title: language === 'ar' ? 'منتج غير موجود' : 'Product not found',
-            description: barcodeBuffer,
+            description: scannedBarcode,
             variant: 'destructive'
           });
         }
-        barcodeBuffer = '';
         return;
       }
 
@@ -110,7 +131,15 @@ const POS: React.FC = () => {
     return () => window.removeEventListener('keypress', handleKeyPress);
   }, [language]);
 
-  const addToCart = (product: typeof mockProducts[0]) => {
+  const addToCart = (product: { id: string; name: string; nameAr: string; price: number; sku: string; stock: number }) => {
+    if (product.stock === 0) {
+      toast({
+        title: language === 'ar' ? 'المنتج غير متوفر' : 'Out of stock',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -201,6 +230,8 @@ const POS: React.FC = () => {
     });
   };
 
+  const isLoading = categoriesLoading || productsLoading;
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* POS Header */}
@@ -227,13 +258,15 @@ const POS: React.FC = () => {
               </span>
             )}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white/80 hover:text-white hover:bg-white/10"
-          >
-            <Home size={20} />
-          </Button>
+          <Link to="/">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10"
+            >
+              <Home size={20} />
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -266,7 +299,7 @@ const POS: React.FC = () => {
 
             {/* Categories */}
             <POSCategories
-              categories={mockCategories}
+              categories={transformedCategories}
               selectedCategory={selectedCategory}
               onSelectCategory={setSelectedCategory}
             />
@@ -274,12 +307,18 @@ const POS: React.FC = () => {
 
           {/* Products Grid */}
           <div className="flex-1 overflow-y-auto">
-            <POSProductGrid
-              products={mockProducts}
-              onAddToCart={addToCart}
-              searchQuery={searchQuery}
-              selectedCategory={selectedCategory}
-            />
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <POSProductGrid
+                products={transformedProducts}
+                onAddToCart={addToCart}
+                searchQuery={searchQuery}
+                selectedCategory={selectedCategory}
+              />
+            )}
           </div>
         </div>
 
@@ -316,5 +355,18 @@ const POS: React.FC = () => {
     </div>
   );
 };
+
+// Helper function to convert icon names to emojis
+function getIconEmoji(iconName: string | null): string {
+  const iconMap: Record<string, string> = {
+    'Smartphone': '📱',
+    'Shirt': '👔',
+    'Coffee': '☕',
+    'Home': '🏠',
+    'Dumbbell': '🏋️',
+    'Package': '📦',
+  };
+  return iconMap[iconName || ''] || '📦';
+}
 
 export default POS;
