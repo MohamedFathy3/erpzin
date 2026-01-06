@@ -76,7 +76,8 @@ const Inventory: React.FC = () => {
       cost: product.cost, hasVariants: product.variants > 0, variants: [], 
       selectedSizes: [], selectedColors: [],
       stock: product.stock,
-      reorderPoint: 5, status: product.status === 'inactive' ? 'inactive' : 'active'
+      reorderPoint: 5, status: product.status === 'inactive' ? 'inactive' : 'active',
+      imageUrl: product.image || ''
     });
     setShowProductForm(true);
   };

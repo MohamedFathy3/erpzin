@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Upload, Barcode, RefreshCw } from 'lucide-react';
+import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import VariantMatrix, { VariantOption, ProductVariant } from './VariantMatrix';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ProductFormProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export interface ProductFormData {
   stock: number;
   reorderPoint: number;
   status: 'active' | 'inactive';
+  imageUrl: string;
 }
 
 // Default sizes and colors are now loaded from database via VariantMatrix
@@ -103,6 +105,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
   editProduct
 }) => {
   const { language } = useLanguage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
   
   // Fetch categories from database
   const { data: dbCategories = [] } = useQuery({
@@ -136,11 +142,67 @@ const ProductForm: React.FC<ProductFormProps> = ({
     selectedColors: [],
     stock: 0,
     reorderPoint: 5,
-    status: 'active'
+    status: 'active',
+    imageUrl: ''
   });
 
   const handleChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === 'ar' ? 'حجم الصورة يجب أن يكون أقل من 5 ميجابايت' : 'Image size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `products/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('company-logos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('company-logos')
+        .getPublicUrl(filePath);
+
+      handleChange('imageUrl', publicUrl);
+      toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح' : 'Image uploaded successfully');
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleUrlSubmit = () => {
+    if (imageUrlInput.trim()) {
+      handleChange('imageUrl', imageUrlInput.trim());
+      setImageUrlInput('');
+      setShowUrlInput(false);
+      toast.success(language === 'ar' ? 'تم إضافة رابط الصورة' : 'Image URL added');
+    }
+  };
+
+  const removeImage = () => {
+    handleChange('imageUrl', '');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -178,6 +240,90 @@ const ProductForm: React.FC<ProductFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          {/* Product Image */}
+          <div className="space-y-3">
+            <Label>{language === 'ar' ? 'صورة المنتج' : 'Product Image'}</Label>
+            <div className="flex gap-4 items-start">
+              {/* Image Preview */}
+              <div className="relative w-32 h-32 border-2 border-dashed border-border rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center">
+                {formData.imageUrl ? (
+                  <>
+                    <img 
+                      src={formData.imageUrl} 
+                      alt="Product" 
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                )}
+              </div>
+              
+              {/* Upload Options */}
+              <div className="flex-1 space-y-3">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingImage}
+                    className="flex-1"
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    {language === 'ar' ? 'رفع من الجهاز' : 'Upload from Device'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                  >
+                    <Link className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                
+                {showUrlInput && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={imageUrlInput}
+                      onChange={(e) => setImageUrlInput(e.target.value)}
+                      placeholder={language === 'ar' ? 'أدخل رابط الصورة...' : 'Enter image URL...'}
+                      className="flex-1"
+                    />
+                    <Button type="button" onClick={handleUrlSubmit} size="sm">
+                      {language === 'ar' ? 'إضافة' : 'Add'}
+                    </Button>
+                  </div>
+                )}
+                
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'الحد الأقصى: 5 ميجابايت - الصيغ: JPG, PNG, GIF, WEBP'
+                    : 'Max: 5MB - Formats: JPG, PNG, GIF, WEBP'
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -343,6 +489,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               variants={formData.variants}
               baseSku={formData.sku}
               basePrice={formData.price}
+              baseCost={formData.cost}
               onVariantChange={(variants) => handleChange('variants', variants)}
               selectedSizes={formData.selectedSizes}
               selectedColors={formData.selectedColors}
