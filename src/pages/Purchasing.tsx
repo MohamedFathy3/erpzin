@@ -13,10 +13,11 @@ import SupplierForm from '@/components/purchasing/SupplierForm';
 import SupplierDetails from '@/components/purchasing/SupplierDetails';
 import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
 import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
+import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
 import { cn } from '@/lib/utils';
 import { 
   Plus, Search, Truck, Package, FileText, Building2, Phone, Mail, User, 
-  Eye, Edit2, Wallet, CreditCard, TrendingUp, Receipt
+  Eye, Edit2, Wallet, CreditCard, TrendingUp, Receipt, ShoppingCart
 } from 'lucide-react';
 
 const Purchasing = () => {
@@ -80,8 +81,8 @@ const Purchasing = () => {
   const stats = [
     { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: invoices.length, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
     { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalInvoices.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
+    { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
     { label: language === 'ar' ? 'المستحق للموردين' : 'Payables', value: `${totalBalance.toLocaleString()} YER`, icon: <Wallet className="text-destructive" size={24} />, color: 'bg-destructive/10' },
-    { label: language === 'ar' ? 'الموردين' : 'Suppliers', value: suppliers.length, icon: <Building2 className="text-chart-4" size={24} />, color: 'bg-chart-4/10' }
   ];
 
   return (
@@ -124,10 +125,19 @@ const Purchasing = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="invoices">{language === 'ar' ? 'فواتير الشراء' : 'Invoices'}</TabsTrigger>
-            <TabsTrigger value="suppliers">{language === 'ar' ? 'الموردين' : 'Suppliers'}</TabsTrigger>
-            <TabsTrigger value="orders">{language === 'ar' ? 'أوامر الشراء' : 'Orders'}</TabsTrigger>
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="invoices" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileText size={16} className="me-2" />
+              {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
+              <ShoppingCart size={16} className="me-2" />
+              {language === 'ar' ? 'أوامر الشراء' : 'Orders'}
+            </TabsTrigger>
+            <TabsTrigger value="suppliers" className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
+              <Building2 size={16} className="me-2" />
+              {language === 'ar' ? 'الموردين' : 'Suppliers'}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="invoices" className="mt-4">
@@ -220,9 +230,9 @@ const Purchasing = () => {
           </TabsContent>
 
           <TabsContent value="orders" className="mt-4">
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                {language === 'ar' ? 'أوامر الشراء - قريباً' : 'Purchase Orders - Coming Soon'}
+            <Card className="shadow-md border-border">
+              <CardContent className="p-4">
+                <PurchaseOrderList />
               </CardContent>
             </Card>
           </TabsContent>
