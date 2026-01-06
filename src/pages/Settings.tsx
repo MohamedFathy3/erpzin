@@ -41,6 +41,7 @@ import {
 import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
 import ModuleSettings from '@/components/settings/ModuleSettings';
+import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
 
 const Settings = () => {
   const { language, direction, setLanguage } = useLanguage();
@@ -770,6 +771,9 @@ const Settings = () => {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Payment Methods */}
+            <PaymentMethodsManager />
           </TabsContent>
 
           {/* Users & Permissions Tab */}
