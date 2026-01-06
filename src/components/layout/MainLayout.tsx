@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { SidebarProvider } from '@/contexts/SidebarContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
@@ -13,6 +14,7 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { signOut } = useAuth();
 
   const getActiveFromPath = () => {
     const path = location.pathname;
@@ -22,7 +24,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
 
   const currentActive = activeItem || getActiveFromPath();
 
-  const handleNavigate = (item: string) => {
+  const handleNavigate = async (item: string) => {
+    if (item === 'logout') {
+      await signOut();
+      navigate('/auth');
+      return;
+    }
+    
     const routes: Record<string, string> = {
       dashboard: '/',
       inventory: '/inventory',
