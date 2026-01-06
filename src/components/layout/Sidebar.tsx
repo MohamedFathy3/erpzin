@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   Package,
-  ShoppingCart,
   Truck,
   Wallet,
   Users,
@@ -57,7 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   const navItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('nav.dashboard') },
     { id: 'inventory', icon: <Package size={20} />, label: t('nav.inventory') },
-    { id: 'pos', icon: <ShoppingCart size={20} />, label: t('nav.pos') },
     { id: 'sales', icon: <Receipt size={20} />, label: t('nav.sales') },
     { id: 'purchasing', icon: <Truck size={20} />, label: t('nav.purchasing') },
     { id: 'finance', icon: <Wallet size={20} />, label: t('nav.finance') },
