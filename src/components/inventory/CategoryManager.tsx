@@ -391,81 +391,93 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
     }
   };
 
+  if (isCollapsed) {
+    return (
+      <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col items-center py-4">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-10 w-10 p-0 mb-2"
+          onClick={() => setIsCollapsed(false)}
+        >
+          <Layers size={20} className="text-primary" />
+        </Button>
+        <div className="w-px bg-border flex-1 my-2" />
+        <span className="text-xs text-muted-foreground [writing-mode:vertical-rl] rotate-180">
+          {language === 'ar' ? 'التصنيفات' : 'Categories'}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <Collapsible
-      open={!isCollapsed}
-      onOpenChange={(open) => setIsCollapsed(!open)}
-      className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col"
-    >
+    <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
-            </Button>
-          </CollapsibleTrigger>
-          {!isCollapsed && (
-            <h3 className="font-bold text-foreground">
-              {language === 'ar' ? 'التصنيفات' : 'Categories'}
-            </h3>
-          )}
-        </div>
-        {!isCollapsed && (
-          <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0">
-            <Plus size={16} />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0"
+            onClick={() => setIsCollapsed(true)}
+          >
+            <PanelLeftClose size={16} />
           </Button>
-        )}
+          <h3 className="font-bold text-foreground">
+            {language === 'ar' ? 'التصنيفات' : 'Categories'}
+          </h3>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0">
+          <Plus size={16} />
+        </Button>
       </div>
 
-      <CollapsibleContent className="flex-1 flex flex-col overflow-hidden">
-        {/* All Products */}
-        <div
-          className={cn(
-            'flex items-center gap-2 py-2 px-4 cursor-pointer transition-all border-b border-border',
-            selectedCategory === null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-          )}
-          onClick={() => onSelectCategory(null)}
-        >
-          <Package size={18} />
-          <span className="flex-1 font-medium text-sm">
-            {language === 'ar' ? 'جميع المنتجات' : 'All Products'}
-          </span>
-          <span className={cn(
-            'text-xs px-2 py-0.5 rounded-full',
-            selectedCategory === null ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
-          )}>
-            {totalProducts}
-          </span>
-        </div>
+      {/* All Products */}
+      <div
+        className={cn(
+          'flex items-center gap-2 py-2 px-4 cursor-pointer transition-all border-b border-border',
+          selectedCategory === null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+        )}
+        onClick={() => onSelectCategory(null)}
+      >
+        <Package size={18} />
+        <span className="flex-1 font-medium text-sm">
+          {language === 'ar' ? 'جميع المنتجات' : 'All Products'}
+        </span>
+        <span className={cn(
+          'text-xs px-2 py-0.5 rounded-full',
+          selectedCategory === null ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
+        )}>
+          {totalProducts}
+        </span>
+      </div>
 
-        {/* Tree */}
-        <div className="flex-1 overflow-y-auto p-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-            </div>
-          ) : categoryTree.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Package size={32} className="mb-2 opacity-50" />
-              <p className="text-sm">{language === 'ar' ? 'لا توجد تصنيفات' : 'No categories'}</p>
-            </div>
-          ) : (
-            categoryTree.map((category) => (
-              <CategoryNode
-                key={category.id}
-                category={category}
-                level={0}
-                selectedCategory={selectedCategory}
-                onSelectCategory={onSelectCategory}
-                onEdit={handleEdit}
-                onDelete={setDeleteCategory}
-                language={language}
-              />
-            ))
-          )}
-        </div>
-      </CollapsibleContent>
+      {/* Tree */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+          </div>
+        ) : categoryTree.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <Package size={32} className="mb-2 opacity-50" />
+            <p className="text-sm">{language === 'ar' ? 'لا توجد تصنيفات' : 'No categories'}</p>
+          </div>
+        ) : (
+          categoryTree.map((category) => (
+            <CategoryNode
+              key={category.id}
+              category={category}
+              level={0}
+              selectedCategory={selectedCategory}
+              onSelectCategory={onSelectCategory}
+              onEdit={handleEdit}
+              onDelete={setDeleteCategory}
+              language={language}
+            />
+          ))
+        )}
+      </div>
 
       {/* Add/Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && resetForm()}>
@@ -575,7 +587,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Collapsible>
+    </div>
   );
 };
 
