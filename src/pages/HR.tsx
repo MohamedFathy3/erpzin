@@ -24,8 +24,10 @@ import {
   UserCheck,
   Truck,
   Building,
-  Phone
+  Phone,
+  Briefcase
 } from 'lucide-react';
+import SalesmenManager from "@/components/sales/SalesmenManager";
 
 const HR = () => {
   const { language, direction } = useLanguage();
@@ -174,6 +176,7 @@ const HR = () => {
       title: 'HR & Payroll',
       employees: 'Employees',
       deliveryPersons: 'Delivery Persons',
+      salesReps: 'Sales Representatives',
       attendance: 'Attendance',
       payroll: 'Payroll',
       newEmployee: 'New Employee',
@@ -215,6 +218,7 @@ const HR = () => {
       title: 'الموارد البشرية والرواتب',
       employees: 'الموظفين',
       deliveryPersons: 'مناديب التوصيل',
+      salesReps: 'مندوبين المبيعات',
       attendance: 'الحضور',
       payroll: 'الرواتب',
       newEmployee: 'موظف جديد',
@@ -498,6 +502,10 @@ const HR = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="employees">{t.employees}</TabsTrigger>
+            <TabsTrigger value="salesreps" className="flex items-center gap-2">
+              <Briefcase size={16} />
+              {t.salesReps}
+            </TabsTrigger>
             <TabsTrigger value="delivery">{t.deliveryPersons}</TabsTrigger>
             <TabsTrigger value="attendance">{t.attendance}</TabsTrigger>
           </TabsList>
@@ -565,6 +573,10 @@ const HR = () => {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="salesreps" className="mt-4">
+            <SalesmenManager />
           </TabsContent>
 
           <TabsContent value="delivery" className="mt-4">
