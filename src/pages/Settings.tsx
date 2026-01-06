@@ -31,7 +31,10 @@ import {
   Store,
   FileText,
   Languages,
-  Users
+  Users,
+  Upload,
+  X,
+  Image
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 
@@ -82,8 +85,14 @@ const Settings = () => {
     tax_number: '',
     commercial_register: '',
     default_currency: 'YER',
-    tax_rate: 0
+    tax_rate: 0,
+    logo_url: '',
+    logo_icon_url: '',
+    phones: [] as string[]
   });
+
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingLogoIcon, setUploadingLogoIcon] = useState(false);
 
   // Update company form when data loads
   React.useEffect(() => {
@@ -98,10 +107,70 @@ const Settings = () => {
         tax_number: companySettings.tax_number || '',
         commercial_register: companySettings.commercial_register || '',
         default_currency: companySettings.default_currency || 'YER',
-        tax_rate: companySettings.tax_rate || 0
+        tax_rate: companySettings.tax_rate || 0,
+        logo_url: (companySettings as any).logo_url || '',
+        logo_icon_url: (companySettings as any).logo_icon_url || '',
+        phones: (companySettings as any).phones || []
       });
     }
   }, [companySettings]);
+
+  // Handle logo upload
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'full' | 'icon') => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const setUploading = type === 'full' ? setUploadingLogo : setUploadingLogoIcon;
+    setUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${type}-logo-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('company-logos')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('company-logos')
+        .getPublicUrl(fileName);
+
+      if (type === 'full') {
+        setCompanyForm(prev => ({ ...prev, logo_url: publicUrl }));
+      } else {
+        setCompanyForm(prev => ({ ...prev, logo_icon_url: publicUrl }));
+      }
+
+      toast({ title: language === 'ar' ? 'تم رفع الشعار بنجاح' : 'Logo uploaded successfully' });
+    } catch (error) {
+      toast({ title: language === 'ar' ? 'خطأ في رفع الشعار' : 'Error uploading logo', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle adding phone number
+  const addPhoneNumber = () => {
+    setCompanyForm(prev => ({ ...prev, phones: [...prev.phones, ''] }));
+  };
+
+  // Handle removing phone number
+  const removePhoneNumber = (index: number) => {
+    setCompanyForm(prev => ({
+      ...prev,
+      phones: prev.phones.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Handle updating phone number
+  const updatePhoneNumber = (index: number, value: string) => {
+    setCompanyForm(prev => ({
+      ...prev,
+      phones: prev.phones.map((p, i) => i === index ? value : p)
+    }));
+  };
 
   const translations = {
     en: {
@@ -285,6 +354,124 @@ const Settings = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Logos Section */}
+                <div className="space-y-4">
+                  <Label className="flex items-center gap-2 text-base font-semibold">
+                    <Image size={18} />
+                    {language === 'ar' ? 'شعارات الشركة' : 'Company Logos'}
+                  </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Full Logo (Expanded Sidebar) */}
+                    <div className="space-y-3">
+                      <Label className="text-sm text-muted-foreground">
+                        {language === 'ar' ? 'الشعار الكامل (القائمة المفتوحة)' : 'Full Logo (Expanded Sidebar)'}
+                      </Label>
+                      <div className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center min-h-[120px] bg-muted/20">
+                        {companyForm.logo_url ? (
+                          <div className="relative group">
+                            <img 
+                              src={companyForm.logo_url} 
+                              alt="Company Logo" 
+                              className="max-h-20 max-w-full object-contain"
+                            />
+                            {isEditingCompany && (
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -end-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => setCompanyForm(prev => ({ ...prev, logo_url: '' }))}
+                              >
+                                <X size={12} />
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              {language === 'ar' ? 'لا يوجد شعار' : 'No logo uploaded'}
+                            </p>
+                          </div>
+                        )}
+                        {isEditingCompany && (
+                          <label className="mt-3">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleLogoUpload(e, 'full')}
+                              disabled={uploadingLogo}
+                            />
+                            <Button variant="outline" size="sm" asChild disabled={uploadingLogo}>
+                              <span className="cursor-pointer">
+                                {uploadingLogo 
+                                  ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') 
+                                  : (language === 'ar' ? 'رفع شعار' : 'Upload Logo')}
+                              </span>
+                            </Button>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Icon Logo (Collapsed Sidebar) */}
+                    <div className="space-y-3">
+                      <Label className="text-sm text-muted-foreground">
+                        {language === 'ar' ? 'أيقونة الشعار (القائمة المطوية)' : 'Icon Logo (Collapsed Sidebar)'}
+                      </Label>
+                      <div className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center min-h-[120px] bg-muted/20">
+                        {companyForm.logo_icon_url ? (
+                          <div className="relative group">
+                            <img 
+                              src={companyForm.logo_icon_url} 
+                              alt="Company Icon" 
+                              className="max-h-16 max-w-16 object-contain"
+                            />
+                            {isEditingCompany && (
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -end-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => setCompanyForm(prev => ({ ...prev, logo_icon_url: '' }))}
+                              >
+                                <X size={12} />
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center">
+                            <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              {language === 'ar' ? 'لا يوجد أيقونة' : 'No icon uploaded'}
+                            </p>
+                          </div>
+                        )}
+                        {isEditingCompany && (
+                          <label className="mt-3">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleLogoUpload(e, 'icon')}
+                              disabled={uploadingLogoIcon}
+                            />
+                            <Button variant="outline" size="sm" asChild disabled={uploadingLogoIcon}>
+                              <span className="cursor-pointer">
+                                {uploadingLogoIcon 
+                                  ? (language === 'ar' ? 'جاري الرفع...' : 'Uploading...') 
+                                  : (language === 'ar' ? 'رفع أيقونة' : 'Upload Icon')}
+                              </span>
+                            </Button>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Company Names */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label>{t.companyName}</Label>
@@ -317,31 +504,77 @@ const Settings = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                {/* Phone Numbers Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
                     <Label className="flex items-center gap-2">
                       <Phone size={16} />
-                      {t.phone}
+                      {language === 'ar' ? 'أرقام الهواتف' : 'Phone Numbers'}
+                    </Label>
+                    {isEditingCompany && (
+                      <Button variant="outline" size="sm" onClick={addPhoneNumber}>
+                        <Plus size={14} className="me-1" />
+                        {language === 'ar' ? 'إضافة رقم' : 'Add Number'}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Main Phone */}
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">
+                      {language === 'ar' ? 'الرقم الرئيسي' : 'Main Number'}
                     </Label>
                     <Input 
                       value={companyForm.phone}
                       onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
                       disabled={!isEditingCompany}
                       dir="ltr"
+                      placeholder="+967 XXX XXX XXX"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Mail size={16} />
-                      {t.email}
-                    </Label>
-                    <Input 
-                      value={companyForm.email}
-                      onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
-                      disabled={!isEditingCompany}
-                      type="email"
-                    />
-                  </div>
+
+                  {/* Additional Phones */}
+                  {companyForm.phones.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-sm text-muted-foreground">
+                        {language === 'ar' ? 'أرقام إضافية' : 'Additional Numbers'}
+                      </Label>
+                      {companyForm.phones.map((phone, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input 
+                            value={phone}
+                            onChange={(e) => updatePhoneNumber(index, e.target.value)}
+                            disabled={!isEditingCompany}
+                            dir="ltr"
+                            placeholder="+967 XXX XXX XXX"
+                          />
+                          {isEditingCompany && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => removePhoneNumber(index)}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Mail size={16} />
+                    {t.email}
+                  </Label>
+                  <Input 
+                    value={companyForm.email}
+                    onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                    disabled={!isEditingCompany}
+                    type="email"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
