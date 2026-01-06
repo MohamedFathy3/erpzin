@@ -120,7 +120,10 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('en');
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem('injaz-language');
+    return (saved as Language) || 'ar';
+  });
   const direction: Direction = language === 'ar' ? 'rtl' : 'ltr';
 
   useEffect(() => {
