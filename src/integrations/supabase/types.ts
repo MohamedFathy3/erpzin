@@ -662,6 +662,117 @@ export type Database = {
           },
         ]
       }
+      stock_transfer_items: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          received_quantity: number | null
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity: number
+          received_quantity?: number | null
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          received_quantity?: number | null
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfer_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfer_items_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "stock_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_transfers: {
+        Row: {
+          approved_by: string | null
+          completed_date: string | null
+          created_at: string
+          created_by: string | null
+          from_warehouse_id: string
+          id: string
+          notes: string | null
+          status: string
+          to_warehouse_id: string
+          total_items: number | null
+          total_quantity: number | null
+          transfer_date: string
+          transfer_number: string
+          updated_at: string
+        }
+        Insert: {
+          approved_by?: string | null
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          from_warehouse_id: string
+          id?: string
+          notes?: string | null
+          status?: string
+          to_warehouse_id: string
+          total_items?: number | null
+          total_quantity?: number | null
+          transfer_date?: string
+          transfer_number: string
+          updated_at?: string
+        }
+        Update: {
+          approved_by?: string | null
+          completed_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          from_warehouse_id?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          to_warehouse_id?: string
+          total_items?: number | null
+          total_quantity?: number | null
+          transfer_date?: string
+          transfer_number?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transfers_from_warehouse_id_fkey"
+            columns: ["from_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transfers_to_warehouse_id_fkey"
+            columns: ["to_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
@@ -755,6 +866,51 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_stock: {
+        Row: {
+          id: string
+          last_updated: string
+          max_quantity: number | null
+          min_quantity: number | null
+          product_id: string
+          quantity: number
+          warehouse_id: string
+        }
+        Insert: {
+          id?: string
+          last_updated?: string
+          max_quantity?: number | null
+          min_quantity?: number | null
+          product_id: string
+          quantity?: number
+          warehouse_id: string
+        }
+        Update: {
+          id?: string
+          last_updated?: string
+          max_quantity?: number | null
+          min_quantity?: number | null
+          product_id?: string
+          quantity?: number
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stock_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stock_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouses: {
         Row: {
           address: string | null
@@ -805,6 +961,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_transfer_number: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
