@@ -1,35 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Banknote, CreditCard, Check } from 'lucide-react';
+import { X, Banknote, CreditCard, Check, Smartphone, Building2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+
+type PaymentMethodType = 'cash' | 'card' | 'kuraimi' | 'floosak' | 'jawal' | 'bank_transfer' | 'split';
+
+interface PaymentMethod {
+  id: PaymentMethodType;
+  icon: React.ReactNode;
+  label: string;
+  labelAr: string;
+  color: string;
+}
+
+const paymentMethods: PaymentMethod[] = [
+  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success' },
+  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500' },
+  { id: 'kuraimi', icon: <Smartphone size={20} />, label: 'Kuraimi', labelAr: 'كريمي', color: 'bg-orange-500' },
+  { id: 'floosak', icon: <Wallet size={20} />, label: 'Floosak', labelAr: 'فلوسك', color: 'bg-purple-500' },
+  { id: 'jawal', icon: <Smartphone size={20} />, label: 'Jawal Pay', labelAr: 'جوال باي', color: 'bg-green-600' },
+  { id: 'bank_transfer', icon: <Building2 size={20} />, label: 'Bank Transfer', labelAr: 'تحويل بنكي', color: 'bg-slate-600' },
+  { id: 'split', icon: <span className="text-sm font-bold">½</span>, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary' },
+];
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
-  onComplete: (payments: { cash: number; card: number }) => void;
+  onComplete: (payments: { method: string; amount: number }[]) => void;
+  customer?: { id: string; name: string } | null;
+  deliveryPerson?: { id: string; name: string } | null;
 }
 
 const POSPaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
   total,
-  onComplete
+  onComplete,
+  customer,
+  deliveryPerson
 }) => {
   const { language } = useLanguage();
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'split'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
   const [cashAmount, setCashAmount] = useState<string>(total.toString());
-  const [cardAmount, setCardAmount] = useState<string>('0');
+  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({
+    cash: '',
+    card: ''
+  });
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    setCashAmount(total.toString());
+    setSplitAmounts({ cash: '', card: '' });
+  }, [total, isOpen]);
 
   const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
   const handleQuickAmount = (amount: number) => {
     if (paymentMethod === 'split') {
-      setCashAmount(amount.toString());
-      setCardAmount((total - amount).toString());
+      setSplitAmounts(prev => ({
+        ...prev,
+        cash: amount.toString(),
+        card: Math.max(0, total - amount).toString()
+      }));
     } else {
       setCashAmount(amount.toString());
     }
@@ -37,34 +72,158 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   const calculateChange = () => {
     const cash = parseFloat(cashAmount) || 0;
-    const card = parseFloat(cardAmount) || 0;
     if (paymentMethod === 'split') {
-      return cash + card - total;
+      const totalPaid = Object.values(splitAmounts).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+      return totalPaid - total;
     }
     return paymentMethod === 'cash' ? cash - total : 0;
   };
 
   const canComplete = () => {
     const cash = parseFloat(cashAmount) || 0;
-    const card = parseFloat(cardAmount) || 0;
     
     if (paymentMethod === 'cash') return cash >= total;
-    if (paymentMethod === 'card') return true;
-    if (paymentMethod === 'split') return cash + card >= total;
-    return false;
+    if (paymentMethod === 'split') {
+      const totalPaid = Object.values(splitAmounts).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+      return totalPaid >= total;
+    }
+    return true; // For electronic payments
   };
 
   const handleComplete = () => {
     setIsProcessing(true);
     setTimeout(() => {
-      const cash = paymentMethod === 'card' ? 0 : parseFloat(cashAmount) || 0;
-      const card = paymentMethod === 'cash' ? 0 : paymentMethod === 'card' ? total : parseFloat(cardAmount) || 0;
-      onComplete({ cash, card });
+      let payments: { method: string; amount: number }[] = [];
+      
+      if (paymentMethod === 'split') {
+        Object.entries(splitAmounts).forEach(([method, amount]) => {
+          const numAmount = parseFloat(amount) || 0;
+          if (numAmount > 0) {
+            payments.push({ method, amount: numAmount });
+          }
+        });
+      } else if (paymentMethod === 'cash') {
+        payments = [{ method: 'cash', amount: parseFloat(cashAmount) || total }];
+      } else {
+        payments = [{ method: paymentMethod, amount: total }];
+      }
+      
+      onComplete(payments);
       setIsProcessing(false);
     }, 1000);
   };
 
   if (!isOpen) return null;
+
+  const renderPaymentContent = () => {
+    if (paymentMethod === 'cash') {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              {language === 'ar' ? 'المبلغ المستلم' : 'Amount Received'}
+            </label>
+            <Input
+              type="number"
+              value={cashAmount}
+              onChange={(e) => setCashAmount(e.target.value)}
+              className="text-2xl font-bold h-14 text-center"
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {quickAmounts.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => handleQuickAmount(amount)}
+                className="py-3 bg-muted hover:bg-muted/80 rounded-lg font-medium text-foreground transition-colors"
+              >
+                {amount.toLocaleString()}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (paymentMethod === 'split') {
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
+                <Banknote size={16} />
+                {language === 'ar' ? 'نقدي' : 'Cash'}
+              </label>
+              <Input
+                type="number"
+                value={splitAmounts.cash}
+                onChange={(e) => {
+                  setSplitAmounts(prev => ({
+                    ...prev,
+                    cash: e.target.value,
+                    card: Math.max(0, total - (parseFloat(e.target.value) || 0)).toString()
+                  }));
+                }}
+                className="text-xl font-bold h-12 text-center"
+              />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
+                <CreditCard size={16} />
+                {language === 'ar' ? 'شبكة' : 'Card'}
+              </label>
+              <Input
+                type="number"
+                value={splitAmounts.card}
+                onChange={(e) => {
+                  setSplitAmounts(prev => ({
+                    ...prev,
+                    card: e.target.value,
+                    cash: Math.max(0, total - (parseFloat(e.target.value) || 0)).toString()
+                  }));
+                }}
+                className="text-xl font-bold h-12 text-center"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {quickAmounts.slice(0, 3).map((amount) => (
+              <button
+                key={amount}
+                onClick={() => handleQuickAmount(amount)}
+                className="py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium text-foreground transition-colors"
+              >
+                {language === 'ar' ? 'نقدي' : 'Cash'}: {amount.toLocaleString()}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Electronic payment methods
+    const method = paymentMethods.find(m => m.id === paymentMethod);
+    return (
+      <div className="text-center py-8">
+        <div className={cn('w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center text-white', method?.color)}>
+          {method?.icon}
+        </div>
+        <p className="text-lg font-medium text-foreground mb-2">
+          {language === 'ar' ? method?.labelAr : method?.label}
+        </p>
+        <p className="text-muted-foreground">
+          {language === 'ar' 
+            ? `جاهز لاستلام الدفع عبر ${method?.labelAr}`
+            : `Ready to receive ${method?.label} payment`
+          }
+        </p>
+        <p className="text-3xl font-bold text-primary mt-4">
+          {total.toLocaleString()} YER
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -90,6 +249,24 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div className="p-6">
+          {/* Customer & Delivery Info */}
+          {(customer || deliveryPerson) && (
+            <div className="flex gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
+              {customer && (
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">{language === 'ar' ? 'العميل' : 'Customer'}</p>
+                  <p className="font-medium text-foreground">{customer.name}</p>
+                </div>
+              )}
+              {deliveryPerson && (
+                <div className="flex-1">
+                  <p className="text-xs text-muted-foreground">{language === 'ar' ? 'مندوب التوصيل' : 'Delivery'}</p>
+                  <p className="font-medium text-foreground">{deliveryPerson.name}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Total Display */}
           <div className="text-center mb-6">
             <p className="text-muted-foreground text-sm mb-1">
@@ -101,118 +278,29 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           </div>
 
           {/* Payment Method Tabs */}
-          <div className="flex gap-2 mb-6">
-            {[
-              { id: 'cash', icon: <Banknote size={20} />, label: language === 'ar' ? 'نقدي' : 'Cash' },
-              { id: 'card', icon: <CreditCard size={20} />, label: language === 'ar' ? 'شبكة' : 'Card' },
-              { id: 'split', icon: <span className="text-sm font-bold">½</span>, label: language === 'ar' ? 'تقسيم' : 'Split' }
-            ].map((method) => (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {paymentMethods.map((method) => (
               <button
                 key={method.id}
-                onClick={() => setPaymentMethod(method.id as 'cash' | 'card' | 'split')}
+                onClick={() => setPaymentMethod(method.id)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all',
+                  'flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all text-sm',
                   paymentMethod === method.id
                     ? 'bg-primary text-primary-foreground shadow-lg'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 )}
               >
                 {method.icon}
-                {method.label}
+                {language === 'ar' ? method.labelAr : method.label}
               </button>
             ))}
           </div>
 
-          {/* Payment Inputs */}
-          {paymentMethod === 'cash' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  {language === 'ar' ? 'المبلغ المستلم' : 'Amount Received'}
-                </label>
-                <Input
-                  type="number"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  className="text-2xl font-bold h-14 text-center"
-                  autoFocus
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {quickAmounts.map((amount) => (
-                  <button
-                    key={amount}
-                    onClick={() => handleQuickAmount(amount)}
-                    className="py-3 bg-muted hover:bg-muted/80 rounded-lg font-medium text-foreground transition-colors"
-                  >
-                    {amount.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {paymentMethod === 'card' && (
-            <div className="text-center py-8">
-              <CreditCard size={64} className="mx-auto text-primary mb-4" />
-              <p className="text-muted-foreground">
-                {language === 'ar' ? 'جاهز لاستلام الدفع عبر الشبكة' : 'Ready to receive card payment'}
-              </p>
-            </div>
-          )}
-
-          {paymentMethod === 'split' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
-                    <Banknote size={16} />
-                    {language === 'ar' ? 'نقدي' : 'Cash'}
-                  </label>
-                  <Input
-                    type="number"
-                    value={cashAmount}
-                    onChange={(e) => {
-                      setCashAmount(e.target.value);
-                      const remaining = total - (parseFloat(e.target.value) || 0);
-                      setCardAmount(Math.max(0, remaining).toString());
-                    }}
-                    className="text-xl font-bold h-12 text-center"
-                  />
-                </div>
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
-                    <CreditCard size={16} />
-                    {language === 'ar' ? 'شبكة' : 'Card'}
-                  </label>
-                  <Input
-                    type="number"
-                    value={cardAmount}
-                    onChange={(e) => {
-                      setCardAmount(e.target.value);
-                      const remaining = total - (parseFloat(e.target.value) || 0);
-                      setCashAmount(Math.max(0, remaining).toString());
-                    }}
-                    className="text-xl font-bold h-12 text-center"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {quickAmounts.slice(0, 3).map((amount) => (
-                  <button
-                    key={amount}
-                    onClick={() => handleQuickAmount(amount)}
-                    className="py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium text-foreground transition-colors"
-                  >
-                    {language === 'ar' ? 'نقدي' : 'Cash'}: {amount.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Payment Content */}
+          {renderPaymentContent()}
 
           {/* Change Display */}
-          {paymentMethod !== 'card' && calculateChange() > 0 && (
+          {paymentMethod === 'cash' && calculateChange() > 0 && (
             <div className="mt-6 p-4 bg-success/10 rounded-xl text-center">
               <p className="text-sm text-success mb-1">
                 {language === 'ar' ? 'الباقي' : 'Change'}

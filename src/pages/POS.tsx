@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Clock, Home, LogOut, Loader2 } from 'lucide-react';
+import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
@@ -12,15 +12,21 @@ import POSCart from '@/components/pos/POSCart';
 import POSPaymentModal from '@/components/pos/POSPaymentModal';
 import POSHeldOrders from '@/components/pos/POSHeldOrders';
 import POSCategories from '@/components/pos/POSCategories';
+import POSVariantSelector from '@/components/pos/POSVariantSelector';
+import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
+import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import { Link } from 'react-router-dom';
 
 interface CartItem {
   id: string;
+  variantId?: string;
   name: string;
   nameAr: string;
   price: number;
   quantity: number;
   sku: string;
+  sizeName?: string;
+  colorName?: string;
 }
 
 interface HeldOrder {
@@ -31,6 +37,22 @@ interface HeldOrder {
   note?: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  phone: string | null;
+  address: string | null;
+  loyalty_points: number | null;
+}
+
+interface DeliveryPerson {
+  id: string;
+  name: string;
+  nameAr: string;
+  phone: string;
+}
+
 const POS: React.FC = () => {
   const { language, t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,6 +61,12 @@ const POS: React.FC = () => {
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [showHeldOrders, setShowHeldOrders] = useState(false);
+  const [showVariantSelector, setShowVariantSelector] = useState(false);
+  const [showCustomerSelector, setShowCustomerSelector] = useState(false);
+  const [showDeliverySelector, setShowDeliverySelector] = useState(false);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<any>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: categories, isLoading: categoriesLoading } = useCategories();
@@ -65,7 +93,8 @@ const POS: React.FC = () => {
     barcode: prod.barcode || '',
     stock: prod.stock,
     category: prod.category_id || '',
-    image: prod.image_url || undefined
+    image: prod.image_url || undefined,
+    hasVariants: prod.has_variants || false
   })) || [];
 
   // Listen for barcode scanner input (rapid keystrokes)
@@ -76,12 +105,10 @@ const POS: React.FC = () => {
     const handleKeyPress = async (e: KeyboardEvent) => {
       const currentTime = Date.now();
       
-      // If Enter is pressed and we have a buffer, it's a barcode scan
       if (e.key === 'Enter' && barcodeBuffer.length > 5) {
         const scannedBarcode = barcodeBuffer;
         barcodeBuffer = '';
         
-        // Search for product by barcode
         const { data: product, error } = await supabase
           .from('products')
           .select('*')
@@ -96,7 +123,8 @@ const POS: React.FC = () => {
             nameAr: product.name_ar || product.name,
             price: Number(product.price),
             sku: product.sku,
-            stock: product.stock
+            stock: product.stock,
+            hasVariants: product.has_variants || false
           });
         } else {
           toast({
@@ -108,7 +136,6 @@ const POS: React.FC = () => {
         return;
       }
 
-      // Build barcode buffer for rapid keypresses (within 50ms)
       if (currentTime - lastKeyTime < 50 || barcodeBuffer === '') {
         if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
           barcodeBuffer += e.key;
@@ -119,7 +146,6 @@ const POS: React.FC = () => {
       
       lastKeyTime = currentTime;
 
-      // Clear buffer after 200ms of inactivity
       setTimeout(() => {
         if (Date.now() - lastKeyTime > 200) {
           barcodeBuffer = '';
@@ -131,7 +157,19 @@ const POS: React.FC = () => {
     return () => window.removeEventListener('keypress', handleKeyPress);
   }, [language]);
 
-  const addToCart = (product: { id: string; name: string; nameAr: string; price: number; sku: string; stock: number }) => {
+  const addToCart = (product: { id: string; name: string; nameAr: string; price: number; sku: string; stock: number; hasVariants?: boolean }) => {
+    if (product.hasVariants) {
+      setSelectedProductForVariant({
+        id: product.id,
+        name: product.name,
+        nameAr: product.nameAr,
+        price: product.price,
+        sku: product.sku
+      });
+      setShowVariantSelector(true);
+      return;
+    }
+
     if (product.stock === 0) {
       toast({
         title: language === 'ar' ? 'المنتج غير متوفر' : 'Out of stock',
@@ -141,10 +179,10 @@ const POS: React.FC = () => {
     }
 
     setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const existing = prev.find(item => item.id === product.id && !item.variantId);
       if (existing) {
         return prev.map(item =>
-          item.id === product.id
+          item.id === product.id && !item.variantId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
@@ -156,6 +194,39 @@ const POS: React.FC = () => {
         price: product.price,
         quantity: 1,
         sku: product.sku
+      }];
+    });
+  };
+
+  const addVariantToCart = (variant: {
+    id: string;
+    variantId: string;
+    name: string;
+    nameAr: string;
+    price: number;
+    sku: string;
+    sizeName?: string;
+    colorName?: string;
+  }) => {
+    setCartItems(prev => {
+      const existing = prev.find(item => item.variantId === variant.variantId);
+      if (existing) {
+        return prev.map(item =>
+          item.variantId === variant.variantId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, {
+        id: variant.id,
+        variantId: variant.variantId,
+        name: variant.name,
+        nameAr: variant.nameAr,
+        price: variant.price,
+        quantity: 1,
+        sku: variant.sku,
+        sizeName: variant.sizeName,
+        colorName: variant.colorName
       }];
     });
   };
@@ -218,9 +289,11 @@ const POS: React.FC = () => {
     return subtotal + tax;
   };
 
-  const handlePaymentComplete = (payments: { cash: number; card: number }) => {
+  const handlePaymentComplete = (payments: { method: string; amount: number }[]) => {
     setShowPayment(false);
     setCartItems([]);
+    setSelectedCustomer(null);
+    setSelectedDelivery(null);
     
     toast({
       title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
@@ -244,7 +317,43 @@ const POS: React.FC = () => {
             {language === 'ar' ? 'فرع أبرا' : 'Abra Branch'}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Customer Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCustomerSelector(true)}
+            className={cn(
+              "text-white/80 hover:text-white hover:bg-white/10",
+              selectedCustomer && "bg-white/10"
+            )}
+          >
+            <User size={18} className="me-1" />
+            <span className="text-xs max-w-24 truncate">
+              {selectedCustomer 
+                ? (language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name)
+                : (language === 'ar' ? 'العميل' : 'Customer')
+              }
+            </span>
+          </Button>
+          {/* Delivery Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowDeliverySelector(true)}
+            className={cn(
+              "text-white/80 hover:text-white hover:bg-white/10",
+              selectedDelivery && "bg-white/10"
+            )}
+          >
+            <Truck size={18} className="me-1" />
+            <span className="text-xs max-w-24 truncate">
+              {selectedDelivery 
+                ? (language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name)
+                : (language === 'ar' ? 'التوصيل' : 'Delivery')
+              }
+            </span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -259,19 +368,11 @@ const POS: React.FC = () => {
             )}
           </Button>
           <Link to="/">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white hover:bg-white/10"
-            >
+            <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
               <Home size={20} />
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white/80 hover:text-white hover:bg-white/10"
-          >
+          <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
             <LogOut size={20} />
           </Button>
         </div>
@@ -281,9 +382,7 @@ const POS: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Products Section */}
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
-          {/* Search & Categories */}
           <div className="space-y-3 mb-4 flex-shrink-0">
-            {/* Search Bar */}
             <div className="relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
               <Input
@@ -296,8 +395,6 @@ const POS: React.FC = () => {
               />
               <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
             </div>
-
-            {/* Categories */}
             <POSCategories
               categories={transformedCategories}
               selectedCategory={selectedCategory}
@@ -305,7 +402,6 @@ const POS: React.FC = () => {
             />
           </div>
 
-          {/* Products Grid */}
           <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
@@ -336,15 +432,16 @@ const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Payment Modal */}
+      {/* Modals */}
       <POSPaymentModal
         isOpen={showPayment}
         onClose={() => setShowPayment(false)}
         total={calculateTotal()}
         onComplete={handlePaymentComplete}
+        customer={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null}
+        deliveryPerson={selectedDelivery ? { id: selectedDelivery.id, name: selectedDelivery.name } : null}
       />
 
-      {/* Held Orders Modal */}
       <POSHeldOrders
         isOpen={showHeldOrders}
         onClose={() => setShowHeldOrders(false)}
@@ -352,11 +449,36 @@ const POS: React.FC = () => {
         onRestoreOrder={restoreOrder}
         onDeleteOrder={deleteHeldOrder}
       />
+
+      {selectedProductForVariant && (
+        <POSVariantSelector
+          isOpen={showVariantSelector}
+          onClose={() => {
+            setShowVariantSelector(false);
+            setSelectedProductForVariant(null);
+          }}
+          product={selectedProductForVariant}
+          onSelectVariant={addVariantToCart}
+        />
+      )}
+
+      <POSCustomerSelector
+        isOpen={showCustomerSelector}
+        onClose={() => setShowCustomerSelector(false)}
+        onSelectCustomer={setSelectedCustomer}
+        selectedCustomer={selectedCustomer}
+      />
+
+      <POSDeliverySelector
+        isOpen={showDeliverySelector}
+        onClose={() => setShowDeliverySelector(false)}
+        onSelectDelivery={setSelectedDelivery}
+        selectedDelivery={selectedDelivery}
+      />
     </div>
   );
 };
 
-// Helper function to convert icon names to emojis
 function getIconEmoji(iconName: string | null): string {
   const iconMap: Record<string, string> = {
     'Smartphone': '📱',
