@@ -34,7 +34,8 @@ import {
   Users,
   Upload,
   X,
-  Image
+  Image,
+  Warehouse
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 
@@ -59,6 +60,16 @@ const Settings = () => {
     queryKey: ['branches'],
     queryFn: async () => {
       const { data, error } = await supabase.from('branches').select('*').order('is_main', { ascending: false });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch warehouses
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('warehouses').select('*, branches(name, name_ar)').order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     }
@@ -176,7 +187,7 @@ const Settings = () => {
     en: {
       title: 'Settings',
       company: 'Company Info',
-      branches: 'Branches',
+      branches: 'Branches & Warehouses',
       currency: 'Currency & Taxes',
       language: 'Language',
       users: 'Users & Permissions',
@@ -214,12 +225,21 @@ const Settings = () => {
       generalSettings: 'General Settings',
       systemLanguage: 'System Language',
       currencySettings: 'Currency Settings',
-      taxSettings: 'Tax Settings'
+      taxSettings: 'Tax Settings',
+      warehouses: 'Warehouses',
+      warehouseName: 'Warehouse Name',
+      warehouseNameAr: 'Warehouse Name (Arabic)',
+      warehouseCode: 'Code',
+      addWarehouse: 'Add Warehouse',
+      selectBranch: 'Select Branch',
+      linkedBranch: 'Linked Branch',
+      mainWarehouse: 'Main Warehouse',
+      notes: 'Notes'
     },
     ar: {
       title: 'الإعدادات',
       company: 'معلومات الشركة',
-      branches: 'الفروع',
+      branches: 'الفروع والمخازن',
       currency: 'العملة والضرائب',
       language: 'اللغة',
       users: 'المستخدمين والصلاحيات',
@@ -257,7 +277,16 @@ const Settings = () => {
       generalSettings: 'الإعدادات العامة',
       systemLanguage: 'لغة النظام',
       currencySettings: 'إعدادات العملة',
-      taxSettings: 'إعدادات الضرائب'
+      taxSettings: 'إعدادات الضرائب',
+      warehouses: 'المخازن',
+      warehouseName: 'اسم المخزن',
+      warehouseNameAr: 'اسم المخزن (بالعربية)',
+      warehouseCode: 'الرمز',
+      addWarehouse: 'إضافة مخزن',
+      selectBranch: 'اختر الفرع',
+      linkedBranch: 'الفرع المرتبط',
+      mainWarehouse: 'المخزن الرئيسي',
+      notes: 'ملاحظات'
     }
   };
 
@@ -615,13 +644,17 @@ const Settings = () => {
             </Card>
           </TabsContent>
 
-          {/* Branches Tab */}
-          <TabsContent value="branches" className="mt-6">
+          {/* Branches & Warehouses Tab */}
+          <TabsContent value="branches" className="mt-6 space-y-6">
+            {/* Branches Section */}
             <Card className="card-elevated">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>{t.branches}</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Store size={20} />
+                      {language === 'ar' ? 'الفروع' : 'Branches'}
+                    </CardTitle>
                     <CardDescription>
                       {language === 'ar' ? 'إدارة فروع الشركة' : 'Manage company branches'}
                     </CardDescription>
@@ -705,6 +738,145 @@ const Settings = () => {
                         </TableCell>
                       </TableRow>
                     ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Warehouses Section */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Warehouse size={20} />
+                      {t.warehouses}
+                    </CardTitle>
+                    <CardDescription>
+                      {language === 'ar' ? 'إدارة مخازن الشركة وربطها بالفروع' : 'Manage company warehouses and link them to branches'}
+                    </CardDescription>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="gradient-success">
+                        <Plus size={16} className="me-2" />
+                        {t.addWarehouse}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{t.addWarehouse}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>{t.warehouseName}</Label>
+                            <Input placeholder={t.warehouseName} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.warehouseNameAr}</Label>
+                            <Input placeholder={t.warehouseNameAr} dir="rtl" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>{t.warehouseCode}</Label>
+                            <Input placeholder="WH001" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.linkedBranch}</Label>
+                            <Select>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t.selectBranch} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {branches.map((branch) => (
+                                  <SelectItem key={branch.id} value={branch.id}>
+                                    {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>{t.phone}</Label>
+                            <Input placeholder={t.phone} dir="ltr" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>{t.manager}</Label>
+                            <Input placeholder={t.manager} />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.address}</Label>
+                          <Input placeholder={t.address} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.notes}</Label>
+                          <Input placeholder={t.notes} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch id="is_main_warehouse" />
+                          <Label htmlFor="is_main_warehouse">{t.mainWarehouse}</Label>
+                        </div>
+                        <Button className="w-full gradient-success">{t.addWarehouse}</Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t.warehouseCode}</TableHead>
+                      <TableHead>{t.warehouseName}</TableHead>
+                      <TableHead>{t.linkedBranch}</TableHead>
+                      <TableHead>{t.address}</TableHead>
+                      <TableHead>{t.phone}</TableHead>
+                      <TableHead>{t.mainWarehouse}</TableHead>
+                      <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {warehouses.map((warehouse: any) => (
+                      <TableRow key={warehouse.id}>
+                        <TableCell className="font-mono">{warehouse.code || '-'}</TableCell>
+                        <TableCell className="font-medium">
+                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                        </TableCell>
+                        <TableCell>
+                          {warehouse.branches ? (
+                            <Badge variant="outline">
+                              {language === 'ar' 
+                                ? warehouse.branches.name_ar || warehouse.branches.name 
+                                : warehouse.branches.name}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate">{warehouse.address || '-'}</TableCell>
+                        <TableCell dir="ltr">{warehouse.phone || '-'}</TableCell>
+                        <TableCell>
+                          {warehouse.is_main && (
+                            <Badge className="bg-primary">{t.mainWarehouse}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={warehouse.is_active ? 'default' : 'secondary'}>
+                            {warehouse.is_active ? t.active : t.inactive}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {warehouses.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          {language === 'ar' ? 'لا توجد مخازن بعد' : 'No warehouses yet'}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
