@@ -11,10 +11,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, RotateCcw, AlertCircle } from "lucide-react";
+import { Search, RotateCcw, Eye, Filter, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface ReturnItem {
   id: string;
@@ -32,33 +34,92 @@ interface ReturnItem {
 const SalesReturns = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
   const [refundMethod, setRefundMethod] = useState("cash");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Search invoices
-  const { data: searchResults, isLoading: isSearching, refetch: searchInvoice } = useQuery({
-    queryKey: ['search-invoice-for-return', searchQuery],
-    queryFn: async () => {
-      if (!searchQuery) return [];
+  // Search filters
+  const [filters, setFilters] = useState({
+    invoiceNumber: "",
+    customerName: "",
+    customerPhone: "",
+    branchId: "",
+    warehouseId: "",
+    invoiceType: "",
+    paymentStatus: "",
+    dateFrom: "",
+    dateTo: ""
+  });
 
-      // Search in sales_invoices (standard)
-      const { data: standardInvoices, error: err1 } = await supabase
+  // Fetch branches
+  const { data: branches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('id, name, name_ar')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch warehouses
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('warehouses')
+        .select('id, name, name_ar')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch invoices with filters
+  const { data: invoices, isLoading, refetch } = useQuery({
+    queryKey: ['sales-invoices-for-return', filters],
+    queryFn: async () => {
+      // Fetch standard invoices
+      let standardQuery = supabase
         .from('sales_invoices')
         .select(`
           *,
           customer:customers(id, name, name_ar, phone),
+          branch:branches(id, name, name_ar),
           items:sales_invoice_items(*)
         `)
-        .or(`invoice_number.ilike.%${searchQuery}%`)
         .eq('status', 'active')
-        .limit(10);
+        .order('created_at', { ascending: false });
 
-      // Search in sales (POS)
-      const { data: posInvoices, error: err2 } = await supabase
+      if (filters.invoiceNumber) {
+        standardQuery = standardQuery.ilike('invoice_number', `%${filters.invoiceNumber}%`);
+      }
+      if (filters.branchId) {
+        standardQuery = standardQuery.eq('branch_id', filters.branchId);
+      }
+      if (filters.warehouseId) {
+        standardQuery = standardQuery.eq('warehouse_id', filters.warehouseId);
+      }
+      if (filters.paymentStatus) {
+        standardQuery = standardQuery.eq('payment_status', filters.paymentStatus);
+      }
+      if (filters.dateFrom) {
+        standardQuery = standardQuery.gte('invoice_date', `${filters.dateFrom}T00:00:00`);
+      }
+      if (filters.dateTo) {
+        standardQuery = standardQuery.lte('invoice_date', `${filters.dateTo}T23:59:59`);
+      }
+
+      const { data: standardInvoices } = await standardQuery.limit(100);
+
+      // Fetch POS sales
+      let posQuery = supabase
         .from('sales')
         .select(`
           *,
@@ -72,18 +133,56 @@ const SalesReturns = () => {
             product:products(name, name_ar)
           )
         `)
-        .or(`invoice_number.ilike.%${searchQuery}%`)
         .eq('status', 'completed')
-        .limit(10);
+        .order('created_at', { ascending: false });
 
-      const combined = [
-        ...(standardInvoices || []).map(inv => ({ ...inv, invoice_type: 'standard' })),
-        ...(posInvoices || []).map(inv => ({ ...inv, invoice_type: 'pos' }))
-      ];
+      if (filters.invoiceNumber) {
+        posQuery = posQuery.ilike('invoice_number', `%${filters.invoiceNumber}%`);
+      }
+      if (filters.dateFrom) {
+        posQuery = posQuery.gte('sale_date', `${filters.dateFrom}T00:00:00`);
+      }
+      if (filters.dateTo) {
+        posQuery = posQuery.lte('sale_date', `${filters.dateTo}T23:59:59`);
+      }
 
+      const { data: posInvoices } = await posQuery.limit(100);
+
+      // Combine results
+      let combined = [];
+      
+      if (!filters.invoiceType || filters.invoiceType === 'standard') {
+        combined.push(...(standardInvoices || []).map(inv => ({ 
+          ...inv, 
+          invoice_type: 'standard',
+          date: inv.invoice_date 
+        })));
+      }
+      
+      if (!filters.invoiceType || filters.invoiceType === 'pos') {
+        combined.push(...(posInvoices || []).map(inv => ({ 
+          ...inv, 
+          invoice_type: 'pos',
+          date: inv.sale_date 
+        })));
+      }
+
+      // Filter by customer
+      if (filters.customerName) {
+        combined = combined.filter(inv => 
+          inv.customer?.name?.toLowerCase().includes(filters.customerName.toLowerCase()) ||
+          inv.customer?.name_ar?.includes(filters.customerName)
+        );
+      }
+      if (filters.customerPhone) {
+        combined = combined.filter(inv => 
+          inv.customer?.phone?.includes(filters.customerPhone)
+        );
+      }
+
+      combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       return combined;
-    },
-    enabled: false
+    }
   });
 
   // Fetch existing returns for selected invoice
@@ -106,18 +205,16 @@ const SalesReturns = () => {
     enabled: !!selectedInvoice
   });
 
-  // Handle invoice selection
-  const handleSelectInvoice = (invoice: any) => {
+  // Handle invoice selection for return
+  const handleStartReturn = (invoice: any) => {
     setSelectedInvoice(invoice);
     
-    // Calculate already returned quantities
     const returnedMap = new Map<string, number>();
     existingReturns?.forEach(item => {
       const key = item.product_id || item.product_name;
       returnedMap.set(key, (returnedMap.get(key) || 0) + item.quantity);
     });
 
-    // Map items based on invoice type
     const items: ReturnItem[] = invoice.items?.map((item: any) => {
       const productName = invoice.invoice_type === 'pos' 
         ? (item.product?.name || 'Unknown')
@@ -141,6 +238,7 @@ const SalesReturns = () => {
     }) || [];
     
     setReturnItems(items);
+    setShowReturnDialog(true);
   };
 
   // Toggle item selection
@@ -194,10 +292,8 @@ const SalesReturns = () => {
         throw new Error(language === 'ar' ? 'يجب اختيار أصناف للإرجاع' : 'Select items to return');
       }
 
-      // Generate return number
       const { data: returnNumber } = await supabase.rpc('generate_sales_return_number');
 
-      // Create return record
       const { data: returnRecord, error: returnError } = await supabase
         .from('sales_returns')
         .insert({
@@ -219,7 +315,6 @@ const SalesReturns = () => {
 
       if (returnError) throw returnError;
 
-      // Create return items
       const returnItemsData = selectedItems.map(item => ({
         return_id: returnRecord.id,
         original_item_id: item.id,
@@ -238,7 +333,7 @@ const SalesReturns = () => {
 
       if (itemsError) throw itemsError;
 
-      // Update product stock (increase stock)
+      // Update product stock
       for (const item of selectedItems) {
         if (item.product_id) {
           const { data: product } = await supabase
@@ -256,42 +351,20 @@ const SalesReturns = () => {
         }
       }
 
-      // Handle refund based on method
-      if (refundMethod === 'cash') {
-        // Create treasury transaction for cash refund
-        // This would integrate with treasury system
-      } else if (refundMethod === 'account_deduction' && selectedInvoice.customer_id) {
-        // Deduct from customer balance
-        const customer = await supabase
-          .from('customers')
-          .select('total_purchases')
-          .eq('id', selectedInvoice.customer_id)
-          .single();
-        
-        if (customer.data) {
-          await supabase
-            .from('customers')
-            .update({ 
-              total_purchases: Math.max(0, (customer.data.total_purchases || 0) - totals.totalAmount)
-            })
-            .eq('id', selectedInvoice.customer_id);
-        }
-      }
-
       return returnRecord;
     },
     onSuccess: () => {
       toast.success(language === 'ar' ? 'تم إنشاء المرتجع بنجاح' : 'Return processed successfully');
-      queryClient.invalidateQueries({ queryKey: ['sales-returns'] });
-      resetForm();
+      queryClient.invalidateQueries({ queryKey: ['sales-invoices-for-return'] });
+      setShowReturnDialog(false);
+      resetReturnForm();
     },
     onError: (error: any) => {
       toast.error(error.message);
     }
   });
 
-  const resetForm = () => {
-    setSearchQuery("");
+  const resetReturnForm = () => {
     setSelectedInvoice(null);
     setReturnItems([]);
     setRefundMethod("cash");
@@ -299,292 +372,391 @@ const SalesReturns = () => {
     setNotes("");
   };
 
-  // Fetch recent returns
-  const { data: recentReturns } = useQuery({
-    queryKey: ['recent-sales-returns'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sales_returns')
-        .select(`
-          *,
-          customer:customers(name, name_ar)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data;
-    }
-  });
+  const clearFilters = () => {
+    setFilters({
+      invoiceNumber: "",
+      customerName: "",
+      customerPhone: "",
+      branchId: "",
+      warehouseId: "",
+      invoiceType: "",
+      paymentStatus: "",
+      dateFrom: "",
+      dateTo: ""
+    });
+  };
+
+  const getStatusBadge = (invoice: any) => {
+    const status = invoice.payment_status || invoice.status || 'completed';
+    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+      paid: { label: language === 'ar' ? 'مدفوع' : 'Paid', variant: 'default' },
+      completed: { label: language === 'ar' ? 'مكتمل' : 'Completed', variant: 'default' },
+      pending: { label: language === 'ar' ? 'معلق' : 'Pending', variant: 'secondary' },
+      partial: { label: language === 'ar' ? 'جزئي' : 'Partial', variant: 'outline' }
+    };
+    const config = statusConfig[status] || statusConfig.completed;
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Return Form */}
-      <div className="lg:col-span-2 space-y-4">
+    <>
+      <div className="space-y-4">
+        {/* Quick Search & Filters Toggle */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5" />
-              {language === 'ar' ? 'مرتجع مبيعات' : 'Sales Return'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Search Invoice */}
-            <div className="flex gap-2">
+          <CardContent className="pt-4">
+            <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder={language === 'ar' ? 'ابحث برقم الفاتورة...' : 'Search by invoice number...'}
+                  placeholder={language === 'ar' ? 'بحث سريع برقم الفاتورة أو اسم العميل...' : 'Quick search by invoice # or customer name...'}
                   className="pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && searchInvoice()}
+                  value={filters.invoiceNumber}
+                  onChange={(e) => setFilters({ ...filters, invoiceNumber: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && refetch()}
                 />
               </div>
-              <Button onClick={() => searchInvoice()} disabled={isSearching}>
-                {language === 'ar' ? 'بحث' : 'Search'}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => refetch()}>
+                  <Search className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'بحث' : 'Search'}
+                </Button>
+                <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+                  <Filter className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'فلاتر متقدمة' : 'Advanced Filters'}
+                  {showFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+                </Button>
+              </div>
             </div>
 
-            {/* Search Results */}
-            {searchResults && searchResults.length > 0 && !selectedInvoice && (
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.map((invoice: any) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell className="font-mono">{invoice.invoice_number}</TableCell>
-                        <TableCell>
-                          {language === 'ar' 
-                            ? invoice.customer?.name_ar || invoice.customer?.name 
-                            : invoice.customer?.name}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={invoice.invoice_type === 'pos' ? 'secondary' : 'outline'}>
-                            {invoice.invoice_type === 'pos' ? 'POS' : 'Standard'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{invoice.total_amount?.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Button size="sm" onClick={() => handleSelectInvoice(invoice)}>
-                            {language === 'ar' ? 'اختر' : 'Select'}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {/* Selected Invoice Items */}
-            {selectedInvoice && (
-              <>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+            {/* Advanced Filters */}
+            <Collapsible open={showFilters}>
+              <CollapsibleContent className="mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t">
                   <div>
-                    <span className="font-mono font-medium">{selectedInvoice.invoice_number}</span>
-                    <span className="mx-2">-</span>
-                    <span>
-                      {language === 'ar' 
-                        ? selectedInvoice.customer?.name_ar || selectedInvoice.customer?.name 
-                        : selectedInvoice.customer?.name}
-                    </span>
+                    <Label>{language === 'ar' ? 'اسم العميل' : 'Customer Name'}</Label>
+                    <Input
+                      value={filters.customerName}
+                      onChange={(e) => setFilters({ ...filters, customerName: e.target.value })}
+                      placeholder={language === 'ar' ? 'ابحث باسم العميل' : 'Search by name'}
+                    />
                   </div>
-                  <Button variant="outline" size="sm" onClick={resetForm}>
-                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                  </Button>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12"></TableHead>
-                        <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="text-center">{language === 'ar' ? 'الكمية الأصلية' : 'Orig. Qty'}</TableHead>
-                        <TableHead className="text-center">{language === 'ar' ? 'مرتجع سابق' : 'Prev. Ret.'}</TableHead>
-                        <TableHead className="text-center">{language === 'ar' ? 'كمية الإرجاع' : 'Return Qty'}</TableHead>
-                        <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {returnItems.map((item) => {
-                        const availableQty = item.original_quantity - item.already_returned;
-                        const canReturn = availableQty > 0;
-                        
-                        return (
-                          <TableRow key={item.id} className={!canReturn ? 'opacity-50' : ''}>
-                            <TableCell>
-                              <Checkbox
-                                checked={item.selected}
-                                onCheckedChange={() => toggleItem(item.id)}
-                                disabled={!canReturn}
-                              />
-                            </TableCell>
-                            <TableCell>{item.product_name}</TableCell>
-                            <TableCell className="text-center">{item.original_quantity}</TableCell>
-                            <TableCell className="text-center">
-                              {item.already_returned > 0 && (
-                                <Badge variant="destructive">{item.already_returned}</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {canReturn ? (
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max={availableQty}
-                                  value={item.return_quantity}
-                                  onChange={(e) => updateReturnQuantity(item.id, parseInt(e.target.value) || 0)}
-                                  className="w-20 mx-auto"
-                                  disabled={!item.selected}
-                                />
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {item.total_price.toLocaleString()}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Return Options */}
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</Label>
-                    <Select value={refundMethod} onValueChange={setRefundMethod}>
+                    <Label>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</Label>
+                    <Input
+                      value={filters.customerPhone}
+                      onChange={(e) => setFilters({ ...filters, customerPhone: e.target.value })}
+                      placeholder={language === 'ar' ? 'رقم الهاتف' : 'Phone number'}
+                    />
+                  </div>
+                  <div>
+                    <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                    <Select value={filters.branchId} onValueChange={(value) => setFilters({ ...filters, branchId: value })}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder={language === 'ar' ? 'جميع الفروع' : 'All Branches'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                        <SelectItem value="credit_note">{language === 'ar' ? 'إشعار دائن' : 'Credit Note'}</SelectItem>
-                        <SelectItem value="account_deduction">{language === 'ar' ? 'خصم من الحساب' : 'Account Deduction'}</SelectItem>
+                        <SelectItem value="">{language === 'ar' ? 'جميع الفروع' : 'All Branches'}</SelectItem>
+                        {branches?.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>{language === 'ar' ? 'سبب الإرجاع' : 'Return Reason'}</Label>
+                    <Label>{language === 'ar' ? 'المخزن' : 'Warehouse'}</Label>
+                    <Select value={filters.warehouseId} onValueChange={(value) => setFilters({ ...filters, warehouseId: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={language === 'ar' ? 'جميع المخازن' : 'All Warehouses'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}</SelectItem>
+                        {warehouses?.map((wh) => (
+                          <SelectItem key={wh.id} value={wh.id}>
+                            {language === 'ar' ? wh.name_ar || wh.name : wh.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>{language === 'ar' ? 'نوع الفاتورة' : 'Invoice Type'}</Label>
+                    <Select value={filters.invoiceType} onValueChange={(value) => setFilters({ ...filters, invoiceType: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={language === 'ar' ? 'جميع الأنواع' : 'All Types'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{language === 'ar' ? 'جميع الأنواع' : 'All Types'}</SelectItem>
+                        <SelectItem value="standard">{language === 'ar' ? 'قياسية' : 'Standard'}</SelectItem>
+                        <SelectItem value="pos">{language === 'ar' ? 'نقاط البيع' : 'POS'}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>{language === 'ar' ? 'حالة الدفع' : 'Payment Status'}</Label>
+                    <Select value={filters.paymentStatus} onValueChange={(value) => setFilters({ ...filters, paymentStatus: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={language === 'ar' ? 'جميع الحالات' : 'All Statuses'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</SelectItem>
+                        <SelectItem value="paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</SelectItem>
+                        <SelectItem value="pending">{language === 'ar' ? 'معلق' : 'Pending'}</SelectItem>
+                        <SelectItem value="partial">{language === 'ar' ? 'جزئي' : 'Partial'}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>{language === 'ar' ? 'من تاريخ' : 'From Date'}</Label>
                     <Input
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل السبب...' : 'Enter reason...'}
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>{language === 'ar' ? 'إلى تاريخ' : 'To Date'}</Label>
+                    <Input
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                     />
                   </div>
                 </div>
-
-                <div>
-                  <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={2}
-                  />
+                <div className="flex justify-end mt-4">
+                  <Button variant="ghost" onClick={clearFilters}>
+                    {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
+                  </Button>
                 </div>
-              </>
-            )}
+              </CollapsibleContent>
+            </Collapsible>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Summary & Recent Returns */}
-      <div className="space-y-4">
-        {/* Return Summary */}
-        {selectedInvoice && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">
-                {language === 'ar' ? 'ملخص المرتجع' : 'Return Summary'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {language === 'ar' ? 'عدد الأصناف:' : 'Items:'}
-                </span>
-                <span>{totals.itemCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}
-                </span>
-                <span>{totals.subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {language === 'ar' ? 'الضريبة:' : 'Tax:'}
-                </span>
-                <span>{totals.taxAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>{language === 'ar' ? 'إجمالي الاسترداد:' : 'Refund Total:'}</span>
-                <span className="text-primary">{totals.totalAmount.toLocaleString()}</span>
-              </div>
-
-              <Button
-                className="w-full mt-4"
-                onClick={() => processReturnMutation.mutate()}
-                disabled={processReturnMutation.isPending || totals.itemCount === 0}
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                {processReturnMutation.isPending 
-                  ? (language === 'ar' ? 'جاري المعالجة...' : 'Processing...')
-                  : (language === 'ar' ? 'تأكيد المرتجع' : 'Confirm Return')}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Recent Returns */}
+        {/* Invoices Table */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">
-              {language === 'ar' ? 'آخر المرتجعات' : 'Recent Returns'}
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {language === 'ar' ? 'فواتير المبيعات' : 'Sales Invoices'}
+              {invoices && ` (${invoices.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {recentReturns?.slice(0, 5).map((ret) => (
-                <div key={ret.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                  <div>
-                    <div className="font-mono text-sm">{ret.return_number}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {format(new Date(ret.created_at), 'yyyy/MM/dd HH:mm')}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium text-destructive">
-                      -{ret.total_amount?.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {ret.customer?.name || ret.customer?.name_ar}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {(!recentReturns || recentReturns.length === 0) && (
-                <p className="text-center text-muted-foreground py-4">
-                  {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns yet'}
-                </p>
-              )}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                    <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8">
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </TableCell>
+                    </TableRow>
+                  ) : !invoices || invoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        {language === 'ar' ? 'لا توجد فواتير' : 'No invoices found'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    invoices.map((invoice: any) => (
+                      <TableRow key={invoice.id}>
+                        <TableCell className="font-mono font-medium">{invoice.invoice_number}</TableCell>
+                        <TableCell>
+                          <Badge variant={invoice.invoice_type === 'pos' ? 'secondary' : 'outline'}>
+                            {invoice.invoice_type === 'pos' ? 'POS' : (language === 'ar' ? 'قياسية' : 'Standard')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {language === 'ar' 
+                            ? invoice.customer?.name_ar || invoice.customer?.name || '-'
+                            : invoice.customer?.name || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {format(new Date(invoice.date), 'yyyy/MM/dd HH:mm', { locale: language === 'ar' ? ar : undefined })}
+                        </TableCell>
+                        <TableCell className="font-medium">{invoice.total_amount?.toLocaleString()}</TableCell>
+                        <TableCell>{getStatusBadge(invoice)}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => handleStartReturn(invoice)}>
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            {language === 'ar' ? 'مرتجع' : 'Return'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
+
+      {/* Return Dialog */}
+      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5" />
+              {language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
+              {selectedInvoice && ` - ${selectedInvoice.invoice_number}`}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Items Table */}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                    <TableHead className="text-center">{language === 'ar' ? 'الكمية الأصلية' : 'Orig. Qty'}</TableHead>
+                    <TableHead className="text-center">{language === 'ar' ? 'مرتجع سابق' : 'Prev. Ret.'}</TableHead>
+                    <TableHead className="text-center">{language === 'ar' ? 'كمية الإرجاع' : 'Return Qty'}</TableHead>
+                    <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {returnItems.map((item) => {
+                    const availableQty = item.original_quantity - item.already_returned;
+                    const canReturn = availableQty > 0;
+                    
+                    return (
+                      <TableRow key={item.id} className={!canReturn ? 'opacity-50' : ''}>
+                        <TableCell>
+                          <Checkbox
+                            checked={item.selected}
+                            onCheckedChange={() => toggleItem(item.id)}
+                            disabled={!canReturn}
+                          />
+                        </TableCell>
+                        <TableCell>{item.product_name}</TableCell>
+                        <TableCell className="text-center">{item.original_quantity}</TableCell>
+                        <TableCell className="text-center">
+                          {item.already_returned > 0 && (
+                            <Badge variant="destructive">{item.already_returned}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {canReturn ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              max={availableQty}
+                              value={item.return_quantity}
+                              onChange={(e) => updateReturnQuantity(item.id, parseInt(e.target.value) || 0)}
+                              className="w-20 mx-auto"
+                              disabled={!item.selected}
+                            />
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {item.total_price.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Return Details */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</Label>
+                <Select value={refundMethod} onValueChange={setRefundMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">{language === 'ar' ? 'نقدي' : 'Cash'}</SelectItem>
+                    <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                    <SelectItem value="account_deduction">{language === 'ar' ? 'خصم من الحساب' : 'Account Deduction'}</SelectItem>
+                    <SelectItem value="exchange">{language === 'ar' ? 'استبدال' : 'Exchange'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{language === 'ar' ? 'سبب الإرجاع' : 'Return Reason'}</Label>
+                <Select value={reason} onValueChange={setReason}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر السبب' : 'Select reason'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="defective">{language === 'ar' ? 'منتج معيب' : 'Defective'}</SelectItem>
+                    <SelectItem value="wrong_item">{language === 'ar' ? 'منتج خاطئ' : 'Wrong Item'}</SelectItem>
+                    <SelectItem value="not_needed">{language === 'ar' ? 'غير مطلوب' : 'Not Needed'}</SelectItem>
+                    <SelectItem value="size_issue">{language === 'ar' ? 'مشكلة في المقاس' : 'Size Issue'}</SelectItem>
+                    <SelectItem value="other">{language === 'ar' ? 'أخرى' : 'Other'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'}
+                rows={2}
+              />
+            </div>
+
+            {/* Totals */}
+            <div className="bg-muted p-4 rounded-lg space-y-2">
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'عدد الأصناف:' : 'Items:'}</span>
+                <span className="font-medium">{totals.itemCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
+                <span>{totals.subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'الضريبة:' : 'Tax:'}</span>
+                <span>{totals.taxAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold border-t pt-2">
+                <span>{language === 'ar' ? 'إجمالي الاسترداد:' : 'Total Refund:'}</span>
+                <span>{totals.totalAmount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowReturnDialog(false)}>
+                {language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </Button>
+              <Button 
+                onClick={() => processReturnMutation.mutate()}
+                disabled={processReturnMutation.isPending || totals.itemCount === 0}
+              >
+                {processReturnMutation.isPending 
+                  ? (language === 'ar' ? 'جاري المعالجة...' : 'Processing...') 
+                  : (language === 'ar' ? 'تأكيد المرتجع' : 'Confirm Return')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

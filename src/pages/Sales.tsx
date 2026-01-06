@@ -2,12 +2,10 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import MainLayout from "@/components/layout/MainLayout";
-import SalesInvoiceForm from "@/components/sales/SalesInvoiceForm";
 import SalesInvoiceList from "@/components/sales/SalesInvoiceList";
 import SalesReturns from "@/components/sales/SalesReturns";
-import InvoiceSearch from "@/components/sales/InvoiceSearch";
 import SalesmenManager from "@/components/sales/SalesmenManager";
-import { FileText, RotateCcw, Search, Users } from "lucide-react";
+import { FileText, RotateCcw, Users } from "lucide-react";
 
 const Sales = () => {
   const { language } = useLanguage();
@@ -22,13 +20,13 @@ const Sales = () => {
           </h1>
           <p className="text-muted-foreground mt-1">
             {language === 'ar' 
-              ? 'فواتير المبيعات، المرتجعات، والبحث المتقدم'
-              : 'Sales invoices, returns, and advanced search'}
+              ? 'فواتير المبيعات، المرتجعات، وإدارة المندوبين'
+              : 'Sales invoices, returns, and salesmen management'}
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
             <TabsTrigger value="invoices" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">
@@ -39,12 +37,6 @@ const Sales = () => {
               <RotateCcw className="h-4 w-4" />
               <span className="hidden sm:inline">
                 {language === 'ar' ? 'المرتجعات' : 'Returns'}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="search" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {language === 'ar' ? 'البحث المتقدم' : 'Advanced Search'}
               </span>
             </TabsTrigger>
             <TabsTrigger value="salesmen" className="flex items-center gap-2">
@@ -61,10 +53,6 @@ const Sales = () => {
 
           <TabsContent value="returns" className="mt-6">
             <SalesReturns />
-          </TabsContent>
-
-          <TabsContent value="search" className="mt-6">
-            <InvoiceSearch />
           </TabsContent>
 
           <TabsContent value="salesmen" className="mt-6">
