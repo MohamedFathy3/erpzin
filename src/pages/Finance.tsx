@@ -17,7 +17,6 @@ import RevenueManager from '@/components/finance/RevenueManager';
 import AccountsPayable from '@/components/finance/AccountsPayable';
 import ChartOfAccounts from '@/components/finance/ChartOfAccounts';
 import TreasuryBankManager from '@/components/finance/TreasuryBankManager';
-import AdvancedReports from '@/components/finance/AdvancedReports';
 
 const Finance = () => {
   const { language, direction } = useLanguage();
@@ -29,8 +28,7 @@ const Finance = () => {
     { id: 'expenses', label: language === 'ar' ? 'المصروفات' : 'Expenses', icon: Receipt },
     { id: 'treasury', label: language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks', icon: Wallet },
     { id: 'accounts', label: language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts', icon: FolderTree },
-    { id: 'payables', label: language === 'ar' ? 'الذمم الدائنة' : 'Payables', icon: Building2 },
-    { id: 'reports', label: language === 'ar' ? 'التقارير' : 'Reports', icon: FileText }
+    { id: 'payables', label: language === 'ar' ? 'الذمم الدائنة' : 'Payables', icon: Building2 }
   ];
 
   return (
@@ -43,7 +41,7 @@ const Finance = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon size={16} />
@@ -74,10 +72,6 @@ const Finance = () => {
 
           <TabsContent value="payables" className="mt-6">
             <AccountsPayable language={language} />
-          </TabsContent>
-
-          <TabsContent value="reports" className="mt-6">
-            <AdvancedReports language={language} />
           </TabsContent>
         </Tabs>
       </div>
