@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Receipt,
 } from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
 import logoFull from '@/assets/logo-full.png';
@@ -57,6 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('nav.dashboard') },
     { id: 'inventory', icon: <Package size={20} />, label: t('nav.inventory') },
     { id: 'pos', icon: <ShoppingCart size={20} />, label: t('nav.pos') },
+    { id: 'sales', icon: <Receipt size={20} />, label: t('nav.sales') },
     { id: 'purchasing', icon: <Truck size={20} />, label: t('nav.purchasing') },
     { id: 'finance', icon: <Wallet size={20} />, label: t('nav.finance') },
     { id: 'hr', icon: <Users size={20} />, label: t('nav.hr') },
