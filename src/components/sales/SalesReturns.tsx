@@ -13,10 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, RotateCcw, Eye, Filter, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { Search, RotateCcw, Eye, Filter, ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import SalesReturnForm from "./SalesReturnForm";
 
 interface ReturnItem {
   id: string;
@@ -37,6 +38,7 @@ const SalesReturns = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [showReturnDialog, setShowReturnDialog] = useState(false);
+  const [showNewReturnForm, setShowNewReturnForm] = useState(false);
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
   const [refundMethod, setRefundMethod] = useState("cash");
   const [reason, setReason] = useState("");
@@ -416,13 +418,17 @@ const SalesReturns = () => {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => refetch()}>
+                <Button onClick={() => setShowNewReturnForm(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'مرتجع جديد' : 'New Return'}
+                </Button>
+                <Button variant="outline" onClick={() => refetch()}>
                   <Search className="h-4 w-4 mr-2" />
                   {language === 'ar' ? 'بحث' : 'Search'}
                 </Button>
                 <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
                   <Filter className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'فلاتر متقدمة' : 'Advanced Filters'}
+                  {language === 'ar' ? 'فلاتر' : 'Filters'}
                   {showFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
                 </Button>
               </div>
@@ -756,6 +762,12 @@ const SalesReturns = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* New Return Form */}
+      <SalesReturnForm 
+        isOpen={showNewReturnForm} 
+        onClose={() => setShowNewReturnForm(false)} 
+      />
     </>
   );
 };
