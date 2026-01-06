@@ -55,6 +55,45 @@ export type Database = {
           },
         ]
       }
+      branch_warehouses: {
+        Row: {
+          branch_id: string
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          warehouse_id: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          warehouse_id: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branch_warehouses_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null
@@ -719,7 +758,6 @@ export type Database = {
       warehouses: {
         Row: {
           address: string | null
-          branch_id: string | null
           code: string | null
           created_at: string
           id: string
@@ -734,7 +772,6 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          branch_id?: string | null
           code?: string | null
           created_at?: string
           id?: string
@@ -749,7 +786,6 @@ export type Database = {
         }
         Update: {
           address?: string | null
-          branch_id?: string | null
           code?: string | null
           created_at?: string
           id?: string
@@ -762,15 +798,7 @@ export type Database = {
           phone?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "warehouses_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
