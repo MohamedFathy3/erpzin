@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
-import CategoryTree, { Category } from '@/components/inventory/CategoryTree';
+import CategoryManager from '@/components/inventory/CategoryManager';
 import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
@@ -15,35 +15,10 @@ import ExcelImport from '@/components/inventory/ExcelImport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-
-// Mock categories
-const mockCategories: Category[] = [
-  {
-    id: 'boys',
-    name: 'Boys',
-    nameAr: 'أولاد',
-    parentId: null,
-    productCount: 45,
-    children: [
-      { id: 'boys-pants', name: 'Pants', nameAr: 'بناطيل', parentId: 'boys', productCount: 20, children: [] },
-      { id: 'boys-shirts', name: 'Shirts', nameAr: 'قمصان', parentId: 'boys', productCount: 15, children: [] }
-    ]
-  },
-  {
-    id: 'girls',
-    name: 'Girls',
-    nameAr: 'بنات',
-    parentId: null,
-    productCount: 52,
-    children: [
-      { id: 'girls-dresses', name: 'Dresses', nameAr: 'فساتين', parentId: 'girls', productCount: 25, children: [] }
-    ]
-  }
-];
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
@@ -147,7 +122,7 @@ const Inventory: React.FC = () => {
             </div>
             <div className="flex-1 flex gap-4 min-h-0">
               <div className="w-64 flex-shrink-0 hidden lg:block">
-                <CategoryTree categories={mockCategories} selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} onAddCategory={() => {}} onEditCategory={() => {}} onDeleteCategory={() => {}} />
+                <CategoryManager selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
               </div>
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex items-center gap-3 mb-4">
@@ -173,7 +148,7 @@ const Inventory: React.FC = () => {
         </Tabs>
       </div>
 
-      <ProductForm isOpen={showProductForm} onClose={() => setShowProductForm(false)} onSave={handleSaveProduct} categories={mockCategories} editProduct={editProduct} />
+      <ProductForm isOpen={showProductForm} onClose={() => setShowProductForm(false)} onSave={handleSaveProduct} categories={[]} editProduct={editProduct} />
       <BarcodeScanner isOpen={showBarcodeScanner} onClose={() => setShowBarcodeScanner(false)} onProductFound={handleBarcodeProductFound} products={barcodeProducts} />
       <BarcodeLabelPrinter isOpen={showBarcodePrinter} onClose={() => { setShowBarcodePrinter(false); setSelectedProductForPrint(null); }} products={barcodeProducts} selectedProduct={selectedProductForPrint} />
     </MainLayout>

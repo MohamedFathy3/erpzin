@@ -15,13 +15,14 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import VariantMatrix, { VariantOption, ProductVariant } from './VariantMatrix';
-import { Category } from './CategoryTree';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProductFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (product: ProductFormData) => void;
-  categories: Category[];
+  categories?: any[]; // Keep for backwards compatibility but we'll fetch from DB
   editProduct?: ProductFormData | null;
 }
 
@@ -75,25 +76,63 @@ const generateBarcode = (): string => {
   return Math.floor(Math.random() * 9000000000000 + 1000000000000).toString();
 };
 
-const flattenCategories = (categories: Category[], prefix = ''): { id: string; name: string }[] => {
-  let result: { id: string; name: string }[] = [];
-  categories.forEach(cat => {
-    result.push({ id: cat.id, name: prefix + cat.name });
-    if (cat.children.length > 0) {
-      result = result.concat(flattenCategories(cat.children, prefix + cat.name + ' > '));
+interface DbCategory {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  parent_id: string | null;
+}
+
+const flattenDbCategories = (categories: DbCategory[]): { id: string; name: string; nameAr: string }[] => {
+  // Build parent map
+  const parentMap: Record<string, DbCategory> = {};
+  categories.forEach(cat => { parentMap[cat.id] = cat; });
+  
+  return categories.map(cat => {
+    let prefix = '';
+    let current = cat;
+    const ancestors: string[] = [];
+    
+    while (current.parent_id && parentMap[current.parent_id]) {
+      current = parentMap[current.parent_id];
+      ancestors.unshift(current.name);
     }
+    
+    if (ancestors.length > 0) {
+      prefix = ancestors.join(' > ') + ' > ';
+    }
+    
+    return {
+      id: cat.id,
+      name: prefix + cat.name,
+      nameAr: prefix + (cat.name_ar || cat.name),
+    };
   });
-  return result;
 };
 
 const ProductForm: React.FC<ProductFormProps> = ({
   isOpen,
   onClose,
   onSave,
-  categories,
   editProduct
 }) => {
   const { language } = useLanguage();
+  
+  // Fetch categories from database
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ['categories-for-form'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name, name_ar, parent_id')
+        .order('name');
+      if (error) throw error;
+      return data as DbCategory[];
+    },
+    enabled: isOpen,
+  });
+
+  const flatCategories = flattenDbCategories(dbCategories);
   
   const [formData, setFormData] = useState<ProductFormData>(editProduct || {
     name: '',
@@ -111,8 +150,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
     reorderPoint: 5,
     status: 'active'
   });
-
-  const flatCategories = flattenCategories(categories);
 
   const handleChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -210,7 +247,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </SelectTrigger>
                 <SelectContent className="bg-popover border border-border z-50">
                   {flatCategories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {language === 'ar' ? cat.nameAr : cat.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
