@@ -30,8 +30,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Edit2, Trash2, Folder, FolderOpen, ChevronDown, ChevronRight, Package } from 'lucide-react';
+import { 
+  Plus, Edit2, Trash2, ChevronDown, ChevronRight, Package,
+  Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
+  Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
+  Camera, Gamepad2, Book, Palette, Sparkles, Heart, Star, Crown,
+  Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell,
+  PanelLeftClose, PanelLeft
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface DbCategory {
   id: string;
@@ -52,13 +60,51 @@ interface CategoryManagerProps {
 }
 
 const CATEGORY_ICONS = [
-  { value: 'Package', label: 'Package' },
-  { value: 'Shirt', label: 'Shirt' },
-  { value: 'ShoppingBag', label: 'Shopping Bag' },
-  { value: 'Gift', label: 'Gift' },
-  { value: 'Box', label: 'Box' },
-  { value: 'Archive', label: 'Archive' },
+  { value: 'Package', label: 'Package', labelAr: 'طرد' },
+  { value: 'Shirt', label: 'Clothing', labelAr: 'ملابس' },
+  { value: 'ShoppingBag', label: 'Shopping', labelAr: 'تسوق' },
+  { value: 'Gift', label: 'Gifts', labelAr: 'هدايا' },
+  { value: 'Box', label: 'Box', labelAr: 'صندوق' },
+  { value: 'Archive', label: 'Archive', labelAr: 'أرشيف' },
+  { value: 'Watch', label: 'Watches', labelAr: 'ساعات' },
+  { value: 'Gem', label: 'Jewelry', labelAr: 'مجوهرات' },
+  { value: 'Glasses', label: 'Eyewear', labelAr: 'نظارات' },
+  { value: 'Footprints', label: 'Footwear', labelAr: 'أحذية' },
+  { value: 'Baby', label: 'Kids', labelAr: 'أطفال' },
+  { value: 'Home', label: 'Home', labelAr: 'منزل' },
+  { value: 'Utensils', label: 'Kitchen', labelAr: 'مطبخ' },
+  { value: 'Smartphone', label: 'Phones', labelAr: 'هواتف' },
+  { value: 'Laptop', label: 'Computers', labelAr: 'حواسيب' },
+  { value: 'Headphones', label: 'Audio', labelAr: 'صوتيات' },
+  { value: 'Camera', label: 'Cameras', labelAr: 'كاميرات' },
+  { value: 'Gamepad2', label: 'Gaming', labelAr: 'ألعاب' },
+  { value: 'Book', label: 'Books', labelAr: 'كتب' },
+  { value: 'Palette', label: 'Art', labelAr: 'فنون' },
+  { value: 'Sparkles', label: 'Beauty', labelAr: 'تجميل' },
+  { value: 'Heart', label: 'Health', labelAr: 'صحة' },
+  { value: 'Star', label: 'Featured', labelAr: 'مميز' },
+  { value: 'Crown', label: 'Premium', labelAr: 'فاخر' },
+  { value: 'Layers', label: 'Collections', labelAr: 'مجموعات' },
+  { value: 'Tag', label: 'Sales', labelAr: 'تخفيضات' },
+  { value: 'Briefcase', label: 'Business', labelAr: 'أعمال' },
+  { value: 'Car', label: 'Automotive', labelAr: 'سيارات' },
+  { value: 'Bike', label: 'Sports', labelAr: 'رياضة' },
+  { value: 'Plane', label: 'Travel', labelAr: 'سفر' },
+  { value: 'Music', label: 'Music', labelAr: 'موسيقى' },
+  { value: 'Film', label: 'Entertainment', labelAr: 'ترفيه' },
+  { value: 'Dumbbell', label: 'Fitness', labelAr: 'لياقة' },
 ];
+
+const IconComponent: React.FC<{ iconName: string; size?: number; className?: string }> = ({ iconName, size = 18, className }) => {
+  const icons: Record<string, React.ElementType> = {
+    Package, Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
+    Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
+    Camera, Gamepad2, Book, Palette, Sparkles, Heart, Star, Crown,
+    Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell,
+  };
+  const Icon = icons[iconName] || Package;
+  return <Icon size={size} className={className} />;
+};
 
 const CategoryNode: React.FC<{
   category: CategoryWithCount;
@@ -97,11 +143,11 @@ const CategoryNode: React.FC<{
           <span className="w-5" />
         )}
         
-        {expanded && hasChildren ? (
-          <FolderOpen size={18} className={isSelected ? 'text-primary-foreground' : 'text-primary'} />
-        ) : (
-          <Folder size={18} className={isSelected ? 'text-primary-foreground' : 'text-primary'} />
-        )}
+        <IconComponent 
+          iconName={category.icon || 'Package'} 
+          size={18} 
+          className={isSelected ? 'text-primary-foreground' : 'text-primary'} 
+        />
         
         <span className="flex-1 font-medium text-sm truncate">
           {language === 'ar' ? (category.name_ar || category.name) : category.name}
@@ -170,6 +216,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<DbCategory | null>(null);
   const [deleteCategory, setDeleteCategory] = useState<DbCategory | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     name_ar: '',
@@ -345,63 +392,80 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   };
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col">
+    <Collapsible
+      open={!isCollapsed}
+      onOpenChange={(open) => setIsCollapsed(!open)}
+      className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col"
+    >
       {/* Header */}
       <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
-        <h3 className="font-bold text-foreground">
-          {language === 'ar' ? 'التصنيفات' : 'Categories'}
-        </h3>
-        <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0">
-          <Plus size={16} />
-        </Button>
-      </div>
-
-      {/* All Products */}
-      <div
-        className={cn(
-          'flex items-center gap-2 py-2 px-4 cursor-pointer transition-all border-b border-border',
-          selectedCategory === null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-        )}
-        onClick={() => onSelectCategory(null)}
-      >
-        <Package size={18} />
-        <span className="flex-1 font-medium text-sm">
-          {language === 'ar' ? 'جميع المنتجات' : 'All Products'}
-        </span>
-        <span className={cn(
-          'text-xs px-2 py-0.5 rounded-full',
-          selectedCategory === null ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
-        )}>
-          {totalProducts}
-        </span>
-      </div>
-
-      {/* Tree */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
-            {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-          </div>
-        ) : categoryTree.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Folder size={32} className="mb-2 opacity-50" />
-            <p className="text-sm">{language === 'ar' ? 'لا توجد تصنيفات' : 'No categories'}</p>
-          </div>
-        ) : (
-          categoryTree.map((category) => (
-            <CategoryNode
-              key={category.id}
-              category={category}
-              level={0}
-              selectedCategory={selectedCategory}
-              onSelectCategory={onSelectCategory}
-              onEdit={handleEdit}
-              onDelete={setDeleteCategory}
-              language={language}
-            />
-          ))
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              {isCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+            </Button>
+          </CollapsibleTrigger>
+          {!isCollapsed && (
+            <h3 className="font-bold text-foreground">
+              {language === 'ar' ? 'التصنيفات' : 'Categories'}
+            </h3>
+          )}
+        </div>
+        {!isCollapsed && (
+          <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0">
+            <Plus size={16} />
+          </Button>
         )}
       </div>
+
+      <CollapsibleContent className="flex-1 flex flex-col overflow-hidden">
+        {/* All Products */}
+        <div
+          className={cn(
+            'flex items-center gap-2 py-2 px-4 cursor-pointer transition-all border-b border-border',
+            selectedCategory === null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          )}
+          onClick={() => onSelectCategory(null)}
+        >
+          <Package size={18} />
+          <span className="flex-1 font-medium text-sm">
+            {language === 'ar' ? 'جميع المنتجات' : 'All Products'}
+          </span>
+          <span className={cn(
+            'text-xs px-2 py-0.5 rounded-full',
+            selectedCategory === null ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
+          )}>
+            {totalProducts}
+          </span>
+        </div>
+
+        {/* Tree */}
+        <div className="flex-1 overflow-y-auto p-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+            </div>
+          ) : categoryTree.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <Package size={32} className="mb-2 opacity-50" />
+              <p className="text-sm">{language === 'ar' ? 'لا توجد تصنيفات' : 'No categories'}</p>
+            </div>
+          ) : (
+            categoryTree.map((category) => (
+              <CategoryNode
+                key={category.id}
+                category={category}
+                level={0}
+                selectedCategory={selectedCategory}
+                onSelectCategory={onSelectCategory}
+                onEdit={handleEdit}
+                onDelete={setDeleteCategory}
+                language={language}
+              />
+            ))
+          )}
+        </div>
+      </CollapsibleContent>
 
       {/* Add/Edit Dialog */}
       <Dialog open={showForm} onOpenChange={(open) => !open && resetForm()}>
@@ -461,10 +525,13 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-60">
                   {CATEGORY_ICONS.map((icon) => (
                     <SelectItem key={icon.value} value={icon.value}>
-                      {icon.label}
+                      <div className="flex items-center gap-2">
+                        <IconComponent iconName={icon.value} size={16} />
+                        <span>{language === 'ar' ? icon.labelAr : icon.label}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -508,7 +575,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Collapsible>
   );
 };
 
