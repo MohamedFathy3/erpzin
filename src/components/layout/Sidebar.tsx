@@ -85,22 +85,33 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     >
       {/* Logo */}
       <div className={cn(
-        'flex items-center p-4 bg-white m-2 rounded-lg border-2 border-sidebar',
-        collapsed ? 'justify-center' : 'justify-center'
+        'flex items-center bg-white m-2 rounded-lg border-2 border-sidebar overflow-hidden transition-all duration-300',
+        collapsed ? 'justify-center p-3' : 'justify-center p-4'
       )}>
-        {collapsed ? (
+        <div className="relative w-full h-12 flex items-center justify-center">
+          {/* Icon Logo - visible when collapsed */}
           <img 
             src={logoIcon} 
             alt="INJAZ" 
-            className="w-10 h-10 object-contain"
+            className={cn(
+              'absolute object-contain transition-all duration-300 ease-in-out',
+              collapsed 
+                ? 'w-10 h-10 opacity-100 scale-100 rotate-0' 
+                : 'w-0 h-0 opacity-0 scale-50 rotate-180'
+            )}
           />
-        ) : (
+          {/* Full Logo - visible when expanded */}
           <img 
             src={logoFull} 
             alt="INJAZ ERP" 
-            className="h-14 object-contain"
+            className={cn(
+              'object-contain transition-all duration-300 ease-in-out',
+              collapsed 
+                ? 'w-0 h-0 opacity-0 scale-75' 
+                : 'h-12 opacity-100 scale-100'
+            )}
           />
-        )}
+        </div>
       </div>
 
       {/* Collapse Button */}
