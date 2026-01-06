@@ -32,15 +32,18 @@ import {
   ArrowRightLeft,
   ArrowUpCircle,
   ArrowDownCircle,
-  User
+  User,
+  ClipboardList,
+  BarChart3
 } from 'lucide-react';
 import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import ReadyReports from '@/components/reports/ReadyReports';
 
 const Reports = () => {
   const { language, direction } = useLanguage();
   const printRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('sales');
+  const [activeTab, setActiveTab] = useState('ready');
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -617,7 +620,11 @@ const Reports = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="print:hidden">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="ready" className="flex items-center gap-2">
+              <ClipboardList size={16} />
+              {language === 'ar' ? 'التقارير الجاهزة' : 'Ready Reports'}
+            </TabsTrigger>
             <TabsTrigger value="sales" className="flex items-center gap-2">
               <TrendingUp size={16} />
               {t.sales}
@@ -639,6 +646,11 @@ const Reports = () => {
               {t.customers}
             </TabsTrigger>
           </TabsList>
+
+          {/* Ready Reports Tab */}
+          <TabsContent value="ready" className="mt-6">
+            <ReadyReports />
+          </TabsContent>
 
           {/* Sales Tab */}
           <TabsContent value="sales" className="mt-6 space-y-6">
