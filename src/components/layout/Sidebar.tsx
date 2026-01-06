@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import logoIcon from '@/assets/logo-icon.png';
 import injazLogo from '@/assets/injaz-logo.png';
 
 interface NavItemProps {
@@ -85,16 +86,24 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         'flex items-center gap-3 p-4 border-b border-sidebar-border',
         collapsed && 'justify-center'
       )}>
-        <img 
-          src={injazLogo} 
-          alt="INJAZ ERP" 
-          className={cn('transition-all duration-300', collapsed ? 'w-10 h-10' : 'w-12 h-12')}
-        />
-        {!collapsed && (
-          <div className="flex flex-col">
-            <span className="text-lg font-bold text-sidebar-foreground">INJAZ</span>
-            <span className="text-xs text-sidebar-muted">ERP System</span>
-          </div>
+        {collapsed ? (
+          <img 
+            src={logoIcon} 
+            alt="INJAZ" 
+            className="w-10 h-10 object-contain"
+          />
+        ) : (
+          <>
+            <img 
+              src={injazLogo} 
+              alt="INJAZ ERP" 
+              className="w-12 h-12"
+            />
+            <div className="flex flex-col">
+              <span className="text-lg font-bold text-sidebar-foreground">INJAZ</span>
+              <span className="text-xs text-sidebar-muted">ERP System</span>
+            </div>
+          </>
         )}
       </div>
 
