@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +43,7 @@ const Inventory: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isCategoryCollapsed, setIsCategoryCollapsed] = useState(false);
 
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
@@ -289,8 +291,16 @@ const Inventory: React.FC = () => {
 
             {/* Products Grid */}
             <div className="flex-1 flex gap-4 min-h-0">
-              <div className="w-64 flex-shrink-0 hidden lg:block">
-                <CategoryManager selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
+              <div className={cn(
+                "flex-shrink-0 hidden lg:block transition-all duration-300",
+                isCategoryCollapsed ? "w-12" : "w-64"
+              )}>
+                <CategoryManager 
+                  selectedCategory={selectedCategory} 
+                  onSelectCategory={setSelectedCategory}
+                  isCollapsed={isCategoryCollapsed}
+                  onCollapseChange={setIsCategoryCollapsed}
+                />
               </div>
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">

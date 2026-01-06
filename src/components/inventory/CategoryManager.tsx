@@ -57,6 +57,8 @@ export interface CategoryWithCount extends DbCategory {
 interface CategoryManagerProps {
   selectedCategory: string | null;
   onSelectCategory: (categoryId: string | null) => void;
+  isCollapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
 const CATEGORY_ICONS = [
@@ -210,13 +212,24 @@ const CategoryNode: React.FC<{
 const CategoryManager: React.FC<CategoryManagerProps> = ({
   selectedCategory,
   onSelectCategory,
+  isCollapsed: controlledCollapsed,
+  onCollapseChange,
 }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<DbCategory | null>(null);
   const [deleteCategory, setDeleteCategory] = useState<DbCategory | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  
+  const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
+  const setIsCollapsed = (value: boolean) => {
+    if (onCollapseChange) {
+      onCollapseChange(value);
+    } else {
+      setInternalCollapsed(value);
+    }
+  };
   const [formData, setFormData] = useState({
     name: '',
     name_ar: '',
