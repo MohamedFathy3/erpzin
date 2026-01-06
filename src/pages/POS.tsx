@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign } from 'lucide-react';
+import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign, Crown, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -372,6 +372,19 @@ const POS: React.FC = () => {
               }
             </span>
           </Button>
+          {/* Loyalty Points Display */}
+          {selectedCustomer && (
+            <div className="flex items-center gap-1 px-3 py-1.5 bg-warning/20 rounded-lg">
+              <Crown size={16} className="text-warning" />
+              <Star size={12} className="text-warning fill-warning" />
+              <span className="text-warning font-semibold text-sm">
+                {selectedCustomer.loyalty_points || 0}
+              </span>
+              <span className="text-warning/70 text-xs">
+                {language === 'ar' ? 'نقطة' : 'pts'}
+              </span>
+            </div>
+          )}
           {/* Delivery Button */}
           <Button
             variant="ghost"
@@ -474,7 +487,7 @@ const POS: React.FC = () => {
         onClose={() => setShowPayment(false)}
         total={calculateTotal()}
         onComplete={handlePaymentComplete}
-        customer={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name } : null}
+        customer={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name, loyalty_points: selectedCustomer.loyalty_points } : null}
         deliveryPerson={selectedDelivery ? { id: selectedDelivery.id, name: selectedDelivery.name } : null}
       />
 
