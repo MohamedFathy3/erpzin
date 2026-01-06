@@ -178,6 +178,48 @@ export const useAddColor = () => {
   });
 };
 
+export const useUpdateSize = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...size }: Partial<Size> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('sizes')
+        .update(size)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sizes'] });
+    }
+  });
+};
+
+export const useUpdateColor = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...color }: Partial<Color> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('colors')
+        .update(color)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colors'] });
+    }
+  });
+};
+
 export const useDeleteSize = () => {
   const queryClient = useQueryClient();
   
