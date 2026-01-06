@@ -1633,6 +1633,175 @@ export type Database = {
           },
         ]
       }
+      purchase_return_items: {
+        Row: {
+          created_at: string
+          id: string
+          original_item_id: string | null
+          product_id: string | null
+          product_name: string
+          product_variant_id: string | null
+          quantity: number
+          reason: string | null
+          return_id: string
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_item_id?: string | null
+          product_id?: string | null
+          product_name: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id: string
+          total_cost?: number
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_item_id?: string | null
+          product_id?: string | null
+          product_name?: string
+          product_variant_id?: string | null
+          quantity?: number
+          reason?: string | null
+          return_id?: string
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_return_items_original_item_id_fkey"
+            columns: ["original_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_invoice_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_return_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_return_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_return_items_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_returns: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          discount_amount: number | null
+          id: string
+          notes: string | null
+          original_invoice_id: string | null
+          original_invoice_number: string | null
+          processed_by: string | null
+          reason: string | null
+          refund_method: string | null
+          refund_status: string | null
+          return_date: string
+          return_number: string
+          status: string | null
+          subtotal: number
+          supplier_id: string | null
+          tax_amount: number | null
+          total_amount: number
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          discount_amount?: number | null
+          id?: string
+          notes?: string | null
+          original_invoice_id?: string | null
+          original_invoice_number?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          refund_status?: string | null
+          return_date?: string
+          return_number: string
+          status?: string | null
+          subtotal?: number
+          supplier_id?: string | null
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          discount_amount?: number | null
+          id?: string
+          notes?: string | null
+          original_invoice_id?: string | null
+          original_invoice_number?: string | null
+          processed_by?: string | null
+          reason?: string | null
+          refund_method?: string | null
+          refund_status?: string | null
+          return_date?: string
+          return_number?: string
+          status?: string | null
+          subtotal?: number
+          supplier_id?: string | null
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_returns_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_returns_original_invoice_id_fkey"
+            columns: ["original_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_returns_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_returns_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenues: {
         Row: {
           account_id: string | null
@@ -2756,6 +2925,7 @@ export type Database = {
       generate_count_number: { Args: never; Returns: string }
       generate_payment_number: { Args: never; Returns: string }
       generate_purchase_invoice_number: { Args: never; Returns: string }
+      generate_purchase_return_number: { Args: never; Returns: string }
       generate_return_number: { Args: never; Returns: string }
       generate_sales_invoice_number: { Args: never; Returns: string }
       generate_sales_return_number: { Args: never; Returns: string }
