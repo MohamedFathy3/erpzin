@@ -183,17 +183,70 @@ const Inventory: React.FC = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="w-fit flex-wrap h-auto gap-1">
-            <TabsTrigger value="products" className="flex items-center gap-1.5"><Package size={14} />{language === 'ar' ? 'المنتجات' : 'Products'}</TabsTrigger>
-            <TabsTrigger value="transfers" className="flex items-center gap-1.5"><ArrowRightLeft size={14} />{language === 'ar' ? 'نقل المخزون' : 'Transfers'}</TabsTrigger>
-            <TabsTrigger value="reports" className="flex items-center gap-1.5"><BarChart3 size={14} />{language === 'ar' ? 'التقارير' : 'Reports'}</TabsTrigger>
-            <TabsTrigger value="alerts" className="flex items-center gap-1.5"><Bell size={14} />{language === 'ar' ? 'التنبيهات' : 'Alerts'}</TabsTrigger>
-            <TabsTrigger value="count" className="flex items-center gap-1.5"><ClipboardList size={14} />{language === 'ar' ? 'الجرد' : 'Count'}</TabsTrigger>
-            <TabsTrigger value="movements" className="flex items-center gap-1.5"><ArrowUpDown size={14} />{language === 'ar' ? 'الحركات' : 'Movements'}</TabsTrigger>
-            <TabsTrigger value="opening" className="flex items-center gap-1.5"><Wallet size={14} />{language === 'ar' ? 'أول المدة' : 'Opening'}</TabsTrigger>
-            <TabsTrigger value="import" className="flex items-center gap-1.5"><FileSpreadsheet size={14} />{language === 'ar' ? 'استيراد' : 'Import'}</TabsTrigger>
-            <TabsTrigger value="variants" className="flex items-center gap-1.5"><Palette size={14} />{language === 'ar' ? 'المقاسات والألوان' : 'Sizes & Colors'}</TabsTrigger>
-          </TabsList>
+          <div className="flex flex-wrap items-center gap-6 pb-4 border-b border-border mb-4">
+            {/* المنتجات والإعدادات */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground px-1">
+                {language === 'ar' ? 'المنتجات' : 'Products'}
+              </span>
+              <TabsList className="h-9 bg-muted/50 p-1">
+                <TabsTrigger value="products" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <Package size={14} />
+                  {language === 'ar' ? 'قائمة المنتجات' : 'Product List'}
+                </TabsTrigger>
+                <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <Palette size={14} />
+                  {language === 'ar' ? 'المقاسات والألوان' : 'Sizes & Colors'}
+                </TabsTrigger>
+                <TabsTrigger value="import" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <FileSpreadsheet size={14} />
+                  {language === 'ar' ? 'استيراد' : 'Import'}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* إدارة المخزون */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground px-1">
+                {language === 'ar' ? 'إدارة المخزون' : 'Stock Management'}
+              </span>
+              <TabsList className="h-9 bg-muted/50 p-1">
+                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                  <ArrowRightLeft size={14} />
+                  {language === 'ar' ? 'التحويلات' : 'Transfers'}
+                </TabsTrigger>
+                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                  <ClipboardList size={14} />
+                  {language === 'ar' ? 'الجرد' : 'Count'}
+                </TabsTrigger>
+                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-2 data-[state=active]:text-white">
+                  <Wallet size={14} />
+                  {language === 'ar' ? 'أول المدة' : 'Opening'}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* التقارير والمراقبة */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground px-1">
+                {language === 'ar' ? 'التقارير والمراقبة' : 'Reports & Monitoring'}
+              </span>
+              <TabsList className="h-9 bg-muted/50 p-1">
+                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                  <BarChart3 size={14} />
+                  {language === 'ar' ? 'التقارير' : 'Reports'}
+                </TabsTrigger>
+                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                  <ArrowUpDown size={14} />
+                  {language === 'ar' ? 'الحركات' : 'Movements'}
+                </TabsTrigger>
+                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3 data-[state=active]:bg-chart-3 data-[state=active]:text-white">
+                  <Bell size={14} />
+                  {language === 'ar' ? 'التنبيهات' : 'Alerts'}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
             {/* Actions Bar */}
