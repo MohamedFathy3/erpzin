@@ -103,7 +103,7 @@ const SizeColorManager: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Tabs defaultValue="sizes" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="sizes" className="flex items-center gap-2">
@@ -116,7 +116,7 @@ const SizeColorManager: React.FC = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sizes" className="mt-6">
+        <TabsContent value="sizes" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -219,7 +219,7 @@ const SizeColorManager: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="colors" className="mt-6">
+        <TabsContent value="colors" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
