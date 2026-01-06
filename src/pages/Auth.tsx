@@ -8,9 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, LogIn, UserPlus, Mail, Lock, User } from 'lucide-react';
+import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe } from 'lucide-react';
 import { z } from 'zod';
 import logoFull from '@/assets/logo-full.png';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const loginSchema = z.object({
   email: z.string().trim().email({ message: 'البريد الإلكتروني غير صالح' }),
@@ -29,7 +35,7 @@ const signupSchema = z.object({
 
 const Auth = () => {
   const { user, signIn, signUp } = useAuth();
-  const { language, direction } = useLanguage();
+  const { language, direction, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -173,10 +179,34 @@ const Auth = () => {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center p-4"
+      className="min-h-screen flex items-center justify-center p-4 relative"
       style={{ background: 'linear-gradient(135deg, hsl(217 47% 14%) 0%, hsl(217 47% 20%) 50%, hsl(160 60% 35%) 100%)' }}
       dir={direction}
     >
+      {/* Language Selector */}
+      <div className="absolute top-4 end-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+              <Globe size={16} className="me-2" />
+              {language === 'ar' ? 'العربية' : 'English'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setLanguage('ar')} className="flex items-center gap-2">
+              <span>🇾🇪</span>
+              <span>العربية</span>
+              {language === 'ar' && <span className="ms-auto text-primary">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLanguage('en')} className="flex items-center gap-2">
+              <span>🇺🇸</span>
+              <span>English</span>
+              {language === 'en' && <span className="ms-auto text-primary">✓</span>}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <Card className="w-full max-w-md shadow-2xl border-0">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">
