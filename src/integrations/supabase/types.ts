@@ -357,6 +357,326 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_count_items: {
+        Row: {
+          count_id: string
+          counted_at: string | null
+          counted_by: string | null
+          counted_quantity: number | null
+          created_at: string
+          id: string
+          notes: string | null
+          product_id: string
+          system_quantity: number
+          variance: number | null
+        }
+        Insert: {
+          count_id: string
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_quantity?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          system_quantity?: number
+          variance?: number | null
+        }
+        Update: {
+          count_id?: string
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_quantity?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          system_quantity?: number
+          variance?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_count_items_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_count_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_counts: {
+        Row: {
+          approved_by: string | null
+          completed_date: string | null
+          count_date: string
+          count_number: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          status: string
+          total_items: number | null
+          updated_at: string
+          variance_items: number | null
+          warehouse_id: string
+        }
+        Insert: {
+          approved_by?: string | null
+          completed_date?: string | null
+          count_date?: string
+          count_number: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+          variance_items?: number | null
+          warehouse_id: string
+        }
+        Update: {
+          approved_by?: string | null
+          completed_date?: string | null
+          count_date?: string
+          count_number?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          total_items?: number | null
+          updated_at?: string
+          variance_items?: number | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_counts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          movement_type: string
+          new_stock: number
+          notes: string | null
+          previous_stock: number
+          product_id: string
+          quantity: number
+          reference_id: string | null
+          reference_type: string | null
+          warehouse_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          movement_type: string
+          new_stock?: number
+          notes?: string | null
+          previous_stock?: number
+          product_id: string
+          quantity: number
+          reference_id?: string | null
+          reference_type?: string | null
+          warehouse_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          movement_type?: string
+          new_stock?: number
+          notes?: string | null
+          previous_stock?: number
+          product_id?: string
+          quantity?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      low_stock_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          current_quantity: number
+          id: string
+          is_read: boolean | null
+          is_resolved: boolean | null
+          product_id: string
+          resolved_at: string | null
+          threshold_quantity: number
+          warehouse_id: string | null
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string
+          current_quantity: number
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          product_id: string
+          resolved_at?: string | null
+          threshold_quantity: number
+          warehouse_id?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          current_quantity?: number
+          id?: string
+          is_read?: boolean | null
+          is_resolved?: boolean | null
+          product_id?: string
+          resolved_at?: string | null
+          threshold_quantity?: number
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "low_stock_alerts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "low_stock_alerts_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opening_balances: {
+        Row: {
+          balance_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          quantity: number
+          total_value: number | null
+          unit_cost: number
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          balance_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity?: number
+          total_value?: number | null
+          unit_cost?: number
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          balance_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity?: number
+          total_value?: number | null
+          unit_cost?: number
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opening_balances_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opening_balances_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_imports: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error_log: Json | null
+          failed_rows: number
+          file_name: string
+          id: string
+          status: string
+          successful_rows: number
+          total_rows: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_log?: Json | null
+          failed_rows?: number
+          file_name: string
+          id?: string
+          status?: string
+          successful_rows?: number
+          total_rows?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error_log?: Json | null
+          failed_rows?: number
+          file_name?: string
+          id?: string
+          status?: string
+          successful_rows?: number
+          total_rows?: number
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           barcode: string | null
@@ -961,6 +1281,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_count_number: { Args: never; Returns: string }
       generate_transfer_number: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
