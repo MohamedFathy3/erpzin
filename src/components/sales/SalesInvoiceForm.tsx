@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Save, Printer } from "lucide-react";
+import { Plus, Trash2, Search, Save, Printer, Crown, Star } from "lucide-react";
 import { format } from "date-fns";
 
 interface InvoiceItem {
@@ -280,14 +280,18 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         }
       }
 
-      // Update customer total purchases
+      // Update customer total purchases and add loyalty points
       if (formData.customer_id) {
         const customer = customers?.find(c => c.id === formData.customer_id);
         if (customer) {
+          // Calculate loyalty points: 1 point per 1000 YER
+          const earnedPoints = Math.floor(totals.totalAmount / 1000);
+          
           await supabase
             .from('customers')
             .update({ 
-              total_purchases: (customer.total_purchases || 0) + totals.totalAmount 
+              total_purchases: (customer.total_purchases || 0) + totals.totalAmount,
+              loyalty_points: (customer.loyalty_points || 0) + earnedPoints
             })
             .eq('id', formData.customer_id);
         }
@@ -355,11 +359,36 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     <SelectContent>
                       {customers?.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id}>
-                          {language === 'ar' ? customer.name_ar || customer.name : customer.name}
+                          <div className="flex items-center gap-2">
+                            <span>{language === 'ar' ? customer.name_ar || customer.name : customer.name}</span>
+                            {(customer.loyalty_points || 0) > 0 && (
+                              <span className="flex items-center gap-1 text-warning text-xs">
+                                <Star size={10} className="fill-warning" />
+                                {customer.loyalty_points}
+                              </span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* Show selected customer loyalty points */}
+                  {formData.customer_id && (() => {
+                    const customer = customers?.find(c => c.id === formData.customer_id);
+                    if (!customer) return null;
+                    return (
+                      <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-warning/10 border border-warning/20">
+                        <Crown size={16} className="text-warning" />
+                        <span className="text-sm font-medium">
+                          {language === 'ar' ? 'نقاط الولاء:' : 'Loyalty Points:'}
+                        </span>
+                        <span className="text-warning font-bold">{customer.loyalty_points || 0}</span>
+                        <span className="text-xs text-muted-foreground">
+                          (+{Math.floor(totals.totalAmount / 1000)} {language === 'ar' ? 'نقطة جديدة' : 'new pts'})
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="col-span-2 md:col-span-1">

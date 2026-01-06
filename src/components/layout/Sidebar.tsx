@@ -8,7 +8,7 @@ import {
   Truck,
   Wallet,
   Users,
-  UserCircle,
+  Crown,
   FileBarChart,
   Settings,
   LogOut,
@@ -62,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     { id: 'purchasing', icon: <Truck size={20} />, label: t('nav.purchasing') },
     { id: 'finance', icon: <Wallet size={20} />, label: t('nav.finance') },
     { id: 'hr', icon: <Users size={20} />, label: t('nav.hr') },
-    { id: 'crm', icon: <UserCircle size={20} />, label: t('nav.crm') },
+    { id: 'crm', icon: <Crown size={20} />, label: t('nav.crm') },
     { id: 'reports', icon: <FileBarChart size={20} />, label: t('nav.reports') },
   ];
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Banknote, CreditCard, Check, Smartphone, Building2, Wallet } from 'lucide-react';
+import { X, Banknote, CreditCard, Check, Smartphone, Building2, Wallet, Crown, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -30,7 +30,7 @@ interface PaymentModalProps {
   onClose: () => void;
   total: number;
   onComplete: (payments: { method: string; amount: number }[]) => void;
-  customer?: { id: string; name: string } | null;
+  customer?: { id: string; name: string; loyalty_points?: number | null } | null;
   deliveryPerson?: { id: string; name: string } | null;
 }
 
@@ -256,6 +256,18 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
                 <div className="flex-1">
                   <p className="text-xs text-muted-foreground">{language === 'ar' ? 'العميل' : 'Customer'}</p>
                   <p className="font-medium text-foreground">{customer.name}</p>
+                  {(customer.loyalty_points || 0) > 0 && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Crown size={12} className="text-warning" />
+                      <Star size={10} className="text-warning fill-warning" />
+                      <span className="text-warning font-semibold text-xs">{customer.loyalty_points}</span>
+                      <span className="text-warning/70 text-xs">{language === 'ar' ? 'نقطة' : 'pts'}</span>
+                    </div>
+                  )}
+                  {/* Points to be earned */}
+                  <div className="text-xs text-success mt-1">
+                    +{Math.floor(total / 1000)} {language === 'ar' ? 'نقطة جديدة' : 'new pts'}
+                  </div>
                 </div>
               )}
               {deliveryPerson && (

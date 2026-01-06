@@ -8,23 +8,61 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useQuery } from '@tanstack/react-query';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { 
   Plus, 
   Search, 
   Users, 
   Star, 
   ShoppingBag,
-  Phone,
-  Mail,
   Award,
-  TrendingUp
+  TrendingUp,
+  Crown,
+  Gift,
+  Settings,
+  Percent
 } from 'lucide-react';
+
+interface LoyaltySettings {
+  pointsPerCurrency: number;
+  pointsValuePercent: number;
+  bronzeThreshold: number;
+  silverThreshold: number;
+  goldThreshold: number;
+  platinumThreshold: number;
+}
 
 const CRM = () => {
   const { language, direction } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('customers');
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [showLoyaltySettings, setShowLoyaltySettings] = useState(false);
+  const [showRedeemPoints, setShowRedeemPoints] = useState<string | null>(null);
+  const [redeemAmount, setRedeemAmount] = useState('');
+  const queryClient = useQueryClient();
+
+  // New customer form state
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    name_ar: '',
+    phone: '',
+    email: '',
+    address: ''
+  });
+
+  // Loyalty settings state
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings>({
+    pointsPerCurrency: 1000, // 1 point per 1000 YER
+    pointsValuePercent: 1, // 1% discount per point
+    bronzeThreshold: 0,
+    silverThreshold: 200,
+    goldThreshold: 500,
+    platinumThreshold: 1000
+  });
 
   // Fetch customers
   const { data: customers = [] } = useQuery({
@@ -38,10 +76,11 @@ const CRM = () => {
 
   const translations = {
     en: {
-      title: 'Customer Management',
+      title: 'Customers & Loyalty',
       newCustomer: 'New Customer',
       search: 'Search customers...',
       name: 'Name',
+      nameAr: 'Name (Arabic)',
       phone: 'Phone',
       email: 'Email',
       loyaltyPoints: 'Loyalty Points',
@@ -52,13 +91,36 @@ const CRM = () => {
       totalPoints: 'Total Points',
       avgPurchase: 'Avg Purchase',
       address: 'Address',
-      notes: 'Notes'
+      notes: 'Notes',
+      customers: 'Customers',
+      loyaltyProgram: 'Loyalty Program',
+      redeemPoints: 'Redeem Points',
+      addPoints: 'Add Points',
+      pointsHistory: 'Points History',
+      tier: 'Tier',
+      bronze: 'Bronze',
+      silver: 'Silver',
+      gold: 'Gold',
+      platinum: 'Platinum',
+      loyaltySettings: 'Loyalty Settings',
+      pointsPerCurrency: 'Points per 1000 YER',
+      pointsValuePercent: 'Point Value (%)',
+      thresholds: 'Tier Thresholds',
+      save: 'Save',
+      cancel: 'Cancel',
+      add: 'Add',
+      pointsToRedeem: 'Points to Redeem',
+      availablePoints: 'Available Points',
+      earnedPoints: 'Earned Points',
+      redeemedPoints: 'Redeemed Points',
+      currentTier: 'Current Tier'
     },
     ar: {
-      title: 'إدارة العملاء',
+      title: 'العملاء والولاء',
       newCustomer: 'عميل جديد',
       search: 'بحث عن العملاء...',
       name: 'الاسم',
+      nameAr: 'الاسم بالعربي',
       phone: 'الهاتف',
       email: 'البريد الإلكتروني',
       loyaltyPoints: 'نقاط الولاء',
@@ -69,7 +131,29 @@ const CRM = () => {
       totalPoints: 'إجمالي النقاط',
       avgPurchase: 'متوسط الشراء',
       address: 'العنوان',
-      notes: 'ملاحظات'
+      notes: 'ملاحظات',
+      customers: 'العملاء',
+      loyaltyProgram: 'برنامج الولاء',
+      redeemPoints: 'استبدال النقاط',
+      addPoints: 'إضافة نقاط',
+      pointsHistory: 'سجل النقاط',
+      tier: 'المستوى',
+      bronze: 'برونزي',
+      silver: 'فضي',
+      gold: 'ذهبي',
+      platinum: 'بلاتيني',
+      loyaltySettings: 'إعدادات الولاء',
+      pointsPerCurrency: 'نقاط لكل 1000 ريال',
+      pointsValuePercent: 'قيمة النقطة (%)',
+      thresholds: 'حدود المستويات',
+      save: 'حفظ',
+      cancel: 'إلغاء',
+      add: 'إضافة',
+      pointsToRedeem: 'نقاط للاستبدال',
+      availablePoints: 'النقاط المتاحة',
+      earnedPoints: 'النقاط المكتسبة',
+      redeemedPoints: 'النقاط المستبدلة',
+      currentTier: 'المستوى الحالي'
     }
   };
 
@@ -94,7 +178,7 @@ const CRM = () => {
     { 
       label: t.totalPoints, 
       value: totalPoints.toLocaleString(), 
-      icon: <Award className="text-warning" size={24} />,
+      icon: <Crown className="text-warning" size={24} />,
       color: 'bg-warning/10' 
     },
     { 
@@ -112,49 +196,106 @@ const CRM = () => {
   );
 
   const getLoyaltyTier = (points: number) => {
-    if (points >= 500) return { label: language === 'ar' ? 'ذهبي' : 'Gold', color: 'bg-yellow-500' };
-    if (points >= 200) return { label: language === 'ar' ? 'فضي' : 'Silver', color: 'bg-gray-400' };
-    return { label: language === 'ar' ? 'برونزي' : 'Bronze', color: 'bg-orange-400' };
+    if (points >= loyaltySettings.platinumThreshold) return { 
+      label: language === 'ar' ? 'بلاتيني' : 'Platinum', 
+      color: 'bg-gradient-to-r from-purple-500 to-pink-500',
+      icon: <Crown size={14} />
+    };
+    if (points >= loyaltySettings.goldThreshold) return { 
+      label: language === 'ar' ? 'ذهبي' : 'Gold', 
+      color: 'bg-gradient-to-r from-yellow-400 to-amber-500',
+      icon: <Star size={14} />
+    };
+    if (points >= loyaltySettings.silverThreshold) return { 
+      label: language === 'ar' ? 'فضي' : 'Silver', 
+      color: 'bg-gradient-to-r from-gray-300 to-gray-400',
+      icon: <Award size={14} />
+    };
+    return { 
+      label: language === 'ar' ? 'برونزي' : 'Bronze', 
+      color: 'bg-gradient-to-r from-orange-300 to-orange-400',
+      icon: <Gift size={14} />
+    };
   };
+
+  // Add customer mutation
+  const addCustomerMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase
+        .from('customers')
+        .insert({
+          name: newCustomer.name,
+          name_ar: newCustomer.name_ar || null,
+          phone: newCustomer.phone || null,
+          email: newCustomer.email || null,
+          address: newCustomer.address || null,
+          loyalty_points: 0,
+          total_purchases: 0
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success(language === 'ar' ? 'تم إضافة العميل بنجاح' : 'Customer added successfully');
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setShowAddCustomer(false);
+      setNewCustomer({ name: '', name_ar: '', phone: '', email: '', address: '' });
+    },
+    onError: () => {
+      toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+    }
+  });
+
+  // Redeem points mutation
+  const redeemPointsMutation = useMutation({
+    mutationFn: async ({ customerId, points }: { customerId: string; points: number }) => {
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) throw new Error('Customer not found');
+      if ((customer.loyalty_points || 0) < points) throw new Error('Insufficient points');
+
+      const { error } = await supabase
+        .from('customers')
+        .update({ loyalty_points: (customer.loyalty_points || 0) - points })
+        .eq('id', customerId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success(language === 'ar' ? 'تم استبدال النقاط بنجاح' : 'Points redeemed successfully');
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setShowRedeemPoints(null);
+      setRedeemAmount('');
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    }
+  });
 
   return (
     <MainLayout activeItem="crm">
       <div className="space-y-6" dir={direction}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gradient-success">
-                <Plus size={18} className="me-2" />
-                {t.newCustomer}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t.newCustomer}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>{t.name}</Label>
-                  <Input placeholder={t.name} />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.phone}</Label>
-                  <Input placeholder={t.phone} />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.email}</Label>
-                  <Input placeholder={t.email} type="email" />
-                </div>
-                <div className="space-y-2">
-                  <Label>{t.address}</Label>
-                  <Input placeholder={t.address} />
-                </div>
-                <Button className="w-full gradient-success">{t.newCustomer}</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-3">
+            <Crown className="text-warning" size={28} />
+            <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowLoyaltySettings(true)}
+            >
+              <Settings size={18} className="me-2" />
+              {t.loyaltySettings}
+            </Button>
+            <Button className="gradient-success" onClick={() => setShowAddCustomer(true)}>
+              <Plus size={18} className="me-2" />
+              {t.newCustomer}
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -176,76 +317,363 @@ const CRM = () => {
           ))}
         </div>
 
-        {/* Customers Table */}
-        <Card className="card-elevated">
-          <CardHeader className="pb-3">
-            <div className="relative max-w-sm">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input 
-                placeholder={t.search} 
-                className="ps-10"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t.name}</TableHead>
-                  <TableHead>{t.phone}</TableHead>
-                  <TableHead>{t.email}</TableHead>
-                  <TableHead>{t.loyaltyPoints}</TableHead>
-                  <TableHead>{t.totalPurchases}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCustomers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      {language === 'ar' ? 'لا يوجد عملاء' : 'No customers yet'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredCustomers.map((customer) => {
-                    const tier = getLoyaltyTier(customer.loyalty_points || 0);
-                    return (
-                      <TableRow key={customer.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-primary font-semibold">
-                                {(language === 'ar' ? customer.name_ar || customer.name : customer.name).charAt(0)}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium">
-                                {language === 'ar' ? customer.name_ar || customer.name : customer.name}
-                              </p>
-                            </div>
-                          </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="customers" className="flex items-center gap-2">
+              <Users size={16} />
+              {t.customers}
+            </TabsTrigger>
+            <TabsTrigger value="loyalty" className="flex items-center gap-2">
+              <Crown size={16} />
+              {t.loyaltyProgram}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="customers" className="mt-4">
+            {/* Customers Table */}
+            <Card className="card-elevated">
+              <CardHeader className="pb-3">
+                <div className="relative max-w-sm">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input 
+                    placeholder={t.search} 
+                    className="ps-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t.name}</TableHead>
+                      <TableHead>{t.phone}</TableHead>
+                      <TableHead>{t.email}</TableHead>
+                      <TableHead>{t.loyaltyPoints}</TableHead>
+                      <TableHead>{t.totalPurchases}</TableHead>
+                      <TableHead>{t.actions}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          {language === 'ar' ? 'لا يوجد عملاء' : 'No customers yet'}
                         </TableCell>
-                        <TableCell dir="ltr">{customer.phone || '-'}</TableCell>
-                        <TableCell>{customer.email || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Star size={16} className="text-warning fill-warning" />
-                            <span>{customer.loyalty_points || 0}</span>
-                            <Badge className={`${tier.color} text-white text-xs`}>
-                              {tier.label}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>{Number(customer.total_purchases || 0).toLocaleString()} YER</TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    ) : (
+                      filteredCustomers.map((customer) => {
+                        const tier = getLoyaltyTier(customer.loyalty_points || 0);
+                        return (
+                          <TableRow key={customer.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <span className="text-primary font-semibold">
+                                    {(language === 'ar' ? customer.name_ar || customer.name : customer.name).charAt(0)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-medium">
+                                    {language === 'ar' ? customer.name_ar || customer.name : customer.name}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell dir="ltr">{customer.phone || '-'}</TableCell>
+                            <TableCell>{customer.email || '-'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Star size={16} className="text-warning fill-warning" />
+                                <span className="font-semibold">{customer.loyalty_points || 0}</span>
+                                <Badge className={`${tier.color} text-white text-xs flex items-center gap-1`}>
+                                  {tier.icon}
+                                  {tier.label}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>{Number(customer.total_purchases || 0).toLocaleString()} YER</TableCell>
+                            <TableCell>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setShowRedeemPoints(customer.id)}
+                              >
+                                <Gift size={14} className="me-1" />
+                                {t.redeemPoints}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="loyalty" className="mt-4">
+            {/* Loyalty Program Overview */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="card-elevated">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Crown className="text-warning" />
+                    {language === 'ar' ? 'مستويات الولاء' : 'Loyalty Tiers'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[
+                    { name: t.bronze, threshold: loyaltySettings.bronzeThreshold, color: 'from-orange-300 to-orange-400', icon: <Gift /> },
+                    { name: t.silver, threshold: loyaltySettings.silverThreshold, color: 'from-gray-300 to-gray-400', icon: <Award /> },
+                    { name: t.gold, threshold: loyaltySettings.goldThreshold, color: 'from-yellow-400 to-amber-500', icon: <Star /> },
+                    { name: t.platinum, threshold: loyaltySettings.platinumThreshold, color: 'from-purple-500 to-pink-500', icon: <Crown /> }
+                  ].map((tier, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-r ${tier.color} flex items-center justify-center text-white`}>
+                          {tier.icon}
+                        </div>
+                        <span className="font-medium">{tier.name}</span>
+                      </div>
+                      <span className="text-muted-foreground">{tier.threshold}+ {language === 'ar' ? 'نقطة' : 'points'}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="card-elevated">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Percent className="text-primary" />
+                    {language === 'ar' ? 'قواعد النقاط' : 'Points Rules'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-lg font-semibold text-primary">
+                      {language === 'ar' 
+                        ? `نقطة واحدة لكل ${loyaltySettings.pointsPerCurrency} ريال`
+                        : `1 point per ${loyaltySettings.pointsPerCurrency} YER`
+                      }
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'ar' ? 'عند كل عملية شراء' : 'On every purchase'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-success/10 border border-success/20">
+                    <p className="text-lg font-semibold text-success">
+                      {language === 'ar' 
+                        ? `${loyaltySettings.pointsValuePercent}% خصم لكل نقطة`
+                        : `${loyaltySettings.pointsValuePercent}% discount per point`
+                      }
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'ar' ? 'عند الاستبدال' : 'When redeeming'}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-warning/10 border border-warning/20">
+                    <div className="flex items-center gap-2 text-warning">
+                      <Star className="fill-warning" size={20} />
+                      <span className="font-semibold">
+                        {language === 'ar' ? 'مزايا المستوى الذهبي' : 'Gold Tier Benefits'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {language === 'ar' ? 'خصم إضافي 5% على جميع المشتريات' : 'Extra 5% discount on all purchases'}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Add Customer Dialog */}
+        <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t.newCustomer}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{t.name} *</Label>
+                  <Input 
+                    placeholder={t.name}
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.nameAr}</Label>
+                  <Input 
+                    placeholder={t.nameAr}
+                    value={newCustomer.name_ar}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name_ar: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{t.phone}</Label>
+                <Input 
+                  placeholder={t.phone}
+                  value={newCustomer.phone}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.email}</Label>
+                <Input 
+                  placeholder={t.email} 
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.address}</Label>
+                <Input 
+                  placeholder={t.address}
+                  value={newCustomer.address}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                />
+              </div>
+              <Button 
+                className="w-full gradient-success"
+                onClick={() => addCustomerMutation.mutate()}
+                disabled={!newCustomer.name || addCustomerMutation.isPending}
+              >
+                {t.add}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Loyalty Settings Dialog */}
+        <Dialog open={showLoyaltySettings} onOpenChange={setShowLoyaltySettings}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Settings size={20} />
+                {t.loyaltySettings}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>{t.pointsPerCurrency}</Label>
+                <Input 
+                  type="number"
+                  value={loyaltySettings.pointsPerCurrency}
+                  onChange={(e) => setLoyaltySettings({ ...loyaltySettings, pointsPerCurrency: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.pointsValuePercent}</Label>
+                <Input 
+                  type="number"
+                  step="0.1"
+                  value={loyaltySettings.pointsValuePercent}
+                  onChange={(e) => setLoyaltySettings({ ...loyaltySettings, pointsValuePercent: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.thresholds}</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">{t.silver}</Label>
+                    <Input 
+                      type="number"
+                      value={loyaltySettings.silverThreshold}
+                      onChange={(e) => setLoyaltySettings({ ...loyaltySettings, silverThreshold: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">{t.gold}</Label>
+                    <Input 
+                      type="number"
+                      value={loyaltySettings.goldThreshold}
+                      onChange={(e) => setLoyaltySettings({ ...loyaltySettings, goldThreshold: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">{t.platinum}</Label>
+                    <Input 
+                      type="number"
+                      value={loyaltySettings.platinumThreshold}
+                      onChange={(e) => setLoyaltySettings({ ...loyaltySettings, platinumThreshold: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowLoyaltySettings(false)} className="flex-1">
+                  {t.cancel}
+                </Button>
+                <Button className="flex-1 gradient-success" onClick={() => setShowLoyaltySettings(false)}>
+                  {t.save}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Redeem Points Dialog */}
+        <Dialog open={!!showRedeemPoints} onOpenChange={() => setShowRedeemPoints(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Gift size={20} className="text-primary" />
+                {t.redeemPoints}
+              </DialogTitle>
+            </DialogHeader>
+            {showRedeemPoints && (() => {
+              const customer = customers.find(c => c.id === showRedeemPoints);
+              if (!customer) return null;
+              const tier = getLoyaltyTier(customer.loyalty_points || 0);
+              return (
+                <div className="space-y-4 py-4">
+                  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                    <span>{t.availablePoints}</span>
+                    <div className="flex items-center gap-2">
+                      <Star size={16} className="text-warning fill-warning" />
+                      <span className="text-xl font-bold">{customer.loyalty_points || 0}</span>
+                      <Badge className={`${tier.color} text-white`}>{tier.label}</Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.pointsToRedeem}</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0"
+                      value={redeemAmount}
+                      onChange={(e) => setRedeemAmount(e.target.value)}
+                      max={customer.loyalty_points || 0}
+                    />
+                    {redeemAmount && (
+                      <p className="text-sm text-muted-foreground">
+                        = {(Number(redeemAmount) * loyaltySettings.pointsValuePercent).toFixed(0)}% {language === 'ar' ? 'خصم' : 'discount'}
+                      </p>
+                    )}
+                  </div>
+                  <Button 
+                    className="w-full gradient-success"
+                    onClick={() => redeemPointsMutation.mutate({ 
+                      customerId: showRedeemPoints, 
+                      points: Number(redeemAmount) 
+                    })}
+                    disabled={!redeemAmount || Number(redeemAmount) > (customer.loyalty_points || 0) || redeemPointsMutation.isPending}
+                  >
+                    {t.redeemPoints}
+                  </Button>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   );
