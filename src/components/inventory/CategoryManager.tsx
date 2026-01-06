@@ -62,42 +62,65 @@ interface CategoryManagerProps {
 }
 
 const CATEGORY_ICONS = [
-  { value: 'Package', label: 'Package', labelAr: 'طرد' },
-  { value: 'Shirt', label: 'Clothing', labelAr: 'ملابس' },
-  { value: 'ShoppingBag', label: 'Shopping', labelAr: 'تسوق' },
-  { value: 'Gift', label: 'Gifts', labelAr: 'هدايا' },
-  { value: 'Box', label: 'Box', labelAr: 'صندوق' },
-  { value: 'Archive', label: 'Archive', labelAr: 'أرشيف' },
-  { value: 'Watch', label: 'Watches', labelAr: 'ساعات' },
-  { value: 'Gem', label: 'Jewelry', labelAr: 'مجوهرات' },
-  { value: 'Glasses', label: 'Eyewear', labelAr: 'نظارات' },
-  { value: 'Footprints', label: 'Footwear', labelAr: 'أحذية' },
-  { value: 'Baby', label: 'Kids', labelAr: 'أطفال' },
-  { value: 'Home', label: 'Home', labelAr: 'منزل' },
-  { value: 'Utensils', label: 'Kitchen', labelAr: 'مطبخ' },
-  { value: 'Smartphone', label: 'Phones', labelAr: 'هواتف' },
-  { value: 'Laptop', label: 'Computers', labelAr: 'حواسيب' },
-  { value: 'Headphones', label: 'Audio', labelAr: 'صوتيات' },
-  { value: 'Camera', label: 'Cameras', labelAr: 'كاميرات' },
-  { value: 'Gamepad2', label: 'Gaming', labelAr: 'ألعاب' },
-  { value: 'Book', label: 'Books', labelAr: 'كتب' },
-  { value: 'Palette', label: 'Art', labelAr: 'فنون' },
-  { value: 'Sparkles', label: 'Beauty', labelAr: 'تجميل' },
-  { value: 'Heart', label: 'Health', labelAr: 'صحة' },
-  { value: 'Star', label: 'Featured', labelAr: 'مميز' },
-  { value: 'Crown', label: 'Premium', labelAr: 'فاخر' },
-  { value: 'Layers', label: 'Collections', labelAr: 'مجموعات' },
-  { value: 'Tag', label: 'Sales', labelAr: 'تخفيضات' },
-  { value: 'Briefcase', label: 'Business', labelAr: 'أعمال' },
-  { value: 'Car', label: 'Automotive', labelAr: 'سيارات' },
-  { value: 'Bike', label: 'Sports', labelAr: 'رياضة' },
-  { value: 'Plane', label: 'Travel', labelAr: 'سفر' },
-  { value: 'Music', label: 'Music', labelAr: 'موسيقى' },
-  { value: 'Film', label: 'Entertainment', labelAr: 'ترفيه' },
-  { value: 'Dumbbell', label: 'Fitness', labelAr: 'لياقة' },
+  { value: 'Package', label: 'Package', labelAr: 'طرد', color: 'blue' },
+  { value: 'Shirt', label: 'Clothing', labelAr: 'ملابس', color: 'purple' },
+  { value: 'ShoppingBag', label: 'Shopping', labelAr: 'تسوق', color: 'pink' },
+  { value: 'Gift', label: 'Gifts', labelAr: 'هدايا', color: 'red' },
+  { value: 'Box', label: 'Box', labelAr: 'صندوق', color: 'orange' },
+  { value: 'Archive', label: 'Archive', labelAr: 'أرشيف', color: 'teal' },
+  { value: 'Watch', label: 'Watches', labelAr: 'ساعات', color: 'indigo' },
+  { value: 'Gem', label: 'Jewelry', labelAr: 'مجوهرات', color: 'pink' },
+  { value: 'Glasses', label: 'Eyewear', labelAr: 'نظارات', color: 'cyan' },
+  { value: 'Footprints', label: 'Footwear', labelAr: 'أحذية', color: 'orange' },
+  { value: 'Baby', label: 'Kids', labelAr: 'أطفال', color: 'yellow' },
+  { value: 'Home', label: 'Home', labelAr: 'منزل', color: 'green' },
+  { value: 'Utensils', label: 'Kitchen', labelAr: 'مطبخ', color: 'red' },
+  { value: 'Smartphone', label: 'Phones', labelAr: 'هواتف', color: 'blue' },
+  { value: 'Laptop', label: 'Computers', labelAr: 'حواسيب', color: 'indigo' },
+  { value: 'Headphones', label: 'Audio', labelAr: 'صوتيات', color: 'purple' },
+  { value: 'Camera', label: 'Cameras', labelAr: 'كاميرات', color: 'cyan' },
+  { value: 'Gamepad2', label: 'Gaming', labelAr: 'ألعاب', color: 'green' },
+  { value: 'Book', label: 'Books', labelAr: 'كتب', color: 'yellow' },
+  { value: 'Palette', label: 'Art', labelAr: 'فنون', color: 'pink' },
+  { value: 'Sparkles', label: 'Beauty', labelAr: 'تجميل', color: 'purple' },
+  { value: 'Heart', label: 'Health', labelAr: 'صحة', color: 'red' },
+  { value: 'Star', label: 'Featured', labelAr: 'مميز', color: 'yellow' },
+  { value: 'Crown', label: 'Premium', labelAr: 'فاخر', color: 'orange' },
+  { value: 'Layers', label: 'Collections', labelAr: 'مجموعات', color: 'teal' },
+  { value: 'Tag', label: 'Sales', labelAr: 'تخفيضات', color: 'red' },
+  { value: 'Briefcase', label: 'Business', labelAr: 'أعمال', color: 'indigo' },
+  { value: 'Car', label: 'Automotive', labelAr: 'سيارات', color: 'blue' },
+  { value: 'Bike', label: 'Sports', labelAr: 'رياضة', color: 'green' },
+  { value: 'Plane', label: 'Travel', labelAr: 'سفر', color: 'cyan' },
+  { value: 'Music', label: 'Music', labelAr: 'موسيقى', color: 'purple' },
+  { value: 'Film', label: 'Entertainment', labelAr: 'ترفيه', color: 'pink' },
+  { value: 'Dumbbell', label: 'Fitness', labelAr: 'لياقة', color: 'orange' },
 ];
 
-const IconComponent: React.FC<{ iconName: string; size?: number; className?: string }> = ({ iconName, size = 18, className }) => {
+const ICON_COLORS: Record<string, string> = {
+  blue: 'text-blue-500 bg-blue-500/10',
+  green: 'text-emerald-500 bg-emerald-500/10',
+  purple: 'text-purple-500 bg-purple-500/10',
+  orange: 'text-orange-500 bg-orange-500/10',
+  pink: 'text-pink-500 bg-pink-500/10',
+  cyan: 'text-cyan-500 bg-cyan-500/10',
+  yellow: 'text-amber-500 bg-amber-500/10',
+  red: 'text-red-500 bg-red-500/10',
+  indigo: 'text-indigo-500 bg-indigo-500/10',
+  teal: 'text-teal-500 bg-teal-500/10',
+};
+
+const getIconColor = (iconName: string): string => {
+  const icon = CATEGORY_ICONS.find(i => i.value === iconName);
+  return icon?.color || 'blue';
+};
+
+const IconComponent: React.FC<{ iconName: string; size?: number; className?: string; showBackground?: boolean }> = ({ 
+  iconName, 
+  size = 18, 
+  className,
+  showBackground = false 
+}) => {
   const icons: Record<string, React.ElementType> = {
     Package, Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
     Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
@@ -105,7 +128,17 @@ const IconComponent: React.FC<{ iconName: string; size?: number; className?: str
     Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell,
   };
   const Icon = icons[iconName] || Package;
-  return <Icon size={size} className={className} />;
+  const colorClass = ICON_COLORS[getIconColor(iconName)] || ICON_COLORS.blue;
+  
+  if (showBackground) {
+    return (
+      <div className={cn('p-1.5 rounded-lg transition-all duration-200', colorClass, className)}>
+        <Icon size={size} />
+      </div>
+    );
+  }
+  
+  return <Icon size={size} className={cn(colorClass.split(' ')[0], className)} />;
 };
 
 const CategoryNode: React.FC<{
@@ -122,11 +155,13 @@ const CategoryNode: React.FC<{
   const isSelected = selectedCategory === category.id;
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div
         className={cn(
-          'flex items-center gap-2 py-2 px-2 rounded-lg cursor-pointer transition-all group',
-          isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          'flex items-center gap-2 py-2.5 px-2 rounded-lg cursor-pointer transition-all duration-200 group hover:translate-x-1 rtl:hover:-translate-x-1',
+          isSelected 
+            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md' 
+            : 'hover:bg-muted/80'
         )}
         style={{ paddingInlineStart: `${level * 16 + 8}px` }}
         onClick={() => onSelectCategory(category.id)}
@@ -137,9 +172,13 @@ const CategoryNode: React.FC<{
               e.stopPropagation();
               setExpanded(!expanded);
             }}
-            className="p-0.5 hover:bg-black/10 rounded"
+            className={cn(
+              'p-0.5 rounded transition-transform duration-200',
+              expanded ? 'rotate-0' : '-rotate-90 rtl:rotate-90',
+              isSelected ? 'hover:bg-white/10' : 'hover:bg-black/10'
+            )}
           >
-            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            <ChevronDown size={16} className="transition-transform duration-200" />
           </button>
         ) : (
           <span className="w-5" />
@@ -147,8 +186,9 @@ const CategoryNode: React.FC<{
         
         <IconComponent 
           iconName={category.icon || 'Package'} 
-          size={18} 
-          className={isSelected ? 'text-primary-foreground' : 'text-primary'} 
+          size={16} 
+          showBackground={!isSelected}
+          className={isSelected ? '!text-primary-foreground !bg-white/20' : ''} 
         />
         
         <span className="flex-1 font-medium text-sm truncate">
@@ -156,21 +196,23 @@ const CategoryNode: React.FC<{
         </span>
         
         <span className={cn(
-          'text-xs px-2 py-0.5 rounded-full',
-          isSelected ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
+          'text-xs px-2 py-0.5 rounded-full font-medium transition-all duration-200',
+          isSelected 
+            ? 'bg-white/20 text-primary-foreground' 
+            : 'bg-primary/10 text-primary'
         )}>
           {category.productCount}
         </span>
 
-        <div className="hidden group-hover:flex items-center gap-1">
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity duration-200">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit(category);
             }}
             className={cn(
-              'p-1 rounded hover:bg-black/10',
-              isSelected ? 'text-primary-foreground' : 'text-muted-foreground'
+              'p-1 rounded transition-colors duration-200',
+              isSelected ? 'hover:bg-white/20 text-primary-foreground' : 'hover:bg-primary/10 text-muted-foreground hover:text-primary'
             )}
           >
             <Edit2 size={14} />
@@ -181,7 +223,7 @@ const CategoryNode: React.FC<{
                 e.stopPropagation();
                 onDelete(category);
               }}
-              className="p-1 rounded hover:bg-destructive/20 text-destructive"
+              className="p-1 rounded hover:bg-destructive/20 text-destructive transition-colors duration-200"
             >
               <Trash2 size={14} />
             </button>
@@ -189,11 +231,17 @@ const CategoryNode: React.FC<{
         </div>
       </div>
       
-      {expanded && hasChildren && (
-        <div>
-          {category.children.map((child) => (
+      <div className={cn(
+        'overflow-hidden transition-all duration-300',
+        expanded && hasChildren ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+      )}>
+        {category.children.map((child, index) => (
+          <div 
+            key={child.id} 
+            style={{ animationDelay: `${index * 50}ms` }}
+            className="animate-slide-up"
+          >
             <CategoryNode
-              key={child.id}
               category={child}
               level={level + 1}
               selectedCategory={selectedCategory}
@@ -202,9 +250,9 @@ const CategoryNode: React.FC<{
               onDelete={onDelete}
               language={language}
             />
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -406,17 +454,17 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
 
   if (isCollapsed) {
     return (
-      <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col items-center py-4">
+      <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col items-center py-4 panel-transition animate-fade-in">
         <Button 
           variant="ghost" 
           size="sm" 
-          className="h-10 w-10 p-0 mb-2"
+          className="h-10 w-10 p-0 mb-2 hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:scale-110"
           onClick={() => setIsCollapsed(false)}
         >
-          <Layers size={20} className="text-primary" />
+          <Layers size={20} className="text-primary animate-pulse-slow" />
         </Button>
-        <div className="w-px bg-border flex-1 my-2" />
-        <span className="text-xs text-muted-foreground [writing-mode:vertical-rl] rotate-180">
+        <div className="w-px bg-gradient-to-b from-transparent via-border to-transparent flex-1 my-2" />
+        <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-rl] rotate-180 tracking-wider">
           {language === 'ar' ? 'التصنيفات' : 'Categories'}
         </span>
       </div>
@@ -424,23 +472,28 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col">
+    <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col panel-transition animate-scale-in shadow-card">
       {/* Header */}
-      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+      <div className="p-4 border-b border-border bg-gradient-to-r from-muted/50 to-muted/30 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-all duration-200"
             onClick={() => setIsCollapsed(true)}
           >
             <PanelLeftClose size={16} />
           </Button>
-          <h3 className="font-bold text-foreground">
+          <h3 className="font-bold text-foreground section-header">
             {language === 'ar' ? 'التصنيفات' : 'Categories'}
           </h3>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleAdd} className="h-8 w-8 p-0">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleAdd} 
+          className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:rotate-90"
+        >
           <Plus size={16} />
         </Button>
       </div>
@@ -448,47 +501,67 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
       {/* All Products */}
       <div
         className={cn(
-          'flex items-center gap-2 py-2 px-4 cursor-pointer transition-all border-b border-border',
-          selectedCategory === null ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+          'flex items-center gap-3 py-3 px-4 cursor-pointer transition-all duration-200 border-b border-border group',
+          selectedCategory === null 
+            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md' 
+            : 'hover:bg-muted/80 hover:translate-x-1 rtl:hover:-translate-x-1'
         )}
         onClick={() => onSelectCategory(null)}
       >
-        <Package size={18} />
+        <div className={cn(
+          'p-1.5 rounded-lg transition-all duration-200',
+          selectedCategory === null 
+            ? 'bg-white/20' 
+            : 'bg-primary/10 text-primary group-hover:bg-primary/20'
+        )}>
+          <Package size={16} />
+        </div>
         <span className="flex-1 font-medium text-sm">
           {language === 'ar' ? 'جميع المنتجات' : 'All Products'}
         </span>
         <span className={cn(
-          'text-xs px-2 py-0.5 rounded-full',
-          selectedCategory === null ? 'bg-white/20' : 'bg-muted-foreground/10 text-muted-foreground'
+          'text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-200',
+          selectedCategory === null 
+            ? 'bg-white/20 text-primary-foreground' 
+            : 'bg-primary/10 text-primary'
         )}>
           {totalProducts}
         </span>
       </div>
 
       {/* Tree */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
+          <div className="flex items-center justify-center py-8 text-muted-foreground animate-pulse">
             {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
           </div>
         ) : categoryTree.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Package size={32} className="mb-2 opacity-50" />
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground animate-fade-in">
+            <div className="p-4 rounded-full bg-muted/50 mb-3">
+              <Package size={32} className="opacity-50" />
+            </div>
             <p className="text-sm">{language === 'ar' ? 'لا توجد تصنيفات' : 'No categories'}</p>
           </div>
         ) : (
-          categoryTree.map((category) => (
-            <CategoryNode
-              key={category.id}
-              category={category}
-              level={0}
-              selectedCategory={selectedCategory}
-              onSelectCategory={onSelectCategory}
-              onEdit={handleEdit}
-              onDelete={setDeleteCategory}
-              language={language}
-            />
-          ))
+          <div className="space-y-0.5">
+            {categoryTree.map((category, index) => (
+              <div 
+                key={category.id} 
+                style={{ animationDelay: `${index * 50}ms` }}
+                className="animate-slide-up"
+              >
+                <CategoryNode
+                  category={category}
+                  level={0}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={onSelectCategory}
+                  onEdit={handleEdit}
+                  onDelete={setDeleteCategory}
+                  language={language}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

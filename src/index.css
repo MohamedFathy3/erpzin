@@ -66,6 +66,18 @@
     --chart-secondary: 160 55% 45%;
     --chart-accent: 162 63% 46%;
 
+    /* Category Colors */
+    --category-blue: 217 91% 60%;
+    --category-green: 142 71% 45%;
+    --category-purple: 271 81% 56%;
+    --category-orange: 25 95% 53%;
+    --category-pink: 330 81% 60%;
+    --category-cyan: 187 92% 43%;
+    --category-yellow: 48 96% 53%;
+    --category-red: 0 84% 60%;
+    --category-indigo: 239 84% 67%;
+    --category-teal: 172 66% 50%;
+
     /* Gradients */
     --gradient-success: linear-gradient(135deg, hsl(134 61% 41%) 0%, hsl(162 63% 46%) 100%);
     --gradient-primary: linear-gradient(135deg, hsl(217 47% 19%) 0%, hsl(217 47% 30%) 100%);
@@ -209,6 +221,63 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Category icon colors */
+  .category-icon-blue { @apply text-blue-500 bg-blue-500/10; }
+  .category-icon-green { @apply text-emerald-500 bg-emerald-500/10; }
+  .category-icon-purple { @apply text-purple-500 bg-purple-500/10; }
+  .category-icon-orange { @apply text-orange-500 bg-orange-500/10; }
+  .category-icon-pink { @apply text-pink-500 bg-pink-500/10; }
+  .category-icon-cyan { @apply text-cyan-500 bg-cyan-500/10; }
+  .category-icon-yellow { @apply text-yellow-500 bg-yellow-500/10; }
+  .category-icon-red { @apply text-red-500 bg-red-500/10; }
+  .category-icon-indigo { @apply text-indigo-500 bg-indigo-500/10; }
+  .category-icon-teal { @apply text-teal-500 bg-teal-500/10; }
+
+  /* Smooth transitions for collapsibles */
+  .collapsible-content {
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .collapsible-content[data-state="open"] {
+    animation: collapse-open 0.3s ease-out;
+  }
+
+  .collapsible-content[data-state="closed"] {
+    animation: collapse-close 0.3s ease-out;
+  }
+
+  /* Panel transitions */
+  .panel-transition {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.3s ease,
+                transform 0.3s ease;
+  }
+
+  /* Hover effects */
+  .hover-lift {
+    @apply transition-all duration-300;
+  }
+  .hover-lift:hover {
+    @apply -translate-y-0.5 shadow-lg;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.2);
+  }
+
+  /* Section headers */
+  .section-header {
+    @apply relative pl-3 before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1 before:h-5 before:rounded-full before:bg-gradient-to-b before:from-primary before:to-accent;
+  }
+
+  [dir="rtl"] .section-header {
+    @apply pr-3 pl-0 before:left-auto before:right-0;
   }
 }
 
