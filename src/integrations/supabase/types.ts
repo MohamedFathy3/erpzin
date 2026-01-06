@@ -829,6 +829,7 @@ export type Database = {
       }
       products: {
         Row: {
+          average_cost: number | null
           barcode: string | null
           category_id: string | null
           cost: number | null
@@ -846,6 +847,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          average_cost?: number | null
           barcode?: string | null
           category_id?: string | null
           cost?: number | null
@@ -863,6 +865,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          average_cost?: number | null
           barcode?: string | null
           category_id?: string | null
           cost?: number | null
@@ -932,6 +935,174 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_invoice_items: {
+        Row: {
+          created_at: string
+          discount_amount: number | null
+          discount_percent: number | null
+          id: string
+          invoice_id: string
+          notes: string | null
+          product_id: string | null
+          product_variant_id: string | null
+          quantity: number
+          tax_amount: number | null
+          tax_percent: number | null
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          id?: string
+          invoice_id: string
+          notes?: string | null
+          product_id?: string | null
+          product_variant_id?: string | null
+          quantity?: number
+          tax_amount?: number | null
+          tax_percent?: number | null
+          total_cost?: number
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          discount_amount?: number | null
+          discount_percent?: number | null
+          id?: string
+          invoice_id?: string
+          notes?: string | null
+          product_id?: string | null
+          product_variant_id?: string | null
+          quantity?: number
+          tax_amount?: number | null
+          tax_percent?: number | null
+          total_cost?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoice_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoice_items_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_invoices: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          discount_amount: number | null
+          due_date: string | null
+          id: string
+          invoice_date: string
+          invoice_number: string
+          notes: string | null
+          paid_amount: number | null
+          payment_method: string | null
+          payment_status: string | null
+          purchase_order_id: string | null
+          remaining_amount: number | null
+          subtotal: number
+          supplier_id: string | null
+          tax_amount: number | null
+          total_amount: number
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number: string
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          purchase_order_id?: string | null
+          remaining_amount?: number | null
+          subtotal?: number
+          supplier_id?: string | null
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          notes?: string | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: string | null
+          purchase_order_id?: string | null
+          remaining_amount?: number | null
+          subtotal?: number
+          supplier_id?: string | null
+          tax_amount?: number | null
+          total_amount?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_invoices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoices_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -1276,38 +1447,163 @@ export type Database = {
           },
         ]
       }
+      supplier_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          invoice_id: string | null
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          payment_number: string
+          reference_number: string | null
+          supplier_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          payment_number: string
+          reference_number?: string | null
+          supplier_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_id?: string | null
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          payment_number?: string
+          reference_number?: string | null
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_transactions: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          balance_before: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          reference_id: string | null
+          reference_type: string | null
+          supplier_id: string
+          transaction_date: string
+          transaction_type: string
+        }
+        Insert: {
+          amount?: number
+          balance_after?: number | null
+          balance_before?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          supplier_id: string
+          transaction_date?: string
+          transaction_type: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          balance_before?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          supplier_id?: string
+          transaction_date?: string
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           address: string | null
+          balance: number | null
           contact_person: string | null
           created_at: string
+          credit_limit: number | null
           email: string | null
           id: string
+          is_active: boolean | null
           name: string
           name_ar: string | null
+          payment_terms: number | null
           phone: string | null
+          tax_number: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          balance?: number | null
           contact_person?: string | null
           created_at?: string
+          credit_limit?: number | null
           email?: string | null
           id?: string
+          is_active?: boolean | null
           name: string
           name_ar?: string | null
+          payment_terms?: number | null
           phone?: string | null
+          tax_number?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          balance?: number | null
           contact_person?: string | null
           created_at?: string
+          credit_limit?: number | null
           email?: string | null
           id?: string
+          is_active?: boolean | null
           name?: string
           name_ar?: string | null
+          payment_terms?: number | null
           phone?: string | null
+          tax_number?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1465,6 +1761,8 @@ export type Database = {
     }
     Functions: {
       generate_count_number: { Args: never; Returns: string }
+      generate_payment_number: { Args: never; Returns: string }
+      generate_purchase_invoice_number: { Args: never; Returns: string }
       generate_transfer_number: { Args: never; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
