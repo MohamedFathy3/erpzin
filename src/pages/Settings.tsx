@@ -30,8 +30,10 @@ import {
   Save,
   Store,
   FileText,
-  Languages
+  Languages,
+  Users
 } from 'lucide-react';
+import UsersPermissions from '@/components/settings/UsersPermissions';
 
 const Settings = () => {
   const { language, direction, setLanguage } = useLanguage();
@@ -108,6 +110,7 @@ const Settings = () => {
       branches: 'Branches',
       currency: 'Currency & Taxes',
       language: 'Language',
+      users: 'Users & Permissions',
       companyName: 'Company Name',
       companyNameAr: 'Company Name (Arabic)',
       address: 'Address',
@@ -150,6 +153,7 @@ const Settings = () => {
       branches: 'الفروع',
       currency: 'العملة والضرائب',
       language: 'اللغة',
+      users: 'المستخدمين والصلاحيات',
       companyName: 'اسم الشركة',
       companyNameAr: 'اسم الشركة (بالعربية)',
       address: 'العنوان',
@@ -228,7 +232,7 @@ const Settings = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-flex">
             <TabsTrigger value="company" className="flex items-center gap-2">
               <Building2 size={16} />
               <span className="hidden sm:inline">{t.company}</span>
@@ -240,6 +244,10 @@ const Settings = () => {
             <TabsTrigger value="currency" className="flex items-center gap-2">
               <DollarSign size={16} />
               <span className="hidden sm:inline">{t.currency}</span>
+            </TabsTrigger>
+            <TabsTrigger value="users" className="flex items-center gap-2">
+              <Users size={16} />
+              <span className="hidden sm:inline">{t.users}</span>
             </TabsTrigger>
             <TabsTrigger value="language" className="flex items-center gap-2">
               <Languages size={16} />
@@ -599,6 +607,11 @@ const Settings = () => {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Users & Permissions Tab */}
+          <TabsContent value="users" className="mt-6">
+            <UsersPermissions />
           </TabsContent>
 
           {/* Language Tab */}
