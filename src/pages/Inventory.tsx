@@ -6,10 +6,16 @@ import ProductList, { Product } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
 import StockTransfer from '@/components/inventory/StockTransfer';
+import InventoryReports from '@/components/inventory/InventoryReports';
+import LowStockAlerts from '@/components/inventory/LowStockAlerts';
+import InventoryCount from '@/components/inventory/InventoryCount';
+import InventoryMovements from '@/components/inventory/InventoryMovements';
+import OpeningBalances from '@/components/inventory/OpeningBalances';
+import ExcelImport from '@/components/inventory/ExcelImport';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer, Package, ArrowRightLeft } from 'lucide-react';
+import { Plus, Search, Download, Upload, Filter, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,12 +29,8 @@ const mockCategories: Category[] = [
     parentId: null,
     productCount: 45,
     children: [
-      { id: 'boys-pants', name: 'Pants', nameAr: 'بناطيل', parentId: 'boys', productCount: 20, children: [
-        { id: 'boys-jeans', name: 'Jeans', nameAr: 'جينز', parentId: 'boys-pants', productCount: 12, children: [] },
-        { id: 'boys-shorts', name: 'Shorts', nameAr: 'شورتات', parentId: 'boys-pants', productCount: 8, children: [] }
-      ]},
-      { id: 'boys-shirts', name: 'Shirts', nameAr: 'قمصان', parentId: 'boys', productCount: 15, children: [] },
-      { id: 'boys-tshirts', name: 'T-Shirts', nameAr: 'تيشيرتات', parentId: 'boys', productCount: 10, children: [] }
+      { id: 'boys-pants', name: 'Pants', nameAr: 'بناطيل', parentId: 'boys', productCount: 20, children: [] },
+      { id: 'boys-shirts', name: 'Shirts', nameAr: 'قمصان', parentId: 'boys', productCount: 15, children: [] }
     ]
   },
   {
@@ -38,43 +40,7 @@ const mockCategories: Category[] = [
     parentId: null,
     productCount: 52,
     children: [
-      { id: 'girls-dresses', name: 'Dresses', nameAr: 'فساتين', parentId: 'girls', productCount: 25, children: [] },
-      { id: 'girls-skirts', name: 'Skirts', nameAr: 'تنانير', parentId: 'girls', productCount: 15, children: [] },
-      { id: 'girls-tops', name: 'Tops', nameAr: 'بلايز', parentId: 'girls', productCount: 12, children: [] }
-    ]
-  },
-  {
-    id: 'women',
-    name: 'Women',
-    nameAr: 'نساء',
-    parentId: null,
-    productCount: 78,
-    children: [
-      { id: 'women-dresses', name: 'Dresses', nameAr: 'فساتين', parentId: 'women', productCount: 30, children: [] },
-      { id: 'women-pants', name: 'Pants', nameAr: 'بناطيل', parentId: 'women', productCount: 25, children: [] },
-      { id: 'women-blouses', name: 'Blouses', nameAr: 'بلوزات', parentId: 'women', productCount: 23, children: [] }
-    ]
-  },
-  {
-    id: 'men',
-    name: 'Men',
-    nameAr: 'رجال',
-    parentId: null,
-    productCount: 65,
-    children: [
-      { id: 'men-shirts', name: 'Shirts', nameAr: 'قمصان', parentId: 'men', productCount: 35, children: [] },
-      { id: 'men-pants', name: 'Pants', nameAr: 'بناطيل', parentId: 'men', productCount: 30, children: [] }
-    ]
-  },
-  {
-    id: 'accessories',
-    name: 'Accessories',
-    nameAr: 'إكسسوارات',
-    parentId: null,
-    productCount: 40,
-    children: [
-      { id: 'acc-bags', name: 'Bags', nameAr: 'حقائب', parentId: 'accessories', productCount: 20, children: [] },
-      { id: 'acc-belts', name: 'Belts', nameAr: 'أحزمة', parentId: 'accessories', productCount: 20, children: [] }
+      { id: 'girls-dresses', name: 'Dresses', nameAr: 'فساتين', parentId: 'girls', productCount: 25, children: [] }
     ]
   }
 ];
@@ -90,7 +56,6 @@ const Inventory: React.FC = () => {
   const [showBarcodePrinter, setShowBarcodePrinter] = useState(false);
   const [selectedProductForPrint, setSelectedProductForPrint] = useState<any>(null);
 
-  // Fetch products from database
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
     queryFn: async () => {
@@ -103,7 +68,6 @@ const Inventory: React.FC = () => {
     }
   });
 
-  // Transform DB products to match component interface
   const products: Product[] = dbProducts.map(p => ({
     id: p.id,
     name: p.name,
@@ -125,258 +89,93 @@ const Inventory: React.FC = () => {
       product.nameAr.includes(searchQuery) ||
       product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.barcode && product.barcode.includes(searchQuery));
-    
     return matchesSearch;
   });
 
-  const handleAddProduct = () => {
-    setEditProduct(null);
-    setShowProductForm(true);
-  };
-
+  const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
   const handleEditProduct = (product: Product) => {
     setEditProduct({
-      id: product.id,
-      name: product.name,
-      nameAr: product.nameAr,
-      description: '',
-      descriptionAr: '',
-      sku: product.sku,
-      barcode: product.barcode || '',
-      categoryId: '',
-      price: product.price,
-      cost: product.cost,
-      hasVariants: product.variants > 0,
-      variants: [],
-      stock: product.stock,
-      reorderPoint: 5,
-      status: product.status === 'inactive' ? 'inactive' : 'active'
+      id: product.id, name: product.name, nameAr: product.nameAr, description: '', descriptionAr: '',
+      sku: product.sku, barcode: product.barcode || '', categoryId: '', price: product.price,
+      cost: product.cost, hasVariants: product.variants > 0, variants: [], stock: product.stock,
+      reorderPoint: 5, status: product.status === 'inactive' ? 'inactive' : 'active'
     });
     setShowProductForm(true);
   };
-
-  const handleDeleteProduct = (productId: string) => {
-    toast({
-      title: language === 'ar' ? 'تم الحذف' : 'Deleted',
-      description: language === 'ar' ? 'تم حذف المنتج بنجاح' : 'Product deleted successfully'
-    });
-    refetch();
-  };
-
-  const handleDuplicateProduct = (product: Product) => {
-    toast({
-      title: language === 'ar' ? 'تم النسخ' : 'Duplicated',
-      description: language === 'ar' ? 'تم نسخ المنتج بنجاح' : 'Product duplicated successfully'
-    });
-  };
-
-  const handleViewProduct = (product: Product) => {
-    handleEditProduct(product);
-  };
-
+  const handleDeleteProduct = () => { toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' }); refetch(); };
+  const handleDuplicateProduct = () => { toast({ title: language === 'ar' ? 'تم النسخ' : 'Duplicated' }); };
+  const handleViewProduct = (product: Product) => { handleEditProduct(product); };
   const handlePrintBarcode = (product: Product) => {
-    setSelectedProductForPrint({
-      id: product.id,
-      name: product.name,
-      name_ar: product.nameAr,
-      sku: product.sku,
-      barcode: product.barcode,
-      price: product.price,
-      stock: product.stock
-    });
+    setSelectedProductForPrint({ id: product.id, name: product.name, name_ar: product.nameAr, sku: product.sku, barcode: product.barcode, price: product.price, stock: product.stock });
     setShowBarcodePrinter(true);
   };
-
-  const handleSaveProduct = (productData: ProductFormData) => {
-    toast({
-      title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-      description: language === 'ar' ? 'تم حفظ المنتج بنجاح' : 'Product saved successfully'
-    });
-    refetch();
-  };
-
+  const handleSaveProduct = () => { toast({ title: language === 'ar' ? 'تم الحفظ' : 'Saved' }); refetch(); };
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
-    if (found) {
-      handleEditProduct(found);
-    }
+    if (found) handleEditProduct(found);
   };
 
-  // Products for barcode system
-  const barcodeProducts = dbProducts.map(p => ({
-    id: p.id,
-    name: p.name,
-    name_ar: p.name_ar,
-    sku: p.sku,
-    barcode: p.barcode,
-    price: Number(p.price),
-    stock: p.stock
-  }));
+  const barcodeProducts = dbProducts.map(p => ({ id: p.id, name: p.name, name_ar: p.name_ar, sku: p.sku, barcode: p.barcode, price: Number(p.price), stock: p.stock }));
 
   return (
     <MainLayout activeItem="inventory">
       <div className="h-full flex flex-col gap-4">
-        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & Products'}
-            </h1>
-            <p className="text-muted-foreground">
-              {language === 'ar' ? 'إدارة المنتجات والتصنيفات ونقل المخزون' : 'Manage products, categories, and stock transfers'}
-            </p>
+            <h1 className="text-2xl font-bold text-foreground">{language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & Products'}</h1>
+            <p className="text-muted-foreground">{language === 'ar' ? 'إدارة المنتجات والتصنيفات والمخزون' : 'Manage products, categories, and inventory'}</p>
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="w-fit">
-            <TabsTrigger value="products" className="flex items-center gap-2">
-              <Package size={16} />
-              {language === 'ar' ? 'المنتجات' : 'Products'}
-            </TabsTrigger>
-            <TabsTrigger value="transfers" className="flex items-center gap-2">
-              <ArrowRightLeft size={16} />
-              {language === 'ar' ? 'نقل المخزون' : 'Stock Transfers'}
-            </TabsTrigger>
+          <TabsList className="w-fit flex-wrap h-auto gap-1">
+            <TabsTrigger value="products" className="flex items-center gap-1.5"><Package size={14} />{language === 'ar' ? 'المنتجات' : 'Products'}</TabsTrigger>
+            <TabsTrigger value="transfers" className="flex items-center gap-1.5"><ArrowRightLeft size={14} />{language === 'ar' ? 'نقل المخزون' : 'Transfers'}</TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-1.5"><BarChart3 size={14} />{language === 'ar' ? 'التقارير' : 'Reports'}</TabsTrigger>
+            <TabsTrigger value="alerts" className="flex items-center gap-1.5"><Bell size={14} />{language === 'ar' ? 'التنبيهات' : 'Alerts'}</TabsTrigger>
+            <TabsTrigger value="count" className="flex items-center gap-1.5"><ClipboardList size={14} />{language === 'ar' ? 'الجرد' : 'Count'}</TabsTrigger>
+            <TabsTrigger value="movements" className="flex items-center gap-1.5"><ArrowUpDown size={14} />{language === 'ar' ? 'الحركات' : 'Movements'}</TabsTrigger>
+            <TabsTrigger value="opening" className="flex items-center gap-1.5"><Wallet size={14} />{language === 'ar' ? 'أول المدة' : 'Opening'}</TabsTrigger>
+            <TabsTrigger value="import" className="flex items-center gap-1.5"><FileSpreadsheet size={14} />{language === 'ar' ? 'استيراد' : 'Import'}</TabsTrigger>
           </TabsList>
 
-          {/* Products Tab */}
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
-            {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowBarcodeScanner(true)}
-              >
-                <ScanBarcode size={16} className="me-2" />
-                {language === 'ar' ? 'قارئ الباركود' : 'Scan Barcode'}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  setSelectedProductForPrint(null);
-                  setShowBarcodePrinter(true);
-                }}
-              >
-                <Printer size={16} className="me-2" />
-                {language === 'ar' ? 'طباعة باركود' : 'Print Barcode'}
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download size={16} className="me-2" />
-                {language === 'ar' ? 'تصدير' : 'Export'}
-              </Button>
-              <Button variant="outline" size="sm">
-                <Upload size={16} className="me-2" />
-                {language === 'ar' ? 'استيراد' : 'Import'}
-              </Button>
-              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90">
-                <Plus size={16} className="me-2" />
-                {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowBarcodeScanner(true)}><ScanBarcode size={16} className="me-2" />{language === 'ar' ? 'مسح الباركود' : 'Scan'}</Button>
+              <Button variant="outline" size="sm" onClick={() => { setSelectedProductForPrint(null); setShowBarcodePrinter(true); }}><Printer size={16} className="me-2" />{language === 'ar' ? 'طباعة' : 'Print'}</Button>
+              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
             </div>
-
-            {/* Main Content */}
             <div className="flex-1 flex gap-4 min-h-0">
-              {/* Category Sidebar */}
-              <div className="w-72 flex-shrink-0 hidden lg:block">
-                <CategoryTree
-                  categories={mockCategories}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={setSelectedCategory}
-                  onAddCategory={() => toast({ title: 'Coming soon' })}
-                  onEditCategory={() => toast({ title: 'Coming soon' })}
-                  onDeleteCategory={() => toast({ title: 'Coming soon' })}
-                />
+              <div className="w-64 flex-shrink-0 hidden lg:block">
+                <CategoryTree categories={mockCategories} selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} onAddCategory={() => {}} onEditCategory={() => {}} onDeleteCategory={() => {}} />
               </div>
-
-              {/* Products Area */}
               <div className="flex-1 flex flex-col min-w-0">
-                {/* Search & Filter Bar */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                    <Input
-                      placeholder={language === 'ar' ? 'بحث بالاسم أو SKU أو الباركود...' : 'Search by name, SKU or barcode...'}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="ps-10"
-                    />
+                    <Input placeholder={language === 'ar' ? 'بحث...' : 'Search...'} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-10" />
                   </div>
-                  <Button variant="outline" size="icon" className="lg:hidden">
-                    <Filter size={18} />
-                  </Button>
                 </div>
-
-                {/* Products Table */}
                 <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
-                  <ProductList
-                    products={filteredProducts}
-                    onEdit={handleEditProduct}
-                    onDelete={handleDeleteProduct}
-                    onDuplicate={handleDuplicateProduct}
-                    onView={handleViewProduct}
-                    onPrintBarcode={handlePrintBarcode}
-                  />
-                </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-                  <span>
-                    {language === 'ar' 
-                      ? `عرض ${filteredProducts.length} من ${products.length} منتج`
-                      : `Showing ${filteredProducts.length} of ${products.length} products`
-                    }
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled>
-                      {language === 'ar' ? 'السابق' : 'Previous'}
-                    </Button>
-                    <Button variant="outline" size="sm" disabled>
-                      {language === 'ar' ? 'التالي' : 'Next'}
-                    </Button>
-                  </div>
+                  <ProductList products={filteredProducts} onEdit={handleEditProduct} onDelete={handleDeleteProduct} onDuplicate={handleDuplicateProduct} onView={handleViewProduct} onPrintBarcode={handlePrintBarcode} />
                 </div>
               </div>
             </div>
           </TabsContent>
 
-          {/* Stock Transfers Tab */}
-          <TabsContent value="transfers" className="flex-1 mt-4">
-            <StockTransfer />
-          </TabsContent>
+          <TabsContent value="transfers" className="flex-1 mt-4"><StockTransfer /></TabsContent>
+          <TabsContent value="reports" className="flex-1 mt-4"><InventoryReports /></TabsContent>
+          <TabsContent value="alerts" className="flex-1 mt-4"><LowStockAlerts /></TabsContent>
+          <TabsContent value="count" className="flex-1 mt-4"><InventoryCount /></TabsContent>
+          <TabsContent value="movements" className="flex-1 mt-4"><InventoryMovements /></TabsContent>
+          <TabsContent value="opening" className="flex-1 mt-4"><OpeningBalances /></TabsContent>
+          <TabsContent value="import" className="flex-1 mt-4"><ExcelImport /></TabsContent>
         </Tabs>
       </div>
 
-      {/* Product Form Modal */}
-      <ProductForm
-        isOpen={showProductForm}
-        onClose={() => setShowProductForm(false)}
-        onSave={handleSaveProduct}
-        categories={mockCategories}
-        editProduct={editProduct}
-      />
-
-      {/* Barcode Scanner Modal */}
-      <BarcodeScanner
-        isOpen={showBarcodeScanner}
-        onClose={() => setShowBarcodeScanner(false)}
-        onProductFound={handleBarcodeProductFound}
-        products={barcodeProducts}
-      />
-
-      {/* Barcode Printer Modal */}
-      <BarcodeLabelPrinter
-        isOpen={showBarcodePrinter}
-        onClose={() => {
-          setShowBarcodePrinter(false);
-          setSelectedProductForPrint(null);
-        }}
-        products={barcodeProducts}
-        selectedProduct={selectedProductForPrint}
-      />
+      <ProductForm isOpen={showProductForm} onClose={() => setShowProductForm(false)} onSave={handleSaveProduct} categories={mockCategories} editProduct={editProduct} />
+      <BarcodeScanner isOpen={showBarcodeScanner} onClose={() => setShowBarcodeScanner(false)} onProductFound={handleBarcodeProductFound} products={barcodeProducts} />
+      <BarcodeLabelPrinter isOpen={showBarcodePrinter} onClose={() => { setShowBarcodePrinter(false); setSelectedProductForPrint(null); }} products={barcodeProducts} selectedProduct={selectedProductForPrint} />
     </MainLayout>
   );
 };
