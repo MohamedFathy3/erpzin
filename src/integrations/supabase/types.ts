@@ -55,6 +55,48 @@ export type Database = {
           },
         ]
       }
+      branches: {
+        Row: {
+          address: string | null
+          code: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_main: boolean | null
+          manager_name: string | null
+          name: string
+          name_ar: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          manager_name?: string | null
+          name: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          code?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_main?: boolean | null
+          manager_name?: string | null
+          name?: string
+          name_ar?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -92,6 +134,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      company_settings: {
+        Row: {
+          address: string | null
+          commercial_register: string | null
+          created_at: string
+          default_currency: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          name_ar: string | null
+          phone: string | null
+          tax_number: string | null
+          tax_rate: number | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          commercial_register?: string | null
+          created_at?: string
+          default_currency?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          name_ar?: string | null
+          phone?: string | null
+          tax_number?: string | null
+          tax_rate?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          commercial_register?: string | null
+          created_at?: string
+          default_currency?: string | null
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          name_ar?: string | null
+          phone?: string | null
+          tax_number?: string | null
+          tax_rate?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
       }
       customers: {
         Row: {
@@ -509,6 +602,39 @@ export type Database = {
           name?: string
           name_ar?: string | null
           phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tax_rates: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          name_ar: string | null
+          rate: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          name_ar?: string | null
+          rate?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          name_ar?: string | null
+          rate?: number
           updated_at?: string
         }
         Relationships: []
