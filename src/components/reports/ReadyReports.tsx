@@ -528,6 +528,7 @@ const ReadyReports = () => {
     crm: [
       { id: 'customer-list', name: t.customerList, nameAr: translations.ar.customerList, description: t.customerListDesc, descriptionAr: translations.ar.customerListDesc, icon: <Users size={20} />, category: 'crm' },
       { id: 'top-customers', name: t.topCustomers, nameAr: translations.ar.topCustomers, description: t.topCustomersDesc, descriptionAr: translations.ar.topCustomersDesc, icon: <TrendingUp size={20} />, category: 'crm' },
+      { id: 'customer-aging', name: t.customerAging, nameAr: translations.ar.customerAging, description: t.customerAgingDesc, descriptionAr: translations.ar.customerAgingDesc, icon: <ClipboardList size={20} />, category: 'crm' },
     ],
     hr: [
       { id: 'employee-list', name: t.employeeList, nameAr: translations.ar.employeeList, description: t.employeeListDesc, descriptionAr: translations.ar.employeeListDesc, icon: <Users size={20} />, category: 'hr' },
@@ -1117,6 +1118,423 @@ const ReadyReports = () => {
               </Card>
             </div>
           </div>
+        );
+
+      case 'sales-by-customer':
+        const salesByCustomer = salesInvoices.reduce((acc: any[], inv: any) => {
+          const customerName = language === 'ar' 
+            ? inv.customers?.name_ar || inv.customers?.name || 'عميل نقدي'
+            : inv.customers?.name || 'Cash Customer';
+          const existing = acc.find(c => c.name === customerName);
+          if (existing) {
+            existing.total += Number(inv.total_amount || 0);
+            existing.count += 1;
+          } else {
+            acc.push({ name: customerName, total: Number(inv.total_amount || 0), count: 1, phone: inv.customers?.phone || '-' });
+          }
+          return acc;
+        }, []).sort((a, b) => b.total - a.total);
+        
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>{t.customer}</TableHead>
+                <TableHead>{t.phone}</TableHead>
+                <TableHead>{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</TableHead>
+                <TableHead>{t.amount}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {salesByCustomer.map((c: any, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{idx + 1}</TableCell>
+                  <TableCell>{c.name}</TableCell>
+                  <TableCell>{c.phone}</TableCell>
+                  <TableCell>{c.count}</TableCell>
+                  <TableCell className="font-bold text-accent">{c.total.toLocaleString()} YER</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 font-bold">
+                <TableCell colSpan={4}>{t.total}</TableCell>
+                <TableCell className="text-primary">{salesByCustomer.reduce((s, c) => s + c.total, 0).toLocaleString()} YER</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        );
+
+      case 'sales-by-product':
+        const salesByProduct = salesInvoices.reduce((acc: any[], inv: any) => {
+          // This is a simplified version - in a real app, you'd join with sale_items
+          return acc;
+        }, []);
+        
+        // For now, show products with their stock and price as a sales catalog
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t.product}</TableHead>
+                <TableHead>{t.sku}</TableHead>
+                <TableHead>{t.category}</TableHead>
+                <TableHead>{t.price}</TableHead>
+                <TableHead>{t.stock}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((p: any) => (
+                <TableRow key={p.id}>
+                  <TableCell>{language === 'ar' ? p.name_ar || p.name : p.name}</TableCell>
+                  <TableCell>{p.sku}</TableCell>
+                  <TableCell>{language === 'ar' ? p.categories?.name_ar || p.categories?.name : p.categories?.name}</TableCell>
+                  <TableCell>{Number(p.price || 0).toLocaleString()} YER</TableCell>
+                  <TableCell>{p.stock}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        );
+
+      case 'sales-by-salesman':
+        const salesBySalesman = salesInvoices.reduce((acc: any[], inv: any) => {
+          const salesmanName = language === 'ar' 
+            ? inv.salesmen?.name_ar || inv.salesmen?.name || 'بدون مندوب'
+            : inv.salesmen?.name || 'No Salesman';
+          const existing = acc.find(s => s.name === salesmanName);
+          if (existing) {
+            existing.total += Number(inv.total_amount || 0);
+            existing.count += 1;
+          } else {
+            acc.push({ name: salesmanName, total: Number(inv.total_amount || 0), count: 1 });
+          }
+          return acc;
+        }, []).sort((a, b) => b.total - a.total);
+        
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>{t.salesman}</TableHead>
+                <TableHead>{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</TableHead>
+                <TableHead>{t.amount}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {salesBySalesman.map((s: any, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{idx + 1}</TableCell>
+                  <TableCell>{s.name}</TableCell>
+                  <TableCell>{s.count}</TableCell>
+                  <TableCell className="font-bold text-accent">{s.total.toLocaleString()} YER</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 font-bold">
+                <TableCell colSpan={3}>{t.total}</TableCell>
+                <TableCell className="text-primary">{salesBySalesman.reduce((s, c) => s + c.total, 0).toLocaleString()} YER</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        );
+
+      case 'products-by-category':
+        const productsByCategory = products.reduce((acc: any[], p: any) => {
+          const categoryName = language === 'ar' 
+            ? p.categories?.name_ar || p.categories?.name || 'غير مصنف'
+            : p.categories?.name || 'Uncategorized';
+          const existing = acc.find(c => c.category === categoryName);
+          if (existing) {
+            existing.products.push(p);
+            existing.totalStock += p.stock;
+            existing.totalValue += (p.stock * (p.cost || 0));
+          } else {
+            acc.push({ 
+              category: categoryName, 
+              products: [p], 
+              totalStock: p.stock,
+              totalValue: p.stock * (p.cost || 0)
+            });
+          }
+          return acc;
+        }, []);
+        
+        return (
+          <div className="space-y-4">
+            {productsByCategory.map((cat: any, idx) => (
+              <Card key={idx}>
+                <CardHeader className="py-3 bg-muted/30">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-base">{cat.category}</CardTitle>
+                    <div className="flex gap-4 text-sm">
+                      <Badge variant="outline">{cat.products.length} {language === 'ar' ? 'منتج' : 'products'}</Badge>
+                      <Badge variant="secondary">{cat.totalStock} {language === 'ar' ? 'وحدة' : 'units'}</Badge>
+                      <Badge>{cat.totalValue.toLocaleString()} YER</Badge>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t.product}</TableHead>
+                        <TableHead>{t.sku}</TableHead>
+                        <TableHead>{t.stock}</TableHead>
+                        <TableHead>{t.cost}</TableHead>
+                        <TableHead>{t.value}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cat.products.map((p: any) => (
+                        <TableRow key={p.id}>
+                          <TableCell>{language === 'ar' ? p.name_ar || p.name : p.name}</TableCell>
+                          <TableCell>{p.sku}</TableCell>
+                          <TableCell>{p.stock}</TableCell>
+                          <TableCell>{Number(p.cost || 0).toLocaleString()} YER</TableCell>
+                          <TableCell>{(p.stock * (p.cost || 0)).toLocaleString()} YER</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+
+      case 'employee-by-dept':
+        const employeesByDept = employees.reduce((acc: any[], e: any) => {
+          const deptName = e.department || (language === 'ar' ? 'بدون قسم' : 'No Department');
+          const existing = acc.find(d => d.department === deptName);
+          if (existing) {
+            existing.employees.push(e);
+          } else {
+            acc.push({ department: deptName, employees: [e] });
+          }
+          return acc;
+        }, []);
+        
+        return (
+          <div className="space-y-4">
+            {employeesByDept.map((dept: any, idx) => (
+              <Card key={idx}>
+                <CardHeader className="py-3 bg-muted/30">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-base">{dept.department}</CardTitle>
+                    <Badge>{dept.employees.length} {language === 'ar' ? 'موظف' : 'employees'}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{language === 'ar' ? 'الكود' : 'Code'}</TableHead>
+                        <TableHead>{t.name}</TableHead>
+                        <TableHead>{t.position}</TableHead>
+                        <TableHead>{t.phone}</TableHead>
+                        <TableHead>{t.email}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dept.employees.map((e: any) => (
+                        <TableRow key={e.id}>
+                          <TableCell>{e.employee_code}</TableCell>
+                          <TableCell>{language === 'ar' ? e.name_ar || e.name : e.name}</TableCell>
+                          <TableCell>{e.position}</TableCell>
+                          <TableCell>{e.phone}</TableCell>
+                          <TableCell>{e.email}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+
+      case 'daily-pos':
+        // Group shifts by date
+        const posByDate = posShifts.reduce((acc: any[], shift: any) => {
+          const date = format(new Date(shift.opened_at), 'yyyy-MM-dd');
+          const existing = acc.find(d => d.date === date);
+          if (existing) {
+            existing.shifts.push(shift);
+            existing.totalSales += Number(shift.total_sales || 0);
+            existing.cashSales += Number(shift.cash_sales || 0);
+            existing.cardSales += Number(shift.card_sales || 0);
+          } else {
+            acc.push({ 
+              date, 
+              shifts: [shift], 
+              totalSales: Number(shift.total_sales || 0),
+              cashSales: Number(shift.cash_sales || 0),
+              cardSales: Number(shift.card_sales || 0)
+            });
+          }
+          return acc;
+        }, []).sort((a, b) => b.date.localeCompare(a.date));
+        
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="bg-accent/10">
+                <CardContent className="p-4 text-center">
+                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales'}</p>
+                  <p className="text-2xl font-bold text-accent">{posByDate.reduce((s, d) => s + d.totalSales, 0).toLocaleString()} YER</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-500/10">
+                <CardContent className="p-4 text-center">
+                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'مبيعات نقدية' : 'Cash Sales'}</p>
+                  <p className="text-2xl font-bold text-blue-600">{posByDate.reduce((s, d) => s + d.cashSales, 0).toLocaleString()} YER</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-500/10">
+                <CardContent className="p-4 text-center">
+                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'مبيعات بطاقة' : 'Card Sales'}</p>
+                  <p className="text-2xl font-bold text-purple-600">{posByDate.reduce((s, d) => s + d.cardSales, 0).toLocaleString()} YER</p>
+                </CardContent>
+              </Card>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t.date}</TableHead>
+                  <TableHead>{language === 'ar' ? 'عدد الورديات' : 'Shifts'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'مبيعات نقدية' : 'Cash'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'مبيعات بطاقة' : 'Card'}</TableHead>
+                  <TableHead>{t.totalSales}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {posByDate.map((d: any, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{d.date}</TableCell>
+                    <TableCell>{d.shifts.length}</TableCell>
+                    <TableCell>{d.cashSales.toLocaleString()} YER</TableCell>
+                    <TableCell>{d.cardSales.toLocaleString()} YER</TableCell>
+                    <TableCell className="font-bold text-accent">{d.totalSales.toLocaleString()} YER</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        );
+
+      case 'purchase-by-supplier':
+        const purchaseBySupplier = purchaseInvoices.reduce((acc: any[], inv: any) => {
+          const supplierName = language === 'ar' 
+            ? inv.suppliers?.name_ar || inv.suppliers?.name || 'بدون مورد'
+            : inv.suppliers?.name || 'No Supplier';
+          const existing = acc.find(s => s.name === supplierName);
+          if (existing) {
+            existing.total += Number(inv.total_amount || 0);
+            existing.paid += Number(inv.paid_amount || 0);
+            existing.remaining += Number(inv.remaining_amount || 0);
+            existing.count += 1;
+          } else {
+            acc.push({ 
+              name: supplierName, 
+              total: Number(inv.total_amount || 0), 
+              paid: Number(inv.paid_amount || 0),
+              remaining: Number(inv.remaining_amount || 0),
+              count: 1 
+            });
+          }
+          return acc;
+        }, []).sort((a, b) => b.total - a.total);
+        
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>{t.supplier}</TableHead>
+                <TableHead>{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</TableHead>
+                <TableHead>{t.amount}</TableHead>
+                <TableHead>{t.paid}</TableHead>
+                <TableHead>{t.remaining}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {purchaseBySupplier.map((s: any, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{idx + 1}</TableCell>
+                  <TableCell>{s.name}</TableCell>
+                  <TableCell>{s.count}</TableCell>
+                  <TableCell>{s.total.toLocaleString()} YER</TableCell>
+                  <TableCell className="text-accent">{s.paid.toLocaleString()} YER</TableCell>
+                  <TableCell className="text-destructive font-bold">{s.remaining.toLocaleString()} YER</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 font-bold">
+                <TableCell colSpan={3}>{t.total}</TableCell>
+                <TableCell>{purchaseBySupplier.reduce((s, c) => s + c.total, 0).toLocaleString()} YER</TableCell>
+                <TableCell className="text-accent">{purchaseBySupplier.reduce((s, c) => s + c.paid, 0).toLocaleString()} YER</TableCell>
+                <TableCell className="text-destructive">{purchaseBySupplier.reduce((s, c) => s + c.remaining, 0).toLocaleString()} YER</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        );
+
+      case 'customer-aging':
+        const customerAging = salesInvoices
+          .filter((inv: any) => inv.payment_status !== 'paid' && (inv.remaining_amount || 0) > 0)
+          .reduce((acc: any[], inv: any) => {
+            const customerName = language === 'ar' 
+              ? inv.customers?.name_ar || inv.customers?.name || 'عميل نقدي'
+              : inv.customers?.name || 'Cash Customer';
+            const existing = acc.find(c => c.name === customerName);
+            const daysOverdue = Math.floor((new Date().getTime() - new Date(inv.invoice_date).getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (existing) {
+              existing.total += Number(inv.remaining_amount || 0);
+              existing.invoices += 1;
+              if (daysOverdue > existing.maxDays) existing.maxDays = daysOverdue;
+            } else {
+              acc.push({ 
+                name: customerName, 
+                phone: inv.customers?.phone || '-',
+                total: Number(inv.remaining_amount || 0), 
+                invoices: 1,
+                maxDays: daysOverdue
+              });
+            }
+            return acc;
+          }, []).sort((a, b) => b.total - a.total);
+        
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t.customer}</TableHead>
+                <TableHead>{t.phone}</TableHead>
+                <TableHead>{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</TableHead>
+                <TableHead>{language === 'ar' ? 'أقدم فاتورة (أيام)' : 'Oldest (days)'}</TableHead>
+                <TableHead>{t.remaining}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customerAging.map((c: any, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{c.name}</TableCell>
+                  <TableCell>{c.phone}</TableCell>
+                  <TableCell>{c.invoices}</TableCell>
+                  <TableCell>
+                    <Badge variant={c.maxDays > 30 ? 'destructive' : c.maxDays > 15 ? 'secondary' : 'default'}>
+                      {c.maxDays} {language === 'ar' ? 'يوم' : 'days'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-bold text-destructive">{c.total.toLocaleString()} YER</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 font-bold">
+                <TableCell colSpan={4}>{t.total}</TableCell>
+                <TableCell className="text-destructive">{customerAging.reduce((s, c) => s + c.total, 0).toLocaleString()} YER</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         );
 
       default:
