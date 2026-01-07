@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,17 +9,32 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 import { 
   Wallet, 
   Plus, 
   Search,
   Save,
   Trash2,
-  Edit
+  Edit,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
+
+interface ImportRow {
+  product_sku: string;
+  warehouse_name: string;
+  quantity: number;
+  unit_cost: number;
+  notes?: string;
+}
 
 const OpeningBalances = () => {
   const { language } = useLanguage();
@@ -38,6 +53,14 @@ const OpeningBalances = () => {
     unit_cost: 0,
     notes: ''
   });
+
+  // Import/Export state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importData, setImportData] = useState<ImportRow[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const t = {
     en: {
@@ -64,7 +87,21 @@ const OpeningBalances = () => {
       balanceUpdated: 'Opening balance updated',
       balanceDeleted: 'Opening balance deleted',
       search: 'Search products...',
-      sku: 'SKU'
+      sku: 'SKU',
+      import: 'Import',
+      export: 'Export',
+      downloadTemplate: 'Download Template',
+      startImport: 'Start Import',
+      importSuccess: 'Balances imported successfully',
+      importError: 'Error importing balances',
+      dragDrop: 'Drag & drop Excel file here, or click to browse',
+      supportedFormats: 'Supported formats: .xlsx, .xls',
+      preview: 'Preview',
+      rowsToImport: 'Rows to Import',
+      errors: 'Errors',
+      exportSuccess: 'Data exported successfully',
+      productSku: 'Product SKU',
+      warehouseName: 'Warehouse Name'
     },
     ar: {
       title: 'رصيد أول المدة',
@@ -90,7 +127,21 @@ const OpeningBalances = () => {
       balanceUpdated: 'تم تحديث الرصيد الافتتاحي',
       balanceDeleted: 'تم حذف الرصيد الافتتاحي',
       search: 'بحث في المنتجات...',
-      sku: 'رمز المنتج'
+      sku: 'رمز المنتج',
+      import: 'استيراد',
+      export: 'تصدير',
+      downloadTemplate: 'تحميل النموذج',
+      startImport: 'بدء الاستيراد',
+      importSuccess: 'تم استيراد الأرصدة بنجاح',
+      importError: 'خطأ في استيراد الأرصدة',
+      dragDrop: 'اسحب وأفلت ملف Excel هنا، أو انقر للاستعراض',
+      supportedFormats: 'الصيغ المدعومة: .xlsx, .xls',
+      preview: 'معاينة',
+      rowsToImport: 'صفوف للاستيراد',
+      errors: 'الأخطاء',
+      exportSuccess: 'تم تصدير البيانات بنجاح',
+      productSku: 'رمز المنتج',
+      warehouseName: 'اسم المخزن'
     }
   }[language];
 
@@ -232,6 +283,173 @@ const OpeningBalances = () => {
 
   const totalValue = filteredBalances.reduce((sum, b) => sum + Number(b.total_value || 0), 0);
 
+  // Import mutation
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      setIsImporting(true);
+      setImportProgress(0);
+
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < importData.length; i++) {
+        const row = importData[i];
+        try {
+          // Find product by SKU
+          const product = products.find(p => p.sku.toLowerCase() === row.product_sku.toLowerCase());
+          if (!product) {
+            failCount++;
+            errors.push(`Row ${i + 1}: Product SKU "${row.product_sku}" not found`);
+            continue;
+          }
+
+          // Find warehouse by name
+          const warehouse = warehouses.find(w => 
+            w.name.toLowerCase() === row.warehouse_name.toLowerCase() ||
+            w.name_ar?.toLowerCase() === row.warehouse_name.toLowerCase()
+          );
+          if (!warehouse) {
+            failCount++;
+            errors.push(`Row ${i + 1}: Warehouse "${row.warehouse_name}" not found`);
+            continue;
+          }
+
+          const { error } = await supabase
+            .from('opening_balances')
+            .insert({
+              product_id: product.id,
+              warehouse_id: warehouse.id,
+              quantity: row.quantity,
+              unit_cost: row.unit_cost,
+              notes: row.notes || null
+            });
+
+          if (error) {
+            failCount++;
+            errors.push(`Row ${i + 1}: ${error.message}`);
+          } else {
+            successCount++;
+          }
+        } catch (err: any) {
+          failCount++;
+          errors.push(`Row ${i + 1}: ${err.message}`);
+        }
+
+        setImportProgress(Math.round(((i + 1) / importData.length) * 100));
+      }
+
+      return { successCount, failCount, errors };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['opening-balances'] });
+      toast({
+        title: t.importSuccess,
+        description: `${result.successCount} ${language === 'ar' ? 'ناجح' : 'successful'}, ${result.failCount} ${language === 'ar' ? 'فاشل' : 'failed'}`
+      });
+      setImportData([]);
+      setImportErrors(result.errors);
+      setIsImporting(false);
+      if (result.errors.length === 0) {
+        setShowImportDialog(false);
+      }
+    },
+    onError: () => {
+      toast({ title: t.importError, variant: 'destructive' });
+      setIsImporting(false);
+    }
+  });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json<ImportRow>(worksheet);
+
+        const validData: ImportRow[] = [];
+        const errors: string[] = [];
+
+        jsonData.forEach((row, index) => {
+          if (!row.product_sku || !row.warehouse_name) {
+            errors.push(`Row ${index + 2}: Missing required fields (product_sku, warehouse_name)`);
+          } else if (row.quantity === undefined || row.unit_cost === undefined) {
+            errors.push(`Row ${index + 2}: Missing quantity or unit_cost`);
+          } else {
+            validData.push({
+              product_sku: String(row.product_sku),
+              warehouse_name: String(row.warehouse_name),
+              quantity: Number(row.quantity) || 0,
+              unit_cost: Number(row.unit_cost) || 0,
+              notes: row.notes ? String(row.notes) : undefined
+            });
+          }
+        });
+
+        setImportData(validData);
+        setImportErrors(errors);
+
+        if (errors.length > 0) {
+          toast({
+            title: language === 'ar' ? 'تم العثور على أخطاء' : 'Errors found',
+            description: `${errors.length} ${language === 'ar' ? 'صف به مشاكل' : 'rows with issues'}`,
+            variant: 'destructive'
+          });
+        }
+      } catch (err) {
+        toast({ title: language === 'ar' ? 'صيغة الملف غير صالحة' : 'Invalid file format', variant: 'destructive' });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const downloadTemplate = () => {
+    const template = [
+      {
+        product_sku: 'SKU-001',
+        warehouse_name: 'Main Warehouse',
+        quantity: 100,
+        unit_cost: 50,
+        notes: 'Initial stock'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Opening Balances');
+    XLSX.writeFile(wb, 'opening_balances_template.xlsx');
+  };
+
+  const exportData = () => {
+    const exportRows = filteredBalances.map(b => ({
+      product_name: language === 'ar' ? b.products?.name_ar || b.products?.name : b.products?.name,
+      product_sku: b.products?.sku,
+      warehouse_name: language === 'ar' ? b.warehouses?.name_ar || b.warehouses?.name : b.warehouses?.name,
+      quantity: b.quantity,
+      unit_cost: Number(b.unit_cost),
+      total_value: Number(b.total_value),
+      balance_date: b.balance_date,
+      notes: b.notes || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Opening Balances');
+    XLSX.writeFile(wb, `opening_balances_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast({ title: t.exportSuccess });
+  };
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -245,10 +463,20 @@ const OpeningBalances = () => {
             <p className="text-sm text-muted-foreground">{t.description}</p>
           </div>
         </div>
-        <Button onClick={() => setAddBalanceOpen(true)}>
-          <Plus size={16} className="me-2" />
-          {t.addBalance}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+            <Upload size={16} className="me-2" />
+            {t.import}
+          </Button>
+          <Button variant="outline" onClick={exportData}>
+            <Download size={16} className="me-2" />
+            {t.export}
+          </Button>
+          <Button onClick={() => setAddBalanceOpen(true)}>
+            <Plus size={16} className="me-2" />
+            {t.addBalance}
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -509,6 +737,126 @@ const OpeningBalances = () => {
             >
               <Save size={16} className="me-2" />
               {t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet size={20} />
+              {t.import}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Download Template */}
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={downloadTemplate}>
+                <Download size={16} className="me-2" />
+                {t.downloadTemplate}
+              </Button>
+            </div>
+
+            {/* Upload Area */}
+            <div 
+              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="mx-auto text-muted-foreground mb-4" size={48} />
+              <p className="text-lg font-medium mb-2">{t.dragDrop}</p>
+              <p className="text-sm text-muted-foreground">{t.supportedFormats}</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* Preview */}
+            {importData.length > 0 && (
+              <Card>
+                <CardHeader className="border-b py-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{t.preview}</CardTitle>
+                    <Badge variant="secondary">
+                      {t.rowsToImport}: {importData.length}
+                    </Badge>
+                  </div>
+                  {isImporting && (
+                    <Progress value={importProgress} className="mt-2" />
+                  )}
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[200px] w-full">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t.productSku}</TableHead>
+                          <TableHead>{t.warehouseName}</TableHead>
+                          <TableHead>{t.quantity}</TableHead>
+                          <TableHead>{t.unitCost}</TableHead>
+                          <TableHead>{t.notes}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importData.slice(0, 20).map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{row.product_sku}</TableCell>
+                            <TableCell>{row.warehouse_name}</TableCell>
+                            <TableCell>{row.quantity}</TableCell>
+                            <TableCell>{row.unit_cost}</TableCell>
+                            <TableCell>{row.notes || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Errors */}
+            {importErrors.length > 0 && (
+              <Card className="border-amber-500/50">
+                <CardHeader className="border-b py-3">
+                  <CardTitle className="flex items-center gap-2 text-amber-500 text-base">
+                    <AlertTriangle size={16} />
+                    {t.errors} ({importErrors.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <ScrollArea className="h-[100px]">
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {importErrors.map((error, index) => (
+                        <li key={index}>• {error}</li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowImportDialog(false); setImportData([]); setImportErrors([]); }}>
+              {t.cancel}
+            </Button>
+            <Button
+              onClick={() => importMutation.mutate()}
+              disabled={importData.length === 0 || isImporting}
+            >
+              {isImporting ? (
+                <RefreshCw className="animate-spin me-2" size={16} />
+              ) : (
+                <Upload size={16} className="me-2" />
+              )}
+              {t.startImport}
             </Button>
           </DialogFooter>
         </DialogContent>
