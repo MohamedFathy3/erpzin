@@ -262,7 +262,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
       if (itemsError) throw itemsError;
 
-      // Update product stock
+      // Update product stock and create inventory movements
       for (const item of items) {
         if (item.product_id) {
           const { data: product } = await supabase
@@ -272,10 +272,29 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
             .single();
           
           if (product) {
+            const previousStock = product.stock;
+            const newStock = Math.max(0, previousStock - item.quantity);
+            
+            // Update product stock
             await supabase
               .from('products')
-              .update({ stock: Math.max(0, product.stock - item.quantity) })
+              .update({ stock: newStock })
               .eq('id', item.product_id);
+
+            // Create inventory movement record
+            await supabase
+              .from('inventory_movements')
+              .insert({
+                product_id: item.product_id,
+                warehouse_id: formData.warehouse_id || null,
+                movement_type: 'sale',
+                quantity: -item.quantity,
+                previous_stock: previousStock,
+                new_stock: newStock,
+                reference_type: 'sales_invoice',
+                reference_id: invoice.id,
+                notes: `فاتورة مبيعات رقم ${invoiceNumber}`
+              });
           }
         }
       }
@@ -303,6 +322,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       toast.success(language === 'ar' ? 'تم إنشاء الفاتورة بنجاح' : 'Invoice created successfully');
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['new-invoice-number'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-search'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       onClose();
       resetForm();
     },

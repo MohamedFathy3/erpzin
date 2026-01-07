@@ -19,7 +19,7 @@ import {
   FileText, Plus, Trash2, Package, Search, Building2, 
   Warehouse, CreditCard, Calendar, Loader2
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -50,6 +50,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   onSave
 }) => {
   const { language } = useLanguage();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -335,6 +336,14 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           ? `تم إنشاء فاتورة الشراء رقم ${invoiceNumber}`
           : `Purchase invoice ${invoiceNumber} created`
       });
+
+      // Invalidate all related queries
+      queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
 
       onSave();
       onClose();
