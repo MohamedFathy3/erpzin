@@ -352,12 +352,14 @@ const POS: React.FC = () => {
           {/* Returns Button */}
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => setShowReturns(true)}
             className="text-white/80 hover:text-white hover:bg-white/10"
-            title={language === 'ar' ? 'مرتجعات' : 'Returns'}
           >
-            <RotateCcw size={20} />
+            <RotateCcw size={18} className="me-1" />
+            <span className="text-xs">
+              {language === 'ar' ? 'فاتورة مرتجع' : 'Return Invoice'}
+            </span>
           </Button>
           {/* Customer Button */}
           <Button
