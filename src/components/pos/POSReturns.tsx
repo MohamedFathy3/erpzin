@@ -275,71 +275,96 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <RotateCcw className="h-5 w-5" />
-            مرتجعات المبيعات
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-4xl h-[85vh] p-0 overflow-hidden flex flex-col bg-background">
+        {/* Header - POS Style */}
+        <div className="bg-sidebar px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+              <RotateCcw className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">مرتجعات المبيعات</h2>
+              <p className="text-white/60 text-sm">إرجاع الأصناف واسترداد المبلغ</p>
+            </div>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleClose}
+            className="text-white/80 hover:text-white hover:bg-white/10"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden p-6">
           {step === 'search' && (
-            <div className="space-y-4">
-              {/* Search Input */}
-              <div className="flex gap-2">
-                <div className="flex-1">
+            <div className="space-y-6 h-full flex flex-col">
+              {/* Search Input - POS Style */}
+              <div className="flex gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input
                     placeholder="ابحث برقم الفاتورة..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="h-14 ps-12 text-lg rounded-xl"
                   />
                 </div>
-                <Button onClick={handleSearch} disabled={isSearching}>
-                  <Search className="h-4 w-4 ml-2" />
+                <Button 
+                  onClick={handleSearch} 
+                  disabled={isSearching}
+                  className="h-14 px-8 rounded-xl text-base"
+                >
+                  <Search className="h-5 w-5 me-2" />
                   بحث
                 </Button>
               </div>
 
-              {/* Search Results */}
-              <ScrollArea className="h-[400px]">
+              {/* Search Results - Card Grid */}
+              <ScrollArea className="flex-1">
                 {isSearching ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    جاري البحث...
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-lg">جاري البحث...</p>
+                    </div>
                   </div>
                 ) : searchResults && searchResults.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {searchResults.map((sale) => (
                       <Card 
                         key={sale.id} 
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
                         onClick={() => handleSelectSale(sale)}
                       >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Receipt className="h-8 w-8 text-muted-foreground" />
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                                <Receipt className="h-7 w-7 text-primary" />
+                              </div>
                               <div>
-                                <div className="font-medium">{sale.invoice_number}</div>
-                                <div className="text-sm text-muted-foreground">
+                                <div className="font-bold text-lg">{sale.invoice_number}</div>
+                                <div className="text-sm text-muted-foreground mt-1">
                                   {format(new Date(sale.sale_date), 'yyyy/MM/dd HH:mm', { locale: ar })}
                                 </div>
                                 {sale.customer && (
-                                  <div className="text-sm text-muted-foreground">
-                                    العميل: {sale.customer.name_ar || sale.customer.name}
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    👤 {sale.customer.name_ar || sale.customer.name}
                                   </div>
                                 )}
                               </div>
                             </div>
                             <div className="text-left">
-                              <div className="font-bold text-lg">
+                              <div className="font-bold text-xl text-primary">
                                 {sale.total_amount.toLocaleString()} ر.ي
                               </div>
-                              <div className="text-sm text-muted-foreground">
-                                {sale.sale_items.length} صنف
+                              <div className="text-sm text-muted-foreground mt-1">
+                                📦 {sale.sale_items.length} صنف
                               </div>
-                              <Badge variant="outline">{sale.payment_method}</Badge>
+                              <Badge variant="secondary" className="mt-2">{sale.payment_method}</Badge>
                             </div>
                           </div>
                         </CardContent>
@@ -347,14 +372,24 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                     ))}
                   </div>
                 ) : searchQuery && !isSearching ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>لم يتم العثور على فواتير</p>
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertCircle className="h-10 w-10 opacity-50" />
+                      </div>
+                      <p className="text-lg font-medium">لم يتم العثور على فواتير</p>
+                      <p className="text-sm mt-1">تأكد من رقم الفاتورة وحاول مرة أخرى</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Search className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>أدخل رقم الفاتورة للبحث</p>
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Search className="h-10 w-10 opacity-50" />
+                      </div>
+                      <p className="text-lg font-medium">ابحث عن فاتورة</p>
+                      <p className="text-sm mt-1">أدخل رقم الفاتورة للبحث عنها</p>
+                    </div>
                   </div>
                 )}
               </ScrollArea>
@@ -362,139 +397,169 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           )}
 
           {step === 'select' && selectedSale && (
-            <div className="space-y-4">
-              {/* Invoice Info */}
-              <div className="p-3 rounded-lg bg-muted/50 flex items-center justify-between">
-                <div>
-                  <span className="text-muted-foreground">فاتورة رقم: </span>
-                  <span className="font-medium">{selectedSale.invoice_number}</span>
+            <div className="space-y-4 h-full flex flex-col">
+              {/* Invoice Info - Enhanced */}
+              <div className="p-4 rounded-xl bg-sidebar/5 border flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <Receipt className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-lg">{selectedSale.invoice_number}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(selectedSale.sale_date), 'yyyy/MM/dd HH:mm', { locale: ar })}
+                    </div>
+                  </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setStep('search')}>
-                  <X className="h-4 w-4 ml-1" />
-                  تغيير
+                <Button variant="outline" size="sm" onClick={() => setStep('search')} className="rounded-lg">
+                  <X className="h-4 w-4 me-1" />
+                  تغيير الفاتورة
                 </Button>
               </div>
 
               {/* Selection Controls */}
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={selectAll}>
+              <div className="flex gap-3 flex-shrink-0">
+                <Button variant="outline" size="sm" onClick={selectAll} className="rounded-lg">
+                  <CheckCircle2 className="h-4 w-4 me-1" />
                   تحديد الكل
                 </Button>
-                <Button variant="outline" size="sm" onClick={deselectAll}>
+                <Button variant="outline" size="sm" onClick={deselectAll} className="rounded-lg">
+                  <X className="h-4 w-4 me-1" />
                   إلغاء التحديد
                 </Button>
               </div>
 
-              {/* Items Table */}
-              <ScrollArea className="h-[280px] border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>المنتج</TableHead>
-                      <TableHead className="text-center">الكمية المباعة</TableHead>
-                      <TableHead className="text-center">كمية الإرجاع</TableHead>
-                      <TableHead className="text-left">السعر</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {returnItems.map((item) => (
-                      <TableRow key={item.id} className={item.selected ? 'bg-primary/5' : ''}>
-                        <TableCell>
-                          <Checkbox
-                            checked={item.selected}
-                            onCheckedChange={() => toggleItemSelection(item.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">
+              {/* Items Grid - POS Style */}
+              <ScrollArea className="flex-1 border rounded-xl">
+                <div className="p-3 space-y-2">
+                  {returnItems.map((item) => (
+                    <div 
+                      key={item.id} 
+                      onClick={() => toggleItemSelection(item.id)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        item.selected 
+                          ? 'border-primary bg-primary/5 shadow-sm' 
+                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <Checkbox
+                          checked={item.selected}
+                          onCheckedChange={() => toggleItemSelection(item.id)}
+                          className="h-5 w-5"
+                        />
+                        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
+                          <Package className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-base">
                             {item.product?.name_ar || item.product?.name || 'غير معروف'}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.product?.sku}
+                          <div className="text-sm text-muted-foreground">
+                            {item.product?.sku} • الكمية المباعة: {item.quantity}
                           </div>
-                        </TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell className="text-center">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={item.quantity}
-                            value={item.return_quantity}
-                            onChange={(e) => updateReturnQuantity(item.id, parseInt(e.target.value) || 1)}
-                            className="w-20 text-center mx-auto"
-                            disabled={!item.selected}
-                          />
-                        </TableCell>
-                        <TableCell className="text-left font-medium">
-                          {(item.unit_price * item.return_quantity).toLocaleString()} ر.ي
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-center">
+                            <Label className="text-xs text-muted-foreground">كمية الإرجاع</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.quantity}
+                              value={item.return_quantity}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => updateReturnQuantity(item.id, parseInt(e.target.value) || 1)}
+                              className="w-20 text-center h-10 rounded-lg font-bold"
+                              disabled={!item.selected}
+                            />
+                          </div>
+                          <div className="text-left min-w-[100px]">
+                            <Label className="text-xs text-muted-foreground">الإجمالي</Label>
+                            <div className="font-bold text-lg text-primary">
+                              {(item.unit_price * item.return_quantity).toLocaleString()} ر.ي
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </ScrollArea>
 
-              {/* Return Details */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Return Details - Enhanced */}
+              <div className="grid grid-cols-2 gap-4 flex-shrink-0">
                 <div className="space-y-2">
-                  <Label>سبب الإرجاع</Label>
+                  <Label className="text-sm font-medium">سبب الإرجاع</Label>
                   <Textarea
                     placeholder="اكتب سبب الإرجاع..."
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
                     rows={2}
+                    className="rounded-xl resize-none"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>طريقة الاسترداد</Label>
+                  <Label className="text-sm font-medium">طريقة الاسترداد</Label>
                   <Select value={refundMethod} onValueChange={setRefundMethod}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-12 rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">نقدي</SelectItem>
-                      <SelectItem value="card">بطاقة</SelectItem>
-                      <SelectItem value="credit">رصيد للعميل</SelectItem>
+                      <SelectItem value="cash">💵 نقدي</SelectItem>
+                      <SelectItem value="card">💳 بطاقة</SelectItem>
+                      <SelectItem value="credit">👤 رصيد للعميل</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
-
-              {/* Summary */}
-              <div className="p-4 rounded-lg bg-primary/10 flex items-center justify-between">
-                <div>
-                  <span className="text-muted-foreground">الأصناف المحددة: </span>
-                  <span className="font-bold">{selectedItemsCount}</span>
-                </div>
-                <div className="text-xl font-bold">
-                  إجمالي الإرجاع: {selectedItemsTotal.toLocaleString()} ر.ي
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            إلغاء
-          </Button>
-          {step === 'select' && (
-            <Button 
-              onClick={() => processReturnMutation.mutate()}
-              disabled={selectedItemsCount === 0 || processReturnMutation.isPending}
-            >
-              {processReturnMutation.isPending ? (
-                'جاري المعالجة...'
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4 ml-2" />
-                  تأكيد الإرجاع
-                </>
-              )}
-            </Button>
-          )}
-        </DialogFooter>
+        {/* Footer - POS Style */}
+        {step === 'select' && (
+          <div className="bg-muted/30 border-t p-4 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-muted-foreground text-sm">الأصناف المحددة</span>
+                <div className="font-bold text-2xl">{selectedItemsCount}</div>
+              </div>
+              <Separator orientation="vertical" className="h-12" />
+              <div>
+                <span className="text-muted-foreground text-sm">إجمالي المرتجع</span>
+                <div className="font-bold text-2xl text-primary">
+                  {selectedItemsTotal.toLocaleString()} ر.ي
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleClose}
+                className="h-12 px-6 rounded-xl"
+              >
+                إلغاء
+              </Button>
+              <Button 
+                onClick={() => processReturnMutation.mutate()}
+                disabled={selectedItemsCount === 0 || processReturnMutation.isPending}
+                className="h-12 px-8 rounded-xl text-base font-bold"
+              >
+                {processReturnMutation.isPending ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin me-2"></div>
+                    جاري المعالجة...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 me-2" />
+                    تأكيد المرتجع
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
