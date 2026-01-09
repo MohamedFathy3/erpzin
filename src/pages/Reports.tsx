@@ -37,15 +37,17 @@ import {
   ShoppingCart,
   CreditCard,
   Landmark,
-  RefreshCw
+  RefreshCw,
+  ClipboardList
 } from 'lucide-react';
 import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import ReadyReports from '@/components/reports/ReadyReports';
 
 const Reports = () => {
   const { language, direction } = useLanguage();
   const printRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('ready');
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -504,6 +506,10 @@ const Reports = () => {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="print:hidden">
           <TabsList className="bg-muted/50 p-1 h-auto">
+            <TabsTrigger value="ready" className="gap-2 data-[state=active]:bg-background">
+              <ClipboardList size={16} />
+              {language === 'ar' ? 'التقارير الجاهزة' : 'Ready Reports'}
+            </TabsTrigger>
             <TabsTrigger value="overview" className="gap-2 data-[state=active]:bg-background">
               <Activity size={16} />
               {t.overview}
@@ -521,6 +527,11 @@ const Reports = () => {
               {t.finance}
             </TabsTrigger>
           </TabsList>
+
+          {/* Ready Reports Tab */}
+          <TabsContent value="ready" className="mt-6">
+            <ReadyReports />
+          </TabsContent>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-6 space-y-6">
