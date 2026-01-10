@@ -476,7 +476,7 @@ const ReadyReports = () => {
       closing: 'Closing',
       totalSales: 'Total Sales',
       movement: 'Movement',
-      warehouse: 'Warehouse'
+      warehouseCol: 'Warehouse'
     },
     ar: {
       title: 'التقارير الجاهزة',
@@ -615,7 +615,7 @@ const ReadyReports = () => {
       closing: 'الإغلاق',
       totalSales: 'إجمالي المبيعات',
       movement: 'الحركة',
-      warehouse: 'المخزن'
+      warehouseCol: 'المخزن'
     }
   };
 
@@ -1313,14 +1313,14 @@ const ReadyReports = () => {
                     {reportData.rows.map((row, i) => (
                       <TableRow key={i}>
                         {row.map((cell, j) => (
-                          <TableCell key={j}>{cell}</TableCell>
+                          <TableCell key={j}>{String(cell ?? '')}</TableCell>
                         ))}
                       </TableRow>
                     ))}
                     <TableRow className="bg-muted/50 font-semibold">
                       <TableCell colSpan={reportData.headers.length - 1}>{t.total}</TableCell>
                       <TableCell>
-                        {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : reportData.total}
+                        {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
                       </TableCell>
                     </TableRow>
                   </TableBody>

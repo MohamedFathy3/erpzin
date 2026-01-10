@@ -1,5 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,24 +14,47 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Search,
   Bell,
   Languages,
   Building2,
   ChevronDown,
+  Warehouse,
+  Check,
 } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
+  const { 
+    currentBranch, 
+    setCurrentBranch, 
+    branches, 
+    loadingBranches,
+    currentWarehouse,
+    setCurrentWarehouse,
+    warehouses,
+    permissions 
+  } = useApp();
+  const { user } = useAuth();
 
-  const branches = [
-    { id: 'all', name: t('common.all') },
-    { id: 'abra', name: t('branch.abra') },
-    { id: 'primark', name: t('branch.primark') },
-    { id: 'fashionKings', name: t('branch.fashionKings') },
-    { id: 'ahyan', name: t('branch.ahyan') },
-  ];
+  const getUserInitials = () => {
+    if (user?.email) {
+      return user.email.slice(0, 2).toUpperCase();
+    }
+    return 'U';
+  };
+
+  const getRoleLabel = () => {
+    const roleLabels: Record<string, string> = {
+      admin: language === 'ar' ? 'مدير النظام' : 'Admin',
+      moderator: language === 'ar' ? 'مشرف' : 'Moderator',
+      cashier: language === 'ar' ? 'كاشير' : 'Cashier',
+      viewer: language === 'ar' ? 'عارض' : 'Viewer',
+    };
+    return roleLabels[permissions.role || ''] || (language === 'ar' ? 'مستخدم' : 'User');
+  };
 
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6">
@@ -51,20 +76,64 @@ const Header: React.FC = () => {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <Building2 size={16} />
-              <span>{t('common.all')} {t('common.branches')}</span>
+              {loadingBranches ? (
+                <Skeleton className="w-20 h-4" />
+              ) : (
+                <span className="max-w-[120px] truncate">
+                  {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : t('common.all')}
+                </span>
+              )}
               <ChevronDown size={14} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>{t('common.branches')}</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              {language === 'ar' ? 'اختر الفرع' : 'Select Branch'}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {branches.map((branch) => (
-              <DropdownMenuItem key={branch.id}>
-                {branch.name}
+              <DropdownMenuItem 
+                key={branch.id}
+                onClick={() => setCurrentBranch(branch)}
+                className="flex items-center justify-between"
+              >
+                <span>{language === 'ar' && branch.name_ar ? branch.name_ar : branch.name}</span>
+                {currentBranch?.id === branch.id && <Check size={16} className="text-primary" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Warehouse Selector */}
+        {warehouses.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Warehouse size={16} />
+                <span className="max-w-[100px] truncate">
+                  {currentWarehouse ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name) : (language === 'ar' ? 'المخزن' : 'Warehouse')}
+                </span>
+                <ChevronDown size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>
+                {language === 'ar' ? 'اختر المخزن' : 'Select Warehouse'}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {warehouses.map((warehouse) => (
+                <DropdownMenuItem 
+                  key={warehouse.id}
+                  onClick={() => setCurrentWarehouse(warehouse)}
+                  className="flex items-center justify-between"
+                >
+                  <span>{language === 'ar' && warehouse.name_ar ? warehouse.name_ar : warehouse.name}</span>
+                  {currentWarehouse?.id === warehouse.id && <Check size={16} className="text-primary" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Language Toggle */}
         <Button
@@ -97,21 +166,23 @@ const Header: React.FC = () => {
               <Avatar className="h-8 w-8">
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  AD
+                  {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start">
-                <span className="text-sm font-medium">Admin</span>
-                <span className="text-xs text-muted-foreground">Super Admin</span>
+                <span className="text-sm font-medium">
+                  {user?.email?.split('@')[0] || 'User'}
+                </span>
+                <span className="text-xs text-muted-foreground">{getRoleLabel()}</span>
               </div>
               <ChevronDown size={14} className="text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>{language === 'ar' ? 'حسابي' : 'My Account'}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</DropdownMenuItem>
+            <DropdownMenuItem>{language === 'ar' ? 'الإعدادات' : 'Settings'}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive">
               {t('nav.logout')}
