@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, ScanBarcode, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag } from 'lucide-react';
+import { Plus, Search, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -47,6 +47,7 @@ const Inventory: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('created_desc');
   const [isCategoryCollapsed, setIsCategoryCollapsed] = useState(false);
 
   const { data: dbProducts = [], refetch } = useQuery({
@@ -92,13 +93,13 @@ const Inventory: React.FC = () => {
   }));
 
   const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      // Search filter
+    let filtered = products.filter(product => {
+      // Search filter (barcode and name)
       const matchesSearch = searchQuery === '' ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.nameAr.includes(searchQuery) ||
         product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.barcode && product.barcode.includes(searchQuery));
+        (product.barcode && product.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // Status filter
       const matchesStatus = statusFilter === 'all' || product.status === statusFilter;
@@ -121,7 +122,38 @@ const Inventory: React.FC = () => {
 
       return matchesSearch && matchesStatus && matchesStock && matchesPrice && matchesCategory;
     });
-  }, [products, searchQuery, statusFilter, stockFilter, priceRange, categoryFilter]);
+
+    // Sorting
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name_asc':
+          return (language === 'ar' ? a.nameAr : a.name).localeCompare(language === 'ar' ? b.nameAr : b.name);
+        case 'name_desc':
+          return (language === 'ar' ? b.nameAr : b.name).localeCompare(language === 'ar' ? a.nameAr : a.name);
+        case 'barcode_asc':
+          return (a.barcode || '').localeCompare(b.barcode || '');
+        case 'barcode_desc':
+          return (b.barcode || '').localeCompare(a.barcode || '');
+        case 'stock_asc':
+          return a.stock - b.stock;
+        case 'stock_desc':
+          return b.stock - a.stock;
+        case 'price_asc':
+          return a.price - b.price;
+        case 'price_desc':
+          return b.price - a.price;
+        case 'sku_asc':
+          return a.sku.localeCompare(b.sku);
+        case 'sku_desc':
+          return b.sku.localeCompare(a.sku);
+        case 'created_desc':
+        default:
+          return 0; // Keep original order (already sorted by created_at desc from DB)
+      }
+    });
+
+    return filtered;
+  }, [products, searchQuery, statusFilter, stockFilter, priceRange, categoryFilter, sortBy, language]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
@@ -145,9 +177,10 @@ const Inventory: React.FC = () => {
     setPriceRange('all');
     setCategoryFilter('all');
     setSearchQuery('');
+    setSortBy('created_desc');
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || priceRange !== 'all' || categoryFilter !== 'all' || searchQuery !== '';
+  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || priceRange !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
 
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
   const handleEditProduct = (product: Product) => {
@@ -271,8 +304,7 @@ const Inventory: React.FC = () => {
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
             {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
-              <Button variant="outline" size="sm" onClick={() => setShowBarcodeScanner(true)}><ScanBarcode size={16} className="me-2" />{language === 'ar' ? 'مسح الباركود' : 'Scan'}</Button>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedProductForPrint(null); setShowBarcodePrinter(true); }}><Printer size={16} className="me-2" />{language === 'ar' ? 'طباعة' : 'Print'}</Button>
+              <Button variant="outline" size="sm" onClick={() => { setSelectedProductForPrint(null); setShowBarcodePrinter(true); }}><Printer size={16} className="me-2" />{language === 'ar' ? 'طباعة الباركود' : 'Print Barcode'}</Button>
               <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
             </div>
 
@@ -289,13 +321,13 @@ const Inventory: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {/* Search */}
-                  <div className="col-span-2 md:col-span-1">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  {/* Search by barcode or name */}
+                  <div className="col-span-2">
                     <div className="relative">
                       <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                       <Input 
-                        placeholder={language === 'ar' ? 'بحث...' : 'Search...'} 
+                        placeholder={language === 'ar' ? 'بحث بالباركود أو الاسم أو SKU...' : 'Search by barcode, name, or SKU...'} 
                         value={searchQuery} 
                         onChange={(e) => setSearchQuery(e.target.value)} 
                         className="ps-9 h-9"
@@ -356,6 +388,27 @@ const Inventory: React.FC = () => {
                       <SelectItem value="10000-50000">10,000 - 50,000</SelectItem>
                       <SelectItem value="50000-100000">50,000 - 100,000</SelectItem>
                       <SelectItem value="100000+">{language === 'ar' ? 'أكثر من 100,000' : 'Over 100,000'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Sort By */}
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="h-9">
+                      <SortAsc size={14} className="me-2 text-muted-foreground" />
+                      <SelectValue placeholder={language === 'ar' ? 'الترتيب' : 'Sort'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created_desc">{language === 'ar' ? 'الأحدث أولاً' : 'Newest First'}</SelectItem>
+                      <SelectItem value="name_asc">{language === 'ar' ? 'الاسم (أ-ي)' : 'Name (A-Z)'}</SelectItem>
+                      <SelectItem value="name_desc">{language === 'ar' ? 'الاسم (ي-أ)' : 'Name (Z-A)'}</SelectItem>
+                      <SelectItem value="barcode_asc">{language === 'ar' ? 'الباركود (تصاعدي)' : 'Barcode (Asc)'}</SelectItem>
+                      <SelectItem value="barcode_desc">{language === 'ar' ? 'الباركود (تنازلي)' : 'Barcode (Desc)'}</SelectItem>
+                      <SelectItem value="stock_asc">{language === 'ar' ? 'المخزون (الأقل)' : 'Stock (Lowest)'}</SelectItem>
+                      <SelectItem value="stock_desc">{language === 'ar' ? 'المخزون (الأكثر)' : 'Stock (Highest)'}</SelectItem>
+                      <SelectItem value="price_asc">{language === 'ar' ? 'السعر (الأقل)' : 'Price (Low-High)'}</SelectItem>
+                      <SelectItem value="price_desc">{language === 'ar' ? 'السعر (الأعلى)' : 'Price (High-Low)'}</SelectItem>
+                      <SelectItem value="sku_asc">{language === 'ar' ? 'SKU (تصاعدي)' : 'SKU (Asc)'}</SelectItem>
+                      <SelectItem value="sku_desc">{language === 'ar' ? 'SKU (تنازلي)' : 'SKU (Desc)'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
