@@ -156,6 +156,66 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-5px)" },
         },
+        // New Glow Animations
+        "glow-primary": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--primary) / 0.2), 0 0 10px hsl(var(--primary) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--primary) / 0.4), 0 0 40px hsl(var(--primary) / 0.2)" },
+        },
+        "glow-success": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--success) / 0.2), 0 0 10px hsl(var(--success) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--success) / 0.4), 0 0 40px hsl(var(--success) / 0.2)" },
+        },
+        "glow-accent": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--accent) / 0.2), 0 0 10px hsl(var(--accent) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--accent) / 0.4), 0 0 40px hsl(var(--accent) / 0.2)" },
+        },
+        "glow-warning": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--warning) / 0.2), 0 0 10px hsl(var(--warning) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--warning) / 0.4), 0 0 40px hsl(var(--warning) / 0.2)" },
+        },
+        "glow-destructive": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--destructive) / 0.2), 0 0 10px hsl(var(--destructive) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--destructive) / 0.4), 0 0 40px hsl(var(--destructive) / 0.2)" },
+        },
+        "glow-info": {
+          "0%, 100%": { boxShadow: "0 0 5px hsl(var(--info) / 0.2), 0 0 10px hsl(var(--info) / 0.1)" },
+          "50%": { boxShadow: "0 0 20px hsl(var(--info) / 0.4), 0 0 40px hsl(var(--info) / 0.2)" },
+        },
+        "border-glow": {
+          "0%, 100%": { borderColor: "hsl(var(--primary) / 0.3)" },
+          "50%": { borderColor: "hsl(var(--primary) / 0.8)" },
+        },
+        "text-glow": {
+          "0%, 100%": { textShadow: "0 0 5px hsl(var(--primary) / 0.3)" },
+          "50%": { textShadow: "0 0 15px hsl(var(--primary) / 0.6)" },
+        },
+        "bounce-soft": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
+        "heartbeat": {
+          "0%, 100%": { transform: "scale(1)" },
+          "25%": { transform: "scale(1.05)" },
+          "50%": { transform: "scale(1)" },
+          "75%": { transform: "scale(1.05)" },
+        },
+        "gradient-shift": {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        },
+        "rotate-glow": {
+          "0%": { transform: "rotate(0deg)", filter: "hue-rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)", filter: "hue-rotate(360deg)" },
+        },
+        "ripple": {
+          "0%": { transform: "scale(0)", opacity: "0.5" },
+          "100%": { transform: "scale(4)", opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.3s ease-out",
@@ -173,6 +233,21 @@ export default {
         "shimmer": "shimmer 2s linear infinite",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "float": "float 3s ease-in-out infinite",
+        // New animations
+        "glow-primary": "glow-primary 2s ease-in-out infinite",
+        "glow-success": "glow-success 2s ease-in-out infinite",
+        "glow-accent": "glow-accent 2s ease-in-out infinite",
+        "glow-warning": "glow-warning 2s ease-in-out infinite",
+        "glow-destructive": "glow-destructive 2s ease-in-out infinite",
+        "glow-info": "glow-info 2s ease-in-out infinite",
+        "border-glow": "border-glow 2s ease-in-out infinite",
+        "text-glow": "text-glow 2s ease-in-out infinite",
+        "bounce-soft": "bounce-soft 2s ease-in-out infinite",
+        "wiggle": "wiggle 0.3s ease-in-out",
+        "heartbeat": "heartbeat 1.5s ease-in-out infinite",
+        "gradient-shift": "gradient-shift 3s ease infinite",
+        "rotate-glow": "rotate-glow 8s linear infinite",
+        "ripple": "ripple 0.6s linear",
       },
     },
   },
