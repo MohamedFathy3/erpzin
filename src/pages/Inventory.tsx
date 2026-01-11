@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Printer, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -45,7 +45,6 @@ const Inventory: React.FC = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stockFilter, setStockFilter] = useState<string>('all');
-  const [priceRange, setPriceRange] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_desc');
   const [isCategoryCollapsed, setIsCategoryCollapsed] = useState(false);
@@ -110,17 +109,10 @@ const Inventory: React.FC = () => {
       else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
 
-      // Price range filter
-      let matchesPrice = true;
-      if (priceRange === '0-10000') matchesPrice = product.price <= 10000;
-      else if (priceRange === '10000-50000') matchesPrice = product.price > 10000 && product.price <= 50000;
-      else if (priceRange === '50000-100000') matchesPrice = product.price > 50000 && product.price <= 100000;
-      else if (priceRange === '100000+') matchesPrice = product.price > 100000;
-
       // Category filter
       const matchesCategory = categoryFilter === 'all' || (product as any).categoryId === categoryFilter;
 
-      return matchesSearch && matchesStatus && matchesStock && matchesPrice && matchesCategory;
+      return matchesSearch && matchesStatus && matchesStock && matchesCategory;
     });
 
     // Sorting
@@ -148,12 +140,12 @@ const Inventory: React.FC = () => {
           return b.sku.localeCompare(a.sku);
         case 'created_desc':
         default:
-          return 0; // Keep original order (already sorted by created_at desc from DB)
+          return 0;
       }
     });
 
     return filtered;
-  }, [products, searchQuery, statusFilter, stockFilter, priceRange, categoryFilter, sortBy, language]);
+  }, [products, searchQuery, statusFilter, stockFilter, categoryFilter, sortBy, language]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
@@ -165,7 +157,7 @@ const Inventory: React.FC = () => {
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, stockFilter, priceRange, categoryFilter]);
+  }, [searchQuery, statusFilter, stockFilter, categoryFilter, sortBy]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -174,13 +166,12 @@ const Inventory: React.FC = () => {
   const clearFilters = () => {
     setStatusFilter('all');
     setStockFilter('all');
-    setPriceRange('all');
     setCategoryFilter('all');
     setSearchQuery('');
     setSortBy('created_desc');
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || priceRange !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
+  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
 
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
   const handleEditProduct = (product: Product) => {
@@ -304,7 +295,6 @@ const Inventory: React.FC = () => {
           <TabsContent value="products" className="flex-1 flex flex-col mt-4">
             {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
-              <Button variant="outline" size="sm" onClick={() => { setSelectedProductForPrint(null); setShowBarcodePrinter(true); }}><Printer size={16} className="me-2" />{language === 'ar' ? 'طباعة الباركود' : 'Print Barcode'}</Button>
               <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
             </div>
 
@@ -321,7 +311,7 @@ const Inventory: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {/* Search by barcode or name */}
                   <div className="col-span-2">
                     <div className="relative">
@@ -376,41 +366,37 @@ const Inventory: React.FC = () => {
                       <SelectItem value="out_of_stock">{language === 'ar' ? 'نفذ (0)' : 'Out (0)'}</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
 
-                  {/* Price Range Filter */}
-                  <Select value={priceRange} onValueChange={setPriceRange}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder={language === 'ar' ? 'السعر' : 'Price'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{language === 'ar' ? 'جميع الأسعار' : 'All Prices'}</SelectItem>
-                      <SelectItem value="0-10000">{language === 'ar' ? 'أقل من 10,000' : 'Under 10,000'}</SelectItem>
-                      <SelectItem value="10000-50000">10,000 - 50,000</SelectItem>
-                      <SelectItem value="50000-100000">50,000 - 100,000</SelectItem>
-                      <SelectItem value="100000+">{language === 'ar' ? 'أكثر من 100,000' : 'Over 100,000'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Sort By */}
-                  <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="h-9">
-                      <SortAsc size={14} className="me-2 text-muted-foreground" />
-                      <SelectValue placeholder={language === 'ar' ? 'الترتيب' : 'Sort'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created_desc">{language === 'ar' ? 'الأحدث أولاً' : 'Newest First'}</SelectItem>
-                      <SelectItem value="name_asc">{language === 'ar' ? 'الاسم (أ-ي)' : 'Name (A-Z)'}</SelectItem>
-                      <SelectItem value="name_desc">{language === 'ar' ? 'الاسم (ي-أ)' : 'Name (Z-A)'}</SelectItem>
-                      <SelectItem value="barcode_asc">{language === 'ar' ? 'الباركود (تصاعدي)' : 'Barcode (Asc)'}</SelectItem>
-                      <SelectItem value="barcode_desc">{language === 'ar' ? 'الباركود (تنازلي)' : 'Barcode (Desc)'}</SelectItem>
-                      <SelectItem value="stock_asc">{language === 'ar' ? 'المخزون (الأقل)' : 'Stock (Lowest)'}</SelectItem>
-                      <SelectItem value="stock_desc">{language === 'ar' ? 'المخزون (الأكثر)' : 'Stock (Highest)'}</SelectItem>
-                      <SelectItem value="price_asc">{language === 'ar' ? 'السعر (الأقل)' : 'Price (Low-High)'}</SelectItem>
-                      <SelectItem value="price_desc">{language === 'ar' ? 'السعر (الأعلى)' : 'Price (High-Low)'}</SelectItem>
-                      <SelectItem value="sku_asc">{language === 'ar' ? 'SKU (تصاعدي)' : 'SKU (Asc)'}</SelectItem>
-                      <SelectItem value="sku_desc">{language === 'ar' ? 'SKU (تنازلي)' : 'SKU (Desc)'}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Sort Options */}
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <SortAsc size={16} className="text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">{language === 'ar' ? 'ترتيب حسب:' : 'Sort by:'}</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {[
+                        { value: 'created_desc', labelAr: 'الأحدث', labelEn: 'Newest' },
+                        { value: 'name_asc', labelAr: 'الاسم (أ-ي)', labelEn: 'Name (A-Z)' },
+                        { value: 'name_desc', labelAr: 'الاسم (ي-أ)', labelEn: 'Name (Z-A)' },
+                        { value: 'barcode_asc', labelAr: 'الباركود ↑', labelEn: 'Barcode ↑' },
+                        { value: 'barcode_desc', labelAr: 'الباركود ↓', labelEn: 'Barcode ↓' },
+                        { value: 'stock_asc', labelAr: 'المخزون (الأقل)', labelEn: 'Stock (Low)' },
+                        { value: 'stock_desc', labelAr: 'المخزون (الأكثر)', labelEn: 'Stock (High)' },
+                        { value: 'price_asc', labelAr: 'السعر ↑', labelEn: 'Price ↑' },
+                        { value: 'price_desc', labelAr: 'السعر ↓', labelEn: 'Price ↓' },
+                      ].map(option => (
+                        <Button
+                          key={option.value}
+                          variant={sortBy === option.value ? 'default' : 'outline'}
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setSortBy(option.value)}
+                        >
+                          {language === 'ar' ? option.labelAr : option.labelEn}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
