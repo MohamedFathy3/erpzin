@@ -42,6 +42,8 @@ import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
 import ModuleSettings from '@/components/settings/ModuleSettings';
 import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
+import BackupManager from '@/components/settings/BackupManager';
+import { Database } from 'lucide-react';
 
 const Settings = () => {
   const { language, direction, setLanguage } = useLanguage();
@@ -314,7 +316,7 @@ const Settings = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex">
             <TabsTrigger value="company" className="flex items-center gap-2">
               <Building2 size={16} />
               <span className="hidden sm:inline">{t.company}</span>
@@ -334,6 +336,10 @@ const Settings = () => {
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users size={16} />
               <span className="hidden sm:inline">{t.users}</span>
+            </TabsTrigger>
+            <TabsTrigger value="backup" className="flex items-center gap-2">
+              <Database size={16} />
+              <span className="hidden sm:inline">{language === 'ar' ? 'النسخ الاحتياطي' : 'Backup'}</span>
             </TabsTrigger>
             <TabsTrigger value="language" className="flex items-center gap-2">
               <Languages size={16} />
@@ -818,6 +824,11 @@ const Settings = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Backup Tab */}
+          <TabsContent value="backup" className="mt-6">
+            <BackupManager />
           </TabsContent>
         </Tabs>
       </div>
