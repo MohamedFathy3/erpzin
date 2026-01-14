@@ -57,6 +57,16 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
   const [closingAmount, setClosingAmount] = useState('');
   const [varianceNotes, setVarianceNotes] = useState('');
 
+  // Fetch company settings for print header
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('company_settings').select('*').single();
+      if (error) throw error;
+      return data;
+    }
+  });
+
   // Fetch current open shift
   const { data: activeShift, isLoading } = useQuery({
     queryKey: ['active-shift'],
@@ -189,6 +199,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
         <title>تقرير Z - ${activeShift.shift_number}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
+          .company-header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+          .company-logo { max-height: 50px; margin-bottom: 8px; }
+          .company-name { font-size: 20px; font-weight: bold; margin: 0; }
+          .company-info { font-size: 11px; color: #666; margin: 3px 0; }
           .header { text-align: center; margin-bottom: 20px; }
           .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; }
           .row { display: flex; justify-content: space-between; margin: 5px 0; }
@@ -198,8 +212,15 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
         </style>
       </head>
       <body>
+        <div class="company-header">
+          ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" class="company-logo" alt="Logo" />` : ''}
+          <h1 class="company-name">${companySettings?.name_ar || companySettings?.name || ''}</h1>
+          <p class="company-info">${companySettings?.address || ''}</p>
+          <p class="company-info">${companySettings?.phone || ''}</p>
+          ${companySettings?.tax_number ? `<p class="company-info">الرقم الضريبي: ${companySettings.tax_number}</p>` : ''}
+        </div>
         <div class="header">
-          <h1>تقرير إغلاق الوردية (Z-Report)</h1>
+          <h2>تقرير إغلاق الوردية (Z-Report)</h2>
           <p>رقم الوردية: ${activeShift.shift_number}</p>
           <p>تاريخ الفتح: ${format(new Date(activeShift.opened_at), 'yyyy/MM/dd HH:mm', { locale: ar })}</p>
           <p>تاريخ الإغلاق: ${format(new Date(), 'yyyy/MM/dd HH:mm', { locale: ar })}</p>

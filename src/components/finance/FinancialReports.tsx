@@ -38,6 +38,15 @@ interface FinancialReportsProps {
 }
 
 const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
+  // Fetch company settings for print header
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('company_settings').select('*').single();
+      if (error) throw error;
+      return data;
+    }
+  });
   const [reportPeriod, setReportPeriod] = useState('current_month');
   const [reportType, setReportType] = useState('profit_loss');
 
@@ -174,7 +183,11 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
         <title>${language === 'ar' ? 'التقرير المالي' : 'Financial Report'}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; direction: ${language === 'ar' ? 'rtl' : 'ltr'}; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+          .company-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+          .company-logo { max-height: 60px; margin-bottom: 10px; }
+          .company-name { font-size: 24px; font-weight: bold; margin: 0; }
+          .company-info { font-size: 12px; color: #666; margin: 5px 0; }
+          .header { text-align: center; margin-bottom: 30px; }
           .section { margin: 20px 0; }
           .section-title { font-size: 18px; font-weight: bold; margin-bottom: 10px; background: #f5f5f5; padding: 10px; }
           .row { display: flex; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid #eee; }
@@ -184,8 +197,15 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
         </style>
       </head>
       <body>
+        <div class="company-header">
+          ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" class="company-logo" alt="Logo" />` : ''}
+          <h1 class="company-name">${language === 'ar' ? companySettings?.name_ar || companySettings?.name : companySettings?.name}</h1>
+          <p class="company-info">${companySettings?.address || ''}</p>
+          <p class="company-info">${companySettings?.phone || ''} ${companySettings?.email ? `| ${companySettings.email}` : ''}</p>
+          ${companySettings?.tax_number ? `<p class="company-info">${language === 'ar' ? 'الرقم الضريبي:' : 'Tax #:'} ${companySettings.tax_number}</p>` : ''}
+        </div>
         <div class="header">
-          <h1>${language === 'ar' ? 'تقرير الأرباح والخسائر' : 'Profit & Loss Statement'}</h1>
+          <h2>${language === 'ar' ? 'تقرير الأرباح والخسائر' : 'Profit & Loss Statement'}</h2>
           <p>${language === 'ar' ? 'الفترة:' : 'Period:'} ${format(start, 'yyyy/MM/dd')} - ${format(end, 'yyyy/MM/dd')}</p>
         </div>
         
