@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign, Crown, Star } from 'lucide-react';
+import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign, Crown, Star, Keyboard } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -19,6 +19,8 @@ import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
 import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
+import POSKeyboardShortcutsHelp from '@/components/pos/POSKeyboardShortcutsHelp';
+import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Link } from 'react-router-dom';
 
 interface CartItem {
@@ -75,6 +77,8 @@ const POS: React.FC = () => {
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: categories, isLoading: categoriesLoading } = useCategories();
@@ -316,6 +320,76 @@ const POS: React.FC = () => {
     navigate('/auth');
   };
 
+  // Keyboard shortcuts handlers
+  const handleFocusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handleCloseAllModals = useCallback(() => {
+    if (showPayment) setShowPayment(false);
+    else if (showHeldOrders) setShowHeldOrders(false);
+    else if (showCustomerSelector) setShowCustomerSelector(false);
+    else if (showDeliverySelector) setShowDeliverySelector(false);
+    else if (showReturns) setShowReturns(false);
+    else if (showShiftPanel) setShowShiftPanel(false);
+    else if (showVariantSelector) setShowVariantSelector(false);
+    else if (showKeyboardHelp) setShowKeyboardHelp(false);
+  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector, showKeyboardHelp]);
+
+  const handleIncreaseQuantity = useCallback(() => {
+    if (cartItems.length > 0) {
+      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+      const item = cartItems[index];
+      if (item) {
+        updateQuantity(item.id, item.quantity + 1);
+      }
+    }
+  }, [cartItems, selectedCartItemIndex]);
+
+  const handleDecreaseQuantity = useCallback(() => {
+    if (cartItems.length > 0) {
+      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+      const item = cartItems[index];
+      if (item) {
+        updateQuantity(item.id, item.quantity - 1);
+      }
+    }
+  }, [cartItems, selectedCartItemIndex]);
+
+  // Any modal open check for disabling main shortcuts
+  const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showVariantSelector;
+
+  // Main POS shortcuts
+  const posShortcuts = getPOSShortcuts({
+    onPay: () => cartItems.length > 0 && setShowPayment(true),
+    onHold: holdOrder,
+    onClearCart: clearCart,
+    onFocusSearch: handleFocusSearch,
+    onShowHeldOrders: () => setShowHeldOrders(true),
+    onShowCustomer: () => setShowCustomerSelector(true),
+    onShowDelivery: () => setShowDeliverySelector(true),
+    onShowReturns: () => setShowReturns(true),
+    onShowShift: () => setShowShiftPanel(true),
+    onGoHome: () => navigate('/'),
+    onEscape: handleCloseAllModals,
+    onIncreaseQuantity: handleIncreaseQuantity,
+    onDecreaseQuantity: handleDecreaseQuantity,
+  });
+
+  // Add help shortcut
+  useEffect(() => {
+    const handleHelpShortcut = (e: KeyboardEvent) => {
+      if (e.key === '?' || e.key === 'F12') {
+        e.preventDefault();
+        setShowKeyboardHelp(true);
+      }
+    };
+    window.addEventListener('keydown', handleHelpShortcut);
+    return () => window.removeEventListener('keydown', handleHelpShortcut);
+  }, []);
+
+  usePOSKeyboardShortcuts(posShortcuts, !isAnyModalOpen);
+
   const isLoading = categoriesLoading || productsLoading;
 
   return (
@@ -415,6 +489,7 @@ const POS: React.FC = () => {
             size="sm"
             onClick={() => setShowHeldOrders(true)}
             className="text-white/80 hover:text-white hover:bg-white/10 relative"
+            title={language === 'ar' ? 'الطلبات المعلقة (Alt+O)' : 'Held Orders (Alt+O)'}
           >
             <Clock size={20} />
             {heldOrders.length > 0 && (
@@ -423,8 +498,18 @@ const POS: React.FC = () => {
               </span>
             )}
           </Button>
+          {/* Keyboard Shortcuts Help */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowKeyboardHelp(true)}
+            className="text-white/80 hover:text-white hover:bg-white/10"
+            title={language === 'ar' ? 'اختصارات لوحة المفاتيح (?)' : 'Keyboard Shortcuts (?)'}
+          >
+            <Keyboard size={20} />
+          </Button>
           <Link to="/">
-            <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
+            <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10" title={language === 'ar' ? 'الرئيسية (Alt+Home)' : 'Home (Alt+Home)'}>
               <Home size={20} />
             </Button>
           </Link>
@@ -558,6 +643,12 @@ const POS: React.FC = () => {
             description: `${amount.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}`
           });
         }}
+      />
+
+      {/* Keyboard Shortcuts Help */}
+      <POSKeyboardShortcutsHelp
+        isOpen={showKeyboardHelp}
+        onClose={() => setShowKeyboardHelp(false)}
       />
     </div>
   );
