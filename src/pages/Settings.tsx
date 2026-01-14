@@ -42,7 +42,9 @@ import {
   Shield,
   CreditCard,
   Bell,
-  Palette
+  Palette,
+  Flag,
+  Calendar
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
@@ -179,8 +181,68 @@ const Settings = () => {
     tax_rate: 0,
     logo_url: '',
     logo_icon_url: '',
-    phones: [] as string[]
+    phones: [] as string[],
+    country: 'YE',
+    calendar_system: 'gregorian' as 'gregorian' | 'hijri' | 'both'
   });
+
+  // Arab countries list
+  const arabCountries = [
+    { code: 'YE', name: 'Yemen', nameAr: 'اليمن' },
+    { code: 'SA', name: 'Saudi Arabia', nameAr: 'السعودية' },
+    { code: 'AE', name: 'UAE', nameAr: 'الإمارات' },
+    { code: 'KW', name: 'Kuwait', nameAr: 'الكويت' },
+    { code: 'QA', name: 'Qatar', nameAr: 'قطر' },
+    { code: 'BH', name: 'Bahrain', nameAr: 'البحرين' },
+    { code: 'OM', name: 'Oman', nameAr: 'عُمان' },
+    { code: 'IQ', name: 'Iraq', nameAr: 'العراق' },
+    { code: 'JO', name: 'Jordan', nameAr: 'الأردن' },
+    { code: 'SY', name: 'Syria', nameAr: 'سوريا' },
+    { code: 'LB', name: 'Lebanon', nameAr: 'لبنان' },
+    { code: 'PS', name: 'Palestine', nameAr: 'فلسطين' },
+    { code: 'EG', name: 'Egypt', nameAr: 'مصر' },
+    { code: 'SD', name: 'Sudan', nameAr: 'السودان' },
+    { code: 'LY', name: 'Libya', nameAr: 'ليبيا' },
+    { code: 'TN', name: 'Tunisia', nameAr: 'تونس' },
+    { code: 'DZ', name: 'Algeria', nameAr: 'الجزائر' },
+    { code: 'MA', name: 'Morocco', nameAr: 'المغرب' },
+    { code: 'MR', name: 'Mauritania', nameAr: 'موريتانيا' },
+    { code: 'SO', name: 'Somalia', nameAr: 'الصومال' },
+    { code: 'DJ', name: 'Djibouti', nameAr: 'جيبوتي' },
+    { code: 'KM', name: 'Comoros', nameAr: 'جزر القمر' },
+  ];
+
+  // Arab currencies list
+  const arabCurrencies = [
+    { code: 'YER', name: 'Yemeni Rial', nameAr: 'ريال يمني', symbol: '﷼', country: 'YE' },
+    { code: 'SAR', name: 'Saudi Riyal', nameAr: 'ريال سعودي', symbol: '﷼', country: 'SA' },
+    { code: 'AED', name: 'UAE Dirham', nameAr: 'درهم إماراتي', symbol: 'د.إ', country: 'AE' },
+    { code: 'KWD', name: 'Kuwaiti Dinar', nameAr: 'دينار كويتي', symbol: 'د.ك', country: 'KW' },
+    { code: 'QAR', name: 'Qatari Riyal', nameAr: 'ريال قطري', symbol: '﷼', country: 'QA' },
+    { code: 'BHD', name: 'Bahraini Dinar', nameAr: 'دينار بحريني', symbol: 'د.ب', country: 'BH' },
+    { code: 'OMR', name: 'Omani Rial', nameAr: 'ريال عماني', symbol: '﷼', country: 'OM' },
+    { code: 'IQD', name: 'Iraqi Dinar', nameAr: 'دينار عراقي', symbol: 'د.ع', country: 'IQ' },
+    { code: 'JOD', name: 'Jordanian Dinar', nameAr: 'دينار أردني', symbol: 'د.أ', country: 'JO' },
+    { code: 'SYP', name: 'Syrian Pound', nameAr: 'ليرة سورية', symbol: 'ل.س', country: 'SY' },
+    { code: 'LBP', name: 'Lebanese Pound', nameAr: 'ليرة لبنانية', symbol: 'ل.ل', country: 'LB' },
+    { code: 'EGP', name: 'Egyptian Pound', nameAr: 'جنيه مصري', symbol: 'ج.م', country: 'EG' },
+    { code: 'SDG', name: 'Sudanese Pound', nameAr: 'جنيه سوداني', symbol: 'ج.س', country: 'SD' },
+    { code: 'LYD', name: 'Libyan Dinar', nameAr: 'دينار ليبي', symbol: 'د.ل', country: 'LY' },
+    { code: 'TND', name: 'Tunisian Dinar', nameAr: 'دينار تونسي', symbol: 'د.ت', country: 'TN' },
+    { code: 'DZD', name: 'Algerian Dinar', nameAr: 'دينار جزائري', symbol: 'د.ج', country: 'DZ' },
+    { code: 'MAD', name: 'Moroccan Dirham', nameAr: 'درهم مغربي', symbol: 'د.م', country: 'MA' },
+    { code: 'MRU', name: 'Mauritanian Ouguiya', nameAr: 'أوقية موريتانية', symbol: 'أ.م', country: 'MR' },
+    { code: 'SOS', name: 'Somali Shilling', nameAr: 'شلن صومالي', symbol: 'S', country: 'SO' },
+    { code: 'USD', name: 'US Dollar', nameAr: 'دولار أمريكي', symbol: '$', country: null },
+    { code: 'EUR', name: 'Euro', nameAr: 'يورو', symbol: '€', country: null },
+  ];
+
+  // Calendar systems
+  const calendarSystems = [
+    { id: 'gregorian', name: 'Gregorian Calendar', nameAr: 'التاريخ الميلادي' },
+    { id: 'hijri', name: 'Hijri Calendar', nameAr: 'التاريخ الهجري' },
+    { id: 'both', name: 'Both Calendars', nameAr: 'الميلادي والهجري معاً' },
+  ];
 
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingLogoIcon, setUploadingLogoIcon] = useState(false);
@@ -201,7 +263,9 @@ const Settings = () => {
         tax_rate: companySettings.tax_rate || 0,
         logo_url: (companySettings as any).logo_url || '',
         logo_icon_url: (companySettings as any).logo_icon_url || '',
-        phones: (companySettings as any).phones || []
+        phones: (companySettings as any).phones || [],
+        country: (companySettings as any).country || 'YE',
+        calendar_system: (companySettings as any).calendar_system || 'gregorian'
       });
     }
   }, [companySettings]);
@@ -263,13 +327,8 @@ const Settings = () => {
     }));
   };
 
-  const currencies = [
-    { code: 'YER', name: 'Yemeni Rial', nameAr: 'ريال يمني', symbol: '﷼' },
-    { code: 'SAR', name: 'Saudi Riyal', nameAr: 'ريال سعودي', symbol: '﷼' },
-    { code: 'USD', name: 'US Dollar', nameAr: 'دولار أمريكي', symbol: '$' },
-    { code: 'EUR', name: 'Euro', nameAr: 'يورو', symbol: '€' },
-    { code: 'AED', name: 'UAE Dirham', nameAr: 'درهم إماراتي', symbol: 'د.إ' }
-  ];
+  // Use arabCurrencies for currency selection
+  const currencies = arabCurrencies;
 
   const handleSaveCompany = async () => {
     if (!companySettings?.id) return;
@@ -518,6 +577,134 @@ const Settings = () => {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Regional Settings */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Flag size={18} />
+                  {language === 'ar' ? 'الإعدادات الإقليمية' : 'Regional Settings'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Country */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Flag size={14} />
+                      {language === 'ar' ? 'الدولة' : 'Country'}
+                    </Label>
+                    <Select 
+                      value={companyForm.country} 
+                      onValueChange={(val) => setCompanyForm({ ...companyForm, country: val })}
+                      disabled={!isEditingCompany}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {arabCountries.map(country => (
+                          <SelectItem key={country.code} value={country.code}>
+                            <span className="flex items-center gap-2">
+                              <span>{language === 'ar' ? country.nameAr : country.name}</span>
+                              <span className="text-muted-foreground text-xs">({country.code})</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Default Currency */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <DollarSign size={14} />
+                      {language === 'ar' ? 'العملة الافتراضية' : 'Default Currency'}
+                    </Label>
+                    <Select 
+                      value={companyForm.default_currency} 
+                      onValueChange={(val) => setCompanyForm({ ...companyForm, default_currency: val })}
+                      disabled={!isEditingCompany}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {arabCurrencies.map(currency => (
+                          <SelectItem key={currency.code} value={currency.code}>
+                            <span className="flex items-center gap-2">
+                              <span className="font-bold">{currency.symbol}</span>
+                              <span>{language === 'ar' ? currency.nameAr : currency.name}</span>
+                              <span className="text-muted-foreground text-xs">({currency.code})</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Calendar System */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Calendar size={14} />
+                      {language === 'ar' ? 'نظام التاريخ' : 'Calendar System'}
+                    </Label>
+                    <Select 
+                      value={companyForm.calendar_system} 
+                      onValueChange={(val: 'gregorian' | 'hijri' | 'both') => setCompanyForm({ ...companyForm, calendar_system: val })}
+                      disabled={!isEditingCompany}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {calendarSystems.map(system => (
+                          <SelectItem key={system.id} value={system.id}>
+                            {language === 'ar' ? system.nameAr : system.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Visual representation of selected options */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                  <div className={cn(
+                    "p-4 rounded-lg border-2 text-center transition-all",
+                    isEditingCompany ? "border-primary bg-primary/5" : "border-border bg-muted/20"
+                  )}>
+                    <p className="text-2xl mb-1">🏴</p>
+                    <p className="text-sm font-medium">
+                      {arabCountries.find(c => c.code === companyForm.country)?.[language === 'ar' ? 'nameAr' : 'name'] || companyForm.country}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الدولة' : 'Country'}</p>
+                  </div>
+                  <div className={cn(
+                    "p-4 rounded-lg border-2 text-center transition-all",
+                    isEditingCompany ? "border-primary bg-primary/5" : "border-border bg-muted/20"
+                  )}>
+                    <p className="text-2xl mb-1">
+                      {arabCurrencies.find(c => c.code === companyForm.default_currency)?.symbol || '$'}
+                    </p>
+                    <p className="text-sm font-medium">
+                      {arabCurrencies.find(c => c.code === companyForm.default_currency)?.[language === 'ar' ? 'nameAr' : 'name'] || companyForm.default_currency}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? 'العملة' : 'Currency'}</p>
+                  </div>
+                  <div className={cn(
+                    "p-4 rounded-lg border-2 text-center transition-all",
+                    isEditingCompany ? "border-primary bg-primary/5" : "border-border bg-muted/20"
+                  )}>
+                    <p className="text-2xl mb-1">📅</p>
+                    <p className="text-sm font-medium">
+                      {calendarSystems.find(s => s.id === companyForm.calendar_system)?.[language === 'ar' ? 'nameAr' : 'name'] || companyForm.calendar_system}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? 'التقويم' : 'Calendar'}</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
