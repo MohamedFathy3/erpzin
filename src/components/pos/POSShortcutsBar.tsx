@@ -21,7 +21,7 @@ interface ShortcutItem {
   icon: React.ReactNode;
   action: () => void;
   disabled?: boolean;
-  variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger';
+  colorClass: string;
 }
 
 interface POSShortcutsBarProps {
@@ -65,7 +65,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <CreditCard size={16} />,
       action: onPay,
       disabled: cartItemsCount === 0,
-      variant: 'success'
+      colorClass: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30'
     },
     {
       key: 'F2',
@@ -74,7 +74,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <Pause size={16} />,
       action: onHold,
       disabled: cartItemsCount === 0,
-      variant: 'warning'
+      colorClass: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30'
     },
     {
       key: 'F3',
@@ -82,7 +82,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'المعلقة',
       icon: <Clock size={16} />,
       action: onShowHeldOrders,
-      variant: heldOrdersCount > 0 ? 'warning' : 'default'
+      colorClass: 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border-amber-500/30'
     },
     {
       key: 'F4',
@@ -90,6 +90,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'العميل',
       icon: <User size={16} />,
       action: onShowCustomer,
+      colorClass: 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border-cyan-500/30'
     },
     {
       key: 'F5',
@@ -97,6 +98,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'التوصيل',
       icon: <Truck size={16} />,
       action: onShowDelivery,
+      colorClass: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30'
     },
     {
       key: 'F6',
@@ -104,6 +106,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'مرتجع',
       icon: <RotateCcw size={16} />,
       action: onShowReturns,
+      colorClass: 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border-rose-500/30'
     },
     {
       key: 'F7',
@@ -111,7 +114,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'الوردية',
       icon: <DollarSign size={16} />,
       action: onShowShift,
-      variant: hasShift ? 'primary' : 'default'
+      colorClass: 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-violet-500/30'
     },
     {
       key: 'F8',
@@ -120,7 +123,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <Trash2 size={16} />,
       action: onClearCart,
       disabled: cartItemsCount === 0,
-      variant: 'danger'
+      colorClass: 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
     },
     {
       key: 'F9',
@@ -128,6 +131,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'بحث',
       icon: <Search size={16} />,
       action: onFocusSearch,
+      colorClass: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30'
     },
     {
       key: 'F12',
@@ -135,26 +139,15 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'الرئيسية',
       icon: <Home size={16} />,
       action: onGoHome,
+      colorClass: 'bg-slate-500/20 text-slate-300 hover:bg-slate-500/30 border-slate-500/30'
     },
   ];
 
-  const getVariantClasses = (variant: string = 'default', disabled?: boolean) => {
+  const getButtonClasses = (colorClass: string, disabled?: boolean) => {
     if (disabled) {
-      return 'bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50';
+      return 'bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50 border-muted';
     }
-    
-    switch (variant) {
-      case 'success':
-        return 'bg-success/20 text-success hover:bg-success/30 border-success/30';
-      case 'warning':
-        return 'bg-warning/20 text-warning hover:bg-warning/30 border-warning/30';
-      case 'danger':
-        return 'bg-destructive/20 text-destructive hover:bg-destructive/30 border-destructive/30';
-      case 'primary':
-        return 'bg-primary/20 text-primary hover:bg-primary/30 border-primary/30';
-      default:
-        return 'bg-muted/50 text-foreground hover:bg-muted border-border';
-    }
+    return colorClass;
   };
 
   return (
@@ -168,7 +161,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
             "flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-all duration-150",
             "text-xs font-medium whitespace-nowrap",
             "focus:outline-none focus:ring-2 focus:ring-primary/50",
-            getVariantClasses(shortcut.variant, shortcut.disabled)
+            getButtonClasses(shortcut.colorClass, shortcut.disabled)
           )}
         >
           <span className="px-1.5 py-0.5 bg-black/30 rounded text-[10px] font-bold text-white/90">
