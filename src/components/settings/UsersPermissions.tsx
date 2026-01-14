@@ -150,7 +150,8 @@ const UsersPermissions = () => {
     is_active: true,
     branch_id: '',
     warehouse_id: '',
-    role: 'viewer' as AppRole
+    role: 'viewer' as AppRole,
+    preferred_language: 'ar' as 'ar' | 'en'
   });
   const [newUserForm, setNewUserForm] = useState({
     username: '',
@@ -160,7 +161,8 @@ const UsersPermissions = () => {
     phone: '',
     branch_id: '',
     warehouse_id: '',
-    role: 'viewer' as AppRole
+    role: 'viewer' as AppRole,
+    preferred_language: 'ar' as 'ar' | 'en'
   });
   const [newRoleForm, setNewRoleForm] = useState({
     name: '',
@@ -657,7 +659,8 @@ const UsersPermissions = () => {
           full_name_ar: data.full_name_ar || null,
           phone: data.phone || null,
           branch_id: data.branch_id || null,
-          warehouse_id: data.warehouse_id || null
+          warehouse_id: data.warehouse_id || null,
+          preferred_language: data.preferred_language || 'ar'
         })
         .eq('id', authData.user.id);
 
@@ -677,7 +680,7 @@ const UsersPermissions = () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
       toast({ title: t.userAdded });
       setIsAddUserDialogOpen(false);
-      setNewUserForm({ username: '', password: '', full_name: '', full_name_ar: '', phone: '', branch_id: '', warehouse_id: '', role: 'viewer' });
+      setNewUserForm({ username: '', password: '', full_name: '', full_name_ar: '', phone: '', branch_id: '', warehouse_id: '', role: 'viewer', preferred_language: 'ar' });
     },
     onError: (error: any) => {
       toast({ title: error.message || (language === 'ar' ? 'خطأ في إضافة المستخدم' : 'Error adding user'), variant: 'destructive' });
@@ -767,7 +770,8 @@ const UsersPermissions = () => {
       is_active: user.is_active ?? true,
       branch_id: user.branch_id || '',
       warehouse_id: user.warehouse_id || '',
-      role: getUserRole(user.id)
+      role: getUserRole(user.id),
+      preferred_language: ((user as any).preferred_language as 'ar' | 'en') || 'ar'
     });
     setIsEditDialogOpen(true);
   };
@@ -783,8 +787,9 @@ const UsersPermissions = () => {
         username: editForm.username || null,
         is_active: editForm.is_active,
         branch_id: editForm.branch_id || null,
-        warehouse_id: editForm.warehouse_id || null
-      }
+        warehouse_id: editForm.warehouse_id || null,
+        preferred_language: editForm.preferred_language
+      } as any
     });
     if (editForm.role !== getUserRole(selectedUser.id)) {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: editForm.role });
@@ -1418,9 +1423,23 @@ const UsersPermissions = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm(prev => ({ ...prev, is_active: v }))} />
-              <Label>{editForm.is_active ? t.active : t.inactive}</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'اللغة الافتراضية' : 'Default Language'}</Label>
+                <Select value={editForm.preferred_language} onValueChange={(v: 'ar' | 'en') => setEditForm(prev => ({ ...prev, preferred_language: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ar">العربية 🇾🇪</SelectItem>
+                    <SelectItem value="en">English 🇺🇸</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm(prev => ({ ...prev, is_active: v }))} />
+                <Label>{editForm.is_active ? t.active : t.inactive}</Label>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -1539,6 +1558,18 @@ const UsersPermissions = () => {
                       {language === 'ar' ? wh.name_ar || wh.name : wh.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'اللغة الافتراضية' : 'Default Language'}</Label>
+              <Select value={newUserForm.preferred_language} onValueChange={(v: 'ar' | 'en') => setNewUserForm(prev => ({ ...prev, preferred_language: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ar">العربية 🇾🇪</SelectItem>
+                  <SelectItem value="en">English 🇺🇸</SelectItem>
                 </SelectContent>
               </Select>
             </div>
