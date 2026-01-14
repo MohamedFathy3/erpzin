@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   Plus, 
   Search, 
@@ -33,6 +34,7 @@ const HR = () => {
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('employees');
+  const [employeeFilters, setEmployeeFilters] = useState<FilterValues>({});
   const [showEmployeeDialog, setShowEmployeeDialog] = useState(false);
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [newEmployee, setNewEmployee] = useState({
@@ -513,10 +515,22 @@ const HR = () => {
           <TabsContent value="employees" className="mt-4">
             <Card className="card-elevated">
               <CardHeader className="pb-3">
-                <div className="relative max-w-sm">
-                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input placeholder={t.search} className="ps-10" />
-                </div>
+                <AdvancedFilter
+                  fields={[
+                    { key: 'search', label: 'Name/Code', labelAr: 'الاسم/الكود', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+                    { key: 'department', label: 'Department', labelAr: 'القسم', type: 'text' },
+                    { key: 'position', label: 'Position', labelAr: 'المنصب', type: 'text' },
+                    { key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
+                      { value: 'active', label: 'Active', labelAr: 'نشط' },
+                      { value: 'inactive', label: 'Inactive', labelAr: 'غير نشط' },
+                    ]},
+                    { key: 'salary', label: 'Salary', labelAr: 'الراتب', type: 'numberRange' },
+                  ]}
+                  values={employeeFilters}
+                  onChange={setEmployeeFilters}
+                  onReset={() => setEmployeeFilters({})}
+                  language={language}
+                />
               </CardHeader>
               <CardContent>
                 <Table>

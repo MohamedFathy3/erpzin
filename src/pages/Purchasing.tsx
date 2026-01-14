@@ -15,6 +15,7 @@ import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
 import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
 import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
 import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
+import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { cn } from '@/lib/utils';
 import { 
   Plus, Search, Truck, Package, FileText, Building2, Phone, Mail, User, 
@@ -24,8 +25,9 @@ import {
 const Purchasing = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('invoices');
+  const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
+  const [supplierFilters, setSupplierFilters] = useState<FilterValues>({});
   
   // Modals
   const [showSupplierForm, setShowSupplierForm] = useState(false);
@@ -44,14 +46,53 @@ const Purchasing = () => {
     }
   });
 
+  // Invoice filter fields
+  const invoiceFilterFields: FilterField[] = [
+    { key: 'search', label: 'Invoice/Supplier', labelAr: 'الفاتورة/المورد', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
+      { value: 'paid', label: 'Paid', labelAr: 'مدفوعة' },
+      { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
+      { value: 'unpaid', label: 'Unpaid', labelAr: 'غير مدفوعة' },
+    ]},
+    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+  ];
+
+  // Supplier filter fields
+  const supplierFilterFields: FilterField[] = [
+    { key: 'search', label: 'Name/Phone', labelAr: 'الاسم/الهاتف', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'balance', label: 'Balance', labelAr: 'الرصيد', type: 'numberRange' },
+  ];
+
   // Fetch purchase invoices
   const { data: invoices = [] } = useQuery({
-    queryKey: ['purchase_invoices'],
+    queryKey: ['purchase_invoices', invoiceFilters],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('purchase_invoices')
         .select('*, suppliers(name, name_ar)')
         .order('created_at', { ascending: false });
+      
+      if (invoiceFilters.search) {
+        query = query.or(`invoice_number.ilike.%${invoiceFilters.search}%`);
+      }
+      if (invoiceFilters.payment_status && invoiceFilters.payment_status !== 'all') {
+        query = query.eq('payment_status', invoiceFilters.payment_status);
+      }
+      if (invoiceFilters.date_from) {
+        query = query.gte('invoice_date', invoiceFilters.date_from.split('T')[0]);
+      }
+      if (invoiceFilters.date_to) {
+        query = query.lte('invoice_date', invoiceFilters.date_to.split('T')[0]);
+      }
+      if (invoiceFilters.amount_min) {
+        query = query.gte('total_amount', Number(invoiceFilters.amount_min));
+      }
+      if (invoiceFilters.amount_max) {
+        query = query.lte('total_amount', Number(invoiceFilters.amount_max));
+      }
+      
+      const { data, error } = await query.limit(100);
       if (error) throw error;
       return data;
     }
@@ -164,12 +205,13 @@ const Purchasing = () => {
           <TabsContent value="invoices" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-4">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                    <Input placeholder={language === 'ar' ? 'بحث...' : 'Search...'} className="ps-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                  </div>
-                </div>
+                <AdvancedFilter
+                  fields={invoiceFilterFields}
+                  values={invoiceFilters}
+                  onChange={setInvoiceFilters}
+                  onReset={() => setInvoiceFilters({})}
+                  language={language}
+                />
               </CardHeader>
               <CardContent>
                 <Table>
@@ -215,20 +257,34 @@ const Purchasing = () => {
           <TabsContent value="suppliers" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                    <Input placeholder={language === 'ar' ? 'بحث...' : 'Search...'} className="ps-10" />
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <AdvancedFilter
+                      fields={supplierFilterFields}
+                      values={supplierFilters}
+                      onChange={setSupplierFilters}
+                      onReset={() => setSupplierFilters({})}
+                      language={language}
+                      className="flex-1"
+                    />
+                    <Button variant="outline" onClick={() => { setSelectedSupplier(null); setShowSupplierForm(true); }}>
+                      <Plus size={18} className="me-2" />
+                      {language === 'ar' ? 'مورد جديد' : 'New Supplier'}
+                    </Button>
                   </div>
-                  <Button variant="outline" onClick={() => { setSelectedSupplier(null); setShowSupplierForm(true); }}>
-                    <Plus size={18} className="me-2" />
-                    {language === 'ar' ? 'مورد جديد' : 'New Supplier'}
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {suppliers.map((supplier: any) => (
+                  {suppliers.filter((s: any) => {
+                    if (supplierFilters.search) {
+                      const search = supplierFilters.search.toLowerCase();
+                      if (!s.name?.toLowerCase().includes(search) && !s.name_ar?.includes(search) && !s.phone?.includes(search)) return false;
+                    }
+                    if (supplierFilters.balance_min && Number(s.balance || 0) < Number(supplierFilters.balance_min)) return false;
+                    if (supplierFilters.balance_max && Number(s.balance || 0) > Number(supplierFilters.balance_max)) return false;
+                    return true;
+                  }).map((supplier: any) => (
                     <Card key={supplier.id} className="border hover:shadow-md transition-shadow cursor-pointer" onClick={() => { setSelectedSupplier(supplier); setShowSupplierDetails(true); }}>
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">
