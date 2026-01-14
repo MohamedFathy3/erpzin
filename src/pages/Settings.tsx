@@ -103,15 +103,6 @@ const Settings = () => {
       category: 'business'
     },
     { 
-      id: 'currency', 
-      icon: DollarSign, 
-      label: 'Currency & Taxes', 
-      labelAr: 'العملات والضرائب',
-      description: 'Financial settings',
-      descriptionAr: 'الإعدادات المالية',
-      category: 'business'
-    },
-    { 
       id: 'payment', 
       icon: CreditCard, 
       label: 'Payment Methods', 
