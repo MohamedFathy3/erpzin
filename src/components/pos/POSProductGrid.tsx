@@ -42,20 +42,20 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
   });
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
       {filteredProducts.map((product) => (
         <button
           key={product.id}
           onClick={() => onAddToCart(product)}
           disabled={product.stock === 0}
           className={cn(
-            'relative flex flex-col rounded-xl overflow-hidden transition-all duration-200',
-            'bg-card border border-border hover:border-primary hover:shadow-lg',
+            'relative flex flex-col rounded-lg overflow-hidden transition-all duration-200',
+            'bg-card border border-border hover:border-primary hover:shadow-md',
             'active:scale-95 touch-manipulation',
             product.stock === 0 && 'opacity-50 cursor-not-allowed'
           )}
         >
-          {/* Product Image */}
+          {/* Product Image - Compact */}
           <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
             {product.image ? (
               <img 
@@ -68,38 +68,37 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
                 }}
               />
             ) : null}
-            <div className={cn("text-4xl text-muted-foreground/30", product.image && "hidden")}>👕</div>
+            <div className={cn("text-2xl sm:text-3xl text-muted-foreground/30", product.image && "hidden")}>👕</div>
           </div>
           
-          {/* Stock Badge */}
+          {/* Stock Badge - Smaller */}
           {product.stock <= 5 && product.stock > 0 && (
-            <span className="absolute top-2 right-2 px-2 py-0.5 text-xs font-medium rounded-full bg-warning/20 text-warning">
+            <span className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-warning/20 text-warning">
               {product.stock}
             </span>
           )}
           {product.stock === 0 && (
-            <span className="absolute top-2 right-2 px-2 py-0.5 text-xs font-medium rounded-full bg-destructive/20 text-destructive">
+            <span className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-destructive/20 text-destructive">
               {language === 'ar' ? 'نفذ' : 'Out'}
             </span>
           )}
           
-          {/* Product Info */}
-          <div className="p-3 text-start">
-            <p className="font-medium text-sm text-foreground line-clamp-2 min-h-[2.5rem]">
+          {/* Product Info - Compact */}
+          <div className="p-1.5 sm:p-2 text-start">
+            <p className="font-medium text-[11px] sm:text-xs text-foreground line-clamp-1 leading-tight">
               {language === 'ar' ? product.nameAr : product.name}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">{product.sku}</p>
-            <p className="font-bold text-primary mt-2 text-base">
-              {product.price.toLocaleString()} <span className="text-xs">SAR</span>
+            <p className="font-bold text-primary mt-0.5 text-xs sm:text-sm">
+              {product.price.toLocaleString()}
             </p>
           </div>
         </button>
       ))}
       
       {filteredProducts.length === 0 && (
-        <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground">
-          <span className="text-4xl mb-2">🔍</span>
-          <p>{language === 'ar' ? 'لا توجد منتجات' : 'No products found'}</p>
+        <div className="col-span-full flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <span className="text-3xl mb-2">🔍</span>
+          <p className="text-sm">{language === 'ar' ? 'لا توجد منتجات' : 'No products found'}</p>
         </div>
       )}
     </div>
