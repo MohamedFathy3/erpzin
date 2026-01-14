@@ -1469,6 +1469,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           phone: string | null
+          preferred_language: string | null
           updated_at: string
           username: string | null
           warehouse_id: string | null
@@ -1483,6 +1484,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string
           username?: string | null
           warehouse_id?: string | null
@@ -1497,6 +1499,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string
           username?: string | null
           warehouse_id?: string | null
