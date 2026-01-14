@@ -138,8 +138,8 @@ const DataManagement = () => {
       deleteData: 'Delete Data',
       confirmDelete: 'Confirm Delete',
       cancel: 'Cancel',
-      typeToConfirm: 'Type the confirmation code to proceed:',
-      confirmationCode: 'Confirmation Code',
+      enterPassword: 'Enter your password to confirm:',
+      password: 'Password',
       deleting: 'Deleting...',
       deleteSuccess: 'Data deleted successfully',
       deleteError: 'Error deleting data',
@@ -147,7 +147,7 @@ const DataManagement = () => {
       affectedTables: 'Affected Tables',
       dangerZone: 'Danger Zone',
       permanentAction: 'This action is permanent and cannot be undone!',
-      requiresConfirmation: 'Requires confirmation code:',
+      passwordRequired: 'Your admin password is required',
       deleteComplete: 'Delete Complete',
       someErrors: 'Some errors occurred'
     },
@@ -159,8 +159,8 @@ const DataManagement = () => {
       deleteData: 'حذف البيانات',
       confirmDelete: 'تأكيد الحذف',
       cancel: 'إلغاء',
-      typeToConfirm: 'اكتب رمز التأكيد للمتابعة:',
-      confirmationCode: 'رمز التأكيد',
+      enterPassword: 'أدخل كلمة المرور للتأكيد:',
+      password: 'كلمة المرور',
       deleting: 'جاري الحذف...',
       deleteSuccess: 'تم حذف البيانات بنجاح',
       deleteError: 'خطأ في حذف البيانات',
@@ -168,7 +168,7 @@ const DataManagement = () => {
       affectedTables: 'الجداول المتأثرة',
       dangerZone: 'منطقة الخطر',
       permanentAction: 'هذا الإجراء دائم ولا يمكن التراجع عنه!',
-      requiresConfirmation: 'يتطلب رمز التأكيد:',
+      passwordRequired: 'كلمة مرور المدير مطلوبة',
       deleteComplete: 'اكتمل الحذف',
       someErrors: 'حدثت بعض الأخطاء'
     }
@@ -209,10 +209,10 @@ const DataManagement = () => {
   const handleDelete = async () => {
     if (!selectedOption) return;
     
-    const expectedCode = getExpectedCode();
-    if (confirmationInput !== expectedCode) {
+    // Validate password is entered
+    if (!confirmationInput.trim()) {
       toast({ 
-        title: language === 'ar' ? 'رمز التأكيد غير صحيح' : 'Invalid confirmation code', 
+        title: language === 'ar' ? 'يرجى إدخال كلمة المرور' : 'Please enter your password', 
         variant: 'destructive' 
       });
       return;
@@ -222,6 +222,24 @@ const DataManagement = () => {
     setDeleteResult(null);
 
     try {
+      // First verify the admin's password by re-authenticating
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        throw new Error(language === 'ar' ? 'لم يتم العثور على المستخدم' : 'User not found');
+      }
+
+      // Re-authenticate with password to verify it's correct
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: confirmationInput
+      });
+
+      if (authError) {
+        throw new Error(language === 'ar' ? 'كلمة المرور غير صحيحة' : 'Invalid password');
+      }
+
+      // Password verified, proceed with deletion
+      const expectedCode = getExpectedCode();
       const { data, error } = await supabase.functions.invoke('delete-system-data', {
         body: { 
           deleteType: selectedOption.id, 
@@ -365,19 +383,17 @@ const DataManagement = () => {
               </Alert>
 
               <div className="space-y-2">
-                <Label>{t.typeToConfirm}</Label>
-                <div className="p-2 bg-muted rounded-md font-mono text-sm text-center">
-                  {getExpectedCode()}
-                </div>
+                <Label>{t.enterPassword}</Label>
+                <p className="text-sm text-muted-foreground">{t.passwordRequired}</p>
               </div>
 
               <div className="space-y-2">
-                <Label>{t.confirmationCode}</Label>
+                <Label>{t.password}</Label>
                 <Input
+                  type="password"
                   value={confirmationInput}
                   onChange={(e) => setConfirmationInput(e.target.value)}
-                  placeholder={getExpectedCode()}
-                  className="font-mono"
+                  placeholder="••••••••"
                   dir="ltr"
                 />
               </div>
@@ -415,7 +431,7 @@ const DataManagement = () => {
                 <Button 
                   variant="destructive" 
                   onClick={handleDelete}
-                  disabled={confirmationInput !== getExpectedCode() || isDeleting}
+                  disabled={!confirmationInput.trim() || isDeleting}
                 >
                   {isDeleting ? (
                     <>
