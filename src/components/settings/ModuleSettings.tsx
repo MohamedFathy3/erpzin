@@ -112,6 +112,7 @@ const ModuleSettings = () => {
     workingHoursPerDay: 8,
     enableAttendance: true,
     attendanceMethod: 'manual',
+    enableExcelImportAttendance: true,
     enableOvertime: true,
     overtimeRate: 1.5,
     enableLeaveManagement: true,
@@ -120,7 +121,11 @@ const ModuleSettings = () => {
     payrollCycle: 'monthly',
     enableAdvances: true,
     maxAdvancePercent: 50,
-    enablePerformanceReviews: false
+    enablePerformanceReviews: false,
+    enableSalesCommissions: true,
+    defaultCommissionRate: 2,
+    enableDeliveryPersons: true,
+    trackDeliveryStatus: true
   });
 
   // CRM Settings
@@ -137,6 +142,35 @@ const ModuleSettings = () => {
     sendSMSNotifications: false,
     sendEmailNotifications: false,
     enableCustomerFeedback: false
+  });
+
+  // Sales Settings
+  const [salesSettings, setSalesSettings] = useState({
+    autoGenerateInvoiceNumbers: true,
+    invoicePrefix: 'INV',
+    enableSalesmen: true,
+    enableSalesReturns: true,
+    returnApprovalRequired: false,
+    enableDueDates: true,
+    defaultDueDays: 30,
+    enablePartialPayments: true,
+    trackSalesmanPerformance: true,
+    enableQuotations: true,
+    quotationValidityDays: 7
+  });
+
+  // Reports Settings
+  const [reportsSettings, setReportsSettings] = useState({
+    enableReportPreview: true,
+    defaultExportFormat: 'excel',
+    enableReportScheduling: false,
+    enableEmailReports: false,
+    showReportSummary: true,
+    enableCustomReports: true,
+    retainReportsDays: 90,
+    enableHRReports: true,
+    enableSalesCommissionReports: true,
+    enableDeliveryReports: true
   });
 
   const handleSave = (module: string) => {
@@ -159,19 +193,23 @@ const ModuleSettings = () => {
       inventory: { en: 'Inventory', ar: 'المخزون' },
       finance: { en: 'Finance', ar: 'المالية' },
       purchasing: { en: 'Purchasing', ar: 'المشتريات' },
+      sales: { en: 'Sales', ar: 'المبيعات' },
       hr: { en: 'Human Resources', ar: 'الموارد البشرية' },
-      crm: { en: 'Customer Relations', ar: 'العملاء' }
+      crm: { en: 'Customer Relations', ar: 'العملاء' },
+      reports: { en: 'Reports', ar: 'التقارير' }
     };
-    return language === 'ar' ? names[module].ar : names[module].en;
+    return language === 'ar' ? names[module]?.ar : names[module]?.en;
   };
 
   const modules = [
     { id: 'pos', icon: ShoppingCart, label: language === 'ar' ? 'نقاط البيع' : 'POS' },
+    { id: 'sales', icon: Receipt, label: language === 'ar' ? 'المبيعات' : 'Sales' },
     { id: 'inventory', icon: Package, label: language === 'ar' ? 'المخزون' : 'Inventory' },
     { id: 'finance', icon: DollarSign, label: language === 'ar' ? 'المالية' : 'Finance' },
     { id: 'purchasing', icon: Truck, label: language === 'ar' ? 'المشتريات' : 'Purchasing' },
     { id: 'hr', icon: Users, label: language === 'ar' ? 'الموارد البشرية' : 'HR' },
-    { id: 'crm', icon: UserCheck, label: language === 'ar' ? 'العملاء' : 'CRM' }
+    { id: 'crm', icon: UserCheck, label: language === 'ar' ? 'العملاء' : 'CRM' },
+    { id: 'reports', icon: FileText, label: language === 'ar' ? 'التقارير' : 'Reports' }
   ];
 
   const SettingRow = ({ 
@@ -197,7 +235,7 @@ const ModuleSettings = () => {
   return (
     <div className="space-y-6">
       <Tabs value={activeModule} onValueChange={setActiveModule}>
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 gap-1">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 gap-1">
           {modules.map((module) => (
             <TabsTrigger key={module.id} value={module.id} className="flex items-center gap-2">
               <module.icon size={16} />
@@ -987,6 +1025,25 @@ const ModuleSettings = () => {
 
               <Separator />
 
+              {/* Excel Import Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <FileText size={16} />
+                  {language === 'ar' ? 'استيراد البيانات' : 'Data Import'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل استيراد الحضور من Excel' : 'Enable Excel Attendance Import'}
+                  description={language === 'ar' ? 'السماح باستيراد سجلات الحضور من ملفات Excel' : 'Allow importing attendance records from Excel files'}
+                >
+                  <Switch 
+                    checked={hrSettings.enableExcelImportAttendance}
+                    onCheckedChange={(val) => setHrSettings({ ...hrSettings, enableExcelImportAttendance: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
               {/* Leave & Payroll */}
               <div className="space-y-2">
                 <h4 className="font-semibold flex items-center gap-2">
@@ -1053,6 +1110,57 @@ const ModuleSettings = () => {
                       className="w-20"
                       value={hrSettings.maxAdvancePercent}
                       onChange={(e) => setHrSettings({ ...hrSettings, maxAdvancePercent: Number(e.target.value) })}
+                    />
+                  </SettingRow>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Commissions & Delivery */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Truck size={16} />
+                  {language === 'ar' ? 'العمولات والتوصيل' : 'Commissions & Delivery'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل عمولات المبيعات' : 'Enable Sales Commissions'}
+                  description={language === 'ar' ? 'حساب عمولات مندوبي المبيعات' : 'Calculate salesman commissions'}
+                >
+                  <Switch 
+                    checked={hrSettings.enableSalesCommissions}
+                    onCheckedChange={(val) => setHrSettings({ ...hrSettings, enableSalesCommissions: val })}
+                  />
+                </SettingRow>
+                {hrSettings.enableSalesCommissions && (
+                  <SettingRow 
+                    label={language === 'ar' ? 'نسبة العمولة الافتراضية (%)' : 'Default Commission Rate (%)'}
+                  >
+                    <Input 
+                      type="number"
+                      step="0.5"
+                      className="w-20"
+                      value={hrSettings.defaultCommissionRate}
+                      onChange={(e) => setHrSettings({ ...hrSettings, defaultCommissionRate: Number(e.target.value) })}
+                    />
+                  </SettingRow>
+                )}
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل مناديب التوصيل' : 'Enable Delivery Persons'}
+                  description={language === 'ar' ? 'إدارة مناديب التوصيل وتتبعهم' : 'Manage and track delivery persons'}
+                >
+                  <Switch 
+                    checked={hrSettings.enableDeliveryPersons}
+                    onCheckedChange={(val) => setHrSettings({ ...hrSettings, enableDeliveryPersons: val })}
+                  />
+                </SettingRow>
+                {hrSettings.enableDeliveryPersons && (
+                  <SettingRow 
+                    label={language === 'ar' ? 'تتبع حالة التوصيل' : 'Track Delivery Status'}
+                  >
+                    <Switch 
+                      checked={hrSettings.trackDeliveryStatus}
+                      onCheckedChange={(val) => setHrSettings({ ...hrSettings, trackDeliveryStatus: val })}
                     />
                   </SettingRow>
                 )}
@@ -1205,6 +1313,313 @@ const ModuleSettings = () => {
                   <Switch 
                     checked={crmSettings.sendEmailNotifications}
                     onCheckedChange={(val) => setCrmSettings({ ...crmSettings, sendEmailNotifications: val })}
+                  />
+                </SettingRow>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Sales Settings */}
+        <TabsContent value="sales" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt size={20} />
+                    {language === 'ar' ? 'إعدادات المبيعات' : 'Sales Settings'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'ar' ? 'تخصيص إعدادات فواتير المبيعات والمندوبين' : 'Customize sales invoices and salesmen settings'}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleReset('sales')}>
+                    <RotateCcw size={16} className="me-2" />
+                    {language === 'ar' ? 'إعادة تعيين' : 'Reset'}
+                  </Button>
+                  <Button onClick={() => handleSave('sales')}>
+                    <Save size={16} className="me-2" />
+                    {language === 'ar' ? 'حفظ' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Invoice Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <FileText size={16} />
+                  {language === 'ar' ? 'إعدادات الفواتير' : 'Invoice Settings'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'إنشاء أرقام الفواتير تلقائياً' : 'Auto Generate Invoice Numbers'}
+                >
+                  <Switch 
+                    checked={salesSettings.autoGenerateInvoiceNumbers}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, autoGenerateInvoiceNumbers: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'بادئة الفواتير' : 'Invoice Prefix'}
+                >
+                  <Input 
+                    className="w-24"
+                    value={salesSettings.invoicePrefix}
+                    onChange={(e) => setSalesSettings({ ...salesSettings, invoicePrefix: e.target.value })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تاريخ الاستحقاق' : 'Enable Due Dates'}
+                >
+                  <Switch 
+                    checked={salesSettings.enableDueDates}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, enableDueDates: val })}
+                  />
+                </SettingRow>
+                {salesSettings.enableDueDates && (
+                  <SettingRow 
+                    label={language === 'ar' ? 'فترة الاستحقاق الافتراضية (أيام)' : 'Default Due Days'}
+                  >
+                    <Input 
+                      type="number"
+                      className="w-20"
+                      value={salesSettings.defaultDueDays}
+                      onChange={(e) => setSalesSettings({ ...salesSettings, defaultDueDays: Number(e.target.value) })}
+                    />
+                  </SettingRow>
+                )}
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل الدفعات الجزئية' : 'Enable Partial Payments'}
+                >
+                  <Switch 
+                    checked={salesSettings.enablePartialPayments}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, enablePartialPayments: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Salesmen Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <UserCheck size={16} />
+                  {language === 'ar' ? 'إعدادات المندوبين' : 'Salesmen Settings'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل المندوبين' : 'Enable Salesmen'}
+                  description={language === 'ar' ? 'ربط الفواتير بمندوبي المبيعات' : 'Link invoices to salesmen'}
+                >
+                  <Switch 
+                    checked={salesSettings.enableSalesmen}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, enableSalesmen: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تتبع أداء المندوبين' : 'Track Salesman Performance'}
+                >
+                  <Switch 
+                    checked={salesSettings.trackSalesmanPerformance}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, trackSalesmanPerformance: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Returns & Quotations */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <RotateCcw size={16} />
+                  {language === 'ar' ? 'المرتجعات والعروض' : 'Returns & Quotations'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل مرتجعات المبيعات' : 'Enable Sales Returns'}
+                >
+                  <Switch 
+                    checked={salesSettings.enableSalesReturns}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, enableSalesReturns: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'طلب موافقة على المرتجعات' : 'Require Return Approval'}
+                >
+                  <Switch 
+                    checked={salesSettings.returnApprovalRequired}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, returnApprovalRequired: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل عروض الأسعار' : 'Enable Quotations'}
+                >
+                  <Switch 
+                    checked={salesSettings.enableQuotations}
+                    onCheckedChange={(val) => setSalesSettings({ ...salesSettings, enableQuotations: val })}
+                  />
+                </SettingRow>
+                {salesSettings.enableQuotations && (
+                  <SettingRow 
+                    label={language === 'ar' ? 'صلاحية العرض (أيام)' : 'Quotation Validity (Days)'}
+                  >
+                    <Input 
+                      type="number"
+                      className="w-20"
+                      value={salesSettings.quotationValidityDays}
+                      onChange={(e) => setSalesSettings({ ...salesSettings, quotationValidityDays: Number(e.target.value) })}
+                    />
+                  </SettingRow>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Reports Settings */}
+        <TabsContent value="reports" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText size={20} />
+                    {language === 'ar' ? 'إعدادات التقارير' : 'Reports Settings'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'ar' ? 'تخصيص إعدادات التقارير والمعاينة والتصدير' : 'Customize reports, preview and export settings'}
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleReset('reports')}>
+                    <RotateCcw size={16} className="me-2" />
+                    {language === 'ar' ? 'إعادة تعيين' : 'Reset'}
+                  </Button>
+                  <Button onClick={() => handleSave('reports')}>
+                    <Save size={16} className="me-2" />
+                    {language === 'ar' ? 'حفظ' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Display Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Receipt size={16} />
+                  {language === 'ar' ? 'إعدادات العرض' : 'Display Settings'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل معاينة التقارير' : 'Enable Report Preview'}
+                  description={language === 'ar' ? 'عرض التقرير مباشرة قبل الطباعة أو التصدير' : 'Show report preview before print or export'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableReportPreview}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableReportPreview: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'عرض ملخص التقرير' : 'Show Report Summary'}
+                >
+                  <Switch 
+                    checked={reportsSettings.showReportSummary}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, showReportSummary: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'صيغة التصدير الافتراضية' : 'Default Export Format'}
+                >
+                  <Select 
+                    value={reportsSettings.defaultExportFormat}
+                    onValueChange={(val) => setReportsSettings({ ...reportsSettings, defaultExportFormat: val })}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="excel">{language === 'ar' ? 'Excel' : 'Excel'}</SelectItem>
+                      <SelectItem value="pdf">{language === 'ar' ? 'PDF' : 'PDF'}</SelectItem>
+                      <SelectItem value="csv">{language === 'ar' ? 'CSV' : 'CSV'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Report Types */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Package size={16} />
+                  {language === 'ar' ? 'أنواع التقارير' : 'Report Types'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل التقارير المخصصة' : 'Enable Custom Reports'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableCustomReports}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableCustomReports: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقارير الموارد البشرية' : 'Enable HR Reports'}
+                  description={language === 'ar' ? 'تقارير الحضور والرواتب' : 'Attendance and payroll reports'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableHRReports}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableHRReports: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقارير عمولات المبيعات' : 'Enable Sales Commission Reports'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableSalesCommissionReports}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableSalesCommissionReports: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقارير التوصيل' : 'Enable Delivery Reports'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableDeliveryReports}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableDeliveryReports: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Scheduling & Retention */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Clock size={16} />
+                  {language === 'ar' ? 'الجدولة والاحتفاظ' : 'Scheduling & Retention'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل جدولة التقارير' : 'Enable Report Scheduling'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableReportScheduling}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableReportScheduling: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'إرسال التقارير بالبريد' : 'Email Reports'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableEmailReports}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableEmailReports: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'فترة الاحتفاظ بالتقارير (أيام)' : 'Retain Reports (Days)'}
+                >
+                  <Input 
+                    type="number"
+                    className="w-20"
+                    value={reportsSettings.retainReportsDays}
+                    onChange={(e) => setReportsSettings({ ...reportsSettings, retainReportsDays: Number(e.target.value) })}
                   />
                 </SettingRow>
               </div>
