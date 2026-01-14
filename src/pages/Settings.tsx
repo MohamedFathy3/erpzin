@@ -44,13 +44,15 @@ import {
   Bell,
   Palette,
   Flag,
-  Calendar
+  Calendar,
+  Printer
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
 import ModuleSettings from '@/components/settings/ModuleSettings';
 import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
 import BackupManager from '@/components/settings/BackupManager';
+import PrintingSettings from '@/components/settings/PrintingSettings';
 import { cn } from '@/lib/utils';
 
 interface SettingsSection {
@@ -124,6 +126,15 @@ const Settings = () => {
       labelAr: 'إعدادات الموديولات',
       description: 'Configure system modules',
       descriptionAr: 'تهيئة وحدات النظام',
+      category: 'business'
+    },
+    { 
+      id: 'printing', 
+      icon: Printer, 
+      label: 'Printing & Documents', 
+      labelAr: 'الطباعة والمستندات',
+      description: 'Invoice design and printers',
+      descriptionAr: 'تصميم الفواتير والطابعات',
       category: 'business'
     },
     // System Settings
@@ -845,14 +856,14 @@ const Settings = () => {
       case 'payment':
         return <PaymentMethodsManager />;
 
+      case 'printing':
+        return <PrintingSettings />;
+
       case 'users':
         return <UsersPermissions />;
 
       case 'backup':
         return <BackupManager />;
-
-      case 'users':
-        return <UsersPermissions />;
 
       default:
         return null;
