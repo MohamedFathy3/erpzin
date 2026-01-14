@@ -18,6 +18,15 @@ interface Warehouse {
   is_active: boolean | null;
 }
 
+interface UserProfile {
+  id: string;
+  full_name: string | null;
+  full_name_ar: string | null;
+  email: string | null;
+  branch_id: string | null;
+  warehouse_id: string | null;
+}
+
 interface CartItem {
   id: string;
   productId: string;
@@ -56,6 +65,11 @@ interface AppContextType {
   currentWarehouse: Warehouse | null;
   setCurrentWarehouse: (warehouse: Warehouse | null) => void;
   warehouses: Warehouse[];
+  
+  // User Profile with assigned branch/warehouse
+  userProfile: UserProfile | null;
+  userBranch: Branch | null;
+  userWarehouse: Warehouse | null;
   
   // Cart State (for POS)
   cart: CartItem[];
@@ -115,6 +129,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentWarehouse, setCurrentWarehouse] = useState<Warehouse | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   
+  // User profile with assigned branch/warehouse
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userBranch, setUserBranch] = useState<Branch | null>(null);
+  const [userWarehouse, setUserWarehouse] = useState<Warehouse | null>(null);
+  
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   
@@ -125,11 +144,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [permissions, setPermissions] = useState<UserPermissions>(defaultPermissions);
   const [loadingPermissions, setLoadingPermissions] = useState(true);
 
-  // Load branches
+  // Load branches and user profile
   useEffect(() => {
-    const loadBranches = async () => {
+    const loadBranchesAndProfile = async () => {
       try {
-        const { data, error } = await supabase
+        const { data: branchesData, error } = await supabase
           .from('branches')
           .select('*')
           .eq('is_active', true)
@@ -137,32 +156,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         if (error) throw error;
         
-        setBranches(data || []);
+        setBranches(branchesData || []);
         
-        // Don't set default branch - allow "All Branches" by default
-        // If user has a specific branch assigned, we can load that
+        // Load user profile with branch and warehouse
         if (user) {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('branch_id')
+            .select('id, full_name, full_name_ar, email, branch_id, warehouse_id')
             .eq('id', user.id)
             .maybeSingle();
           
-          if (profileData?.branch_id) {
-            const userBranch = data?.find(b => b.id === profileData.branch_id);
-            if (userBranch) {
-              setCurrentBranch(userBranch);
+          if (profileData) {
+            setUserProfile(profileData);
+            
+            // Set user's assigned branch
+            if (profileData.branch_id) {
+              const assignedBranch = branchesData?.find(b => b.id === profileData.branch_id);
+              if (assignedBranch) {
+                setUserBranch(assignedBranch);
+                setCurrentBranch(assignedBranch);
+              }
+            }
+            
+            // Load user's assigned warehouse
+            if (profileData.warehouse_id) {
+              const { data: warehouseData } = await supabase
+                .from('warehouses')
+                .select('*')
+                .eq('id', profileData.warehouse_id)
+                .maybeSingle();
+              
+              if (warehouseData) {
+                setUserWarehouse(warehouseData);
+                setCurrentWarehouse(warehouseData);
+              }
             }
           }
         }
       } catch (error) {
-        console.error('Error loading branches:', error);
+        console.error('Error loading branches and profile:', error);
       } finally {
         setLoadingBranches(false);
       }
     };
     
-    loadBranches();
+    loadBranchesAndProfile();
   }, [user]);
 
   // Load warehouses when branch changes
@@ -373,6 +411,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentWarehouse,
         setCurrentWarehouse,
         warehouses,
+        userProfile,
+        userBranch,
+        userWarehouse,
         cart,
         addToCart,
         updateCartItem,

@@ -35,7 +35,9 @@ const Header: React.FC = () => {
     currentWarehouse,
     setCurrentWarehouse,
     warehouses,
-    permissions 
+    permissions,
+    userBranch,
+    userWarehouse
   } = useApp();
   const { user } = useAuth();
 
@@ -56,6 +58,10 @@ const Header: React.FC = () => {
     return roleLabels[permissions.role || ''] || (language === 'ar' ? 'مستخدم' : 'User');
   };
 
+  // Check if user has assigned branch/warehouse (restricted access)
+  const hasRestrictedBranch = userBranch !== null;
+  const hasRestrictedWarehouse = userWarehouse !== null;
+
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6">
       {/* Search */}
@@ -71,50 +77,70 @@ const Header: React.FC = () => {
 
       {/* Right Section */}
       <div className="flex items-center gap-3">
-        {/* Branch Selector */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Building2 size={16} />
-              {loadingBranches ? (
-                <Skeleton className="w-20 h-4" />
-              ) : (
-                <span className="max-w-[120px] truncate">
-                  {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : (language === 'ar' ? 'كل الفروع' : 'All Branches')}
-                </span>
-              )}
-              <ChevronDown size={14} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              {language === 'ar' ? 'اختر الفرع' : 'Select Branch'}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {/* All Branches Option */}
-            <DropdownMenuItem 
-              onClick={() => setCurrentBranch(null)}
-              className="flex items-center justify-between"
-            >
-              <span className="font-medium">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</span>
-              {currentBranch === null && <Check size={16} className="text-primary" />}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {branches.map((branch) => (
+        {/* Branch Display/Selector */}
+        {hasRestrictedBranch ? (
+          // User has assigned branch - show as badge (not selectable)
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg">
+            <Building2 size={16} className="text-primary" />
+            <span className="text-sm font-medium">
+              {language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name}
+            </span>
+          </div>
+        ) : (
+          // Admin/All access - show dropdown
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Building2 size={16} />
+                {loadingBranches ? (
+                  <Skeleton className="w-20 h-4" />
+                ) : (
+                  <span className="max-w-[120px] truncate">
+                    {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : (language === 'ar' ? 'كل الفروع' : 'All Branches')}
+                  </span>
+                )}
+                <ChevronDown size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                {language === 'ar' ? 'اختر الفرع' : 'Select Branch'}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* All Branches Option */}
               <DropdownMenuItem 
-                key={branch.id}
-                onClick={() => setCurrentBranch(branch)}
+                onClick={() => setCurrentBranch(null)}
                 className="flex items-center justify-between"
               >
-                <span>{language === 'ar' && branch.name_ar ? branch.name_ar : branch.name}</span>
-                {currentBranch?.id === branch.id && <Check size={16} className="text-primary" />}
+                <span className="font-medium">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</span>
+                {currentBranch === null && <Check size={16} className="text-primary" />}
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSeparator />
+              {branches.map((branch) => (
+                <DropdownMenuItem 
+                  key={branch.id}
+                  onClick={() => setCurrentBranch(branch)}
+                  className="flex items-center justify-between"
+                >
+                  <span>{language === 'ar' && branch.name_ar ? branch.name_ar : branch.name}</span>
+                  {currentBranch?.id === branch.id && <Check size={16} className="text-primary" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
-        {/* Warehouse Selector */}
-        {warehouses.length > 0 && (
+        {/* Warehouse Display/Selector */}
+        {hasRestrictedWarehouse ? (
+          // User has assigned warehouse - show as badge (not selectable)
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border rounded-lg">
+            <Warehouse size={16} className="text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {language === 'ar' && userWarehouse.name_ar ? userWarehouse.name_ar : userWarehouse.name}
+            </span>
+          </div>
+        ) : warehouses.length > 0 ? (
+          // Admin/All access - show dropdown
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -151,7 +177,7 @@ const Header: React.FC = () => {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+        ) : null}
 
         {/* Language Toggle */}
         <Button
