@@ -60,6 +60,8 @@ const ReadyReports = () => {
   // Filters
   const [dateFrom, setDateFrom] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [timeFrom, setTimeFrom] = useState('00:00');
+  const [timeTo, setTimeTo] = useState('23:59');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedWarehouse, setSelectedWarehouse] = useState('all');
   const [selectedUser, setSelectedUser] = useState('all');
@@ -90,14 +92,17 @@ const ReadyReports = () => {
   });
 
   // Fetch report data based on selected report
+  const dateTimeFrom = `${dateFrom}T${timeFrom}:00`;
+  const dateTimeTo = `${dateTo}T${timeTo}:59`;
+
   const { data: salesData = [] } = useQuery({
-    queryKey: ['report-sales', dateFrom, dateTo, selectedBranch],
+    queryKey: ['report-sales', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
     queryFn: async () => {
       let query = supabase
         .from('sales')
         .select('*, customers(name, name_ar)')
-        .gte('sale_date', dateFrom)
-        .lte('sale_date', dateTo + 'T23:59:59')
+        .gte('sale_date', dateTimeFrom)
+        .lte('sale_date', dateTimeTo)
         .order('sale_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch', selectedBranch);
       const { data } = await query;
@@ -107,13 +112,13 @@ const ReadyReports = () => {
   });
 
   const { data: salesInvoices = [] } = useQuery({
-    queryKey: ['report-sales-invoices', dateFrom, dateTo, selectedBranch, selectedUser],
+    queryKey: ['report-sales-invoices', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('sales_invoices')
         .select('*, customers(name, name_ar), salesmen(name, name_ar), branches(name, name_ar), warehouses(name, name_ar)')
-        .gte('invoice_date', dateFrom)
-        .lte('invoice_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('invoice_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
@@ -124,13 +129,13 @@ const ReadyReports = () => {
   });
 
   const { data: salesReturns = [] } = useQuery({
-    queryKey: ['report-sales-returns', dateFrom, dateTo, selectedBranch],
+    queryKey: ['report-sales-returns', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
     queryFn: async () => {
       let query = supabase
         .from('sales_returns')
         .select('*, customers(name, name_ar)')
-        .gte('return_date', dateFrom)
-        .lte('return_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('return_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       const { data } = await query;
@@ -149,13 +154,13 @@ const ReadyReports = () => {
   });
 
   const { data: inventoryMovements = [] } = useQuery({
-    queryKey: ['report-inventory-movements', dateFrom, dateTo, selectedWarehouse, selectedUser],
+    queryKey: ['report-inventory-movements', dateFrom, dateTo, timeFrom, timeTo, selectedWarehouse, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('inventory_movements')
         .select('*, products(name, name_ar, sku), warehouses(name, name_ar)')
-        .gte('created_at', dateFrom)
-        .lte('created_at', dateTo + 'T23:59:59')
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('created_at', { ascending: false });
       if (selectedWarehouse !== 'all') query = query.eq('warehouse_id', selectedWarehouse);
       if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
@@ -166,13 +171,13 @@ const ReadyReports = () => {
   });
 
   const { data: purchaseInvoices = [] } = useQuery({
-    queryKey: ['report-purchase-invoices', dateFrom, dateTo, selectedBranch, selectedUser],
+    queryKey: ['report-purchase-invoices', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('purchase_invoices')
         .select('*, suppliers(name, name_ar), branches(name, name_ar), warehouses(name, name_ar)')
-        .gte('invoice_date', dateFrom)
-        .lte('invoice_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('invoice_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
@@ -183,13 +188,13 @@ const ReadyReports = () => {
   });
 
   const { data: purchaseReturns = [] } = useQuery({
-    queryKey: ['report-purchase-returns', dateFrom, dateTo, selectedBranch],
+    queryKey: ['report-purchase-returns', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
     queryFn: async () => {
       let query = supabase
         .from('purchase_returns')
         .select('*, suppliers(name, name_ar)')
-        .gte('return_date', dateFrom)
-        .lte('return_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('return_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       const { data } = await query;
@@ -208,13 +213,13 @@ const ReadyReports = () => {
   });
 
   const { data: expenses = [] } = useQuery({
-    queryKey: ['report-expenses', dateFrom, dateTo, selectedBranch, selectedUser],
+    queryKey: ['report-expenses', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('expenses')
         .select('*, branches(name, name_ar)')
-        .gte('expense_date', dateFrom)
-        .lte('expense_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('expense_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       const { data } = await query;
@@ -224,13 +229,13 @@ const ReadyReports = () => {
   });
 
   const { data: revenues = [] } = useQuery({
-    queryKey: ['report-revenues', dateFrom, dateTo, selectedBranch, selectedUser],
+    queryKey: ['report-revenues', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('revenues')
         .select('*, branches(name, name_ar)')
-        .gte('revenue_date', dateFrom)
-        .lte('revenue_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('revenue_date', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       const { data } = await query;
@@ -258,13 +263,13 @@ const ReadyReports = () => {
   });
 
   const { data: treasuryTransactions = [] } = useQuery({
-    queryKey: ['report-treasury-transactions', dateFrom, dateTo, selectedUser],
+    queryKey: ['report-treasury-transactions', dateFrom, dateTo, timeFrom, timeTo, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('treasury_transactions')
         .select('*, treasuries(name, name_ar)')
-        .gte('transaction_date', dateFrom)
-        .lte('transaction_date', dateTo + 'T23:59:59')
+        .gte('transaction_date', dateTimeFrom)
+        .lte('transaction_date', dateTimeTo)
         .order('transaction_date', { ascending: false });
       if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
       const { data } = await query;
@@ -274,13 +279,13 @@ const ReadyReports = () => {
   });
 
   const { data: bankTransactions = [] } = useQuery({
-    queryKey: ['report-bank-transactions', dateFrom, dateTo, selectedUser],
+    queryKey: ['report-bank-transactions', dateFrom, dateTo, timeFrom, timeTo, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('bank_transactions')
         .select('*, banks(name, name_ar)')
-        .gte('transaction_date', dateFrom)
-        .lte('transaction_date', dateTo + 'T23:59:59')
+        .gte('transaction_date', dateTimeFrom)
+        .lte('transaction_date', dateTimeTo)
         .order('transaction_date', { ascending: false });
       if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
       const { data } = await query;
@@ -308,13 +313,13 @@ const ReadyReports = () => {
   });
 
   const { data: posShifts = [] } = useQuery({
-    queryKey: ['report-pos-shifts', dateFrom, dateTo, selectedBranch, selectedUser],
+    queryKey: ['report-pos-shifts', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
       let query = supabase
         .from('pos_shifts')
         .select('*, branches(name, name_ar)')
-        .gte('opened_at', dateFrom)
-        .lte('opened_at', dateTo + 'T23:59:59')
+        .gte('opened_at', dateTimeFrom)
+        .lte('opened_at', dateTimeTo)
         .order('opened_at', { ascending: false });
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
       if (selectedUser !== 'all') query = query.eq('cashier_id', selectedUser);
@@ -325,13 +330,13 @@ const ReadyReports = () => {
   });
 
   const { data: posReturns = [] } = useQuery({
-    queryKey: ['report-pos-returns', dateFrom, dateTo],
+    queryKey: ['report-pos-returns', dateFrom, dateTo, timeFrom, timeTo],
     queryFn: async () => {
       const { data } = await supabase
         .from('pos_returns')
         .select('*, customers(name, name_ar)')
-        .gte('return_date', dateFrom)
-        .lte('return_date', dateTo)
+        .gte('created_at', dateTimeFrom)
+        .lte('created_at', dateTimeTo)
         .order('return_date', { ascending: false });
       return data || [];
     },
@@ -345,6 +350,8 @@ const ReadyReports = () => {
       filters: 'Filters',
       dateFrom: 'From',
       dateTo: 'To',
+      timeFrom: 'From Time',
+      timeTo: 'To Time',
       branch: 'Branch',
       warehouse: 'Warehouse',
       user: 'User',
@@ -484,6 +491,8 @@ const ReadyReports = () => {
       filters: 'الفلاتر',
       dateFrom: 'من',
       dateTo: 'إلى',
+      timeFrom: 'من الساعة',
+      timeTo: 'إلى الساعة',
       branch: 'الفرع',
       warehouse: 'المخزن',
       user: 'المستخدم',
@@ -1088,7 +1097,7 @@ const ReadyReports = () => {
         </head>
         <body>
           <h1>${reportDef?.name || 'Report'}</h1>
-          <div class="subtitle">${t.dateFrom}: ${dateFrom} - ${t.dateTo}: ${dateTo}</div>
+          <div class="subtitle">${t.dateFrom}: ${dateFrom} ${timeFrom} - ${t.dateTo}: ${dateTo} ${timeTo}</div>
           <table>
             <thead>
               <tr>${reportData.headers.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -1139,14 +1148,35 @@ const ReadyReports = () => {
                 type="date" 
                 value={dateFrom} 
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-[140px] h-9"
+                className="w-[130px] h-9"
               />
               <span className="text-muted-foreground">-</span>
               <Input 
                 type="date" 
                 value={dateTo} 
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-[140px] h-9"
+                className="w-[130px] h-9"
+              />
+            </div>
+
+            <Separator orientation="vertical" className="h-6 hidden sm:block" />
+
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-muted-foreground" />
+              <Input 
+                type="time" 
+                value={timeFrom} 
+                onChange={(e) => setTimeFrom(e.target.value)}
+                className="w-[100px] h-9"
+                title={t.timeFrom}
+              />
+              <span className="text-muted-foreground">-</span>
+              <Input 
+                type="time" 
+                value={timeTo} 
+                onChange={(e) => setTimeTo(e.target.value)}
+                className="w-[100px] h-9"
+                title={t.timeTo}
               />
             </div>
 
