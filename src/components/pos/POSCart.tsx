@@ -1,9 +1,8 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Trash2, Pause } from 'lucide-react';
+import { Minus, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface CartItem {
   id: string;
@@ -40,7 +39,6 @@ const POSCart: React.FC<POSCartProps> = ({
   const total = subtotal + tax;
 
   return (
-    <TooltipProvider delayDuration={300}>
     <div className="h-full flex flex-col bg-card rounded-xl border border-border overflow-hidden">
       {/* Cart Header */}
       <div className="p-4 border-b border-border bg-muted/30">
@@ -50,24 +48,15 @@ const POSCart: React.FC<POSCartProps> = ({
           </h2>
           <div className="flex items-center gap-2">
             {items.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onClearCart}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-card border border-border">
-                  <div className="flex items-center gap-2">
-                    <span>{language === 'ar' ? 'مسح السلة' : 'Clear Cart'}</span>
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Ctrl+Del</kbd>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClearCart}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
+              >
+                <Trash2 size={16} />
+                <span className="text-[10px] ms-1 opacity-60">F8</span>
+              </Button>
             )}
             <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
               {items.reduce((sum, item) => sum + item.quantity, 0)}
@@ -84,8 +73,8 @@ const POSCart: React.FC<POSCartProps> = ({
             <p className="text-sm">{language === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</p>
             <p className="text-xs mt-2 text-center px-4">
               {language === 'ar' 
-                ? 'استخدم Ctrl+F أو / للبحث السريع'
-                : 'Use Ctrl+F or / for quick search'
+                ? 'استخدم F9 للبحث السريع'
+                : 'Use F9 for quick search'
               }
             </p>
           </div>
@@ -107,47 +96,27 @@ const POSCart: React.FC<POSCartProps> = ({
                 </div>
                 
                 <div className="flex items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-                        className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                          'bg-muted hover:bg-muted/80 text-foreground'
-                        )}
-                      >
-                        <Minus size={14} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="bg-card border border-border">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span>{language === 'ar' ? 'تقليل' : 'Decrease'}</span>
-                        <kbd className="px-1 py-0.5 bg-muted rounded font-mono">Alt+-</kbd>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                  <button
+                    onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
+                    className={cn(
+                      'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                      'bg-muted hover:bg-muted/80 text-foreground'
+                    )}
+                  >
+                    <Minus size={14} />
+                  </button>
                   <span className="w-8 text-center font-semibold text-foreground">
                     {item.quantity}
                   </span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                        className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                          'bg-primary hover:bg-primary/90 text-primary-foreground'
-                        )}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="bg-card border border-border">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span>{language === 'ar' ? 'زيادة' : 'Increase'}</span>
-                        <kbd className="px-1 py-0.5 bg-muted rounded font-mono">Alt++</kbd>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                  <button
+                    onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                    className={cn(
+                      'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                      'bg-primary hover:bg-primary/90 text-primary-foreground'
+                    )}
+                  >
+                    <Plus size={14} />
+                  </button>
                 </div>
                 
                 <button
@@ -179,59 +148,15 @@ const POSCart: React.FC<POSCartProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                onClick={onHoldOrder}
-                disabled={items.length === 0}
-                className="flex-1 h-12 relative"
-              >
-                <Pause size={18} className="me-2" />
-                {language === 'ar' ? 'تعليق' : 'Hold'}
-                {heldOrdersCount > 0 && (
-                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center">
-                    {heldOrdersCount}
-                  </span>
-                )}
-                <span className="absolute -bottom-1 end-1 text-[8px] px-1 bg-muted/80 border border-border rounded font-mono text-muted-foreground">
-                  Alt+H
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'تعليق الطلب' : 'Hold Order'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+H</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={onPay}
-                disabled={items.length === 0}
-                className="flex-[2] h-12 bg-gradient-to-r from-success to-success-light hover:opacity-90 text-white font-bold text-lg relative"
-              >
-                {language === 'ar' ? 'دفع' : 'Pay'}
-                <span className="absolute -bottom-1 end-1 text-[8px] px-1 bg-white/20 border border-white/30 rounded font-mono text-white/90">
-                  Ctrl+↵
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'فتح الدفع' : 'Open Payment'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Ctrl+Enter</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
+        {/* Quick action hint */}
+        <div className="text-center text-xs text-muted-foreground">
+          {language === 'ar' 
+            ? 'F1 للدفع • F2 للتعليق'
+            : 'F1 to Pay • F2 to Hold'
+          }
         </div>
       </div>
     </div>
-    </TooltipProvider>
   );
 };
 
