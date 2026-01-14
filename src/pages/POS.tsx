@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApp } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, Truck, RotateCcw, DollarSign } from 'lucide-react';
+import { Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, Truck, RotateCcw, DollarSign, Building2, Warehouse } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -62,6 +63,7 @@ interface DeliveryPerson {
 
 const POS: React.FC = () => {
   const { language, t } = useLanguage();
+  const { userBranch, userWarehouse, currentBranch, currentWarehouse } = useApp();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -388,11 +390,39 @@ const POS: React.FC = () => {
           <h1 className="text-xl font-bold text-white">
             {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
           </h1>
-          <span className="px-3 py-1 bg-success/20 text-success rounded-full text-sm font-medium">
-            {language === 'ar' ? 'فرع أبرا' : 'Abra Branch'}
-          </span>
+          
+          {/* Branch Info */}
+          {(userBranch || currentBranch) && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
+              <Building2 size={14} />
+              <span>
+                {userBranch 
+                  ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
+                  : currentBranch 
+                    ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
+                    : null
+                }
+              </span>
+            </div>
+          )}
+          
+          {/* Warehouse Info */}
+          {(userWarehouse || currentWarehouse) && (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-success/20 text-success rounded-full text-sm font-medium">
+              <Warehouse size={14} />
+              <span>
+                {userWarehouse 
+                  ? (language === 'ar' && userWarehouse.name_ar ? userWarehouse.name_ar : userWarehouse.name)
+                  : currentWarehouse 
+                    ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name)
+                    : null
+                }
+              </span>
+            </div>
+          )}
+          
           {currentShift && (
-            <span className="px-2 py-1 bg-primary/20 text-primary rounded text-xs font-medium">
+            <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">
               {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
             </span>
           )}
