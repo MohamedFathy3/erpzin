@@ -24,6 +24,7 @@ import {
   Warehouse,
   Check,
 } from 'lucide-react';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
 
 const Header: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();
@@ -193,15 +194,7 @@ const Header: React.FC = () => {
         </Button>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell size={20} />
-          <Badge 
-            variant="destructive" 
-            className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px]"
-          >
-            3
-          </Badge>
-        </Button>
+        <NotificationCenter />
 
         {/* User Menu */}
         <DropdownMenu>

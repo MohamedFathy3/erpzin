@@ -16,6 +16,7 @@ import OpeningBalances from '@/components/inventory/OpeningBalances';
 import ExcelImport from '@/components/inventory/ExcelImport';
 import SizeColorManager from '@/components/inventory/SizeColorManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
+import CouponsManager from '@/components/inventory/CouponsManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -251,6 +252,10 @@ const Inventory: React.FC = () => {
                   <Gift size={14} />
                   {language === 'ar' ? 'العروض' : 'Promotions'}
                 </TabsTrigger>
+                <TabsTrigger value="coupons" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-purple-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
+                  <Tag size={14} />
+                  {language === 'ar' ? 'الكوبونات' : 'Coupons'}
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -467,6 +472,9 @@ const Inventory: React.FC = () => {
           </TabsContent>
           <TabsContent value="promotions" className="flex-1 mt-4">
             <PromotionsManager />
+          </TabsContent>
+          <TabsContent value="coupons" className="flex-1 mt-4">
+            <CouponsManager />
           </TabsContent>
         </Tabs>
       </div>

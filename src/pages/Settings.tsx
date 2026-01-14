@@ -54,6 +54,7 @@ import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
 import BackupManager from '@/components/settings/BackupManager';
 import PrintingSettings from '@/components/settings/PrintingSettings';
 import DataManagement from '@/components/settings/DataManagement';
+import AuditLogViewer from '@/components/settings/AuditLogViewer';
 import { cn } from '@/lib/utils';
 
 interface SettingsSection {
@@ -155,6 +156,15 @@ const Settings = () => {
       labelAr: 'إدارة البيانات',
       description: 'Delete system data (Admin only)',
       descriptionAr: 'حذف بيانات النظام (مدير النظام فقط)',
+      category: 'system'
+    },
+    { 
+      id: 'audit-log', 
+      icon: Shield, 
+      label: 'Audit Log', 
+      labelAr: 'سجل المراجعة',
+      description: 'Track all system changes',
+      descriptionAr: 'تتبع جميع تغييرات النظام',
       category: 'system'
     },
   ];
@@ -868,6 +878,9 @@ const Settings = () => {
 
       case 'data-management':
         return <DataManagement />;
+
+      case 'audit-log':
+        return <AuditLogViewer />;
 
       default:
         return null;
