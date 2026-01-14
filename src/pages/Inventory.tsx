@@ -15,12 +15,13 @@ import InventoryMovements from '@/components/inventory/InventoryMovements';
 import OpeningBalances from '@/components/inventory/OpeningBalances';
 import ExcelImport from '@/components/inventory/ExcelImport';
 import SizeColorManager from '@/components/inventory/SizeColorManager';
+import PromotionsManager from '@/components/inventory/PromotionsManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc, Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -246,6 +247,10 @@ const Inventory: React.FC = () => {
                   <FileSpreadsheet size={14} />
                   {language === 'ar' ? 'استيراد' : 'Import'}
                 </TabsTrigger>
+                <TabsTrigger value="promotions" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
+                  <Gift size={14} />
+                  {language === 'ar' ? 'العروض' : 'Promotions'}
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -459,6 +464,9 @@ const Inventory: React.FC = () => {
           <TabsContent value="variants" className="flex-1 mt-0"><SizeColorManager /></TabsContent>
           <TabsContent value="barcode" className="flex-1 mt-4">
             <BarcodePrintingCenter />
+          </TabsContent>
+          <TabsContent value="promotions" className="flex-1 mt-4">
+            <PromotionsManager />
           </TabsContent>
         </Tabs>
       </div>

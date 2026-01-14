@@ -1424,6 +1424,120 @@ export type Database = {
           },
         ]
       }
+      promotion_products: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          product_variant_id: string | null
+          promotion_id: string
+          special_discount_value: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          product_variant_id?: string | null
+          promotion_id: string
+          special_discount_value?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          product_variant_id?: string | null
+          promotion_id?: string
+          special_discount_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_products_product_variant_id_fkey"
+            columns: ["product_variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_products_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotions: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          current_uses: number | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          end_date: string
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          min_quantity: number | null
+          name: string
+          name_ar: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_uses?: number | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date: string
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_quantity?: number | null
+          name: string
+          name_ar?: string | null
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_uses?: number | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date?: string
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          min_quantity?: number | null
+          name?: string
+          name_ar?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_invoice_items: {
         Row: {
           created_at: string
