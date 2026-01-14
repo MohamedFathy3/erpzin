@@ -152,7 +152,8 @@ const UsersPermissions = () => {
     branch_id: '',
     warehouse_id: '',
     role: 'viewer' as AppRole,
-    preferred_language: 'ar' as 'ar' | 'en'
+    preferred_language: 'ar' as 'ar' | 'en',
+    new_password: ''
   });
   const [newUserForm, setNewUserForm] = useState({
     username: '',
@@ -537,7 +538,7 @@ const UsersPermissions = () => {
         .from('user_roles')
         .select('id')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase
@@ -556,6 +557,27 @@ const UsersPermissions = () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       toast({ title: t.roleUpdated });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'), variant: 'destructive' });
+    }
+  });
+
+  // Update user password mutation
+  const updatePasswordMutation = useMutation({
+    mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
+      const { data, error } = await supabase.functions.invoke('update-user-password', {
+        body: { userId, newPassword }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully' });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message, variant: 'destructive' });
     }
   });
 
@@ -773,7 +795,8 @@ const UsersPermissions = () => {
       branch_id: user.branch_id || '',
       warehouse_id: user.warehouse_id || '',
       role: getUserRole(user.id),
-      preferred_language: (user.preferred_language as 'ar' | 'en') || 'ar'
+      preferred_language: (user.preferred_language as 'ar' | 'en') || 'ar',
+      new_password: ''
     });
     setIsEditDialogOpen(true);
   };
@@ -799,6 +822,11 @@ const UsersPermissions = () => {
     // Update role if changed
     if (editForm.role !== getUserRole(selectedUser.id)) {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: editForm.role });
+    }
+    
+    // Update password if provided
+    if (editForm.new_password && editForm.new_password.length >= 6) {
+      updatePasswordMutation.mutate({ userId: selectedUser.id, newPassword: editForm.new_password });
     }
   };
 
@@ -1377,9 +1405,21 @@ const UsersPermissions = () => {
                 <Input value={editForm.email} disabled className="bg-muted" dir="ltr" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t.phone}</Label>
-              <Input value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} dir="ltr" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.phone}</Label>
+                <Input value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} dir="ltr" />
+              </div>
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'كلمة مرور جديدة' : 'New Password'}</Label>
+                <Input 
+                  type="password" 
+                  value={editForm.new_password} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, new_password: e.target.value }))} 
+                  placeholder={language === 'ar' ? 'اتركها فارغة للإبقاء على الحالية' : 'Leave empty to keep current'}
+                  dir="ltr"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
