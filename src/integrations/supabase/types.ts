@@ -441,6 +441,51 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_roles: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          description_ar: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          is_system: boolean | null
+          name: string
+          name_ar: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name: string
+          name_ar?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          description_ar?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name?: string
+          name_ar?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
@@ -1425,6 +1470,8 @@ export type Database = {
           is_active: boolean | null
           phone: string | null
           updated_at: string
+          username: string | null
+          warehouse_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -1437,6 +1484,8 @@ export type Database = {
           is_active?: boolean | null
           phone?: string | null
           updated_at?: string
+          username?: string | null
+          warehouse_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -1449,6 +1498,8 @@ export type Database = {
           is_active?: boolean | null
           phone?: string | null
           updated_at?: string
+          username?: string | null
+          warehouse_id?: string | null
         }
         Relationships: [
           {
@@ -1456,6 +1507,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
