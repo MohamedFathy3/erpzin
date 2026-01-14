@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { X, Banknote, CreditCard, Check, Smartphone, Building2, Wallet, Crown, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { usePOSKeyboardShortcuts, getPaymentShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 
 type PaymentMethodType = 'cash' | 'card' | 'kuraimi' | 'floosak' | 'jawal' | 'bank_transfer' | 'split';
 
@@ -13,16 +14,17 @@ interface PaymentMethod {
   label: string;
   labelAr: string;
   color: string;
+  shortcut: string;
 }
 
 const paymentMethods: PaymentMethod[] = [
-  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success' },
-  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500' },
-  { id: 'kuraimi', icon: <Smartphone size={20} />, label: 'Kuraimi', labelAr: 'كريمي', color: 'bg-orange-500' },
-  { id: 'floosak', icon: <Wallet size={20} />, label: 'Floosak', labelAr: 'فلوسك', color: 'bg-purple-500' },
-  { id: 'jawal', icon: <Smartphone size={20} />, label: 'Jawal Pay', labelAr: 'جوال باي', color: 'bg-green-600' },
-  { id: 'bank_transfer', icon: <Building2 size={20} />, label: 'Bank Transfer', labelAr: 'تحويل بنكي', color: 'bg-slate-600' },
-  { id: 'split', icon: <span className="text-sm font-bold">½</span>, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary' },
+  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'F1' },
+  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'F2' },
+  { id: 'kuraimi', icon: <Smartphone size={20} />, label: 'Kuraimi', labelAr: 'كريمي', color: 'bg-orange-500', shortcut: 'F3' },
+  { id: 'floosak', icon: <Wallet size={20} />, label: 'Floosak', labelAr: 'فلوسك', color: 'bg-purple-500', shortcut: 'F4' },
+  { id: 'jawal', icon: <Smartphone size={20} />, label: 'Jawal Pay', labelAr: 'جوال باي', color: 'bg-green-600', shortcut: 'F5' },
+  { id: 'bank_transfer', icon: <Building2 size={20} />, label: 'Bank Transfer', labelAr: 'تحويل بنكي', color: 'bg-slate-600', shortcut: 'F6' },
+  { id: 'split', icon: <span className="text-sm font-bold">½</span>, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'F7' },
 ];
 
 interface PaymentModalProps {
@@ -51,12 +53,12 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   });
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
+
   useEffect(() => {
     setCashAmount(total.toString());
     setSplitAmounts({ cash: '', card: '' });
   }, [total, isOpen]);
-
-  const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
   const handleQuickAmount = (amount: number) => {
     if (paymentMethod === 'split') {
@@ -115,6 +117,27 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Payment modal keyboard shortcuts
+  const paymentShortcuts = getPaymentShortcuts({
+    onConfirm: () => canComplete() && !isProcessing && handleComplete(),
+    onCancel: onClose,
+    onSelectCash: () => setPaymentMethod('cash'),
+    onSelectCard: () => setPaymentMethod('card'),
+    onSelectKuraimi: () => setPaymentMethod('kuraimi'),
+    onSelectFloosak: () => setPaymentMethod('floosak'),
+    onSelectJawal: () => setPaymentMethod('jawal'),
+    onSelectBank: () => setPaymentMethod('bank_transfer'),
+    onSelectSplit: () => setPaymentMethod('split'),
+    onQuickAmount1: () => handleQuickAmount(quickAmounts[0]),
+    onQuickAmount2: () => handleQuickAmount(quickAmounts[1]),
+    onQuickAmount3: () => handleQuickAmount(quickAmounts[2]),
+    onQuickAmount4: () => handleQuickAmount(quickAmounts[3]),
+    onQuickAmount5: () => handleQuickAmount(quickAmounts[4]),
+    onQuickAmount6: () => handleQuickAmount(quickAmounts[5]),
+  });
+
+  usePOSKeyboardShortcuts(paymentShortcuts, isOpen);
+
   const renderPaymentContent = () => {
     if (paymentMethod === 'cash') {
       return (
@@ -132,13 +155,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {quickAmounts.map((amount) => (
+            {quickAmounts.map((amount, index) => (
               <button
                 key={amount}
                 onClick={() => handleQuickAmount(amount)}
-                className="py-3 bg-muted hover:bg-muted/80 rounded-lg font-medium text-foreground transition-colors"
+                className="py-3 bg-muted hover:bg-muted/80 rounded-lg font-medium text-foreground transition-colors relative"
               >
                 {amount.toLocaleString()}
+                <span className="absolute top-1 end-1 text-[9px] text-muted-foreground font-mono">
+                  Alt+{index + 1}
+                </span>
               </button>
             ))}
           </div>
@@ -295,8 +321,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               <button
                 key={method.id}
                 onClick={() => setPaymentMethod(method.id)}
+                title={method.shortcut}
                 className={cn(
-                  'flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all text-sm',
+                  'flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all text-sm relative',
                   paymentMethod === method.id
                     ? 'bg-primary text-primary-foreground shadow-lg'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -304,6 +331,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               >
                 {method.icon}
                 {language === 'ar' ? method.labelAr : method.label}
+                <span className="absolute -top-1 -end-1 text-[10px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
+                  {method.shortcut}
+                </span>
               </button>
             ))}
           </div>
@@ -343,6 +373,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               <span className="flex items-center gap-2">
                 <Check size={24} />
                 {language === 'ar' ? 'إتمام الدفع' : 'Complete Payment'}
+                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Enter</kbd>
               </span>
             )}
           </Button>
