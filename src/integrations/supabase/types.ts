@@ -381,7 +381,9 @@ export type Database = {
       company_settings: {
         Row: {
           address: string | null
+          calendar_system: string | null
           commercial_register: string | null
+          country: string | null
           created_at: string
           default_currency: string | null
           email: string | null
@@ -399,7 +401,9 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          calendar_system?: string | null
           commercial_register?: string | null
+          country?: string | null
           created_at?: string
           default_currency?: string | null
           email?: string | null
@@ -417,7 +421,9 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          calendar_system?: string | null
           commercial_register?: string | null
+          country?: string | null
           created_at?: string
           default_currency?: string | null
           email?: string | null
