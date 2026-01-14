@@ -1479,19 +1479,24 @@ const ReadyReports = () => {
         <Card className="lg:col-span-3">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base">
+              <CardTitle className="text-base flex items-center gap-2">
+                {selectedReport && <Eye size={18} className="text-primary" />}
                 {selectedReport 
                   ? reportsByModule[activeModule]?.find(r => r.id === selectedReport)?.name 
                   : t.selectReport}
               </CardTitle>
               {selectedReport && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  {t.dateFrom}: {dateFrom} - {t.dateTo}: {dateTo}
+                  {t.dateFrom}: {dateFrom} {timeFrom} - {t.dateTo}: {dateTo} {timeTo}
+                  {selectedBranch !== 'all' && ` | ${t.branch}: ${branches.find((b: any) => b.id === selectedBranch)?.[language === 'ar' ? 'name_ar' : 'name'] || branches.find((b: any) => b.id === selectedBranch)?.name}`}
                 </p>
               )}
             </div>
-            {selectedReport && (
+            {selectedReport && reportData && reportData.rows.length > 0 && (
               <div className="flex gap-2">
+                <Badge variant="secondary" className="font-normal">
+                  {reportData.rows.length} {language === 'ar' ? 'سجل' : 'records'}
+                </Badge>
                 <Button variant="outline" size="sm" onClick={handlePrint}>
                   <Printer size={16} className="me-1.5" />
                   {t.print}
@@ -1506,41 +1511,60 @@ const ReadyReports = () => {
           <CardContent ref={printRef}>
             {!selectedReport ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                <ClipboardList size={48} className="mb-3 opacity-50" />
-                <p>{t.selectReport}</p>
+                <Eye size={48} className="mb-3 opacity-50" />
+                <p className="text-lg font-medium">{t.selectReport}</p>
+                <p className="text-sm mt-1">{language === 'ar' ? 'اختر تقريراً لعرضه مباشرة هنا' : 'Choose a report to preview it here'}</p>
               </div>
             ) : reportData && reportData.rows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Package size={48} className="mb-3 opacity-50" />
                 <p>{t.noData}</p>
+                <p className="text-sm mt-1">{language === 'ar' ? 'جرب تغيير الفترة الزمنية أو الفلاتر' : 'Try changing the date range or filters'}</p>
               </div>
             ) : reportData && (
-              <ScrollArea className="h-[500px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {reportData.headers.map((header, i) => (
-                        <TableHead key={i} className="font-semibold">{header}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportData.rows.map((row, i) => (
-                      <TableRow key={i}>
-                        {row.map((cell, j) => (
-                          <TableCell key={j}>{String(cell ?? '')}</TableCell>
+              <div className="space-y-3">
+                {/* Summary Stats */}
+                <div className="flex flex-wrap gap-3 p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">{language === 'ar' ? 'عدد السجلات:' : 'Records:'}</span>
+                    <Badge variant="outline">{reportData.rows.length}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">{t.total}:</span>
+                    <Badge variant="default">
+                      {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
+                    </Badge>
+                  </div>
+                </div>
+                
+                {/* Report Table */}
+                <ScrollArea className="h-[450px] border rounded-lg">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow className="bg-muted/50">
+                        {reportData.headers.map((header, i) => (
+                          <TableHead key={i} className="font-semibold">{header}</TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50 font-semibold">
-                      <TableCell colSpan={reportData.headers.length - 1}>{t.total}</TableCell>
-                      <TableCell>
-                        {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                    </TableHeader>
+                    <TableBody>
+                      {reportData.rows.map((row, i) => (
+                        <TableRow key={i} className="hover:bg-muted/30">
+                          {row.map((cell, j) => (
+                            <TableCell key={j}>{String(cell ?? '')}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-primary/5 font-semibold sticky bottom-0">
+                        <TableCell colSpan={reportData.headers.length - 1}>{t.total}</TableCell>
+                        <TableCell className="text-primary font-bold">
+                          {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
             )}
           </CardContent>
         </Card>
