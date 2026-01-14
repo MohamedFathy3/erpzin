@@ -73,6 +73,7 @@ interface Profile {
   branch_id: string | null;
   warehouse_id: string | null;
   username: string | null;
+  preferred_language: string | null;
   created_at: string;
 }
 
@@ -771,26 +772,30 @@ const UsersPermissions = () => {
       branch_id: user.branch_id || '',
       warehouse_id: user.warehouse_id || '',
       role: getUserRole(user.id),
-      preferred_language: ((user as any).preferred_language as 'ar' | 'en') || 'ar'
+      preferred_language: (user.preferred_language as 'ar' | 'en') || 'ar'
     });
     setIsEditDialogOpen(true);
   };
 
   const handleSaveUser = () => {
     if (!selectedUser) return;
+    
+    // Update profile data
     updateUserMutation.mutate({
       userId: selectedUser.id,
       data: {
         full_name: editForm.full_name,
-        full_name_ar: editForm.full_name_ar,
-        phone: editForm.phone,
+        full_name_ar: editForm.full_name_ar || null,
+        phone: editForm.phone || null,
         username: editForm.username || null,
         is_active: editForm.is_active,
         branch_id: editForm.branch_id || null,
         warehouse_id: editForm.warehouse_id || null,
         preferred_language: editForm.preferred_language
-      } as any
+      }
     });
+    
+    // Update role if changed
     if (editForm.role !== getUserRole(selectedUser.id)) {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: editForm.role });
     }
