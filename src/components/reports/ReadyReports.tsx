@@ -39,6 +39,7 @@ import {
 import { format, subMonths } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
+import CompanyHeader from '@/components/shared/CompanyHeader';
 
 interface ReportDefinition {
   id: string;
@@ -1523,8 +1524,25 @@ const ReadyReports = () => {
               </div>
             ) : reportData && (
               <div className="space-y-3">
+                {/* Company Header - shown for print */}
+                <div className="print:block hidden">
+                  <CompanyHeader 
+                    variant="print" 
+                    branchId={selectedBranch !== 'all' ? selectedBranch : undefined}
+                    showBranch={selectedBranch !== 'all'}
+                  />
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl font-bold">
+                      {reportsByModule[activeModule]?.find(r => r.id === selectedReport)?.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {t.dateFrom}: {dateFrom} {timeFrom} - {t.dateTo}: {dateTo} {timeTo}
+                    </p>
+                  </div>
+                </div>
+                
                 {/* Summary Stats */}
-                <div className="flex flex-wrap gap-3 p-3 bg-muted/30 rounded-lg">
+                <div className="flex flex-wrap gap-3 p-3 bg-muted/30 rounded-lg print:hidden">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-sm">{language === 'ar' ? 'عدد السجلات:' : 'Records:'}</span>
                     <Badge variant="outline">{reportData.rows.length}</Badge>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import CompanyHeader from "@/components/shared/CompanyHeader";
 
 interface InvoiceDetailsProps {
   invoice: any;
@@ -31,19 +32,6 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
       return data;
     },
     enabled: !!invoice?.id
-  });
-
-  // Fetch company settings
-  const { data: company } = useQuery({
-    queryKey: ['company-settings'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .single();
-      if (error) throw error;
-      return data;
-    }
   });
 
   const getStatusBadge = (status: string) => {
@@ -79,27 +67,24 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
         </DialogHeader>
 
         <div className="space-y-6 print:p-8">
-          {/* Header */}
-          <div className="flex justify-between items-start border-b pb-4">
+          {/* Company Header with Logo */}
+          <CompanyHeader 
+            variant="print" 
+            branchId={invoice.branch_id}
+            showBranch={true}
+          />
+          
+          {/* Invoice Number and Status */}
+          <div className="flex justify-between items-center border-b pb-4">
             <div>
-              <h2 className="text-2xl font-bold">
-                {language === 'ar' ? company?.name_ar || company?.name : company?.name}
-              </h2>
-              <p className="text-muted-foreground">{company?.address}</p>
-              <p className="text-muted-foreground">{company?.phone}</p>
-              {company?.tax_number && (
-                <p className="text-sm">
-                  {language === 'ar' ? 'الرقم الضريبي:' : 'Tax #:'} {company?.tax_number}
-                </p>
-              )}
-            </div>
-            <div className="text-right">
               <h3 className="text-xl font-bold">{invoice.invoice_number}</h3>
               <p className="text-muted-foreground">
                 {format(new Date(invoice.invoice_date), 'yyyy/MM/dd HH:mm', {
                   locale: language === 'ar' ? ar : undefined
                 })}
               </p>
+            </div>
+            <div>
               {getStatusBadge(invoice.payment_status)}
             </div>
           </div>
