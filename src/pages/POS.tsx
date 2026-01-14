@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Clock, Home, LogOut, Loader2, User, Truck, RotateCcw, DollarSign, Crown, Star, Keyboard } from 'lucide-react';
+import { Search, Barcode, Home, LogOut, Loader2, Crown, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -19,8 +19,7 @@ import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
 import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
-import POSKeyboardShortcutsHelp from '@/components/pos/POSKeyboardShortcutsHelp';
-import POSShortcutBadge from '@/components/pos/POSShortcutBadge';
+import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
@@ -79,7 +78,6 @@ const POS: React.FC = () => {
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
-  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -335,8 +333,7 @@ const POS: React.FC = () => {
     else if (showReturns) setShowReturns(false);
     else if (showShiftPanel) setShowShiftPanel(false);
     else if (showVariantSelector) setShowVariantSelector(false);
-    else if (showKeyboardHelp) setShowKeyboardHelp(false);
-  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector, showKeyboardHelp]);
+  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector]);
 
   const handleIncreaseQuantity = useCallback(() => {
     if (cartItems.length > 0) {
@@ -378,18 +375,6 @@ const POS: React.FC = () => {
     onDecreaseQuantity: handleDecreaseQuantity,
   });
 
-  // Add help shortcut
-  useEffect(() => {
-    const handleHelpShortcut = (e: KeyboardEvent) => {
-      if (e.key === '?' || e.key === 'F12') {
-        e.preventDefault();
-        setShowKeyboardHelp(true);
-      }
-    };
-    window.addEventListener('keydown', handleHelpShortcut);
-    return () => window.removeEventListener('keydown', handleHelpShortcut);
-  }, []);
-
   usePOSKeyboardShortcuts(posShortcuts, !isAnyModalOpen);
 
   const isLoading = categoriesLoading || productsLoading;
@@ -397,8 +382,8 @@ const POS: React.FC = () => {
   return (
     <TooltipProvider delayDuration={300}>
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* POS Header */}
-      <header className="h-16 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
+      {/* POS Header - Simplified */}
+      <header className="h-14 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-white">
             {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
@@ -406,198 +391,48 @@ const POS: React.FC = () => {
           <span className="px-3 py-1 bg-success/20 text-success rounded-full text-sm font-medium">
             {language === 'ar' ? 'فرع أبرا' : 'Abra Branch'}
           </span>
+          {currentShift && (
+            <span className="px-2 py-1 bg-primary/20 text-primary rounded text-xs font-medium">
+              {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-1">
-          {/* Shift Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowShiftPanel(true)}
-                className={cn(
-                  "text-white/80 hover:text-white hover:bg-white/10 relative group",
-                  currentShift && "bg-green-600/30"
-                )}
-              >
-                <DollarSign size={18} className="me-1" />
-                <span className="text-xs">
-                  {currentShift 
-                    ? (language === 'ar' ? 'الوردية' : 'Shift')
-                    : (language === 'ar' ? 'فتح وردية' : 'Open Shift')
-                  }
-                </span>
-                <POSShortcutBadge shortcut="Alt+S" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'إدارة الوردية' : 'Shift Management'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+S</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Returns Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowReturns(true)}
-                className="text-white/80 hover:text-white hover:bg-white/10 relative"
-              >
-                <RotateCcw size={18} className="me-1" />
-                <span className="text-xs">
-                  {language === 'ar' ? 'مرتجع' : 'Returns'}
-                </span>
-                <POSShortcutBadge shortcut="Alt+R" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'فاتورة مرتجع' : 'Return Invoice'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+R</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Customer Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCustomerSelector(true)}
-                className={cn(
-                  "text-white/80 hover:text-white hover:bg-white/10 relative",
-                  selectedCustomer && "bg-white/10"
-                )}
-              >
-                <User size={18} className="me-1" />
-                <span className="text-xs max-w-24 truncate">
-                  {selectedCustomer 
-                    ? (language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name)
-                    : (language === 'ar' ? 'العميل' : 'Customer')
-                  }
-                </span>
-                <POSShortcutBadge shortcut="Alt+C" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'اختيار العميل' : 'Select Customer'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+C</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Loyalty Points Display */}
+        <div className="flex items-center gap-2">
+          {/* Selected Customer Display */}
           {selectedCustomer && (
-            <div className="flex items-center gap-1 px-3 py-1.5 bg-warning/20 rounded-lg">
-              <Crown size={16} className="text-warning" />
-              <Star size={12} className="text-warning fill-warning" />
-              <span className="text-warning font-semibold text-sm">
-                {selectedCustomer.loyalty_points || 0}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
+              <span className="text-white/90 text-sm">
+                {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
               </span>
-              <span className="text-warning/70 text-xs">
-                {language === 'ar' ? 'نقطة' : 'pts'}
-              </span>
+              <div className="flex items-center gap-1">
+                <Crown size={14} className="text-warning" />
+                <span className="text-warning font-semibold text-xs">
+                  {selectedCustomer.loyalty_points || 0}
+                </span>
+              </div>
             </div>
           )}
 
-          {/* Delivery Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowDeliverySelector(true)}
-                className={cn(
-                  "text-white/80 hover:text-white hover:bg-white/10 relative",
-                  selectedDelivery && "bg-white/10"
-                )}
-              >
-                <Truck size={18} className="me-1" />
-                <span className="text-xs max-w-24 truncate">
-                  {selectedDelivery 
-                    ? (language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name)
-                    : (language === 'ar' ? 'التوصيل' : 'Delivery')
-                  }
-                </span>
-                <POSShortcutBadge shortcut="Alt+D" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'اختيار التوصيل' : 'Select Delivery'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+D</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Held Orders */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHeldOrders(true)}
-                className="text-white/80 hover:text-white hover:bg-white/10 relative"
-              >
-                <Clock size={20} />
-                {heldOrders.length > 0 && (
-                  <span className="absolute -top-1 -start-1 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center">
-                    {heldOrders.length}
-                  </span>
-                )}
-                <POSShortcutBadge shortcut="Alt+O" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'الطلبات المعلقة' : 'Held Orders'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+O</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Keyboard Shortcuts Help */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowKeyboardHelp(true)}
-                className="text-white/80 hover:text-white hover:bg-white/10 relative"
-              >
-                <Keyboard size={20} />
-                <POSShortcutBadge shortcut="?" position="top-right" variant="dark" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'اختصارات لوحة المفاتيح' : 'Keyboard Shortcuts'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">?</kbd>
-              </div>
-            </TooltipContent>
-          </Tooltip>
+          {/* Selected Delivery Display */}
+          {selectedDelivery && (
+            <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+              <span className="text-white/90 text-sm">
+                {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
+              </span>
+            </div>
+          )}
 
           {/* Home */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Link to="/">
-                <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10 relative">
+                <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
                   <Home size={20} />
-                  <POSShortcutBadge shortcut="Alt+↖" position="top-right" variant="dark" />
                 </Button>
               </Link>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="bg-card border border-border">
-              <div className="flex items-center gap-2">
-                <span>{language === 'ar' ? 'الصفحة الرئيسية' : 'Dashboard'}</span>
-                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+Home</kbd>
-              </div>
+              <span>{language === 'ar' ? 'الصفحة الرئيسية' : 'Dashboard'} (F12)</span>
             </TooltipContent>
           </Tooltip>
 
@@ -674,6 +509,23 @@ const POS: React.FC = () => {
         </div>
       </div>
 
+      {/* Shortcuts Bar at Bottom */}
+      <POSShortcutsBar
+        onPay={() => cartItems.length > 0 && setShowPayment(true)}
+        onHold={holdOrder}
+        onClearCart={clearCart}
+        onShowHeldOrders={() => setShowHeldOrders(true)}
+        onShowCustomer={() => setShowCustomerSelector(true)}
+        onShowDelivery={() => setShowDeliverySelector(true)}
+        onShowReturns={() => setShowReturns(true)}
+        onShowShift={() => setShowShiftPanel(true)}
+        onFocusSearch={handleFocusSearch}
+        onGoHome={() => navigate('/')}
+        cartItemsCount={cartItems.length}
+        heldOrdersCount={heldOrders.length}
+        hasShift={!!currentShift}
+      />
+
       {/* Modals */}
       <POSPaymentModal
         isOpen={showPayment}
@@ -739,12 +591,6 @@ const POS: React.FC = () => {
             description: `${amount.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}`
           });
         }}
-      />
-
-      {/* Keyboard Shortcuts Help */}
-      <POSKeyboardShortcutsHelp
-        isOpen={showKeyboardHelp}
-        onClose={() => setShowKeyboardHelp(false)}
       />
     </div>
     </TooltipProvider>

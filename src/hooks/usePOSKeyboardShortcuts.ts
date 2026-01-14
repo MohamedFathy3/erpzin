@@ -47,7 +47,7 @@ export const usePOSKeyboardShortcuts = (shortcuts: KeyboardShortcut[], enabled: 
   }, [handleKeyDown]);
 };
 
-// Pre-defined shortcuts configuration
+// Pre-defined shortcuts configuration with F-keys
 export const getPOSShortcuts = (handlers: {
   onPay?: () => void;
   onHold?: () => void;
@@ -59,105 +59,81 @@ export const getPOSShortcuts = (handlers: {
   onShowReturns?: () => void;
   onShowShift?: () => void;
   onGoHome?: () => void;
-  onLogout?: () => void;
   onEscape?: () => void;
   onIncreaseQuantity?: () => void;
   onDecreaseQuantity?: () => void;
 }): KeyboardShortcut[] => [
-  // Payment shortcuts
+  // F1 - Payment
   {
-    key: 'Enter',
-    ctrl: true,
+    key: 'F1',
     action: () => handlers.onPay?.(),
     description: 'Open Payment',
     descriptionAr: 'فتح الدفع'
   },
+  // F2 - Hold order
   {
-    key: 'p',
-    alt: true,
-    action: () => handlers.onPay?.(),
-    description: 'Open Payment',
-    descriptionAr: 'فتح الدفع'
-  },
-  // Hold order
-  {
-    key: 'h',
-    alt: true,
+    key: 'F2',
     action: () => handlers.onHold?.(),
     description: 'Hold Order',
     descriptionAr: 'تعليق الطلب'
   },
-  // Clear cart
+  // F3 - Show held orders
   {
-    key: 'Delete',
-    ctrl: true,
-    action: () => handlers.onClearCart?.(),
-    description: 'Clear Cart',
-    descriptionAr: 'مسح السلة'
-  },
-  // Search focus
-  {
-    key: 'f',
-    ctrl: true,
-    action: () => handlers.onFocusSearch?.(),
-    description: 'Focus Search',
-    descriptionAr: 'البحث'
-  },
-  {
-    key: '/',
-    action: () => handlers.onFocusSearch?.(),
-    description: 'Focus Search',
-    descriptionAr: 'البحث'
-  },
-  // Show held orders
-  {
-    key: 'o',
-    alt: true,
+    key: 'F3',
     action: () => handlers.onShowHeldOrders?.(),
     description: 'Show Held Orders',
     descriptionAr: 'الطلبات المعلقة'
   },
-  // Customer
+  // F4 - Customer
   {
-    key: 'c',
-    alt: true,
+    key: 'F4',
     action: () => handlers.onShowCustomer?.(),
     description: 'Select Customer',
     descriptionAr: 'اختيار العميل'
   },
-  // Delivery
+  // F5 - Delivery
   {
-    key: 'd',
-    alt: true,
+    key: 'F5',
     action: () => handlers.onShowDelivery?.(),
     description: 'Select Delivery',
     descriptionAr: 'اختيار التوصيل'
   },
-  // Returns
+  // F6 - Returns
   {
-    key: 'r',
-    alt: true,
+    key: 'F6',
     action: () => handlers.onShowReturns?.(),
     description: 'Return Invoice',
     descriptionAr: 'فاتورة مرتجع'
   },
-  // Shift
+  // F7 - Shift
   {
-    key: 's',
-    alt: true,
+    key: 'F7',
     action: () => handlers.onShowShift?.(),
     description: 'Shift Management',
     descriptionAr: 'إدارة الوردية'
   },
-  // Home
+  // F8 - Clear cart
   {
-    key: 'Home',
-    alt: true,
+    key: 'F8',
+    action: () => handlers.onClearCart?.(),
+    description: 'Clear Cart',
+    descriptionAr: 'مسح السلة'
+  },
+  // F9 - Search focus
+  {
+    key: 'F9',
+    action: () => handlers.onFocusSearch?.(),
+    description: 'Focus Search',
+    descriptionAr: 'البحث'
+  },
+  // F12 - Home
+  {
+    key: 'F12',
     action: () => handlers.onGoHome?.(),
     description: 'Go to Dashboard',
     descriptionAr: 'الذهاب للرئيسية'
   },
-  // Escape
+  // Escape - Close modals
   {
     key: 'Escape',
     action: () => handlers.onEscape?.(),
