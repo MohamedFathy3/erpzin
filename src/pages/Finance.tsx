@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,7 +7,6 @@ import {
   Receipt,
   TrendingUp,
   Building2,
-  FileText,
   FolderTree,
   Wallet
 } from 'lucide-react';
