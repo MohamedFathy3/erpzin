@@ -43,7 +43,7 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   
   // Login form
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
   // Signup form
@@ -68,6 +68,7 @@ const Auth = () => {
       signupTitle: 'Create Account',
       loginDesc: 'Enter your credentials to access your account',
       signupDesc: 'Create a new account to get started',
+      identifier: 'Username or Email',
       email: 'Email',
       password: 'Password',
       confirmPassword: 'Confirm Password',
@@ -76,13 +77,14 @@ const Auth = () => {
       signup: 'Create Account',
       noAccount: "Don't have an account?",
       hasAccount: 'Already have an account?',
+      identifierPlaceholder: 'Enter username or email',
       emailPlaceholder: 'Enter your email',
       passwordPlaceholder: 'Enter your password',
       namePlaceholder: 'Enter your full name',
       loginSuccess: 'Logged in successfully',
       signupSuccess: 'Account created! Please check your email to verify.',
       error: 'Error',
-      invalidCredentials: 'Invalid email or password',
+      invalidCredentials: 'Invalid username/email or password',
       emailExists: 'An account with this email already exists',
       genericError: 'Something went wrong. Please try again.',
     },
@@ -92,6 +94,7 @@ const Auth = () => {
       signupTitle: 'إنشاء حساب',
       loginDesc: 'أدخل بياناتك للوصول إلى حسابك',
       signupDesc: 'أنشئ حساباً جديداً للبدء',
+      identifier: 'اسم المستخدم أو البريد الإلكتروني',
       email: 'البريد الإلكتروني',
       password: 'كلمة المرور',
       confirmPassword: 'تأكيد كلمة المرور',
@@ -100,13 +103,14 @@ const Auth = () => {
       signup: 'إنشاء حساب',
       noAccount: 'ليس لديك حساب؟',
       hasAccount: 'لديك حساب بالفعل؟',
+      identifierPlaceholder: 'أدخل اسم المستخدم أو البريد الإلكتروني',
       emailPlaceholder: 'أدخل بريدك الإلكتروني',
       passwordPlaceholder: 'أدخل كلمة المرور',
       namePlaceholder: 'أدخل اسمك الكامل',
       loginSuccess: 'تم تسجيل الدخول بنجاح',
       signupSuccess: 'تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني.',
       error: 'خطأ',
-      invalidCredentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+      invalidCredentials: 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة',
       emailExists: 'يوجد حساب بهذا البريد الإلكتروني بالفعل',
       genericError: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
     }
@@ -117,7 +121,7 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const validation = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
+    const validation = loginSchema.safeParse({ identifier: loginIdentifier, password: loginPassword });
     if (!validation.success) {
       toast({ 
         title: t.error, 
@@ -128,12 +132,12 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
+    const { error } = await signIn(loginIdentifier, loginPassword);
     setLoading(false);
 
     if (error) {
       let message = t.genericError;
-      if (error.message.includes('Invalid login credentials')) {
+      if (error.message.includes('Invalid') || error.message.includes('invalid')) {
         message = t.invalidCredentials;
       }
       toast({ title: t.error, description: message, variant: 'destructive' });
@@ -231,16 +235,16 @@ const Auth = () => {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email" className="flex items-center gap-2">
-                    <Mail size={14} />
-                    {t.email}
+                  <Label htmlFor="login-identifier" className="flex items-center gap-2">
+                    <User size={14} />
+                    {t.identifier}
                   </Label>
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder={t.emailPlaceholder}
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    id="login-identifier"
+                    type="text"
+                    placeholder={t.identifierPlaceholder}
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
                     required
                     dir="ltr"
                   />

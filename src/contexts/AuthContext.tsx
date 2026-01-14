@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (identifier: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -46,12 +46,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error: error as Error | null };
+  const signIn = async (identifier: string, password: string) => {
+    // Check if identifier is an email or username
+    const isEmail = identifier.includes('@');
+    
+    if (isEmail) {
+      // Direct email login
+      const { error } = await supabase.auth.signInWithPassword({
+        email: identifier,
+        password,
+      });
+      return { error: error as Error | null };
+    } else {
+      // Username login - first get email from profiles
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', identifier)
+        .single();
+      
+      if (profileError || !profile?.email) {
+        return { error: new Error('Invalid username or password') };
+      }
+      
+      const { error } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password,
+      });
+      return { error: error as Error | null };
+    }
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
