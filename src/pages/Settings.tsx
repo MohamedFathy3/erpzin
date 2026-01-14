@@ -89,16 +89,16 @@ const Settings = () => {
       descriptionAr: 'إدارة المواقع والتخزين',
       category: 'general'
     },
-    { 
-      id: 'language', 
-      icon: Languages, 
-      label: 'Language & Display', 
-      labelAr: 'اللغة والعرض',
-      description: 'System language preferences',
-      descriptionAr: 'إعدادات لغة النظام',
-      category: 'general'
-    },
     // Business Settings
+    { 
+      id: 'currency', 
+      icon: DollarSign, 
+      label: 'Currency & Taxes', 
+      labelAr: 'العملات والضرائب',
+      description: 'Financial settings',
+      descriptionAr: 'الإعدادات المالية',
+      category: 'business'
+    },
     { 
       id: 'currency', 
       icon: DollarSign, 
@@ -851,58 +851,8 @@ const Settings = () => {
       case 'backup':
         return <BackupManager />;
 
-      case 'language':
-        return (
-          <div className="space-y-6 animate-fade-in">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Languages size={20} />
-                  {t.systemLanguage}
-                </CardTitle>
-                <CardDescription>
-                  {language === 'ar' ? 'اختر لغة واجهة النظام' : 'Choose the system interface language'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
-                  <Card 
-                    className={cn(
-                      "p-6 cursor-pointer transition-all hover:scale-105",
-                      language === 'en' 
-                        ? 'border-primary bg-primary/5 shadow-lg shadow-primary/20' 
-                        : 'hover:border-primary/50'
-                    )}
-                    onClick={() => setLanguage('en')}
-                  >
-                    <div className="text-center space-y-2">
-                      <p className="text-4xl">🇺🇸</p>
-                      <p className="font-semibold text-lg">English</p>
-                      <p className="text-sm text-muted-foreground">Left to Right</p>
-                      {language === 'en' && <Badge className="bg-primary">Active</Badge>}
-                    </div>
-                  </Card>
-                  <Card 
-                    className={cn(
-                      "p-6 cursor-pointer transition-all hover:scale-105",
-                      language === 'ar' 
-                        ? 'border-primary bg-primary/5 shadow-lg shadow-primary/20' 
-                        : 'hover:border-primary/50'
-                    )}
-                    onClick={() => setLanguage('ar')}
-                  >
-                    <div className="text-center space-y-2">
-                      <p className="text-4xl">🇾🇪</p>
-                      <p className="font-semibold text-lg">العربية</p>
-                      <p className="text-sm text-muted-foreground">من اليمين لليسار</p>
-                      {language === 'ar' && <Badge className="bg-primary">نشط</Badge>}
-                    </div>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
+      case 'users':
+        return <UsersPermissions />;
 
       default:
         return null;
