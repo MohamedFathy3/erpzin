@@ -139,10 +139,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         setBranches(data || []);
         
-        // Set main branch as default
-        const mainBranch = data?.find(b => b.is_main);
-        if (mainBranch && !currentBranch) {
-          setCurrentBranch(mainBranch);
+        // Don't set default branch - allow "All Branches" by default
+        // If user has a specific branch assigned, we can load that
+        if (user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('branch_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (profileData?.branch_id) {
+            const userBranch = data?.find(b => b.id === profileData.branch_id);
+            if (userBranch) {
+              setCurrentBranch(userBranch);
+            }
+          }
         }
       } catch (error) {
         console.error('Error loading branches:', error);
@@ -152,7 +163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     
     loadBranches();
-  }, []);
+  }, [user]);
 
   // Load warehouses when branch changes
   useEffect(() => {

@@ -80,7 +80,7 @@ const Header: React.FC = () => {
                 <Skeleton className="w-20 h-4" />
               ) : (
                 <span className="max-w-[120px] truncate">
-                  {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : t('common.all')}
+                  {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : (language === 'ar' ? 'كل الفروع' : 'All Branches')}
                 </span>
               )}
               <ChevronDown size={14} />
@@ -90,6 +90,15 @@ const Header: React.FC = () => {
             <DropdownMenuLabel>
               {language === 'ar' ? 'اختر الفرع' : 'Select Branch'}
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {/* All Branches Option */}
+            <DropdownMenuItem 
+              onClick={() => setCurrentBranch(null)}
+              className="flex items-center justify-between"
+            >
+              <span className="font-medium">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</span>
+              {currentBranch === null && <Check size={16} className="text-primary" />}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             {branches.map((branch) => (
               <DropdownMenuItem 
@@ -111,7 +120,7 @@ const Header: React.FC = () => {
               <Button variant="outline" size="sm" className="gap-2">
                 <Warehouse size={16} />
                 <span className="max-w-[100px] truncate">
-                  {currentWarehouse ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name) : (language === 'ar' ? 'المخزن' : 'Warehouse')}
+                  {currentWarehouse ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name) : (language === 'ar' ? 'كل المخازن' : 'All Warehouses')}
                 </span>
                 <ChevronDown size={14} />
               </Button>
@@ -120,6 +129,15 @@ const Header: React.FC = () => {
               <DropdownMenuLabel>
                 {language === 'ar' ? 'اختر المخزن' : 'Select Warehouse'}
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* All Warehouses Option */}
+              <DropdownMenuItem 
+                onClick={() => setCurrentWarehouse(null)}
+                className="flex items-center justify-between"
+              >
+                <span className="font-medium">{language === 'ar' ? 'كل المخازن' : 'All Warehouses'}</span>
+                {currentWarehouse === null && <Check size={16} className="text-primary" />}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {warehouses.map((warehouse) => (
                 <DropdownMenuItem 
