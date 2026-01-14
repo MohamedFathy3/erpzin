@@ -3,24 +3,59 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Eye, Printer, RotateCcw } from "lucide-react";
+import { Plus, Eye, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
+import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 
 const SalesInvoiceList = () => {
   const { language } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
+
+  // Fetch branches for filter
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const { data } = await supabase.from('branches').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  // Fetch salesmen for filter
+  const { data: salesmen = [] } = useQuery({
+    queryKey: ['salesmen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('salesmen').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  const filterFields: FilterField[] = [
+    { key: 'search', label: 'Invoice/Customer', labelAr: 'الفاتورة/العميل', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
+      { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
+      { value: 'pending', label: 'Pending', labelAr: 'معلق' },
+      { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
+    ]},
+    { key: 'invoice_type', label: 'Invoice Type', labelAr: 'نوع الفاتورة', type: 'select', options: [
+      { value: 'cash', label: 'Cash', labelAr: 'نقدي' },
+      { value: 'credit', label: 'Credit', labelAr: 'آجل' },
+    ]},
+    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: any) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
+    { key: 'salesman_id', label: 'Salesman', labelAr: 'المندوب', type: 'select', options: salesmen.map((s: any) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
+    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+  ];
 
   const { data: invoices, isLoading } = useQuery({
-    queryKey: ['sales-invoices', searchQuery],
+    queryKey: ['sales-invoices', filterValues],
     queryFn: async () => {
       let query = supabase
         .from('sales_invoices')
@@ -32,8 +67,32 @@ const SalesInvoiceList = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (searchQuery) {
-        query = query.or(`invoice_number.ilike.%${searchQuery}%`);
+      if (filterValues.search) {
+        query = query.or(`invoice_number.ilike.%${filterValues.search}%`);
+      }
+      if (filterValues.payment_status && filterValues.payment_status !== 'all') {
+        query = query.eq('payment_status', filterValues.payment_status);
+      }
+      if (filterValues.invoice_type && filterValues.invoice_type !== 'all') {
+        query = query.eq('invoice_type', filterValues.invoice_type);
+      }
+      if (filterValues.branch_id && filterValues.branch_id !== 'all') {
+        query = query.eq('branch_id', filterValues.branch_id);
+      }
+      if (filterValues.salesman_id && filterValues.salesman_id !== 'all') {
+        query = query.eq('salesman_id', filterValues.salesman_id);
+      }
+      if (filterValues.date_from) {
+        query = query.gte('invoice_date', filterValues.date_from.split('T')[0]);
+      }
+      if (filterValues.date_to) {
+        query = query.lte('invoice_date', filterValues.date_to.split('T')[0]);
+      }
+      if (filterValues.amount_min) {
+        query = query.gte('total_amount', Number(filterValues.amount_min));
+      }
+      if (filterValues.amount_max) {
+        query = query.lte('total_amount', Number(filterValues.amount_max));
       }
 
       const { data, error } = await query.limit(100);
@@ -64,17 +123,15 @@ const SalesInvoiceList = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          {/* Search */}
+          {/* Advanced Filter */}
           <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={language === 'ar' ? 'بحث برقم الفاتورة...' : 'Search by invoice number...'}
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+            <AdvancedFilter
+              fields={filterFields}
+              values={filterValues}
+              onChange={setFilterValues}
+              onReset={() => setFilterValues({})}
+              language={language}
+            />
           </div>
 
           {/* Table */}

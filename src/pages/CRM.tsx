@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   Plus, 
   Search, 
@@ -37,12 +38,12 @@ interface LoyaltySettings {
 
 const CRM = () => {
   const { language, direction } = useLanguage();
-  const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('customers');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showLoyaltySettings, setShowLoyaltySettings] = useState(false);
   const [showRedeemPoints, setShowRedeemPoints] = useState<string | null>(null);
   const [redeemAmount, setRedeemAmount] = useState('');
+  const [customerFilters, setCustomerFilters] = useState<FilterValues>({});
   const queryClient = useQueryClient();
 
   // New customer form state
@@ -189,11 +190,39 @@ const CRM = () => {
     }
   ];
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.phone?.includes(searchTerm) ||
-    c.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Customer filter fields
+  const customerFilterFields: FilterField[] = [
+    { key: 'search', label: 'Name/Phone/Email', labelAr: 'الاسم/الهاتف/البريد', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'tier', label: 'Loyalty Tier', labelAr: 'مستوى الولاء', type: 'select', options: [
+      { value: 'bronze', label: 'Bronze', labelAr: 'برونزي' },
+      { value: 'silver', label: 'Silver', labelAr: 'فضي' },
+      { value: 'gold', label: 'Gold', labelAr: 'ذهبي' },
+      { value: 'platinum', label: 'Platinum', labelAr: 'بلاتيني' },
+    ]},
+    { key: 'points', label: 'Points', labelAr: 'النقاط', type: 'numberRange' },
+    { key: 'purchases', label: 'Total Purchases', labelAr: 'إجمالي المشتريات', type: 'numberRange' },
+  ];
+
+  const filteredCustomers = customers.filter(c => {
+    // Apply advanced filters
+    if (customerFilters.search) {
+      const search = customerFilters.search.toLowerCase();
+      if (!c.name.toLowerCase().includes(search) && 
+          !c.phone?.includes(search) && 
+          !c.email?.toLowerCase().includes(search) &&
+          !c.name_ar?.includes(search)) return false;
+    }
+    if (customerFilters.tier && customerFilters.tier !== 'all') {
+      const tier = getLoyaltyTier(c.loyalty_points || 0);
+      const tierMap: Record<string, string> = { 'Bronze': 'bronze', 'Silver': 'silver', 'Gold': 'gold', 'Platinum': 'platinum', 'برونزي': 'bronze', 'فضي': 'silver', 'ذهبي': 'gold', 'بلاتيني': 'platinum' };
+      if (tierMap[tier.label] !== customerFilters.tier) return false;
+    }
+    if (customerFilters.points_min && (c.loyalty_points || 0) < Number(customerFilters.points_min)) return false;
+    if (customerFilters.points_max && (c.loyalty_points || 0) > Number(customerFilters.points_max)) return false;
+    if (customerFilters.purchases_min && Number(c.total_purchases || 0) < Number(customerFilters.purchases_min)) return false;
+    if (customerFilters.purchases_max && Number(c.total_purchases || 0) > Number(customerFilters.purchases_max)) return false;
+    return true;
+  });
 
   const getLoyaltyTier = (points: number) => {
     if (points >= loyaltySettings.platinumThreshold) return { 
@@ -334,15 +363,13 @@ const CRM = () => {
             {/* Customers Table */}
             <Card className="card-elevated">
               <CardHeader className="pb-3">
-                <div className="relative max-w-sm">
-                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input 
-                    placeholder={t.search} 
-                    className="ps-10"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <AdvancedFilter
+                  fields={customerFilterFields}
+                  values={customerFilters}
+                  onChange={setCustomerFilters}
+                  onReset={() => setCustomerFilters({})}
+                  language={language}
+                />
               </CardHeader>
               <CardContent>
                 <Table>

@@ -17,10 +17,12 @@ import RevenueManager from '@/components/finance/RevenueManager';
 import AccountsPayable from '@/components/finance/AccountsPayable';
 import ChartOfAccounts from '@/components/finance/ChartOfAccounts';
 import TreasuryBankManager from '@/components/finance/TreasuryBankManager';
+import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 
 const Finance = () => {
   const { language, direction } = useLanguage();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [financeFilters, setFinanceFilters] = useState<FilterValues>({});
 
   const tabs = [
     { id: 'dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
@@ -31,6 +33,53 @@ const Finance = () => {
     { id: 'payables', label: language === 'ar' ? 'الذمم الدائنة' : 'Payables', icon: Building2 }
   ];
 
+  // Finance filter fields based on active tab
+  const getFilterFields = (): FilterField[] => {
+    if (activeTab === 'revenues' || activeTab === 'expenses') {
+      return [
+        { key: 'search', label: 'Search', labelAr: 'بحث', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+        { key: 'category', label: 'Category', labelAr: 'التصنيف', type: 'select', options: [
+          { value: 'sales', label: 'Sales', labelAr: 'مبيعات' },
+          { value: 'services', label: 'Services', labelAr: 'خدمات' },
+          { value: 'other', label: 'Other', labelAr: 'أخرى' },
+        ]},
+        { key: 'payment_method', label: 'Payment Method', labelAr: 'طريقة الدفع', type: 'select', options: [
+          { value: 'cash', label: 'Cash', labelAr: 'نقدي' },
+          { value: 'bank', label: 'Bank', labelAr: 'بنك' },
+          { value: 'card', label: 'Card', labelAr: 'بطاقة' },
+        ]},
+        { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+        { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+      ];
+    }
+    if (activeTab === 'treasury') {
+      return [
+        { key: 'search', label: 'Bank/Account', labelAr: 'البنك/الحساب', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+        { key: 'transaction_type', label: 'Transaction Type', labelAr: 'نوع العملية', type: 'select', options: [
+          { value: 'deposit', label: 'Deposit', labelAr: 'إيداع' },
+          { value: 'withdrawal', label: 'Withdrawal', labelAr: 'سحب' },
+          { value: 'transfer', label: 'Transfer', labelAr: 'تحويل' },
+        ]},
+        { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+      ];
+    }
+    if (activeTab === 'payables') {
+      return [
+        { key: 'search', label: 'Supplier', labelAr: 'المورد', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+        { key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
+          { value: 'pending', label: 'Pending', labelAr: 'معلق' },
+          { value: 'overdue', label: 'Overdue', labelAr: 'متأخر' },
+          { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
+        ]},
+        { key: 'due_date', label: 'Due Date', labelAr: 'تاريخ الاستحقاق', type: 'dateRange' },
+        { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+      ];
+    }
+    return [];
+  };
+
+  const showFilter = ['revenues', 'expenses', 'treasury', 'payables'].includes(activeTab);
+
   return (
     <MainLayout activeItem="finance">
       <div className="space-y-6" dir={direction}>
@@ -40,7 +89,7 @@ const Finance = () => {
           </h1>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
           <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
@@ -49,6 +98,18 @@ const Finance = () => {
               </TabsTrigger>
             ))}
           </TabsList>
+
+          {showFilter && (
+            <div className="mt-4">
+              <AdvancedFilter
+                fields={getFilterFields()}
+                values={financeFilters}
+                onChange={setFinanceFilters}
+                onReset={() => setFinanceFilters({})}
+                language={language}
+              />
+            </div>
+          )}
 
           <TabsContent value="dashboard" className="mt-6">
             <FinanceDashboard language={language} />
