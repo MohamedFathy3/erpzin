@@ -1392,12 +1392,12 @@ const UsersPermissions = () => {
               </div>
               <div className="space-y-2">
                 <Label>{t.branch}</Label>
-                <Select value={editForm.branch_id} onValueChange={(v) => setEditForm(prev => ({ ...prev, branch_id: v }))}>
+                <Select value={editForm.branch_id || 'all'} onValueChange={(v) => setEditForm(prev => ({ ...prev, branch_id: v === 'all' ? '' : v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder={t.selectBranch} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{t.allBranches}</SelectItem>
+                    <SelectItem value="all">{t.allBranches}</SelectItem>
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {language === 'ar' ? branch.name_ar || branch.name : branch.name}
@@ -1409,12 +1409,12 @@ const UsersPermissions = () => {
             </div>
             <div className="space-y-2">
               <Label>{t.warehouse}</Label>
-              <Select value={editForm.warehouse_id} onValueChange={(v) => setEditForm(prev => ({ ...prev, warehouse_id: v }))}>
+              <Select value={editForm.warehouse_id || 'all'} onValueChange={(v) => setEditForm(prev => ({ ...prev, warehouse_id: v === 'all' ? '' : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.selectWarehouse} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t.allWarehouses}</SelectItem>
+                  <SelectItem value="all">{t.allWarehouses}</SelectItem>
                   {warehouses.map((wh) => (
                     <SelectItem key={wh.id} value={wh.id}>
                       {language === 'ar' ? wh.name_ar || wh.name : wh.name}
@@ -1530,12 +1530,12 @@ const UsersPermissions = () => {
               </div>
               <div className="space-y-2">
                 <Label>{t.branch}</Label>
-                <Select value={newUserForm.branch_id} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, branch_id: v }))}>
+                <Select value={newUserForm.branch_id || 'all'} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, branch_id: v === 'all' ? '' : v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder={t.selectBranch} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{t.allBranches}</SelectItem>
+                    <SelectItem value="all">{t.allBranches}</SelectItem>
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {language === 'ar' ? branch.name_ar || branch.name : branch.name}
@@ -1547,12 +1547,12 @@ const UsersPermissions = () => {
             </div>
             <div className="space-y-2">
               <Label>{t.warehouse}</Label>
-              <Select value={newUserForm.warehouse_id} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, warehouse_id: v }))}>
+              <Select value={newUserForm.warehouse_id || 'all'} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, warehouse_id: v === 'all' ? '' : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.selectWarehouse} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t.allWarehouses}</SelectItem>
+                  <SelectItem value="all">{t.allWarehouses}</SelectItem>
                   {warehouses.map((wh) => (
                     <SelectItem key={wh.id} value={wh.id}>
                       {language === 'ar' ? wh.name_ar || wh.name : wh.name}
