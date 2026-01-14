@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -32,20 +34,11 @@ import {
   ShoppingCart,
   Settings as SettingsIcon,
   Search,
-  Filter,
   MoreVertical,
-  Mail,
-  Phone,
-  Calendar,
   CheckCircle2,
   XCircle,
-  AlertTriangle,
-  Lock,
-  Unlock,
-  Activity,
   RefreshCw,
   Download,
-  Upload,
   Layers,
   LayoutGrid,
   List,
@@ -53,7 +46,13 @@ import {
   ChevronDown,
   User,
   Briefcase,
-  Home
+  Home,
+  Save,
+  TrendingUp,
+  FileText,
+  Package,
+  Wallet,
+  Calendar
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -85,21 +84,50 @@ interface Branch {
   name_ar: string | null;
 }
 
+interface Permission {
+  id: string;
+  module: string;
+  module_ar: string;
+  action: string;
+  description: string | null;
+  description_ar: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+interface RolePermission {
+  id: string;
+  role: AppRole;
+  permission_id: string;
+}
+
 const UsersPermissions = () => {
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<AppRole | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [expandedModules, setExpandedModules] = useState<string[]>([]);
+  const [pendingPermissionChanges, setPendingPermissionChanges] = useState<Record<string, boolean>>({});
   const [editForm, setEditForm] = useState({
     full_name: '',
     full_name_ar: '',
     phone: '',
+    email: '',
     is_active: true,
+    branch_id: '',
+    role: 'viewer' as AppRole
+  });
+  const [newUserForm, setNewUserForm] = useState({
+    full_name: '',
+    full_name_ar: '',
+    email: '',
+    phone: '',
     branch_id: '',
     role: 'viewer' as AppRole
   });
@@ -111,7 +139,6 @@ const UsersPermissions = () => {
       users: 'Users',
       roles: 'Roles',
       permissions: 'Permissions Matrix',
-      activity: 'Activity Log',
       addUser: 'Add User',
       editUser: 'Edit User',
       userName: 'Full Name',
@@ -124,6 +151,7 @@ const UsersPermissions = () => {
       active: 'Active',
       inactive: 'Inactive',
       save: 'Save Changes',
+      savePermissions: 'Save Permissions',
       cancel: 'Cancel',
       delete: 'Delete',
       actions: 'Actions',
@@ -135,12 +163,11 @@ const UsersPermissions = () => {
       moderatorDesc: 'Manage inventory, sales, and reports',
       cashierDesc: 'POS operations and basic access',
       viewerDesc: 'Read-only access to view data',
-      lastActive: 'Last Active',
-      createdAt: 'Member Since',
       noUsers: 'No users found',
       roleUpdated: 'Role updated successfully',
       userUpdated: 'User updated successfully',
-      confirmDelete: 'Are you sure you want to delete this user?',
+      userAdded: 'User added successfully',
+      permissionsSaved: 'Permissions saved successfully',
       selectBranch: 'Select Branch',
       allBranches: 'All Branches',
       allRoles: 'All Roles',
@@ -150,11 +177,14 @@ const UsersPermissions = () => {
       activeUsers: 'Active Users',
       inactiveUsers: 'Inactive Users',
       recentlyAdded: 'Recently Added',
-      // Permissions
       module: 'Module',
       view: 'View',
       create: 'Create',
       edit: 'Edit',
+      deleteAction: 'Delete',
+      export: 'Export',
+      import: 'Import',
+      approve: 'Approve',
       dashboard: 'Dashboard',
       inventory: 'Inventory',
       pos: 'Point of Sale',
@@ -165,12 +195,9 @@ const UsersPermissions = () => {
       settings: 'Settings',
       sales: 'Sales',
       purchasing: 'Purchasing',
-      // Role descriptions
-      rolePermissions: 'Role Permissions',
-      accessLevel: 'Access Level',
-      fullAccess: 'Full Access',
-      limitedAccess: 'Limited Access',
-      noAccess: 'No Access'
+      unsavedChanges: 'You have unsaved changes',
+      discardChanges: 'Discard',
+      selectRole: 'Select role to edit permissions'
     },
     ar: {
       title: 'المستخدمين والصلاحيات',
@@ -178,7 +205,6 @@ const UsersPermissions = () => {
       users: 'المستخدمين',
       roles: 'الأدوار',
       permissions: 'مصفوفة الصلاحيات',
-      activity: 'سجل النشاط',
       addUser: 'إضافة مستخدم',
       editUser: 'تعديل مستخدم',
       userName: 'الاسم الكامل',
@@ -191,6 +217,7 @@ const UsersPermissions = () => {
       active: 'نشط',
       inactive: 'غير نشط',
       save: 'حفظ التغييرات',
+      savePermissions: 'حفظ الصلاحيات',
       cancel: 'إلغاء',
       delete: 'حذف',
       actions: 'الإجراءات',
@@ -202,12 +229,11 @@ const UsersPermissions = () => {
       moderatorDesc: 'إدارة المخزون والمبيعات والتقارير',
       cashierDesc: 'عمليات نقطة البيع والوصول الأساسي',
       viewerDesc: 'صلاحية القراءة فقط لعرض البيانات',
-      lastActive: 'آخر نشاط',
-      createdAt: 'عضو منذ',
       noUsers: 'لا يوجد مستخدمين',
       roleUpdated: 'تم تحديث الدور بنجاح',
       userUpdated: 'تم تحديث المستخدم بنجاح',
-      confirmDelete: 'هل أنت متأكد من حذف هذا المستخدم؟',
+      userAdded: 'تم إضافة المستخدم بنجاح',
+      permissionsSaved: 'تم حفظ الصلاحيات بنجاح',
       selectBranch: 'اختر الفرع',
       allBranches: 'جميع الفروع',
       allRoles: 'جميع الأدوار',
@@ -217,11 +243,14 @@ const UsersPermissions = () => {
       activeUsers: 'المستخدمين النشطين',
       inactiveUsers: 'المستخدمين غير النشطين',
       recentlyAdded: 'المضافين حديثاً',
-      // Permissions
       module: 'الموديول',
       view: 'عرض',
       create: 'إنشاء',
       edit: 'تعديل',
+      deleteAction: 'حذف',
+      export: 'تصدير',
+      import: 'استيراد',
+      approve: 'موافقة',
       dashboard: 'لوحة التحكم',
       inventory: 'المخزون',
       pos: 'نقطة البيع',
@@ -232,12 +261,9 @@ const UsersPermissions = () => {
       settings: 'الإعدادات',
       sales: 'المبيعات',
       purchasing: 'المشتريات',
-      // Role descriptions
-      rolePermissions: 'صلاحيات الدور',
-      accessLevel: 'مستوى الوصول',
-      fullAccess: 'وصول كامل',
-      limitedAccess: 'وصول محدود',
-      noAccess: 'بدون وصول'
+      unsavedChanges: 'لديك تغييرات غير محفوظة',
+      discardChanges: 'تجاهل',
+      selectRole: 'اختر دور لتعديل الصلاحيات'
     }
   };
 
@@ -277,6 +303,86 @@ const UsersPermissions = () => {
         .select('id, name, name_ar');
       if (error) throw error;
       return data as Branch[];
+    }
+  });
+
+  // Fetch permissions
+  const { data: permissions = [] } = useQuery({
+    queryKey: ['permissions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('permissions')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data as Permission[];
+    }
+  });
+
+  // Fetch role permissions
+  const { data: rolePermissions = [] } = useQuery({
+    queryKey: ['role-permissions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('role_permissions')
+        .select('*');
+      if (error) throw error;
+      return data as RolePermission[];
+    }
+  });
+
+  // Group permissions by module
+  const groupedPermissions = useMemo(() => {
+    const groups: Record<string, Permission[]> = {};
+    permissions.forEach(p => {
+      if (!groups[p.module]) groups[p.module] = [];
+      groups[p.module].push(p);
+    });
+    return groups;
+  }, [permissions]);
+
+  // Check if role has permission
+  const hasRolePermission = (role: AppRole, permissionId: string): boolean => {
+    const key = `${role}-${permissionId}`;
+    if (pendingPermissionChanges.hasOwnProperty(key)) {
+      return pendingPermissionChanges[key];
+    }
+    return rolePermissions.some(rp => rp.role === role && rp.permission_id === permissionId);
+  };
+
+  // Toggle permission in pending changes
+  const togglePermission = (role: AppRole, permissionId: string) => {
+    const key = `${role}-${permissionId}`;
+    const currentValue = hasRolePermission(role, permissionId);
+    setPendingPermissionChanges(prev => ({
+      ...prev,
+      [key]: !currentValue
+    }));
+  };
+
+  // Save permissions mutation
+  const savePermissionsMutation = useMutation({
+    mutationFn: async () => {
+      const changes = Object.entries(pendingPermissionChanges);
+      for (const [key, shouldHave] of changes) {
+        const [role, permissionId] = key.split('-');
+        const existing = rolePermissions.find(rp => rp.role === role && rp.permission_id === permissionId);
+        
+        if (shouldHave && !existing) {
+          await supabase.from('role_permissions').insert({ role: role as AppRole, permission_id: permissionId });
+        } else if (!shouldHave && existing) {
+          await supabase.from('role_permissions').delete().eq('id', existing.id);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['role-permissions'] });
+      setPendingPermissionChanges({});
+      toast({ title: t.permissionsSaved });
+    },
+    onError: () => {
+      toast({ title: language === 'ar' ? 'خطأ في حفظ الصلاحيات' : 'Error saving permissions', variant: 'destructive' });
     }
   });
 
@@ -324,9 +430,6 @@ const UsersPermissions = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
       toast({ title: t.roleUpdated });
-    },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في تحديث الدور' : 'Role update failed', variant: 'destructive' });
     }
   });
 
@@ -352,36 +455,34 @@ const UsersPermissions = () => {
 
   const getRoleConfig = (role: AppRole) => {
     const configs = {
-      admin: {
-        icon: Crown,
-        color: 'text-amber-500',
-        bgColor: 'bg-amber-500/10',
-        borderColor: 'border-amber-500/30',
-        gradient: 'from-amber-500/20 to-amber-500/5'
-      },
-      moderator: {
-        icon: Shield,
-        color: 'text-blue-500',
-        bgColor: 'bg-blue-500/10',
-        borderColor: 'border-blue-500/30',
-        gradient: 'from-blue-500/20 to-blue-500/5'
-      },
-      cashier: {
-        icon: ShoppingCart,
-        color: 'text-emerald-500',
-        bgColor: 'bg-emerald-500/10',
-        borderColor: 'border-emerald-500/30',
-        gradient: 'from-emerald-500/20 to-emerald-500/5'
-      },
-      viewer: {
-        icon: Eye,
-        color: 'text-slate-500',
-        bgColor: 'bg-slate-500/10',
-        borderColor: 'border-slate-500/30',
-        gradient: 'from-slate-500/20 to-slate-500/5'
-      }
+      admin: { icon: Crown, color: 'text-amber-500', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', gradient: 'from-amber-500/20 to-amber-500/5' },
+      moderator: { icon: Shield, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30', gradient: 'from-blue-500/20 to-blue-500/5' },
+      cashier: { icon: ShoppingCart, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', gradient: 'from-emerald-500/20 to-emerald-500/5' },
+      viewer: { icon: Eye, color: 'text-slate-500', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', gradient: 'from-slate-500/20 to-slate-500/5' }
     };
     return configs[role];
+  };
+
+  const getModuleIcon = (module: string) => {
+    const icons: Record<string, any> = {
+      dashboard: Home, inventory: Package, pos: ShoppingCart, sales: TrendingUp,
+      purchasing: Briefcase, crm: Users, hr: UserCheck, finance: Wallet,
+      reports: FileText, settings: SettingsIcon
+    };
+    return icons[module] || Layers;
+  };
+
+  const getActionLabel = (action: string) => {
+    const labels: Record<string, { en: string; ar: string }> = {
+      view: { en: 'View', ar: 'عرض' },
+      create: { en: 'Create', ar: 'إنشاء' },
+      edit: { en: 'Edit', ar: 'تعديل' },
+      delete: { en: 'Delete', ar: 'حذف' },
+      export: { en: 'Export', ar: 'تصدير' },
+      import: { en: 'Import', ar: 'استيراد' },
+      approve: { en: 'Approve', ar: 'موافقة' }
+    };
+    return language === 'ar' ? labels[action]?.ar || action : labels[action]?.en || action;
   };
 
   const handleEditUser = (user: Profile) => {
@@ -390,6 +491,7 @@ const UsersPermissions = () => {
       full_name: user.full_name || '',
       full_name_ar: user.full_name_ar || '',
       phone: user.phone || '',
+      email: user.email || '',
       is_active: user.is_active ?? true,
       branch_id: user.branch_id || '',
       role: getUserRole(user.id)
@@ -399,7 +501,6 @@ const UsersPermissions = () => {
 
   const handleSaveUser = () => {
     if (!selectedUser) return;
-
     updateUserMutation.mutate({
       userId: selectedUser.id,
       data: {
@@ -410,7 +511,6 @@ const UsersPermissions = () => {
         branch_id: editForm.branch_id || null
       }
     });
-
     if (editForm.role !== getUserRole(selectedUser.id)) {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: editForm.role });
     }
@@ -434,12 +534,10 @@ const UsersPermissions = () => {
       user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.full_name_ar?.includes(searchQuery) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-    
     const matchesRole = filterRole === 'all' || getUserRole(user.id) === filterRole;
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'active' && user.is_active) ||
       (filterStatus === 'inactive' && !user.is_active);
-    
     return matchesSearch && matchesRole && matchesStatus;
   });
 
@@ -454,32 +552,7 @@ const UsersPermissions = () => {
     return created >= weekAgo;
   }).length;
 
-  // Permissions matrix
-  const modules = [
-    { key: 'dashboard', icon: Home, label: t.dashboard },
-    { key: 'inventory', icon: Layers, label: t.inventory },
-    { key: 'pos', icon: ShoppingCart, label: t.pos },
-    { key: 'sales', icon: Briefcase, label: t.sales },
-    { key: 'purchasing', icon: ShoppingCart, label: t.purchasing },
-    { key: 'crm', icon: Users, label: t.crm },
-    { key: 'hr', icon: UserCheck, label: t.hr },
-    { key: 'finance', icon: Key, label: t.finance },
-    { key: 'reports', icon: Activity, label: t.reports },
-    { key: 'settings', icon: SettingsIcon, label: t.settings }
-  ];
-
-  const permissionsMatrix: Record<string, Record<AppRole, { view: boolean; create: boolean; edit: boolean; delete: boolean }>> = {
-    dashboard: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: false, edit: false, delete: false }, cashier: { view: true, create: false, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    inventory: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: true, delete: false }, cashier: { view: true, create: false, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    pos: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: true, delete: true }, cashier: { view: true, create: true, edit: true, delete: false }, viewer: { view: false, create: false, edit: false, delete: false } },
-    sales: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: true, delete: false }, cashier: { view: true, create: true, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    purchasing: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: true, delete: false }, cashier: { view: false, create: false, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    crm: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: true, delete: false }, cashier: { view: true, create: true, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    hr: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: false, create: false, edit: false, delete: false }, cashier: { view: false, create: false, edit: false, delete: false }, viewer: { view: false, create: false, edit: false, delete: false } },
-    finance: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: false, edit: false, delete: false }, cashier: { view: false, create: false, edit: false, delete: false }, viewer: { view: false, create: false, edit: false, delete: false } },
-    reports: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: true, create: true, edit: false, delete: false }, cashier: { view: false, create: false, edit: false, delete: false }, viewer: { view: true, create: false, edit: false, delete: false } },
-    settings: { admin: { view: true, create: true, edit: true, delete: true }, moderator: { view: false, create: false, edit: false, delete: false }, cashier: { view: false, create: false, edit: false, delete: false }, viewer: { view: false, create: false, edit: false, delete: false } }
-  };
+  const hasPendingChanges = Object.keys(pendingPermissionChanges).length > 0;
 
   // Stat Card Component
   const StatCard = ({ label, value, icon: Icon, color, trend }: { label: string; value: number; icon: any; color: string; trend?: string }) => (
@@ -506,7 +579,7 @@ const UsersPermissions = () => {
     const RoleIcon = roleConfig.icon;
 
     return (
-      <Card className={`card-elevated hover:shadow-lg transition-all overflow-hidden`}>
+      <Card className="card-elevated hover:shadow-lg transition-all overflow-hidden">
         <div className={`h-2 bg-gradient-to-r ${roleConfig.gradient}`} />
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
@@ -574,6 +647,10 @@ const UsersPermissions = () => {
                 <Download size={16} />
                 {language === 'ar' ? 'تصدير' : 'Export'}
               </Button>
+              <Button size="sm" className="gap-2" onClick={() => setIsAddUserDialogOpen(true)}>
+                <Plus size={16} />
+                {t.addUser}
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -581,31 +658,10 @@ const UsersPermissions = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          label={t.totalUsers}
-          value={totalUsers}
-          icon={Users}
-          color="bg-primary/10 text-primary"
-        />
-        <StatCard
-          label={t.activeUsers}
-          value={activeUsers}
-          icon={UserCheck}
-          color="bg-accent/10 text-accent"
-        />
-        <StatCard
-          label={t.inactiveUsers}
-          value={inactiveUsers}
-          icon={UserX}
-          color="bg-muted text-muted-foreground"
-        />
-        <StatCard
-          label={t.recentlyAdded}
-          value={recentUsers}
-          icon={Calendar}
-          color="bg-warning/10 text-warning"
-          trend={language === 'ar' ? 'هذا الأسبوع' : 'This week'}
-        />
+        <StatCard label={t.totalUsers} value={totalUsers} icon={Users} color="bg-primary/10 text-primary" />
+        <StatCard label={t.activeUsers} value={activeUsers} icon={UserCheck} color="bg-accent/10 text-accent" />
+        <StatCard label={t.inactiveUsers} value={inactiveUsers} icon={UserX} color="bg-muted text-muted-foreground" />
+        <StatCard label={t.recentlyAdded} value={recentUsers} icon={Calendar} color="bg-warning/10 text-warning" trend={language === 'ar' ? 'هذا الأسبوع' : 'This week'} />
       </div>
 
       {/* Main Tabs */}
@@ -622,6 +678,7 @@ const UsersPermissions = () => {
           <TabsTrigger value="permissions" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Key size={16} />
             {t.permissions}
+            {hasPendingChanges && <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">!</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -633,12 +690,7 @@ const UsersPermissions = () => {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder={t.search}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="ps-9 bg-background"
-                  />
+                  <Input placeholder={t.search} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-9 bg-background" />
                 </div>
                 <Select value={filterRole} onValueChange={(v) => setFilterRole(v as AppRole | 'all')}>
                   <SelectTrigger className="w-[150px] bg-background">
@@ -664,20 +716,10 @@ const UsersPermissions = () => {
                 </Select>
                 <Separator orientation="vertical" className="h-8" />
                 <div className="flex items-center gap-1 border rounded-lg p-0.5 bg-background">
-                  <Button
-                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setViewMode('grid')}
-                  >
+                  <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" onClick={() => setViewMode('grid')}>
                     <LayoutGrid size={14} />
                   </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setViewMode('list')}
-                  >
+                  <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-7 w-7 p-0" onClick={() => setViewMode('list')}>
                     <List size={14} />
                   </Button>
                 </div>
@@ -794,7 +836,7 @@ const UsersPermissions = () => {
               const percentage = totalUsers > 0 ? (count / totalUsers) * 100 : 0;
 
               return (
-                <Card key={role} className={`card-elevated overflow-hidden`}>
+                <Card key={role} className="card-elevated overflow-hidden">
                   <div className={`h-1 bg-gradient-to-r ${config.gradient}`} />
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
@@ -827,88 +869,129 @@ const UsersPermissions = () => {
         <TabsContent value="permissions" className="mt-6">
           <Card className="card-elevated">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Key size={20} className="text-primary" />
-                {t.permissions}
-              </CardTitle>
-              <CardDescription>
-                {language === 'ar' ? 'الصلاحيات التفصيلية لكل دور' : 'Detailed permissions for each role'}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key size={20} className="text-primary" />
+                    {t.permissions}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'ar' ? 'تعديل الصلاحيات التفصيلية لكل دور' : 'Edit detailed permissions for each role'}
+                  </CardDescription>
+                </div>
+                {hasPendingChanges && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-warning border-warning">
+                      {t.unsavedChanges}
+                    </Badge>
+                    <Button variant="outline" size="sm" onClick={() => setPendingPermissionChanges({})}>
+                      {t.discardChanges}
+                    </Button>
+                    <Button size="sm" onClick={() => savePermissionsMutation.mutate()} disabled={savePermissionsMutation.isPending}>
+                      <Save size={14} className="me-1" />
+                      {t.savePermissions}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <ScrollArea className="w-full">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30">
-                      <TableHead className="w-[200px]">{t.module}</TableHead>
-                      <TableHead className="text-center" colSpan={4}>
+                      <TableHead className="w-[250px]">{t.module}</TableHead>
+                      <TableHead className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Crown size={14} className="text-amber-500" />
                           {t.admin}
                         </div>
                       </TableHead>
-                      <TableHead className="text-center" colSpan={4}>
+                      <TableHead className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Shield size={14} className="text-blue-500" />
                           {t.moderator}
                         </div>
                       </TableHead>
-                      <TableHead className="text-center" colSpan={4}>
+                      <TableHead className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <ShoppingCart size={14} className="text-emerald-500" />
                           {t.cashier}
                         </div>
                       </TableHead>
-                      <TableHead className="text-center" colSpan={4}>
+                      <TableHead className="text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Eye size={14} className="text-slate-500" />
                           {t.viewer}
                         </div>
                       </TableHead>
                     </TableRow>
-                    <TableRow className="bg-muted/10">
-                      <TableHead></TableHead>
-                      {['admin', 'moderator', 'cashier', 'viewer'].map((role) => (
-                        <React.Fragment key={role}>
-                          <TableHead className="text-center text-xs px-1">👁</TableHead>
-                          <TableHead className="text-center text-xs px-1">➕</TableHead>
-                          <TableHead className="text-center text-xs px-1">✏️</TableHead>
-                          <TableHead className="text-center text-xs px-1">🗑️</TableHead>
-                        </React.Fragment>
-                      ))}
-                    </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {modules.map((module) => {
-                      const ModuleIcon = module.icon;
+                    {Object.entries(groupedPermissions).map(([module, modulePermissions]) => {
+                      const ModuleIcon = getModuleIcon(module);
+                      const isExpanded = expandedModules.includes(module);
+                      const moduleName = language === 'ar' ? modulePermissions[0]?.module_ar : module;
+
                       return (
-                        <TableRow key={module.key}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <ModuleIcon size={16} className="text-muted-foreground" />
-                              <span className="font-medium">{module.label}</span>
-                            </div>
-                          </TableCell>
-                          {(['admin', 'moderator', 'cashier', 'viewer'] as AppRole[]).map((role) => {
-                            const perms = permissionsMatrix[module.key]?.[role] || { view: false, create: false, edit: false, delete: false };
-                            return (
-                              <React.Fragment key={role}>
-                                <TableCell className="text-center">
-                                  {perms.view ? <CheckCircle2 size={14} className="mx-auto text-accent" /> : <XCircle size={14} className="mx-auto text-muted-foreground/30" />}
+                        <React.Fragment key={module}>
+                          <TableRow 
+                            className="bg-muted/10 cursor-pointer hover:bg-muted/30"
+                            onClick={() => setExpandedModules(prev => 
+                              prev.includes(module) ? prev.filter(m => m !== module) : [...prev, module]
+                            )}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                <ModuleIcon size={16} className="text-primary" />
+                                <span className="font-semibold">{moduleName}</span>
+                                <Badge variant="secondary" className="text-xs">{modulePermissions.length}</Badge>
+                              </div>
+                            </TableCell>
+                            {(['admin', 'moderator', 'cashier', 'viewer'] as AppRole[]).map((role) => {
+                              const hasAll = modulePermissions.every(p => hasRolePermission(role, p.id));
+                              const hasSome = modulePermissions.some(p => hasRolePermission(role, p.id));
+                              return (
+                                <TableCell key={role} className="text-center">
+                                  {hasAll ? (
+                                    <CheckCircle2 size={16} className="mx-auto text-accent" />
+                                  ) : hasSome ? (
+                                    <div className="mx-auto w-4 h-4 rounded-full border-2 border-accent bg-accent/30" />
+                                  ) : (
+                                    <XCircle size={16} className="mx-auto text-muted-foreground/30" />
+                                  )}
                                 </TableCell>
-                                <TableCell className="text-center">
-                                  {perms.create ? <CheckCircle2 size={14} className="mx-auto text-accent" /> : <XCircle size={14} className="mx-auto text-muted-foreground/30" />}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {perms.edit ? <CheckCircle2 size={14} className="mx-auto text-accent" /> : <XCircle size={14} className="mx-auto text-muted-foreground/30" />}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  {perms.delete ? <CheckCircle2 size={14} className="mx-auto text-accent" /> : <XCircle size={14} className="mx-auto text-muted-foreground/30" />}
-                                </TableCell>
-                              </React.Fragment>
-                            );
-                          })}
-                        </TableRow>
+                              );
+                            })}
+                          </TableRow>
+                          {isExpanded && modulePermissions.map((permission) => (
+                            <TableRow key={permission.id} className="hover:bg-muted/20">
+                              <TableCell className="ps-12">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">{getActionLabel(permission.action)}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({language === 'ar' ? permission.description_ar : permission.description})
+                                  </span>
+                                </div>
+                              </TableCell>
+                              {(['admin', 'moderator', 'cashier', 'viewer'] as AppRole[]).map((role) => {
+                                const checked = hasRolePermission(role, permission.id);
+                                const isChanged = pendingPermissionChanges.hasOwnProperty(`${role}-${permission.id}`);
+                                return (
+                                  <TableCell key={role} className="text-center">
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={() => togglePermission(role, permission.id)}
+                                      disabled={role === 'admin'}
+                                      className={isChanged ? 'border-warning' : ''}
+                                    />
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
@@ -923,44 +1006,31 @@ const UsersPermissions = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit size={18} className="text-primary" />
-              {t.editUser}
-            </DialogTitle>
+            <DialogTitle>{t.editUser}</DialogTitle>
           </DialogHeader>
-          
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.userName}</Label>
-                <Input
-                  value={editForm.full_name}
-                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                />
+                <Input value={editForm.full_name} onChange={(e) => setEditForm(prev => ({ ...prev, full_name: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label>{t.userNameAr}</Label>
-                <Input
-                  value={editForm.full_name_ar}
-                  onChange={(e) => setEditForm({ ...editForm, full_name_ar: e.target.value })}
-                  dir="rtl"
-                />
+                <Input value={editForm.full_name_ar} onChange={(e) => setEditForm(prev => ({ ...prev, full_name_ar: e.target.value }))} dir="rtl" />
               </div>
             </div>
-
+            <div className="space-y-2">
+              <Label>{t.email}</Label>
+              <Input value={editForm.email} disabled className="bg-muted" />
+            </div>
             <div className="space-y-2">
               <Label>{t.phone}</Label>
-              <Input
-                value={editForm.phone}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                dir="ltr"
-              />
+              <Input value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.role}</Label>
-                <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v as AppRole })}>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm(prev => ({ ...prev, role: v as AppRole }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -974,12 +1044,12 @@ const UsersPermissions = () => {
               </div>
               <div className="space-y-2">
                 <Label>{t.branch}</Label>
-                <Select value={editForm.branch_id || 'none'} onValueChange={(v) => setEditForm({ ...editForm, branch_id: v === 'none' ? '' : v })}>
+                <Select value={editForm.branch_id} onValueChange={(v) => setEditForm(prev => ({ ...prev, branch_id: v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder={t.selectBranch} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">{t.allBranches}</SelectItem>
+                    <SelectItem value="">{t.allBranches}</SelectItem>
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {language === 'ar' ? branch.name_ar || branch.name : branch.name}
@@ -989,31 +1059,35 @@ const UsersPermissions = () => {
                 </Select>
               </div>
             </div>
-
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-              <div className="flex items-center gap-2">
-                {editForm.is_active ? <Unlock size={16} className="text-accent" /> : <Lock size={16} className="text-muted-foreground" />}
-                <Label className="cursor-pointer">{t.status}</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm ${editForm.is_active ? 'text-accent' : 'text-muted-foreground'}`}>
-                  {editForm.is_active ? t.active : t.inactive}
-                </span>
-                <Switch
-                  checked={editForm.is_active}
-                  onCheckedChange={(checked) => setEditForm({ ...editForm, is_active: checked })}
-                />
-              </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm(prev => ({ ...prev, is_active: v }))} />
+              <Label>{editForm.is_active ? t.active : t.inactive}</Label>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              {t.cancel}
-            </Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>{t.cancel}</Button>
             <Button onClick={handleSaveUser} disabled={updateUserMutation.isPending}>
-              {t.save}
+              {updateUserMutation.isPending ? '...' : t.save}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t.addUser}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              {language === 'ar' 
+                ? 'لإضافة مستخدم جديد، يجب أن يقوم بتسجيل حساب جديد عبر صفحة التسجيل. بعد ذلك سيظهر هنا ويمكنك تعديل صلاحياته.'
+                : 'To add a new user, they must register through the signup page. After registration, they will appear here and you can edit their permissions.'}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsAddUserDialogOpen(false)}>{t.cancel}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
