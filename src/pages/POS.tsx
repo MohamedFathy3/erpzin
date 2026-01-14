@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Home, LogOut, Loader2, Crown, Star } from 'lucide-react';
+import { Search, Barcode, Home, LogOut, Loader2, Crown, CreditCard, Pause, Clock, User, Truck, RotateCcw, DollarSign } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -397,7 +397,145 @@ const POS: React.FC = () => {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-1 me-2 border-e border-white/20 pe-2">
+            {/* Pay */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => cartItems.length > 0 && setShowPayment(true)}
+                  disabled={cartItems.length === 0}
+                  className="text-success hover:text-success hover:bg-success/20 disabled:opacity-50"
+                >
+                  <CreditCard size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'الدفع' : 'Pay'} (F1)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Hold */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={holdOrder}
+                  disabled={cartItems.length === 0}
+                  className="text-warning hover:text-warning hover:bg-warning/20 disabled:opacity-50"
+                >
+                  <Pause size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'تعليق' : 'Hold'} (F2)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Held Orders */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowHeldOrders(true)}
+                  className="text-white/80 hover:text-white hover:bg-white/10 relative"
+                >
+                  <Clock size={18} />
+                  {heldOrders.length > 0 && (
+                    <span className="absolute -top-1 -end-1 w-4 h-4 bg-warning text-warning-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
+                      {heldOrders.length}
+                    </span>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'المعلقة' : 'Held'} (F3)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Customer */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowCustomerSelector(true)}
+                  className={cn(
+                    "hover:bg-white/10",
+                    selectedCustomer ? "text-primary" : "text-white/80 hover:text-white"
+                  )}
+                >
+                  <User size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'العميل' : 'Customer'} (F4)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Delivery */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowDeliverySelector(true)}
+                  className={cn(
+                    "hover:bg-white/10",
+                    selectedDelivery ? "text-primary" : "text-white/80 hover:text-white"
+                  )}
+                >
+                  <Truck size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'التوصيل' : 'Delivery'} (F5)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Returns */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowReturns(true)}
+                  className="text-white/80 hover:text-white hover:bg-white/10"
+                >
+                  <RotateCcw size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'مرتجع' : 'Returns'} (F6)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Shift */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowShiftPanel(true)}
+                  className={cn(
+                    "hover:bg-white/10",
+                    currentShift ? "text-primary" : "text-white/80 hover:text-white"
+                  )}
+                >
+                  <DollarSign size={18} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'الوردية' : 'Shift'} (F7)</span>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
           {/* Selected Customer Display */}
           {selectedCustomer && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
@@ -432,7 +570,7 @@ const POS: React.FC = () => {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="bg-card border border-border">
-              <span>{language === 'ar' ? 'الصفحة الرئيسية' : 'Dashboard'} (F12)</span>
+              <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
             </TooltipContent>
           </Tooltip>
 
@@ -449,7 +587,7 @@ const POS: React.FC = () => {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="bg-card border border-border">
-              <span>{language === 'ar' ? 'تسجيل الخروج' : 'Logout'}</span>
+              <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
             </TooltipContent>
           </Tooltip>
         </div>
