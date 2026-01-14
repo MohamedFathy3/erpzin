@@ -115,9 +115,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     }, 1000);
   };
 
-  if (!isOpen) return null;
-
-  // Payment modal keyboard shortcuts
+  // Payment modal keyboard shortcuts - must be called before any conditional returns
   const paymentShortcuts = getPaymentShortcuts({
     onConfirm: () => canComplete() && !isProcessing && handleComplete(),
     onCancel: onClose,
@@ -137,6 +135,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   });
 
   usePOSKeyboardShortcuts(paymentShortcuts, isOpen);
+
+  if (!isOpen) return null;
 
   const renderPaymentContent = () => {
     if (paymentMethod === 'cash') {
