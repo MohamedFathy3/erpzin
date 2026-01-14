@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const loginSchema = z.object({
-  email: z.string().trim().email({ message: 'البريد الإلكتروني غير صالح' }),
+  identifier: z.string().trim().min(3, { message: 'اسم المستخدم أو البريد الإلكتروني مطلوب' }),
   password: z.string().min(6, { message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' }),
 });
 

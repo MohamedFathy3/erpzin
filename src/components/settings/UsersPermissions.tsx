@@ -52,7 +52,10 @@ import {
   FileText,
   Package,
   Wallet,
-  Calendar
+  Calendar,
+  Warehouse,
+  Lock,
+  Palette
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -68,6 +71,8 @@ interface Profile {
   avatar_url: string | null;
   is_active: boolean | null;
   branch_id: string | null;
+  warehouse_id: string | null;
+  username: string | null;
   created_at: string;
 }
 
@@ -79,6 +84,12 @@ interface UserRole {
 }
 
 interface Branch {
+  id: string;
+  name: string;
+  name_ar: string | null;
+}
+
+interface WarehouseType {
   id: string;
   name: string;
   name_ar: string | null;
@@ -101,12 +112,28 @@ interface RolePermission {
   permission_id: string;
 }
 
+interface CustomRole {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  description: string | null;
+  description_ar: string | null;
+  color: string;
+  icon: string;
+  is_system: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
 const UsersPermissions = () => {
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
+  const [isAddRoleDialogOpen, setIsAddRoleDialogOpen] = useState(false);
+  const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<CustomRole | null>(null);
   const [activeTab, setActiveTab] = useState('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<AppRole | 'all'>('all');
@@ -119,17 +146,37 @@ const UsersPermissions = () => {
     full_name_ar: '',
     phone: '',
     email: '',
+    username: '',
     is_active: true,
     branch_id: '',
+    warehouse_id: '',
     role: 'viewer' as AppRole
   });
   const [newUserForm, setNewUserForm] = useState({
+    username: '',
+    password: '',
     full_name: '',
     full_name_ar: '',
-    email: '',
     phone: '',
     branch_id: '',
+    warehouse_id: '',
     role: 'viewer' as AppRole
+  });
+  const [newRoleForm, setNewRoleForm] = useState({
+    name: '',
+    name_ar: '',
+    description: '',
+    description_ar: '',
+    color: '#6366f1',
+    icon: 'Shield'
+  });
+  const [editRoleForm, setEditRoleForm] = useState({
+    name: '',
+    name_ar: '',
+    description: '',
+    description_ar: '',
+    color: '#6366f1',
+    icon: 'Shield'
   });
 
   const translations = {
@@ -140,13 +187,18 @@ const UsersPermissions = () => {
       roles: 'Roles',
       permissions: 'Permissions Matrix',
       addUser: 'Add User',
+      addRole: 'Add Role',
       editUser: 'Edit User',
+      editRole: 'Edit Role',
       userName: 'Full Name',
       userNameAr: 'Full Name (Arabic)',
+      username: 'Username',
+      password: 'Password',
       email: 'Email',
       phone: 'Phone',
       role: 'Role',
       branch: 'Branch',
+      warehouse: 'Warehouse',
       status: 'Status',
       active: 'Active',
       inactive: 'Inactive',
@@ -167,9 +219,12 @@ const UsersPermissions = () => {
       roleUpdated: 'Role updated successfully',
       userUpdated: 'User updated successfully',
       userAdded: 'User added successfully',
+      roleAdded: 'Role added successfully',
       permissionsSaved: 'Permissions saved successfully',
       selectBranch: 'Select Branch',
+      selectWarehouse: 'Select Warehouse',
       allBranches: 'All Branches',
+      allWarehouses: 'All Warehouses',
       allRoles: 'All Roles',
       allStatus: 'All Status',
       search: 'Search users...',
@@ -197,7 +252,19 @@ const UsersPermissions = () => {
       purchasing: 'Purchasing',
       unsavedChanges: 'You have unsaved changes',
       discardChanges: 'Discard',
-      selectRole: 'Select role to edit permissions'
+      selectRole: 'Select role to edit permissions',
+      roleName: 'Role Name',
+      roleNameAr: 'Role Name (Arabic)',
+      roleDescription: 'Description',
+      roleDescriptionAr: 'Description (Arabic)',
+      roleColor: 'Color',
+      roleIcon: 'Icon',
+      systemRole: 'System Role',
+      customRole: 'Custom Role',
+      cannotDeleteSystemRole: 'Cannot delete system roles',
+      roleDeleted: 'Role deleted successfully',
+      loginWithUsername: 'Login with username and password',
+      createUserNote: 'Create a user with username and password for direct login'
     },
     ar: {
       title: 'المستخدمين والصلاحيات',
@@ -206,13 +273,18 @@ const UsersPermissions = () => {
       roles: 'الأدوار',
       permissions: 'مصفوفة الصلاحيات',
       addUser: 'إضافة مستخدم',
+      addRole: 'إضافة دور',
       editUser: 'تعديل مستخدم',
+      editRole: 'تعديل دور',
       userName: 'الاسم الكامل',
       userNameAr: 'الاسم بالعربية',
+      username: 'اسم المستخدم',
+      password: 'كلمة المرور',
       email: 'البريد الإلكتروني',
       phone: 'الهاتف',
       role: 'الدور',
       branch: 'الفرع',
+      warehouse: 'المخزن',
       status: 'الحالة',
       active: 'نشط',
       inactive: 'غير نشط',
@@ -233,9 +305,12 @@ const UsersPermissions = () => {
       roleUpdated: 'تم تحديث الدور بنجاح',
       userUpdated: 'تم تحديث المستخدم بنجاح',
       userAdded: 'تم إضافة المستخدم بنجاح',
+      roleAdded: 'تم إضافة الدور بنجاح',
       permissionsSaved: 'تم حفظ الصلاحيات بنجاح',
       selectBranch: 'اختر الفرع',
+      selectWarehouse: 'اختر المخزن',
       allBranches: 'جميع الفروع',
+      allWarehouses: 'جميع المخازن',
       allRoles: 'جميع الأدوار',
       allStatus: 'جميع الحالات',
       search: 'بحث عن المستخدمين...',
@@ -263,11 +338,32 @@ const UsersPermissions = () => {
       purchasing: 'المشتريات',
       unsavedChanges: 'لديك تغييرات غير محفوظة',
       discardChanges: 'تجاهل',
-      selectRole: 'اختر دور لتعديل الصلاحيات'
+      selectRole: 'اختر دور لتعديل الصلاحيات',
+      roleName: 'اسم الدور',
+      roleNameAr: 'اسم الدور بالعربية',
+      roleDescription: 'الوصف',
+      roleDescriptionAr: 'الوصف بالعربية',
+      roleColor: 'اللون',
+      roleIcon: 'الأيقونة',
+      systemRole: 'دور نظامي',
+      customRole: 'دور مخصص',
+      cannotDeleteSystemRole: 'لا يمكن حذف الأدوار النظامية',
+      roleDeleted: 'تم حذف الدور بنجاح',
+      loginWithUsername: 'الدخول باسم المستخدم وكلمة المرور',
+      createUserNote: 'إنشاء مستخدم باسم مستخدم وكلمة مرور للدخول المباشر'
     }
   };
 
   const t = translations[language];
+
+  const iconOptions = [
+    'Shield', 'Crown', 'Eye', 'ShoppingCart', 'User', 'Users', 'Key', 'Lock',
+    'Package', 'TrendingUp', 'FileText', 'Wallet', 'Briefcase', 'Home', 'Settings'
+  ];
+
+  const colorOptions = [
+    '#f59e0b', '#3b82f6', '#10b981', '#64748b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'
+  ];
 
   // Fetch profiles
   const { data: profiles = [], isLoading: loadingProfiles, refetch: refetchProfiles } = useQuery({
@@ -303,6 +399,32 @@ const UsersPermissions = () => {
         .select('id, name, name_ar');
       if (error) throw error;
       return data as Branch[];
+    }
+  });
+
+  // Fetch warehouses
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('warehouses')
+        .select('id, name, name_ar');
+      if (error) throw error;
+      return data as WarehouseType[];
+    }
+  });
+
+  // Fetch custom roles
+  const { data: customRoles = [] } = useQuery({
+    queryKey: ['custom-roles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('custom_roles')
+        .select('*')
+        .order('is_system', { ascending: false })
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data as CustomRole[];
     }
   });
 
@@ -433,6 +555,135 @@ const UsersPermissions = () => {
     }
   });
 
+  // Add custom role mutation
+  const addRoleMutation = useMutation({
+    mutationFn: async (data: typeof newRoleForm) => {
+      const { error } = await supabase
+        .from('custom_roles')
+        .insert({
+          name: data.name,
+          name_ar: data.name_ar || null,
+          description: data.description || null,
+          description_ar: data.description_ar || null,
+          color: data.color,
+          icon: data.icon,
+          is_system: false
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
+      toast({ title: t.roleAdded });
+      setIsAddRoleDialogOpen(false);
+      setNewRoleForm({ name: '', name_ar: '', description: '', description_ar: '', color: '#6366f1', icon: 'Shield' });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || (language === 'ar' ? 'خطأ في إضافة الدور' : 'Error adding role'), variant: 'destructive' });
+    }
+  });
+
+  // Update custom role mutation
+  const updateCustomRoleMutation = useMutation({
+    mutationFn: async ({ roleId, data }: { roleId: string; data: typeof editRoleForm }) => {
+      const { error } = await supabase
+        .from('custom_roles')
+        .update({
+          name: data.name,
+          name_ar: data.name_ar || null,
+          description: data.description || null,
+          description_ar: data.description_ar || null,
+          color: data.color,
+          icon: data.icon
+        })
+        .eq('id', roleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
+      toast({ title: t.roleUpdated });
+      setIsEditRoleDialogOpen(false);
+      setSelectedRole(null);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'), variant: 'destructive' });
+    }
+  });
+
+  // Delete custom role mutation
+  const deleteRoleMutation = useMutation({
+    mutationFn: async (roleId: string) => {
+      const { error } = await supabase
+        .from('custom_roles')
+        .delete()
+        .eq('id', roleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
+      toast({ title: t.roleDeleted });
+    },
+    onError: () => {
+      toast({ title: language === 'ar' ? 'خطأ في حذف الدور' : 'Error deleting role', variant: 'destructive' });
+    }
+  });
+
+  // Add user mutation (creates auth user with username as email)
+  const addUserMutation = useMutation({
+    mutationFn: async (data: typeof newUserForm) => {
+      // Create fake email from username for Supabase auth
+      const fakeEmail = `${data.username}@injaz.local`;
+      
+      // Sign up new user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: fakeEmail,
+        password: data.password,
+        options: {
+          data: {
+            full_name: data.full_name,
+            full_name_ar: data.full_name_ar
+          }
+        }
+      });
+      
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('User creation failed');
+
+      // Update profile with additional data
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          username: data.username,
+          full_name: data.full_name,
+          full_name_ar: data.full_name_ar || null,
+          phone: data.phone || null,
+          branch_id: data.branch_id || null,
+          warehouse_id: data.warehouse_id || null
+        })
+        .eq('id', authData.user.id);
+
+      if (profileError) throw profileError;
+
+      // Update role if not viewer
+      if (data.role !== 'viewer') {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .update({ role: data.role })
+          .eq('user_id', authData.user.id);
+        if (roleError) throw roleError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      queryClient.invalidateQueries({ queryKey: ['user-roles'] });
+      toast({ title: t.userAdded });
+      setIsAddUserDialogOpen(false);
+      setNewUserForm({ username: '', password: '', full_name: '', full_name_ar: '', phone: '', branch_id: '', warehouse_id: '', role: 'viewer' });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || (language === 'ar' ? 'خطأ في إضافة المستخدم' : 'Error adding user'), variant: 'destructive' });
+    }
+  });
+
   // Toggle user status
   const toggleUserStatus = useMutation({
     mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
@@ -454,13 +705,33 @@ const UsersPermissions = () => {
   };
 
   const getRoleConfig = (role: AppRole) => {
+    const customRole = customRoles.find(r => r.name === role);
+    if (customRole) {
+      return {
+        icon: getIconComponent(customRole.icon),
+        color: `text-[${customRole.color}]`,
+        bgColor: `bg-[${customRole.color}]/10`,
+        borderColor: `border-[${customRole.color}]/30`,
+        gradient: `from-[${customRole.color}]/20 to-[${customRole.color}]/5`,
+        rawColor: customRole.color
+      };
+    }
+    
     const configs = {
-      admin: { icon: Crown, color: 'text-amber-500', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', gradient: 'from-amber-500/20 to-amber-500/5' },
-      moderator: { icon: Shield, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30', gradient: 'from-blue-500/20 to-blue-500/5' },
-      cashier: { icon: ShoppingCart, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', gradient: 'from-emerald-500/20 to-emerald-500/5' },
-      viewer: { icon: Eye, color: 'text-slate-500', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', gradient: 'from-slate-500/20 to-slate-500/5' }
+      admin: { icon: Crown, color: 'text-amber-500', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/30', gradient: 'from-amber-500/20 to-amber-500/5', rawColor: '#f59e0b' },
+      moderator: { icon: Shield, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30', gradient: 'from-blue-500/20 to-blue-500/5', rawColor: '#3b82f6' },
+      cashier: { icon: ShoppingCart, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', gradient: 'from-emerald-500/20 to-emerald-500/5', rawColor: '#10b981' },
+      viewer: { icon: Eye, color: 'text-slate-500', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', gradient: 'from-slate-500/20 to-slate-500/5', rawColor: '#64748b' }
     };
-    return configs[role];
+    return configs[role] || configs.viewer;
+  };
+
+  const getIconComponent = (iconName: string) => {
+    const icons: Record<string, any> = {
+      Shield, Crown, Eye, ShoppingCart, User, Users, Key, Lock,
+      Package, TrendingUp, FileText, Wallet, Briefcase, Home, Settings: SettingsIcon
+    };
+    return icons[iconName] || Shield;
   };
 
   const getModuleIcon = (module: string) => {
@@ -492,8 +763,10 @@ const UsersPermissions = () => {
       full_name_ar: user.full_name_ar || '',
       phone: user.phone || '',
       email: user.email || '',
+      username: user.username || '',
       is_active: user.is_active ?? true,
       branch_id: user.branch_id || '',
+      warehouse_id: user.warehouse_id || '',
       role: getUserRole(user.id)
     });
     setIsEditDialogOpen(true);
@@ -507,13 +780,28 @@ const UsersPermissions = () => {
         full_name: editForm.full_name,
         full_name_ar: editForm.full_name_ar,
         phone: editForm.phone,
+        username: editForm.username || null,
         is_active: editForm.is_active,
-        branch_id: editForm.branch_id || null
+        branch_id: editForm.branch_id || null,
+        warehouse_id: editForm.warehouse_id || null
       }
     });
     if (editForm.role !== getUserRole(selectedUser.id)) {
       updateRoleMutation.mutate({ userId: selectedUser.id, role: editForm.role });
     }
+  };
+
+  const handleEditRole = (role: CustomRole) => {
+    setSelectedRole(role);
+    setEditRoleForm({
+      name: role.name,
+      name_ar: role.name_ar || '',
+      description: role.description || '',
+      description_ar: role.description_ar || '',
+      color: role.color,
+      icon: role.icon
+    });
+    setIsEditRoleDialogOpen(true);
   };
 
   const getInitials = (name: string | null) => {
@@ -528,12 +816,20 @@ const UsersPermissions = () => {
     return language === 'ar' ? branch.name_ar || branch.name : branch.name;
   };
 
+  const getWarehouseName = (warehouseId: string | null) => {
+    if (!warehouseId) return t.allWarehouses;
+    const wh = warehouses.find(w => w.id === warehouseId);
+    if (!wh) return '-';
+    return language === 'ar' ? wh.name_ar || wh.name : wh.name;
+  };
+
   // Filter users
   const filteredProfiles = profiles.filter(user => {
     const matchesSearch = searchQuery === '' || 
       user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.full_name_ar?.includes(searchQuery) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = filterRole === 'all' || getUserRole(user.id) === filterRole;
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'active' && user.is_active) ||
@@ -580,12 +876,12 @@ const UsersPermissions = () => {
 
     return (
       <Card className="card-elevated hover:shadow-lg transition-all overflow-hidden">
-        <div className={`h-2 bg-gradient-to-r ${roleConfig.gradient}`} />
+        <div className="h-2" style={{ background: `linear-gradient(to right, ${roleConfig.rawColor}33, ${roleConfig.rawColor}11)` }} />
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <Avatar className="h-12 w-12 border-2 border-background shadow-md">
               <AvatarImage src={user.avatar_url || undefined} />
-              <AvatarFallback className={`${roleConfig.bgColor} ${roleConfig.color} font-semibold`}>
+              <AvatarFallback style={{ backgroundColor: `${roleConfig.rawColor}20`, color: roleConfig.rawColor }} className="font-semibold">
                 {getInitials(user.full_name)}
               </AvatarFallback>
             </Avatar>
@@ -600,11 +896,14 @@ const UsersPermissions = () => {
                   <XCircle size={14} className="text-muted-foreground shrink-0" />
                 )}
               </div>
+              {user.username && (
+                <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+              )}
               <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               <div className="flex items-center gap-2 mt-2">
-                <Badge variant="outline" className={`${roleConfig.bgColor} ${roleConfig.color} ${roleConfig.borderColor} text-xs`}>
+                <Badge variant="outline" style={{ backgroundColor: `${roleConfig.rawColor}15`, color: roleConfig.rawColor, borderColor: `${roleConfig.rawColor}40` }} className="text-xs">
                   <RoleIcon size={12} className="me-1" />
-                  {t[role]}
+                  {t[role] || role}
                 </Badge>
               </div>
             </div>
@@ -753,9 +1052,10 @@ const UsersPermissions = () => {
                     <TableHeader>
                       <TableRow className="bg-muted/30">
                         <TableHead className="w-[300px]">{t.userName}</TableHead>
-                        <TableHead>{t.email}</TableHead>
+                        <TableHead>{t.username}</TableHead>
                         <TableHead>{t.role}</TableHead>
                         <TableHead>{t.branch}</TableHead>
+                        <TableHead>{t.warehouse}</TableHead>
                         <TableHead>{t.status}</TableHead>
                         <TableHead className="text-center">{t.actions}</TableHead>
                       </TableRow>
@@ -772,7 +1072,7 @@ const UsersPermissions = () => {
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-9 w-9">
                                   <AvatarImage src={user.avatar_url || undefined} />
-                                  <AvatarFallback className={`${roleConfig.bgColor} ${roleConfig.color} text-xs font-semibold`}>
+                                  <AvatarFallback style={{ backgroundColor: `${roleConfig.rawColor}20`, color: roleConfig.rawColor }} className="text-xs font-semibold">
                                     {getInitials(user.full_name)}
                                   </AvatarFallback>
                                 </Avatar>
@@ -786,17 +1086,25 @@ const UsersPermissions = () => {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{user.email || '-'}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {user.username ? `@${user.username}` : user.email || '-'}
+                            </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={`${roleConfig.bgColor} ${roleConfig.color} ${roleConfig.borderColor}`}>
+                              <Badge variant="outline" style={{ backgroundColor: `${roleConfig.rawColor}15`, color: roleConfig.rawColor, borderColor: `${roleConfig.rawColor}40` }}>
                                 <RoleIcon size={12} className="me-1" />
-                                {t[role]}
+                                {t[role] || role}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1 text-sm">
                                 <Building2 size={14} className="text-muted-foreground" />
                                 {getBranchName(user.branch_id)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1 text-sm">
+                                <Warehouse size={14} className="text-muted-foreground" />
+                                {getWarehouseName(user.warehouse_id)}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -827,34 +1135,63 @@ const UsersPermissions = () => {
         </TabsContent>
 
         {/* Roles Tab */}
-        <TabsContent value="roles" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(['admin', 'moderator', 'cashier', 'viewer'] as AppRole[]).map((role) => {
-              const config = getRoleConfig(role);
-              const RoleIcon = config.icon;
-              const count = profiles.filter(p => getUserRole(p.id) === role).length;
+        <TabsContent value="roles" className="mt-6 space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setIsAddRoleDialogOpen(true)} className="gap-2">
+              <Plus size={16} />
+              {t.addRole}
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {customRoles.map((role) => {
+              const RoleIcon = getIconComponent(role.icon);
+              const count = profiles.filter(p => getUserRole(p.id) === role.name).length;
               const percentage = totalUsers > 0 ? (count / totalUsers) * 100 : 0;
 
               return (
-                <Card key={role} className="card-elevated overflow-hidden">
-                  <div className={`h-1 bg-gradient-to-r ${config.gradient}`} />
+                <Card key={role.id} className="card-elevated overflow-hidden">
+                  <div className="h-1" style={{ background: `linear-gradient(to right, ${role.color}33, ${role.color}11)` }} />
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
-                      <div className={`p-3 rounded-xl ${config.bgColor}`}>
-                        <RoleIcon className={config.color} size={24} />
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: `${role.color}15` }}>
+                        <RoleIcon style={{ color: role.color }} size={24} />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-lg">{t[role]}</h3>
-                          <Badge variant="secondary" className="text-lg px-3">{count}</Badge>
+                          <h3 className="font-semibold text-lg">
+                            {language === 'ar' ? role.name_ar || role.name : role.name}
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-lg px-3">{count}</Badge>
+                            {!role.is_system && (
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEditRole(role)}>
+                                  <Edit size={14} />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteRoleMutation.mutate(role.id)}>
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">{t[`${role}Desc` as keyof typeof t]}</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {language === 'ar' ? role.description_ar || role.description : role.description}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          {role.is_system ? (
+                            <Badge variant="outline" className="text-xs">{t.systemRole}</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">{t.customRole}</Badge>
+                          )}
+                        </div>
                         <div className="mt-4">
                           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                             <span>{language === 'ar' ? 'نسبة المستخدمين' : 'User percentage'}</span>
                             <span>{percentage.toFixed(0)}%</span>
                           </div>
-                          <Progress value={percentage} className="h-1.5" />
+                          <Progress value={percentage} className="h-1.5" style={{ '--progress-color': role.color } as any} />
                         </div>
                       </div>
                     </div>
@@ -1004,7 +1341,7 @@ const UsersPermissions = () => {
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t.editUser}</DialogTitle>
           </DialogHeader>
@@ -1019,13 +1356,19 @@ const UsersPermissions = () => {
                 <Input value={editForm.full_name_ar} onChange={(e) => setEditForm(prev => ({ ...prev, full_name_ar: e.target.value }))} dir="rtl" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t.email}</Label>
-              <Input value={editForm.email} disabled className="bg-muted" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.username}</Label>
+                <Input value={editForm.username} onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))} placeholder="username" dir="ltr" />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.email}</Label>
+                <Input value={editForm.email} disabled className="bg-muted" dir="ltr" />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>{t.phone}</Label>
-              <Input value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} />
+              <Input value={editForm.phone} onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))} dir="ltr" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1059,6 +1402,22 @@ const UsersPermissions = () => {
                 </Select>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>{t.warehouse}</Label>
+              <Select value={editForm.warehouse_id} onValueChange={(v) => setEditForm(prev => ({ ...prev, warehouse_id: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t.selectWarehouse} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t.allWarehouses}</SelectItem>
+                  {warehouses.map((wh) => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {language === 'ar' ? wh.name_ar || wh.name : wh.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center gap-2">
               <Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm(prev => ({ ...prev, is_active: v }))} />
               <Label>{editForm.is_active ? t.active : t.inactive}</Label>
@@ -1075,19 +1434,322 @@ const UsersPermissions = () => {
 
       {/* Add User Dialog */}
       <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t.addUser}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <User size={20} />
+              {t.addUser}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              {language === 'ar' 
-                ? 'لإضافة مستخدم جديد، يجب أن يقوم بتسجيل حساب جديد عبر صفحة التسجيل. بعد ذلك سيظهر هنا ويمكنك تعديل صلاحياته.'
-                : 'To add a new user, they must register through the signup page. After registration, they will appear here and you can edit their permissions.'}
-            </p>
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Lock size={14} />
+                {t.createUserNote}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.username} *</Label>
+                <Input 
+                  value={newUserForm.username} 
+                  onChange={(e) => setNewUserForm(prev => ({ ...prev, username: e.target.value }))} 
+                  placeholder="username"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.password} *</Label>
+                <Input 
+                  type="password"
+                  value={newUserForm.password} 
+                  onChange={(e) => setNewUserForm(prev => ({ ...prev, password: e.target.value }))} 
+                  placeholder="••••••"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.userName}</Label>
+                <Input 
+                  value={newUserForm.full_name} 
+                  onChange={(e) => setNewUserForm(prev => ({ ...prev, full_name: e.target.value }))} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.userNameAr}</Label>
+                <Input 
+                  value={newUserForm.full_name_ar} 
+                  onChange={(e) => setNewUserForm(prev => ({ ...prev, full_name_ar: e.target.value }))} 
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.phone}</Label>
+              <Input 
+                value={newUserForm.phone} 
+                onChange={(e) => setNewUserForm(prev => ({ ...prev, phone: e.target.value }))} 
+                dir="ltr"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.role}</Label>
+                <Select value={newUserForm.role} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, role: v as AppRole }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">{t.admin}</SelectItem>
+                    <SelectItem value="moderator">{t.moderator}</SelectItem>
+                    <SelectItem value="cashier">{t.cashier}</SelectItem>
+                    <SelectItem value="viewer">{t.viewer}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t.branch}</Label>
+                <Select value={newUserForm.branch_id} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, branch_id: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectBranch} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">{t.allBranches}</SelectItem>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t.warehouse}</Label>
+              <Select value={newUserForm.warehouse_id} onValueChange={(v) => setNewUserForm(prev => ({ ...prev, warehouse_id: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t.selectWarehouse} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t.allWarehouses}</SelectItem>
+                  {warehouses.map((wh) => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {language === 'ar' ? wh.name_ar || wh.name : wh.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setIsAddUserDialogOpen(false)}>{t.cancel}</Button>
+            <Button variant="outline" onClick={() => setIsAddUserDialogOpen(false)}>{t.cancel}</Button>
+            <Button 
+              onClick={() => addUserMutation.mutate(newUserForm)} 
+              disabled={addUserMutation.isPending || !newUserForm.username || !newUserForm.password}
+            >
+              {addUserMutation.isPending ? '...' : t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Role Dialog */}
+      <Dialog open={isAddRoleDialogOpen} onOpenChange={setIsAddRoleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield size={20} />
+              {t.addRole}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.roleName} *</Label>
+                <Input 
+                  value={newRoleForm.name} 
+                  onChange={(e) => setNewRoleForm(prev => ({ ...prev, name: e.target.value }))} 
+                  placeholder="sales_manager"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleNameAr}</Label>
+                <Input 
+                  value={newRoleForm.name_ar} 
+                  onChange={(e) => setNewRoleForm(prev => ({ ...prev, name_ar: e.target.value }))} 
+                  placeholder="مدير المبيعات"
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.roleDescription}</Label>
+                <Input 
+                  value={newRoleForm.description} 
+                  onChange={(e) => setNewRoleForm(prev => ({ ...prev, description: e.target.value }))} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleDescriptionAr}</Label>
+                <Input 
+                  value={newRoleForm.description_ar} 
+                  onChange={(e) => setNewRoleForm(prev => ({ ...prev, description_ar: e.target.value }))} 
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Palette size={14} />
+                  {t.roleColor}
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {colorOptions.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`w-8 h-8 rounded-full border-2 transition-all ${newRoleForm.color === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setNewRoleForm(prev => ({ ...prev, color }))}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleIcon}</Label>
+                <Select value={newRoleForm.icon} onValueChange={(v) => setNewRoleForm(prev => ({ ...prev, icon: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {iconOptions.map((icon) => {
+                      const IconComp = getIconComponent(icon);
+                      return (
+                        <SelectItem key={icon} value={icon}>
+                          <div className="flex items-center gap-2">
+                            <IconComp size={16} />
+                            {icon}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddRoleDialogOpen(false)}>{t.cancel}</Button>
+            <Button 
+              onClick={() => addRoleMutation.mutate(newRoleForm)} 
+              disabled={addRoleMutation.isPending || !newRoleForm.name}
+            >
+              {addRoleMutation.isPending ? '...' : t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Role Dialog */}
+      <Dialog open={isEditRoleDialogOpen} onOpenChange={setIsEditRoleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield size={20} />
+              {t.editRole}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.roleName} *</Label>
+                <Input 
+                  value={editRoleForm.name} 
+                  onChange={(e) => setEditRoleForm(prev => ({ ...prev, name: e.target.value }))} 
+                  disabled={selectedRole?.is_system}
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleNameAr}</Label>
+                <Input 
+                  value={editRoleForm.name_ar} 
+                  onChange={(e) => setEditRoleForm(prev => ({ ...prev, name_ar: e.target.value }))} 
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.roleDescription}</Label>
+                <Input 
+                  value={editRoleForm.description} 
+                  onChange={(e) => setEditRoleForm(prev => ({ ...prev, description: e.target.value }))} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleDescriptionAr}</Label>
+                <Input 
+                  value={editRoleForm.description_ar} 
+                  onChange={(e) => setEditRoleForm(prev => ({ ...prev, description_ar: e.target.value }))} 
+                  dir="rtl"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Palette size={14} />
+                  {t.roleColor}
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {colorOptions.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`w-8 h-8 rounded-full border-2 transition-all ${editRoleForm.color === color ? 'border-foreground scale-110' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setEditRoleForm(prev => ({ ...prev, color }))}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{t.roleIcon}</Label>
+                <Select value={editRoleForm.icon} onValueChange={(v) => setEditRoleForm(prev => ({ ...prev, icon: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {iconOptions.map((icon) => {
+                      const IconComp = getIconComponent(icon);
+                      return (
+                        <SelectItem key={icon} value={icon}>
+                          <div className="flex items-center gap-2">
+                            <IconComp size={16} />
+                            {icon}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditRoleDialogOpen(false)}>{t.cancel}</Button>
+            <Button 
+              onClick={() => selectedRole && updateCustomRoleMutation.mutate({ roleId: selectedRole.id, data: editRoleForm })} 
+              disabled={updateCustomRoleMutation.isPending || !editRoleForm.name}
+            >
+              {updateCustomRoleMutation.isPending ? '...' : t.save}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
