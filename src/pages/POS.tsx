@@ -20,7 +20,9 @@ import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
 import POSKeyboardShortcutsHelp from '@/components/pos/POSKeyboardShortcutsHelp';
+import POSShortcutBadge from '@/components/pos/POSShortcutBadge';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
 
 interface CartItem {
@@ -393,6 +395,7 @@ const POS: React.FC = () => {
   const isLoading = categoriesLoading || productsLoading;
 
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* POS Header */}
       <header className="h-16 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
@@ -404,55 +407,91 @@ const POS: React.FC = () => {
             {language === 'ar' ? 'فرع أبرا' : 'Abra Branch'}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {/* Shift Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowShiftPanel(true)}
-            className={cn(
-              "text-white/80 hover:text-white hover:bg-white/10",
-              currentShift && "bg-green-600/30"
-            )}
-          >
-            <DollarSign size={18} className="me-1" />
-            <span className="text-xs">
-              {currentShift 
-                ? (language === 'ar' ? 'الوردية' : 'Shift')
-                : (language === 'ar' ? 'فتح وردية' : 'Open Shift')
-              }
-            </span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowShiftPanel(true)}
+                className={cn(
+                  "text-white/80 hover:text-white hover:bg-white/10 relative group",
+                  currentShift && "bg-green-600/30"
+                )}
+              >
+                <DollarSign size={18} className="me-1" />
+                <span className="text-xs">
+                  {currentShift 
+                    ? (language === 'ar' ? 'الوردية' : 'Shift')
+                    : (language === 'ar' ? 'فتح وردية' : 'Open Shift')
+                  }
+                </span>
+                <POSShortcutBadge shortcut="Alt+S" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'إدارة الوردية' : 'Shift Management'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+S</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
           {/* Returns Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowReturns(true)}
-            className="text-white/80 hover:text-white hover:bg-white/10"
-          >
-            <RotateCcw size={18} className="me-1" />
-            <span className="text-xs">
-              {language === 'ar' ? 'فاتورة مرتجع' : 'Return Invoice'}
-            </span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowReturns(true)}
+                className="text-white/80 hover:text-white hover:bg-white/10 relative"
+              >
+                <RotateCcw size={18} className="me-1" />
+                <span className="text-xs">
+                  {language === 'ar' ? 'مرتجع' : 'Returns'}
+                </span>
+                <POSShortcutBadge shortcut="Alt+R" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'فاتورة مرتجع' : 'Return Invoice'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+R</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
           {/* Customer Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCustomerSelector(true)}
-            className={cn(
-              "text-white/80 hover:text-white hover:bg-white/10",
-              selectedCustomer && "bg-white/10"
-            )}
-          >
-            <User size={18} className="me-1" />
-            <span className="text-xs max-w-24 truncate">
-              {selectedCustomer 
-                ? (language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name)
-                : (language === 'ar' ? 'العميل' : 'Customer')
-              }
-            </span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCustomerSelector(true)}
+                className={cn(
+                  "text-white/80 hover:text-white hover:bg-white/10 relative",
+                  selectedCustomer && "bg-white/10"
+                )}
+              >
+                <User size={18} className="me-1" />
+                <span className="text-xs max-w-24 truncate">
+                  {selectedCustomer 
+                    ? (language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name)
+                    : (language === 'ar' ? 'العميل' : 'Customer')
+                  }
+                </span>
+                <POSShortcutBadge shortcut="Alt+C" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'اختيار العميل' : 'Select Customer'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+C</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
           {/* Loyalty Points Display */}
           {selectedCustomer && (
             <div className="flex items-center gap-1 px-3 py-1.5 bg-warning/20 rounded-lg">
@@ -466,61 +505,118 @@ const POS: React.FC = () => {
               </span>
             </div>
           )}
+
           {/* Delivery Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDeliverySelector(true)}
-            className={cn(
-              "text-white/80 hover:text-white hover:bg-white/10",
-              selectedDelivery && "bg-white/10"
-            )}
-          >
-            <Truck size={18} className="me-1" />
-            <span className="text-xs max-w-24 truncate">
-              {selectedDelivery 
-                ? (language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name)
-                : (language === 'ar' ? 'التوصيل' : 'Delivery')
-              }
-            </span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHeldOrders(true)}
-            className="text-white/80 hover:text-white hover:bg-white/10 relative"
-            title={language === 'ar' ? 'الطلبات المعلقة (Alt+O)' : 'Held Orders (Alt+O)'}
-          >
-            <Clock size={20} />
-            {heldOrders.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center">
-                {heldOrders.length}
-              </span>
-            )}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeliverySelector(true)}
+                className={cn(
+                  "text-white/80 hover:text-white hover:bg-white/10 relative",
+                  selectedDelivery && "bg-white/10"
+                )}
+              >
+                <Truck size={18} className="me-1" />
+                <span className="text-xs max-w-24 truncate">
+                  {selectedDelivery 
+                    ? (language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name)
+                    : (language === 'ar' ? 'التوصيل' : 'Delivery')
+                  }
+                </span>
+                <POSShortcutBadge shortcut="Alt+D" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'اختيار التوصيل' : 'Select Delivery'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+D</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Held Orders */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHeldOrders(true)}
+                className="text-white/80 hover:text-white hover:bg-white/10 relative"
+              >
+                <Clock size={20} />
+                {heldOrders.length > 0 && (
+                  <span className="absolute -top-1 -start-1 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center">
+                    {heldOrders.length}
+                  </span>
+                )}
+                <POSShortcutBadge shortcut="Alt+O" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'الطلبات المعلقة' : 'Held Orders'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+O</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
           {/* Keyboard Shortcuts Help */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowKeyboardHelp(true)}
-            className="text-white/80 hover:text-white hover:bg-white/10"
-            title={language === 'ar' ? 'اختصارات لوحة المفاتيح (?)' : 'Keyboard Shortcuts (?)'}
-          >
-            <Keyboard size={20} />
-          </Button>
-          <Link to="/">
-            <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10" title={language === 'ar' ? 'الرئيسية (Alt+Home)' : 'Home (Alt+Home)'}>
-              <Home size={20} />
-            </Button>
-          </Link>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleLogout}
-            className="text-white/80 hover:text-white hover:bg-white/10"
-          >
-            <LogOut size={20} />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowKeyboardHelp(true)}
+                className="text-white/80 hover:text-white hover:bg-white/10 relative"
+              >
+                <Keyboard size={20} />
+                <POSShortcutBadge shortcut="?" position="top-right" variant="dark" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'اختصارات لوحة المفاتيح' : 'Keyboard Shortcuts'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">?</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Home */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link to="/">
+                <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10 relative">
+                  <Home size={20} />
+                  <POSShortcutBadge shortcut="Alt+↖" position="top-right" variant="dark" />
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <div className="flex items-center gap-2">
+                <span>{language === 'ar' ? 'الصفحة الرئيسية' : 'Dashboard'}</span>
+                <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Alt+Home</kbd>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Logout */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleLogout}
+                className="text-white/80 hover:text-white hover:bg-white/10"
+              >
+                <LogOut size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-card border border-border">
+              <span>{language === 'ar' ? 'تسجيل الخروج' : 'Logout'}</span>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </header>
 
@@ -651,6 +747,7 @@ const POS: React.FC = () => {
         onClose={() => setShowKeyboardHelp(false)}
       />
     </div>
+    </TooltipProvider>
   );
 };
 
