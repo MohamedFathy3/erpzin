@@ -53,6 +53,7 @@ import ModuleSettings from '@/components/settings/ModuleSettings';
 import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
 import BackupManager from '@/components/settings/BackupManager';
 import PrintingSettings from '@/components/settings/PrintingSettings';
+import DataManagement from '@/components/settings/DataManagement';
 import { cn } from '@/lib/utils';
 
 interface SettingsSection {
@@ -154,6 +155,15 @@ const Settings = () => {
       labelAr: 'النسخ الاحتياطي',
       description: 'Data backup management',
       descriptionAr: 'إدارة النسخ الاحتياطية',
+      category: 'system'
+    },
+    { 
+      id: 'data-management', 
+      icon: Trash2, 
+      label: 'Data Management', 
+      labelAr: 'إدارة البيانات',
+      description: 'Delete system data (Admin only)',
+      descriptionAr: 'حذف بيانات النظام (مدير النظام فقط)',
       category: 'system'
     },
   ];
@@ -864,6 +874,9 @@ const Settings = () => {
 
       case 'backup':
         return <BackupManager />;
+
+      case 'data-management':
+        return <DataManagement />;
 
       default:
         return null;
