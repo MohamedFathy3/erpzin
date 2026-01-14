@@ -57,6 +57,9 @@ import {
 import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import ReadyReports from '@/components/reports/ReadyReports';
+import ProfitLossReport from '@/components/reports/ProfitLossReport';
+import SalesAnalysisReport from '@/components/reports/SalesAnalysisReport';
+import CustomerSupplierMovement from '@/components/reports/CustomerSupplierMovement';
 
 const Reports = () => {
   const { language, direction } = useLanguage();
@@ -695,6 +698,18 @@ const Reports = () => {
               <Target size={16} />
               {t.performance}
             </TabsTrigger>
+            <TabsTrigger value="profitLoss" className="gap-2 data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
+              <DollarSign size={16} />
+              {language === 'ar' ? 'الأرباح والخسائر' : 'Profit & Loss'}
+            </TabsTrigger>
+            <TabsTrigger value="advancedSales" className="gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white">
+              <TrendingUp size={16} />
+              {language === 'ar' ? 'تحليل المبيعات' : 'Sales Analysis'}
+            </TabsTrigger>
+            <TabsTrigger value="customerSupplier" className="gap-2 data-[state=active]:bg-violet-500 data-[state=active]:text-white">
+              <Users size={16} />
+              {language === 'ar' ? 'حركة العملاء/الموردين' : 'Customer/Supplier'}
+            </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
@@ -1242,6 +1257,21 @@ const Reports = () => {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Advanced Profit & Loss Report */}
+          <TabsContent value="profitLoss" className="mt-6">
+            <ProfitLossReport />
+          </TabsContent>
+
+          {/* Advanced Sales Analysis Report */}
+          <TabsContent value="advancedSales" className="mt-6">
+            <SalesAnalysisReport />
+          </TabsContent>
+
+          {/* Customer/Supplier Movement Report */}
+          <TabsContent value="customerSupplier" className="mt-6">
+            <CustomerSupplierMovement />
           </TabsContent>
         </Tabs>
       </div>
