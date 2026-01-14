@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -14,15 +14,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
+import AdvancedFilter, { FilterValues } from '@/components/ui/advanced-filter';
 import AttendanceManager from '@/components/hr/AttendanceManager';
 import { 
   Plus, 
   Search, 
   Users, 
-  Clock, 
   DollarSign,
-  Calendar,
   UserCheck,
   Truck,
   Building,
@@ -264,8 +262,6 @@ const HR = () => {
   const t = translations[language];
 
   const totalSalaries = employees.filter(e => e.is_active).reduce((sum, e) => sum + Number(e.salary || 0), 0);
-  const today = new Date().toISOString().split('T')[0];
-  const presentToday = attendance.filter(a => a.date === today && a.status === 'present').length;
 
   const stats = [
     { 

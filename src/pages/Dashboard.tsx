@@ -1,4 +1,3 @@
-import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
@@ -11,7 +10,7 @@ import CategoryPerformanceChart from '@/components/dashboard/CategoryPerformance
 import LowStockAlerts from '@/components/dashboard/LowStockAlerts';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
 import QuickAccessGrid from '@/components/dashboard/QuickAccessGrid';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -20,13 +19,11 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
-  Package,
   DollarSign,
-  Receipt,
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { language } = useLanguage();
   const { currentBranch } = useApp();
   const { user } = useAuth();
 

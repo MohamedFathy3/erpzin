@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,8 +17,8 @@ import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { cn } from '@/lib/utils';
 import { 
-  Plus, Search, Truck, Package, FileText, Building2, Phone, Mail, User, 
-  Eye, Edit2, Wallet, CreditCard, TrendingUp, Receipt, ShoppingCart, RotateCcw
+  Plus, FileText, Building2, Phone, 
+  Wallet, Receipt, ShoppingCart, RotateCcw
 } from 'lucide-react';
 
 const Purchasing = () => {
@@ -141,6 +140,7 @@ const Purchasing = () => {
     { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalInvoices.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
     { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
     { label: language === 'ar' ? 'المستحق للموردين' : 'Payables', value: `${totalBalance.toLocaleString()} YER`, icon: <Wallet className="text-destructive" size={24} />, color: 'bg-destructive/10' },
+    { label: language === 'ar' ? 'المرتجعات' : 'Returns', value: `${totalReturns.toLocaleString()} YER`, icon: <RotateCcw className="text-warning" size={24} />, color: 'bg-warning/10' },
   ];
 
   return (
