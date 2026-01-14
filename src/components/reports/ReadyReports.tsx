@@ -312,6 +312,41 @@ const ReadyReports = () => {
     enabled: activeModule === 'hr'
   });
 
+  const { data: attendance = [] } = useQuery({
+    queryKey: ['report-attendance', dateFrom, dateTo, timeFrom, timeTo],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('attendance')
+        .select('*, employees(name, name_ar, employee_code, department)')
+        .gte('date', dateFrom)
+        .lte('date', dateTo)
+        .order('date', { ascending: false });
+      return data || [];
+    },
+    enabled: activeModule === 'hr'
+  });
+
+  const { data: salesmen = [] } = useQuery({
+    queryKey: ['report-salesmen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('salesmen').select('*');
+      return data || [];
+    },
+    enabled: activeModule === 'hr'
+  });
+
+  const { data: deliveryPersons = [] } = useQuery({
+    queryKey: ['report-delivery-persons'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('delivery_persons')
+        .select('*, employees(name, name_ar, employee_code)')
+        .order('created_at', { ascending: false });
+      return data || [];
+    },
+    enabled: activeModule === 'hr'
+  });
+
   const { data: posShifts = [] } = useQuery({
     queryKey: ['report-pos-shifts', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
@@ -448,7 +483,17 @@ const ReadyReports = () => {
         employeeList: 'Employee List',
         employeeListDesc: 'All employees',
         employeeByDept: 'By Department',
-        employeeByDeptDesc: 'Employees by department'
+        employeeByDeptDesc: 'Employees by department',
+        attendanceReport: 'Attendance Report',
+        attendanceReportDesc: 'Employee attendance records',
+        attendanceSummary: 'Attendance Summary',
+        attendanceSummaryDesc: 'Attendance summary by employee',
+        payrollReport: 'Payroll Report',
+        payrollReportDesc: 'Employee salaries and payroll',
+        salesCommissions: 'Sales Commissions',
+        salesCommissionsDesc: 'Salesman commission report',
+        deliveryReport: 'Delivery Persons Report',
+        deliveryReportDesc: 'Delivery persons list and status'
       },
       
       // Table headers
@@ -589,7 +634,17 @@ const ReadyReports = () => {
         employeeList: 'قائمة الموظفين',
         employeeListDesc: 'جميع الموظفين',
         employeeByDept: 'حسب القسم',
-        employeeByDeptDesc: 'الموظفون حسب الأقسام'
+        employeeByDeptDesc: 'الموظفون حسب الأقسام',
+        attendanceReport: 'تقرير الحضور والانصراف',
+        attendanceReportDesc: 'سجلات حضور الموظفين',
+        attendanceSummary: 'ملخص الحضور',
+        attendanceSummaryDesc: 'ملخص الحضور لكل موظف',
+        payrollReport: 'تقرير الرواتب',
+        payrollReportDesc: 'رواتب الموظفين وكشف المرتبات',
+        salesCommissions: 'عمولات المبيعات',
+        salesCommissionsDesc: 'تقرير عمولات مندوبي المبيعات',
+        deliveryReport: 'تقرير مناديب التوصيل',
+        deliveryReportDesc: 'قائمة مناديب التوصيل وحالتهم'
       },
       
       // Table headers
@@ -685,6 +740,11 @@ const ReadyReports = () => {
     hr: [
       { id: 'employeeList', name: t.reports.employeeList, nameAr: t.reports.employeeList, description: t.reports.employeeListDesc, descriptionAr: t.reports.employeeListDesc, icon: <Users size={20} />, module: 'hr' },
       { id: 'employeeByDept', name: t.reports.employeeByDept, nameAr: t.reports.employeeByDept, description: t.reports.employeeByDeptDesc, descriptionAr: t.reports.employeeByDeptDesc, icon: <Building2 size={20} />, module: 'hr' },
+      { id: 'attendanceReport', name: t.reports.attendanceReport, nameAr: t.reports.attendanceReport, description: t.reports.attendanceReportDesc, descriptionAr: t.reports.attendanceReportDesc, icon: <Clock size={20} />, module: 'hr' },
+      { id: 'attendanceSummary', name: t.reports.attendanceSummary, nameAr: t.reports.attendanceSummary, description: t.reports.attendanceSummaryDesc, descriptionAr: t.reports.attendanceSummaryDesc, icon: <Calendar size={20} />, module: 'hr' },
+      { id: 'payrollReport', name: t.reports.payrollReport, nameAr: t.reports.payrollReport, description: t.reports.payrollReportDesc, descriptionAr: t.reports.payrollReportDesc, icon: <DollarSign size={20} />, module: 'hr' },
+      { id: 'salesCommissions', name: t.reports.salesCommissions, nameAr: t.reports.salesCommissions, description: t.reports.salesCommissionsDesc, descriptionAr: t.reports.salesCommissionsDesc, icon: <TrendingUp size={20} />, module: 'hr' },
+      { id: 'deliveryReport', name: t.reports.deliveryReport, nameAr: t.reports.deliveryReport, description: t.reports.deliveryReportDesc, descriptionAr: t.reports.deliveryReportDesc, icon: <Truck size={20} />, module: 'hr' },
     ],
   };
 
@@ -1067,6 +1127,131 @@ const ReadyReports = () => {
           headers: [t.department, language === 'ar' ? 'عدد الموظفين' : 'Employees'],
           rows: Object.values(byDept).map((d: any) => [d.department, d.count]),
           total: employees.length
+        };
+
+      case 'attendanceReport':
+        return {
+          headers: [
+            language === 'ar' ? 'التاريخ' : 'Date',
+            language === 'ar' ? 'الكود' : 'Code',
+            language === 'ar' ? 'الموظف' : 'Employee',
+            language === 'ar' ? 'الحضور' : 'Check In',
+            language === 'ar' ? 'الانصراف' : 'Check Out',
+            language === 'ar' ? 'الحالة' : 'Status',
+            language === 'ar' ? 'ملاحظات' : 'Notes'
+          ],
+          rows: attendance.map((a: any) => [
+            a.date,
+            a.employees?.employee_code || '-',
+            language === 'ar' ? a.employees?.name_ar || a.employees?.name : a.employees?.name || '-',
+            a.check_in || '-',
+            a.check_out || '-',
+            a.status === 'present' ? (language === 'ar' ? 'حاضر' : 'Present') :
+            a.status === 'absent' ? (language === 'ar' ? 'غائب' : 'Absent') :
+            a.status === 'late' ? (language === 'ar' ? 'متأخر' : 'Late') :
+            a.status === 'leave' ? (language === 'ar' ? 'إجازة' : 'Leave') : a.status,
+            a.notes || '-'
+          ]),
+          total: attendance.length
+        };
+
+      case 'attendanceSummary':
+        const attendanceSummary = attendance.reduce((acc: any, a: any) => {
+          const empName = language === 'ar' ? a.employees?.name_ar || a.employees?.name : a.employees?.name || 'Unknown';
+          const code = a.employees?.employee_code || '-';
+          const key = code;
+          if (!acc[key]) acc[key] = { code, name: empName, present: 0, absent: 0, late: 0, leave: 0, total: 0 };
+          acc[key].total++;
+          if (a.status === 'present') acc[key].present++;
+          else if (a.status === 'absent') acc[key].absent++;
+          else if (a.status === 'late') acc[key].late++;
+          else if (a.status === 'leave') acc[key].leave++;
+          return acc;
+        }, {});
+        return {
+          headers: [
+            language === 'ar' ? 'الكود' : 'Code',
+            language === 'ar' ? 'الموظف' : 'Employee',
+            language === 'ar' ? 'حاضر' : 'Present',
+            language === 'ar' ? 'غائب' : 'Absent',
+            language === 'ar' ? 'متأخر' : 'Late',
+            language === 'ar' ? 'إجازة' : 'Leave',
+            language === 'ar' ? 'الإجمالي' : 'Total'
+          ],
+          rows: Object.values(attendanceSummary).map((s: any) => [
+            s.code, s.name, s.present, s.absent, s.late, s.leave, s.total
+          ]),
+          total: Object.keys(attendanceSummary).length
+        };
+
+      case 'payrollReport':
+        const activeEmployees = employees.filter((e: any) => e.is_active);
+        return {
+          headers: [
+            language === 'ar' ? 'الكود' : 'Code',
+            language === 'ar' ? 'الموظف' : 'Employee',
+            language === 'ar' ? 'القسم' : 'Department',
+            language === 'ar' ? 'المنصب' : 'Position',
+            language === 'ar' ? 'الراتب' : 'Salary'
+          ],
+          rows: activeEmployees.map((e: any) => [
+            e.employee_code,
+            language === 'ar' ? e.name_ar || e.name : e.name,
+            e.department || '-',
+            e.position || '-',
+            Number(e.salary || 0).toLocaleString()
+          ]),
+          total: activeEmployees.reduce((sum: number, e: any) => sum + Number(e.salary || 0), 0)
+        };
+
+      case 'salesCommissions':
+        // Calculate commissions from sales invoices by salesman
+        const commissionsByMan = salesInvoices.reduce((acc: any, inv: any) => {
+          const salesman = language === 'ar' 
+            ? inv.salesmen?.name_ar || inv.salesmen?.name || (language === 'ar' ? 'بدون مندوب' : 'No Salesman')
+            : inv.salesmen?.name || 'No Salesman';
+          if (!acc[salesman]) acc[salesman] = { name: salesman, invoices: 0, sales: 0, commission: 0 };
+          acc[salesman].invoices++;
+          acc[salesman].sales += Number(inv.total_amount || 0);
+          // Assuming 2% commission rate - this could be configurable
+          acc[salesman].commission += Number(inv.total_amount || 0) * 0.02;
+          return acc;
+        }, {});
+        return {
+          headers: [
+            language === 'ar' ? 'المندوب' : 'Salesman',
+            language === 'ar' ? 'عدد الفواتير' : 'Invoices',
+            language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
+            language === 'ar' ? 'العمولة (2%)' : 'Commission (2%)'
+          ],
+          rows: Object.values(commissionsByMan).map((s: any) => [
+            s.name,
+            s.invoices,
+            s.sales.toLocaleString(),
+            s.commission.toLocaleString()
+          ]),
+          total: Object.values(commissionsByMan).reduce((sum: number, s: any) => sum + s.commission, 0)
+        };
+
+      case 'deliveryReport':
+        return {
+          headers: [
+            language === 'ar' ? 'الاسم' : 'Name',
+            language === 'ar' ? 'الهاتف' : 'Phone',
+            language === 'ar' ? 'نوع المركبة' : 'Vehicle Type',
+            language === 'ar' ? 'رقم المركبة' : 'Vehicle Number',
+            language === 'ar' ? 'الحالة' : 'Status',
+            language === 'ar' ? 'متاح' : 'Available'
+          ],
+          rows: deliveryPersons.map((d: any) => [
+            language === 'ar' ? d.name_ar || d.name : d.name,
+            d.phone || '-',
+            d.vehicle_type || '-',
+            d.vehicle_number || '-',
+            d.is_active ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'غير نشط' : 'Inactive'),
+            d.is_available ? (language === 'ar' ? 'متاح' : 'Yes') : (language === 'ar' ? 'غير متاح' : 'No')
+          ]),
+          total: deliveryPersons.length
         };
 
       default:
