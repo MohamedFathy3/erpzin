@@ -268,7 +268,7 @@ const CouponsManager: React.FC = () => {
     code: language === 'ar' ? 'الكود' : 'Code',
     name: language === 'ar' ? 'الاسم' : 'Name',
     nameAr: language === 'ar' ? 'الاسم بالعربية' : 'Arabic Name',
-    description: language === 'ar' ? 'الوصف' : 'Description',
+    couponDescription: language === 'ar' ? 'الوصف' : 'Description',
     discountType: language === 'ar' ? 'نوع الخصم' : 'Discount Type',
     percentage: language === 'ar' ? 'نسبة مئوية' : 'Percentage',
     fixed: language === 'ar' ? 'مبلغ ثابت' : 'Fixed Amount',
@@ -344,7 +344,7 @@ const CouponsManager: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        <Label>{t.description}</Label>
+        <Label>{t.couponDescription}</Label>
         <Textarea
           value={formData.description}
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
