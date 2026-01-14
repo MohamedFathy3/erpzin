@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
+import AttendanceManager from '@/components/hr/AttendanceManager';
 import { 
   Plus, 
   Search, 
@@ -662,58 +663,7 @@ const HR = () => {
           </TabsContent>
 
           <TabsContent value="attendance" className="mt-4">
-            <Card className="card-elevated">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="relative max-w-sm">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                    <Input placeholder={t.search} className="ps-10" />
-                  </div>
-                  <Button variant="outline">
-                    <Calendar size={18} className="me-2" />
-                    {language === 'ar' ? 'اليوم' : 'Today'}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t.code}</TableHead>
-                      <TableHead>{t.name}</TableHead>
-                      <TableHead>{t.date}</TableHead>
-                      <TableHead>{t.checkIn}</TableHead>
-                      <TableHead>{t.checkOut}</TableHead>
-                      <TableHead>{t.status}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendance.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                          {language === 'ar' ? 'لا توجد سجلات حضور' : 'No attendance records yet'}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      attendance.map((record) => (
-                        <TableRow key={record.id}>
-                          <TableCell className="font-mono">{record.employees?.employee_code}</TableCell>
-                          <TableCell>
-                            {language === 'ar' 
-                              ? record.employees?.name_ar || record.employees?.name 
-                              : record.employees?.name}
-                          </TableCell>
-                          <TableCell>{new Date(record.date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</TableCell>
-                          <TableCell>{record.check_in || '-'}</TableCell>
-                          <TableCell>{record.check_out || '-'}</TableCell>
-                          <TableCell>{getAttendanceStatus(record.status)}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <AttendanceManager employees={employees} attendance={attendance} />
           </TabsContent>
         </Tabs>
       </div>
