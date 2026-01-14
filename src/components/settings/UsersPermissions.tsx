@@ -554,6 +554,7 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
       toast({ title: t.roleUpdated });
     }
   });
