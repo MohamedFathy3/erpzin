@@ -55,6 +55,135 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          notes: string | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string | null
+          user_agent: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          notes?: string | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          notes?: string | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
+      backup_logs: {
+        Row: {
+          backup_type: string
+          completed_at: string | null
+          created_by: string | null
+          error_message: string | null
+          file_name: string | null
+          file_size: number | null
+          id: string
+          started_at: string
+          status: string
+          tables_backed_up: string[] | null
+        }
+        Insert: {
+          backup_type?: string
+          completed_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          started_at?: string
+          status?: string
+          tables_backed_up?: string[] | null
+        }
+        Update: {
+          backup_type?: string
+          completed_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          started_at?: string
+          status?: string
+          tables_backed_up?: string[] | null
+        }
+        Relationships: []
+      }
+      backup_settings: {
+        Row: {
+          backup_location: string | null
+          backup_time: string | null
+          created_at: string
+          email_notifications: boolean | null
+          frequency: string | null
+          id: string
+          is_enabled: boolean | null
+          last_backup_at: string | null
+          next_backup_at: string | null
+          notification_email: string | null
+          retention_days: number | null
+          updated_at: string
+        }
+        Insert: {
+          backup_location?: string | null
+          backup_time?: string | null
+          created_at?: string
+          email_notifications?: boolean | null
+          frequency?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          notification_email?: string | null
+          retention_days?: number | null
+          updated_at?: string
+        }
+        Update: {
+          backup_location?: string | null
+          backup_time?: string | null
+          created_at?: string
+          email_notifications?: boolean | null
+          frequency?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          last_backup_at?: string | null
+          next_backup_at?: string | null
+          notification_email?: string | null
+          retention_days?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bank_transactions: {
         Row: {
           amount: number
@@ -440,6 +569,131 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      coupon_usage: {
+        Row: {
+          coupon_id: string
+          customer_id: string | null
+          discount_amount: number
+          id: string
+          sale_id: string | null
+          used_at: string
+        }
+        Insert: {
+          coupon_id: string
+          customer_id?: string | null
+          discount_amount: number
+          id?: string
+          sale_id?: string | null
+          used_at?: string
+        }
+        Update: {
+          coupon_id?: string
+          customer_id?: string | null
+          discount_amount?: number
+          id?: string
+          sale_id?: string | null
+          used_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          applicable_categories: string[] | null
+          applicable_customers: string[] | null
+          applicable_products: string[] | null
+          branch_id: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          end_date: string
+          id: string
+          is_active: boolean | null
+          max_discount_amount: number | null
+          min_purchase_amount: number | null
+          name: string
+          name_ar: string | null
+          start_date: string
+          updated_at: string
+          usage_count: number | null
+          usage_limit: number | null
+          usage_per_customer: number | null
+        }
+        Insert: {
+          applicable_categories?: string[] | null
+          applicable_customers?: string[] | null
+          applicable_products?: string[] | null
+          branch_id?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date: string
+          id?: string
+          is_active?: boolean | null
+          max_discount_amount?: number | null
+          min_purchase_amount?: number | null
+          name: string
+          name_ar?: string | null
+          start_date: string
+          updated_at?: string
+          usage_count?: number | null
+          usage_limit?: number | null
+          usage_per_customer?: number | null
+        }
+        Update: {
+          applicable_categories?: string[] | null
+          applicable_customers?: string[] | null
+          applicable_products?: string[] | null
+          branch_id?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          end_date?: string
+          id?: string
+          is_active?: boolean | null
+          max_discount_amount?: number | null
+          min_purchase_amount?: number | null
+          name?: string
+          name_ar?: string | null
+          start_date?: string
+          updated_at?: string
+          usage_count?: number | null
+          usage_limit?: number | null
+          usage_per_customer?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       custom_roles: {
         Row: {
@@ -906,6 +1160,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          message: string
+          message_ar: string | null
+          read_at: string | null
+          reference_id: string | null
+          reference_type: string | null
+          title: string
+          title_ar: string | null
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          message: string
+          message_ar?: string | null
+          read_at?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          title: string
+          title_ar?: string | null
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          message?: string
+          message_ar?: string | null
+          read_at?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          title?: string
+          title_ar?: string | null
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       opening_balances: {
         Row: {
