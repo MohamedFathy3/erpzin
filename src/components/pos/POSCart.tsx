@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { Minus, Plus, Trash2, CreditCard, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface CartItem {
@@ -148,12 +148,27 @@ const POSCart: React.FC<POSCartProps> = ({
           </div>
         </div>
 
-        {/* Quick action hint */}
-        <div className="text-center text-xs text-muted-foreground">
-          {language === 'ar' 
-            ? 'F1 للدفع • F2 للتعليق'
-            : 'F1 to Pay • F2 to Hold'
-          }
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={onHoldOrder}
+            disabled={items.length === 0}
+            className="flex-1 h-12 border-warning text-warning hover:bg-warning hover:text-warning-foreground disabled:opacity-50"
+          >
+            <Pause size={18} className="me-2" />
+            <span>{language === 'ar' ? 'تعليق' : 'Hold'}</span>
+            <span className="ms-2 text-xs opacity-70">F2</span>
+          </Button>
+          <Button
+            onClick={onPay}
+            disabled={items.length === 0}
+            className="flex-1 h-12 bg-success hover:bg-success/90 text-success-foreground disabled:opacity-50"
+          >
+            <CreditCard size={18} className="me-2" />
+            <span>{language === 'ar' ? 'دفع' : 'Pay'}</span>
+            <span className="ms-2 text-xs opacity-70">F1</span>
+          </Button>
         </div>
       </div>
     </div>
