@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,10 +24,14 @@ import {
   ChevronDown,
   Warehouse,
   Check,
+  User,
+  Settings,
+  LogOut,
 } from 'lucide-react';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
 
 const Header: React.FC = () => {
+  const navigate = useNavigate();
   const { t, language, setLanguage } = useLanguage();
   const { 
     currentBranch, 
@@ -40,7 +45,7 @@ const Header: React.FC = () => {
     userBranch,
     userWarehouse
   } = useApp();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   const getUserInitials = () => {
     if (user?.email) {
@@ -57,6 +62,19 @@ const Header: React.FC = () => {
       viewer: language === 'ar' ? 'عارض' : 'Viewer',
     };
     return roleLabels[permissions.role || ''] || (language === 'ar' ? 'مستخدم' : 'User');
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  const handleProfileClick = () => {
+    navigate('/settings?tab=profile');
+  };
+
+  const handleSettingsClick = () => {
+    navigate('/settings');
   };
 
   // Check if user has assigned branch/warehouse (restricted access)
@@ -218,10 +236,17 @@ const Header: React.FC = () => {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>{language === 'ar' ? 'حسابي' : 'My Account'}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</DropdownMenuItem>
-            <DropdownMenuItem>{language === 'ar' ? 'الإعدادات' : 'Settings'}</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick} className="gap-2 cursor-pointer">
+              <User size={16} />
+              {language === 'ar' ? 'الملف الشخصي' : 'Profile'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSettingsClick} className="gap-2 cursor-pointer">
+              <Settings size={16} />
+              {language === 'ar' ? 'الإعدادات' : 'Settings'}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem onClick={handleLogout} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+              <LogOut size={16} />
               {t('nav.logout')}
             </DropdownMenuItem>
           </DropdownMenuContent>
