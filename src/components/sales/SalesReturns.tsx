@@ -13,9 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, RotateCcw, Eye, FileText, Plus } from "lucide-react";
+import { RotateCcw, FileText, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 
 import SalesReturnForm from "./SalesReturnForm";
 
@@ -44,48 +45,57 @@ const SalesReturns = () => {
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Search filters
-  const [filters, setFilters] = useState({
-    invoiceNumber: "",
-    customerName: "",
-    customerPhone: "",
-    branchId: "",
-    warehouseId: "",
-    invoiceType: "",
-    paymentStatus: "",
-    dateFrom: "",
-    dateTo: ""
-  });
+  // Filter state
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
 
   // Fetch branches
-  const { data: branches } = useQuery({
+  const { data: branches = [] } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, name_ar')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
+      const { data } = await supabase.from('branches').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
     }
   });
 
   // Fetch warehouses
-  const { data: warehouses } = useQuery({
+  const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('id, name, name_ar')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
+      const { data } = await supabase.from('warehouses').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
     }
   });
 
+  // Fetch salesmen for filter
+  const { data: salesmen = [] } = useQuery({
+    queryKey: ['salesmen'],
+    queryFn: async () => {
+      const { data } = await supabase.from('salesmen').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  const filterFields: FilterField[] = [
+    { key: 'search', label: 'Invoice/Customer', labelAr: 'الفاتورة/العميل', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'invoice_type', label: 'Invoice Type', labelAr: 'نوع الفاتورة', type: 'select', options: [
+      { value: 'standard', label: 'Standard', labelAr: 'قياسية' },
+      { value: 'pos', label: 'POS', labelAr: 'نقطة بيع' },
+    ]},
+    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: any) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
+    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: any) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
+    { key: 'salesman_id', label: 'Salesman', labelAr: 'المندوب', type: 'select', options: salesmen.map((s: any) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
+    { key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
+      { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
+      { value: 'pending', label: 'Pending', labelAr: 'معلق' },
+      { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
+    ]},
+    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+  ];
+
   // Fetch invoices with filters
   const { data: invoices, isLoading, refetch } = useQuery({
-    queryKey: ['sales-invoices-for-return', filters],
+    queryKey: ['sales-invoices-for-return', filterValues],
     queryFn: async () => {
       // Fetch standard invoices
       let standardQuery = supabase
@@ -99,23 +109,32 @@ const SalesReturns = () => {
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
-      if (filters.invoiceNumber) {
-        standardQuery = standardQuery.ilike('invoice_number', `%${filters.invoiceNumber}%`);
+      if (filterValues.search) {
+        standardQuery = standardQuery.or(`invoice_number.ilike.%${filterValues.search}%`);
       }
-      if (filters.branchId) {
-        standardQuery = standardQuery.eq('branch_id', filters.branchId);
+      if (filterValues.branch_id && filterValues.branch_id !== 'all') {
+        standardQuery = standardQuery.eq('branch_id', filterValues.branch_id);
       }
-      if (filters.warehouseId) {
-        standardQuery = standardQuery.eq('warehouse_id', filters.warehouseId);
+      if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
+        standardQuery = standardQuery.eq('warehouse_id', filterValues.warehouse_id);
       }
-      if (filters.paymentStatus) {
-        standardQuery = standardQuery.eq('payment_status', filters.paymentStatus);
+      if (filterValues.salesman_id && filterValues.salesman_id !== 'all') {
+        standardQuery = standardQuery.eq('salesman_id', filterValues.salesman_id);
       }
-      if (filters.dateFrom) {
-        standardQuery = standardQuery.gte('invoice_date', `${filters.dateFrom}T00:00:00`);
+      if (filterValues.payment_status && filterValues.payment_status !== 'all') {
+        standardQuery = standardQuery.eq('payment_status', filterValues.payment_status);
       }
-      if (filters.dateTo) {
-        standardQuery = standardQuery.lte('invoice_date', `${filters.dateTo}T23:59:59`);
+      if (filterValues.date_from) {
+        standardQuery = standardQuery.gte('invoice_date', filterValues.date_from.split('T')[0]);
+      }
+      if (filterValues.date_to) {
+        standardQuery = standardQuery.lte('invoice_date', filterValues.date_to.split('T')[0]);
+      }
+      if (filterValues.amount_min) {
+        standardQuery = standardQuery.gte('total_amount', Number(filterValues.amount_min));
+      }
+      if (filterValues.amount_max) {
+        standardQuery = standardQuery.lte('total_amount', Number(filterValues.amount_max));
       }
 
       const { data: standardInvoices } = await standardQuery.limit(100);
@@ -138,14 +157,14 @@ const SalesReturns = () => {
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 
-      if (filters.invoiceNumber) {
-        posQuery = posQuery.ilike('invoice_number', `%${filters.invoiceNumber}%`);
+      if (filterValues.search) {
+        posQuery = posQuery.ilike('invoice_number', `%${filterValues.search}%`);
       }
-      if (filters.dateFrom) {
-        posQuery = posQuery.gte('sale_date', `${filters.dateFrom}T00:00:00`);
+      if (filterValues.date_from) {
+        posQuery = posQuery.gte('sale_date', filterValues.date_from.split('T')[0]);
       }
-      if (filters.dateTo) {
-        posQuery = posQuery.lte('sale_date', `${filters.dateTo}T23:59:59`);
+      if (filterValues.date_to) {
+        posQuery = posQuery.lte('sale_date', filterValues.date_to.split('T')[0]);
       }
 
       const { data: posInvoices } = await posQuery.limit(100);
@@ -153,7 +172,8 @@ const SalesReturns = () => {
       // Combine results
       let combined = [];
       
-      if (!filters.invoiceType || filters.invoiceType === 'standard') {
+      const invoiceType = filterValues.invoice_type;
+      if (!invoiceType || invoiceType === 'all' || invoiceType === 'standard') {
         combined.push(...(standardInvoices || []).map(inv => ({ 
           ...inv, 
           invoice_type: 'standard',
@@ -161,25 +181,12 @@ const SalesReturns = () => {
         })));
       }
       
-      if (!filters.invoiceType || filters.invoiceType === 'pos') {
+      if (!invoiceType || invoiceType === 'all' || invoiceType === 'pos') {
         combined.push(...(posInvoices || []).map(inv => ({ 
           ...inv, 
           invoice_type: 'pos',
           date: inv.sale_date 
         })));
-      }
-
-      // Filter by customer
-      if (filters.customerName) {
-        combined = combined.filter(inv => 
-          inv.customer?.name?.toLowerCase().includes(filters.customerName.toLowerCase()) ||
-          inv.customer?.name_ar?.includes(filters.customerName)
-        );
-      }
-      if (filters.customerPhone) {
-        combined = combined.filter(inv => 
-          inv.customer?.phone?.includes(filters.customerPhone)
-        );
       }
 
       combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -374,20 +381,6 @@ const SalesReturns = () => {
     setNotes("");
   };
 
-  const clearFilters = () => {
-    setFilters({
-      invoiceNumber: "",
-      customerName: "",
-      customerPhone: "",
-      branchId: "",
-      warehouseId: "",
-      invoiceType: "",
-      paymentStatus: "",
-      dateFrom: "",
-      dateTo: ""
-    });
-  };
-
   const getStatusBadge = (invoice: any) => {
     const status = invoice.payment_status || invoice.status || 'completed';
     const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -403,33 +396,22 @@ const SalesReturns = () => {
   return (
     <>
       <div className="space-y-4">
-        {/* Quick Search & Filters Toggle */}
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={language === 'ar' ? 'بحث سريع برقم الفاتورة أو اسم العميل...' : 'Quick search by invoice # or customer name...'}
-                  className="pl-10"
-                  value={filters.invoiceNumber}
-                  onChange={(e) => setFilters({ ...filters, invoiceNumber: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && refetch()}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={() => setShowNewReturnForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'مرتجع جديد' : 'New Return'}
-                </Button>
-                <Button variant="outline" onClick={() => refetch()}>
-                  <Search className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'بحث' : 'Search'}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex-1 w-full">
+            <AdvancedFilter
+              fields={filterFields}
+              values={filterValues}
+              onChange={setFilterValues}
+              onReset={() => setFilterValues({})}
+              language={language as 'ar' | 'en'}
+            />
+          </div>
+          <Button onClick={() => setShowNewReturnForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'مرتجع جديد' : 'New Return'}
+          </Button>
+        </div>
 
         {/* Invoices Table */}
         <Card>
