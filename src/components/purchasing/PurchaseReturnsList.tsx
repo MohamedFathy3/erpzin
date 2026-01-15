@@ -3,28 +3,69 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, RotateCcw, Eye, Plus, FileText, Package, Building2 } from "lucide-react";
+import { RotateCcw, Eye, Plus, FileText, Package, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import PurchaseReturnForm from "./PurchaseReturnForm";
+import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [showForm, setShowForm] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Fetch purchase returns
-  const { data: returns = [], isLoading, refetch } = useQuery({
-    queryKey: ['purchase-returns'],
+  // Fetch branches for filter
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase.from('branches').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  // Fetch warehouses for filter
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { data } = await supabase.from('warehouses').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  // Fetch suppliers for filter
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: async () => {
+      const { data } = await supabase.from('suppliers').select('id, name, name_ar').eq('is_active', true);
+      return data || [];
+    }
+  });
+
+  const filterFields: FilterField[] = [
+    { key: 'search', label: 'Return/Invoice', labelAr: 'المرتجع/الفاتورة', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+    { key: 'supplier_id', label: 'Supplier', labelAr: 'المورد', type: 'select', options: suppliers.map((s: any) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
+    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: any) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
+    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: any) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
+    { key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
+      { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
+      { value: 'pending', label: 'Pending', labelAr: 'معلق' },
+      { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
+    ]},
+    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+  ];
+
+  // Fetch purchase returns with filters
+  const { data: returns = [], isLoading, refetch } = useQuery({
+    queryKey: ['purchase-returns', filterValues],
+    queryFn: async () => {
+      let query = supabase
         .from('purchase_returns')
         .select(`
           *,
@@ -42,17 +83,39 @@ const PurchaseReturnsList = () => {
         `)
         .order('created_at', { ascending: false });
       
+      if (filterValues.search) {
+        query = query.or(`return_number.ilike.%${filterValues.search}%,original_invoice_number.ilike.%${filterValues.search}%`);
+      }
+      if (filterValues.supplier_id && filterValues.supplier_id !== 'all') {
+        query = query.eq('supplier_id', filterValues.supplier_id);
+      }
+      if (filterValues.branch_id && filterValues.branch_id !== 'all') {
+        query = query.eq('branch_id', filterValues.branch_id);
+      }
+      if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
+        query = query.eq('warehouse_id', filterValues.warehouse_id);
+      }
+      if (filterValues.status && filterValues.status !== 'all') {
+        query = query.eq('status', filterValues.status);
+      }
+      if (filterValues.date_from) {
+        query = query.gte('return_date', filterValues.date_from.split('T')[0]);
+      }
+      if (filterValues.date_to) {
+        query = query.lte('return_date', filterValues.date_to.split('T')[0]);
+      }
+      if (filterValues.amount_min) {
+        query = query.gte('total_amount', Number(filterValues.amount_min));
+      }
+      if (filterValues.amount_max) {
+        query = query.lte('total_amount', Number(filterValues.amount_max));
+      }
+      
+      const { data, error } = await query.limit(100);
       if (error) throw error;
       return data;
     }
   });
-
-  const filteredReturns = returns.filter((ret: any) => 
-    ret.return_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ret.original_invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ret.supplier?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ret.supplier?.name_ar?.includes(searchTerm)
-  );
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -75,15 +138,15 @@ const PurchaseReturnsList = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <Input
-            placeholder={language === 'ar' ? 'بحث في المرتجعات...' : 'Search returns...'}
-            className="ps-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+        <div className="flex-1 w-full">
+          <AdvancedFilter
+            fields={filterFields}
+            values={filterValues}
+            onChange={setFilterValues}
+            onReset={() => setFilterValues({})}
+            language={language as 'ar' | 'en'}
           />
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -98,7 +161,7 @@ const PurchaseReturnsList = () => {
           <CardTitle className="flex items-center gap-2">
             <RotateCcw className="h-5 w-5" />
             {language === 'ar' ? 'مرتجعات المشتريات' : 'Purchase Returns'}
-            <Badge variant="secondary">{filteredReturns.length}</Badge>
+            <Badge variant="secondary">{returns.length}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -125,14 +188,14 @@ const PurchaseReturnsList = () => {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : filteredReturns.length === 0 ? (
+              ) : returns.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredReturns.map((ret: any) => (
+                returns.map((ret: any) => (
                   <TableRow key={ret.id}>
                     <TableCell className="font-mono font-medium">{ret.return_number}</TableCell>
                     <TableCell className="font-mono">{ret.original_invoice_number}</TableCell>
