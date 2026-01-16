@@ -106,6 +106,20 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     }
   });
 
+  // Fetch payment methods
+  const { data: paymentMethods = [] } = useQuery({
+    queryKey: ['payment-methods-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data;
+    }
+  });
+
   // Fetch products for search
   const { data: products } = useQuery({
     queryKey: ['products-search', searchQuery],
@@ -481,10 +495,19 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                      <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                      <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
-                      <SelectItem value="mixed">{language === 'ar' ? 'مختلط' : 'Mixed'}</SelectItem>
+                      {paymentMethods.length > 0 ? (
+                        paymentMethods.map((method) => (
+                          <SelectItem key={method.code} value={method.code}>
+                            {language === 'ar' ? method.name_ar : method.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                          <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                          <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
