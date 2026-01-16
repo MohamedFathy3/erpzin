@@ -695,6 +695,54 @@ export type Database = {
           },
         ]
       }
+      currencies: {
+        Row: {
+          code: string
+          country_code: string | null
+          created_at: string
+          decimal_places: number | null
+          exchange_rate: number | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          name_ar: string
+          sort_order: number | null
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          country_code?: string | null
+          created_at?: string
+          decimal_places?: number | null
+          exchange_rate?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          name_ar: string
+          sort_order?: number | null
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          country_code?: string | null
+          created_at?: string
+          decimal_places?: number | null
+          exchange_rate?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          name_ar?: string
+          sort_order?: number | null
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       custom_roles: {
         Row: {
           color: string | null

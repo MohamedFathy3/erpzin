@@ -55,6 +55,7 @@ import BackupManager from '@/components/settings/BackupManager';
 import PrintingSettings from '@/components/settings/PrintingSettings';
 import DataManagement from '@/components/settings/DataManagement';
 import AuditLogViewer from '@/components/settings/AuditLogViewer';
+import CurrencyTaxManager from '@/components/settings/CurrencyTaxManager';
 import { cn } from '@/lib/utils';
 
 interface SettingsSection {
@@ -739,130 +740,7 @@ const Settings = () => {
         return <ModuleSettings />;
 
       case 'currency':
-        return (
-          <div className="space-y-6 animate-fade-in">
-            {/* Currency Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign size={20} />
-                  {language === 'ar' ? 'إعدادات العملة' : 'Currency Settings'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>{t.defaultCurrency}</Label>
-                  <Select value={companyForm.default_currency} onValueChange={(val) => setCompanyForm({ ...companyForm, default_currency: val })}>
-                    <SelectTrigger className="w-full max-w-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencies.map(currency => (
-                        <SelectItem key={currency.code} value={currency.code}>
-                          <span className="flex items-center gap-2">
-                            <span className="font-mono">{currency.code}</span>
-                            <span className="text-muted-foreground">- {language === 'ar' ? currency.nameAr : currency.name}</span>
-                            <span>{currency.symbol}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <Label className="mb-3 block">{t.currencies}</Label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {currencies.map(currency => (
-                      <Card 
-                        key={currency.code} 
-                        className={cn(
-                          "p-4 cursor-pointer transition-all hover:scale-105",
-                          companyForm.default_currency === currency.code 
-                            ? 'border-primary bg-primary/5 shadow-lg shadow-primary/20' 
-                            : 'hover:border-primary/50'
-                        )}
-                        onClick={() => setCompanyForm({ ...companyForm, default_currency: currency.code })}
-                      >
-                        <div className="text-center">
-                          <p className="text-3xl font-bold mb-1">{currency.symbol}</p>
-                          <p className="font-mono text-sm font-medium">{currency.code}</p>
-                          <p className="text-xs text-muted-foreground">{language === 'ar' ? currency.nameAr : currency.name}</p>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Tax Settings */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Percent size={20} />
-                    {t.taxSettings}
-                  </CardTitle>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="gap-2">
-                        <Plus size={16} />
-                        {t.addTax}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t.addTax}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>{t.taxName}</Label>
-                            <Input placeholder={t.taxName} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>{language === 'ar' ? 'الاسم بالعربية' : 'Arabic Name'}</Label>
-                            <Input placeholder={language === 'ar' ? 'الاسم بالعربية' : 'Arabic Name'} dir="rtl" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>{t.rate} (%)</Label>
-                          <Input type="number" placeholder="0" min="0" max="100" />
-                        </div>
-                        <Button className="w-full gradient-success">{t.addTax}</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t.taxName}</TableHead>
-                      <TableHead>{t.rate}</TableHead>
-                      <TableHead>{t.default}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {taxRates.map((tax) => (
-                      <TableRow key={tax.id}>
-                        <TableCell className="font-medium">{language === 'ar' ? tax.name_ar || tax.name : tax.name}</TableCell>
-                        <TableCell><Badge variant="outline">{tax.rate}%</Badge></TableCell>
-                        <TableCell>{tax.is_default && <Badge className="bg-primary">{t.default}</Badge>}</TableCell>
-                        <TableCell><Badge variant={tax.is_active ? 'default' : 'secondary'}>{tax.is_active ? t.active : t.inactive}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-        );
+        return <CurrencyTaxManager />;
 
       case 'payment':
         return <PaymentMethodsManager />;
