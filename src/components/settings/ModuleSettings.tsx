@@ -70,7 +70,13 @@ const ModuleSettings = () => {
     enableMultipleWarehouses: true,
     requireApprovalForTransfers: true,
     enableInventoryCount: true,
-    countFrequencyDays: 30
+    countFrequencyDays: 30,
+    // Promotions Settings
+    enablePromotions: true,
+    maxPromotionDiscount: 50,
+    allowStackingPromotions: false,
+    autoApplyPromotions: true,
+    showPromotionBadge: true
   });
 
   // Finance Settings
@@ -87,7 +93,21 @@ const ModuleSettings = () => {
     autoReconcileBankTransactions: false,
     defaultPaymentTermsDays: 30,
     enableLateFees: false,
-    lateFeePercent: 2
+    lateFeePercent: 2,
+    // Treasury & Banks Settings
+    enableTreasury: true,
+    enableBankAccounts: true,
+    requireBankReconciliation: false,
+    trackCheckNumbers: true,
+    enableBankTransfers: true,
+    // Accounts Payable Settings
+    enableAccountsPayable: true,
+    payableReminderDays: 7,
+    autoCreatePayableFromInvoice: true,
+    // Chart of Accounts Settings
+    enableChartOfAccounts: true,
+    accountCodeFormat: 'numeric',
+    maxAccountDepth: 5
   });
 
   // Purchasing Settings
@@ -103,7 +123,13 @@ const ModuleSettings = () => {
     sendEmailOnPOCreation: false,
     enableSupplierPortal: false,
     reorderPointEnabled: true,
-    autoCreatePOOnLowStock: false
+    autoCreatePOOnLowStock: false,
+    // Purchase Returns Settings
+    enablePurchaseReturns: true,
+    returnPrefix: 'PR',
+    requireReturnApproval: false,
+    autoUpdateStockOnReturn: true,
+    trackReturnReasons: true
   });
 
   // HR Settings
@@ -170,7 +196,15 @@ const ModuleSettings = () => {
     retainReportsDays: 90,
     enableHRReports: true,
     enableSalesCommissionReports: true,
-    enableDeliveryReports: true
+    enableDeliveryReports: true,
+    // Advanced Reports
+    enableProfitLossReport: true,
+    enableSalesAnalysisReport: true,
+    enableCustomerSupplierMovement: true,
+    enableInventoryValuationReport: true,
+    enableCashFlowReport: true,
+    defaultReportPeriod: 'month',
+    comparePreviousPeriod: true
   });
 
   const handleSave = (module: string) => {
@@ -587,6 +621,61 @@ const ModuleSettings = () => {
                   />
                 </SettingRow>
               </div>
+
+              <Separator />
+
+              {/* Promotions Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Receipt size={16} />
+                  {language === 'ar' ? 'إعدادات العروض والتخفيضات' : 'Promotions Settings'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل العروض' : 'Enable Promotions'}
+                  description={language === 'ar' ? 'السماح بإنشاء وتطبيق العروض الترويجية' : 'Allow creating and applying promotional offers'}
+                >
+                  <Switch 
+                    checked={inventorySettings.enablePromotions}
+                    onCheckedChange={(val) => setInventorySettings({ ...inventorySettings, enablePromotions: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'الحد الأقصى لخصم العرض (%)' : 'Max Promotion Discount (%)'}
+                >
+                  <Input 
+                    type="number"
+                    className="w-20"
+                    value={inventorySettings.maxPromotionDiscount}
+                    onChange={(e) => setInventorySettings({ ...inventorySettings, maxPromotionDiscount: Number(e.target.value) })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'السماح بتراكم العروض' : 'Allow Stacking Promotions'}
+                  description={language === 'ar' ? 'تطبيق أكثر من عرض على نفس المنتج' : 'Apply multiple promotions to same product'}
+                >
+                  <Switch 
+                    checked={inventorySettings.allowStackingPromotions}
+                    onCheckedChange={(val) => setInventorySettings({ ...inventorySettings, allowStackingPromotions: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تطبيق العروض تلقائياً' : 'Auto Apply Promotions'}
+                >
+                  <Switch 
+                    checked={inventorySettings.autoApplyPromotions}
+                    onCheckedChange={(val) => setInventorySettings({ ...inventorySettings, autoApplyPromotions: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'إظهار شارة العرض' : 'Show Promotion Badge'}
+                  description={language === 'ar' ? 'عرض شارة للمنتجات التي عليها عروض' : 'Display badge on products with active promotions'}
+                >
+                  <Switch 
+                    checked={inventorySettings.showPromotionBadge}
+                    onCheckedChange={(val) => setInventorySettings({ ...inventorySettings, showPromotionBadge: val })}
+                  />
+                </SettingRow>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -755,6 +844,112 @@ const ModuleSettings = () => {
                   </SettingRow>
                 )}
               </div>
+
+              <Separator />
+
+              {/* Treasury & Banks Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Building2 size={16} />
+                  {language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل الخزائن' : 'Enable Treasury'}
+                >
+                  <Switch 
+                    checked={financeSettings.enableTreasury}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, enableTreasury: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل الحسابات البنكية' : 'Enable Bank Accounts'}
+                >
+                  <Switch 
+                    checked={financeSettings.enableBankAccounts}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, enableBankAccounts: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تتبع أرقام الشيكات' : 'Track Check Numbers'}
+                >
+                  <Switch 
+                    checked={financeSettings.trackCheckNumbers}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, trackCheckNumbers: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل التحويلات البنكية' : 'Enable Bank Transfers'}
+                >
+                  <Switch 
+                    checked={financeSettings.enableBankTransfers}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, enableBankTransfers: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Accounts Payable Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Receipt size={16} />
+                  {language === 'ar' ? 'الذمم الدائنة' : 'Accounts Payable'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل الذمم الدائنة' : 'Enable Accounts Payable'}
+                >
+                  <Switch 
+                    checked={financeSettings.enableAccountsPayable}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, enableAccountsPayable: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'أيام التذكير بالدفع' : 'Payment Reminder Days'}
+                >
+                  <Input 
+                    type="number"
+                    className="w-20"
+                    value={financeSettings.payableReminderDays}
+                    onChange={(e) => setFinanceSettings({ ...financeSettings, payableReminderDays: Number(e.target.value) })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'إنشاء ذمة تلقائياً من الفاتورة' : 'Auto Create Payable from Invoice'}
+                >
+                  <Switch 
+                    checked={financeSettings.autoCreatePayableFromInvoice}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, autoCreatePayableFromInvoice: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Chart of Accounts Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <FileText size={16} />
+                  {language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل شجرة الحسابات' : 'Enable Chart of Accounts'}
+                >
+                  <Switch 
+                    checked={financeSettings.enableChartOfAccounts}
+                    onCheckedChange={(val) => setFinanceSettings({ ...financeSettings, enableChartOfAccounts: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'أقصى عمق للحسابات' : 'Max Account Depth'}
+                >
+                  <Input 
+                    type="number"
+                    className="w-20"
+                    value={financeSettings.maxAccountDepth}
+                    onChange={(e) => setFinanceSettings({ ...financeSettings, maxAccountDepth: Number(e.target.value) })}
+                  />
+                </SettingRow>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -905,6 +1100,57 @@ const ModuleSettings = () => {
                   <Switch 
                     checked={purchasingSettings.autoCreatePOOnLowStock}
                     onCheckedChange={(val) => setPurchasingSettings({ ...purchasingSettings, autoCreatePOOnLowStock: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Purchase Returns Settings */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <RotateCcw size={16} />
+                  {language === 'ar' ? 'مرتجعات المشتريات' : 'Purchase Returns'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل مرتجعات المشتريات' : 'Enable Purchase Returns'}
+                >
+                  <Switch 
+                    checked={purchasingSettings.enablePurchaseReturns}
+                    onCheckedChange={(val) => setPurchasingSettings({ ...purchasingSettings, enablePurchaseReturns: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'بادئة المرتجعات' : 'Return Prefix'}
+                >
+                  <Input 
+                    className="w-24"
+                    value={purchasingSettings.returnPrefix}
+                    onChange={(e) => setPurchasingSettings({ ...purchasingSettings, returnPrefix: e.target.value })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'طلب موافقة على المرتجعات' : 'Require Return Approval'}
+                >
+                  <Switch 
+                    checked={purchasingSettings.requireReturnApproval}
+                    onCheckedChange={(val) => setPurchasingSettings({ ...purchasingSettings, requireReturnApproval: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تحديث المخزون تلقائياً عند الإرجاع' : 'Auto Update Stock on Return'}
+                >
+                  <Switch 
+                    checked={purchasingSettings.autoUpdateStockOnReturn}
+                    onCheckedChange={(val) => setPurchasingSettings({ ...purchasingSettings, autoUpdateStockOnReturn: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تتبع أسباب الإرجاع' : 'Track Return Reasons'}
+                >
+                  <Switch 
+                    checked={purchasingSettings.trackReturnReasons}
+                    onCheckedChange={(val) => setPurchasingSettings({ ...purchasingSettings, trackReturnReasons: val })}
                   />
                 </SettingRow>
               </div>
@@ -1584,6 +1830,48 @@ const ModuleSettings = () => {
                   <Switch 
                     checked={reportsSettings.enableDeliveryReports}
                     onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableDeliveryReports: val })}
+                  />
+                </SettingRow>
+              </div>
+
+              <Separator />
+
+              {/* Advanced Reports */}
+              <div className="space-y-2">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Calculator size={16} />
+                  {language === 'ar' ? 'التقارير المتقدمة' : 'Advanced Reports'}
+                </h4>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقرير الأرباح والخسائر' : 'Enable Profit & Loss Report'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableProfitLossReport}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableProfitLossReport: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقرير تحليل المبيعات' : 'Enable Sales Analysis Report'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableSalesAnalysisReport}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableSalesAnalysisReport: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'تفعيل تقرير حركة العملاء والموردين' : 'Enable Customer/Supplier Movement'}
+                >
+                  <Switch 
+                    checked={reportsSettings.enableCustomerSupplierMovement}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, enableCustomerSupplierMovement: val })}
+                  />
+                </SettingRow>
+                <SettingRow 
+                  label={language === 'ar' ? 'مقارنة بالفترة السابقة' : 'Compare with Previous Period'}
+                >
+                  <Switch 
+                    checked={reportsSettings.comparePreviousPeriod}
+                    onCheckedChange={(val) => setReportsSettings({ ...reportsSettings, comparePreviousPeriod: val })}
                   />
                 </SettingRow>
               </div>
