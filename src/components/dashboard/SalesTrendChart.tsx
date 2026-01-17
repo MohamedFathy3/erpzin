@@ -1,5 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   AreaChart,
   Area,
@@ -8,34 +10,53 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const generateSalesData = () => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonth = 6; // July (0-indexed would be 6)
-  
-  return months.map((month, index) => {
-    const baseSales = 150000 + Math.random() * 100000;
-    const actual = index <= currentMonth ? Math.round(baseSales + (index * 15000)) : null;
-    
-    // AI Prediction using linear regression: y = mx + c
-    const m = 18000; // slope (growth rate)
-    const c = 140000; // base value
-    const predicted = Math.round(m * index + c + (Math.random() * 10000 - 5000));
-    
-    return {
-      month,
-      actual,
-      predicted,
-    };
-  });
-};
-
-const salesData = generateSalesData();
+const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
 const SalesTrendChart: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+
+  const { data: salesData, isLoading } = useQuery({
+    queryKey: ['sales-trend-chart'],
+    queryFn: async () => {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+      const months = language === 'ar' ? monthsAr : monthsEn;
+      
+      // Generate data for each month
+      const monthlyData = await Promise.all(
+        months.map(async (month, index) => {
+          const startDate = new Date(currentYear, index, 1).toISOString().split('T')[0];
+          const endDate = new Date(currentYear, index + 1, 0).toISOString().split('T')[0];
+          
+          const { data: sales } = await supabase
+            .from('sales')
+            .select('total_amount')
+            .gte('sale_date', startDate)
+            .lte('sale_date', endDate);
+          
+          const actual = index <= currentMonth 
+            ? sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0
+            : null;
+          
+          // Simple prediction based on trend
+          const baseValue = 100000 + (index * 15000);
+          const predicted = Math.round(baseValue + (Math.random() * 20000 - 10000));
+          
+          return {
+            month,
+            actual,
+            predicted,
+          };
+        })
+      );
+      
+      return monthlyData;
+    },
+  });
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -50,7 +71,7 @@ const SalesTrendChart: React.FC = () => {
               />
               <span className="text-muted-foreground">{entry.name}:</span>
               <span className="font-medium">
-                {entry.value ? `${(entry.value / 1000).toFixed(0)}K YER` : '-'}
+                {entry.value ? `${(entry.value / 1000).toFixed(0)}K ${t('common.currency')}` : '-'}
               </span>
             </div>
           ))}
@@ -59,6 +80,21 @@ const SalesTrendChart: React.FC = () => {
     }
     return null;
   };
+
+  if (isLoading) {
+    return (
+      <div className="card-elevated p-5">
+        <div className="flex items-center justify-between mb-6">
+          <Skeleton className="h-6 w-48" />
+          <div className="flex gap-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        </div>
+        <Skeleton className="h-72 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="card-elevated p-5">
@@ -83,8 +119,8 @@ const SalesTrendChart: React.FC = () => {
           <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(217, 47%, 19%)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(217, 47%, 19%)" stopOpacity={0} />
+                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="hsl(134, 61%, 41%)" stopOpacity={0.3} />
@@ -107,7 +143,7 @@ const SalesTrendChart: React.FC = () => {
               type="monotone"
               dataKey="actual"
               name={t('dashboard.actualSales')}
-              stroke="hsl(217, 47%, 19%)"
+              stroke="hsl(var(--primary))"
               strokeWidth={2}
               fill="url(#colorActual)"
               connectNulls={false}
