@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { currentBranch } = useApp();
   const { user } = useAuth();
 
@@ -186,37 +186,37 @@ const Dashboard: React.FC = () => {
           ) : (
             <>
               <KPICard
-                title={language === 'ar' ? 'مبيعات اليوم' : "Today's Sales"}
+                title={t('dashboard.todaySales')}
                 value={formatCurrency(dashboardData?.todaySales || 0)}
-                currency="YER"
+                currency={t('common.currency')}
                 change={dashboardData?.salesChange || 0}
-                changeLabel={language === 'ar' ? 'مقارنة بالأمس' : 'vs yesterday'}
+                changeLabel={t('dashboard.vsYesterday')}
                 icon={<Wallet size={20} />}
                 variant="success"
               />
               <KPICard
-                title={language === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue'}
+                title={t('dashboard.totalRevenue')}
                 value={formatCurrency(dashboardData?.totalRevenue || 0)}
-                currency="YER"
+                currency={t('common.currency')}
                 change={0}
-                changeLabel={language === 'ar' ? 'هذا الشهر' : 'this month'}
+                changeLabel={t('dashboard.thisMonth')}
                 icon={<TrendingUp size={20} />}
                 variant="primary"
               />
               <KPICard
-                title={language === 'ar' ? 'صافي الربح' : 'Net Profit'}
+                title={t('dashboard.netProfit')}
                 value={formatCurrency(dashboardData?.netProfit || 0)}
-                currency="YER"
+                currency={t('common.currency')}
                 change={0}
-                changeLabel={language === 'ar' ? 'الإيرادات - المصروفات' : 'Revenue - Expenses'}
+                changeLabel={t('dashboard.revenueMinusExpenses')}
                 icon={(dashboardData?.netProfit || 0) >= 0 ? <DollarSign size={20} /> : <TrendingDown size={20} />}
                 variant={(dashboardData?.netProfit || 0) >= 0 ? 'success' : 'default'}
               />
               <KPICard
-                title={language === 'ar' ? 'إجمالي الطلبات' : 'Total Orders'}
+                title={t('dashboard.totalOrders')}
                 value={dashboardData?.totalOrders || 0}
                 change={0}
-                changeLabel={language === 'ar' ? 'هذا الشهر' : 'this month'}
+                changeLabel={t('dashboard.thisMonth')}
                 icon={<ShoppingCart size={20} />}
                 variant="default"
               />
@@ -233,13 +233,10 @@ const Dashboard: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">
-                  {language === 'ar' ? 'تنبيهات المخزون المنخفض' : 'Low Stock Alerts'}
+                  {t('dashboard.lowStock')}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {language === 'ar' 
-                    ? `${dashboardData?.lowStockCount} منتج بحاجة لإعادة الطلب`
-                    : `${dashboardData?.lowStockCount} products need reordering`
-                  }
+                  {dashboardData?.lowStockCount} {language === 'ar' ? 'منتج يحتاج إعادة طلب' : 'products need reordering'}
                 </p>
               </div>
             </CardContent>

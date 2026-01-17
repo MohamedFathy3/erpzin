@@ -1,47 +1,91 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
-
-interface Transaction {
-  id: string;
-  invoiceNo: string;
-  customer: string;
-  amount: number;
-  items: number;
-  time: string;
-  paymentMethod: 'cash' | 'card' | 'split';
-  branch: string;
-}
+import { Skeleton } from '@/components/ui/skeleton';
+import { useNavigate } from 'react-router-dom';
 
 const RecentTransactions: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const navigate = useNavigate();
 
-  const transactions: Transaction[] = [
-    { id: '1', invoiceNo: 'INV-2024-1234', customer: 'Ahmed Mohammed', amount: 15500, items: 3, time: '10:45 AM', paymentMethod: 'cash', branch: 'Abra' },
-    { id: '2', invoiceNo: 'INV-2024-1235', customer: 'Sara Ali', amount: 8200, items: 2, time: '10:32 AM', paymentMethod: 'card', branch: 'Primark' },
-    { id: '3', invoiceNo: 'INV-2024-1236', customer: 'Omar Hassan', amount: 22750, items: 5, time: '10:15 AM', paymentMethod: 'split', branch: 'Fashion Kings' },
-    { id: '4', invoiceNo: 'INV-2024-1237', customer: 'Fatima Khalid', amount: 5400, items: 1, time: '09:58 AM', paymentMethod: 'cash', branch: 'Ahyan' },
-    { id: '5', invoiceNo: 'INV-2024-1238', customer: 'Yusuf Ibrahim', amount: 18900, items: 4, time: '09:42 AM', paymentMethod: 'card', branch: 'Abra' },
-  ];
+  const { data: transactions, isLoading } = useQuery({
+    queryKey: ['recent-transactions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          invoice_number,
+          total_amount,
+          payment_method,
+          sale_date,
+          created_at,
+          customer_id,
+          customers (name, name_ar)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  const getPaymentBadge = (method: string) => {
-    switch (method) {
+  const getPaymentBadge = (method: string | null) => {
+    const methodLower = method?.toLowerCase() || 'cash';
+    switch (methodLower) {
       case 'cash':
-        return <Badge variant="outline" className="text-success border-success/50 bg-success/5">Cash</Badge>;
+      case 'نقدي':
+        return <Badge variant="outline" className="text-success border-success/50 bg-success/5">{t('dashboard.cash')}</Badge>;
       case 'card':
-        return <Badge variant="outline" className="text-info border-info/50 bg-info/5">Card</Badge>;
+      case 'بطاقة':
+        return <Badge variant="outline" className="text-info border-info/50 bg-info/5">{t('dashboard.card')}</Badge>;
       case 'split':
-        return <Badge variant="outline" className="text-warning border-warning/50 bg-warning/5">Split</Badge>;
+      case 'مقسم':
+        return <Badge variant="outline" className="text-warning border-warning/50 bg-warning/5">{t('dashboard.split')}</Badge>;
       default:
-        return null;
+        return <Badge variant="outline">{method}</Badge>;
     }
   };
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return '??';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="card-elevated p-5">
+        <div className="flex items-center justify-between mb-4">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/50">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1">
+                <Skeleton className="h-4 w-24 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+              <Skeleton className="h-4 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-elevated p-5">
@@ -49,43 +93,55 @@ const RecentTransactions: React.FC = () => {
         <h3 className="text-lg font-semibold text-foreground">
           {t('dashboard.recentTransactions')}
         </h3>
-        <span className="text-sm text-primary cursor-pointer hover:underline">
-          View all
-        </span>
+        <button 
+          onClick={() => navigate('/sales')}
+          className="text-sm text-primary cursor-pointer hover:underline"
+        >
+          {t('dashboard.viewAll')}
+        </button>
       </div>
 
       <div className="space-y-3">
-        {transactions.map((tx) => (
-          <div
-            key={tx.id}
-            className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
-          >
-            <Avatar className="h-10 w-10">
-              <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                {getInitials(tx.customer)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium truncate">{tx.customer}</p>
-                {getPaymentBadge(tx.paymentMethod)}
+        {transactions && transactions.length > 0 ? (
+          transactions.map((tx: any) => {
+            const customerName = language === 'ar' && tx.customers?.name_ar 
+              ? tx.customers.name_ar 
+              : tx.customers?.name || (language === 'ar' ? 'عميل نقدي' : 'Walk-in Customer');
+            
+            return (
+              <div
+                key={tx.id}
+                className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                    {getInitials(customerName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{customerName}</p>
+                    {getPaymentBadge(tx.payment_method)}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{tx.invoice_number}</span>
+                    <span>•</span>
+                    <span>{formatTime(tx.created_at)}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-foreground">
+                    {(tx.total_amount || 0).toLocaleString(language === 'ar' ? 'ar-YE' : 'en-US')} <span className="text-xs text-muted-foreground">{t('common.currency')}</span>
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{tx.invoiceNo}</span>
-                <span>•</span>
-                <span>{tx.items} items</span>
-                <span>•</span>
-                <span>{tx.branch}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-bold text-foreground">
-                {tx.amount.toLocaleString()} <span className="text-xs text-muted-foreground">YER</span>
-              </p>
-              <p className="text-xs text-muted-foreground">{tx.time}</p>
-            </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            {language === 'ar' ? 'لا توجد معاملات حديثة' : 'No recent transactions'}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
