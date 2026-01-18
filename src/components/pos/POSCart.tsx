@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button';
 
 interface CartItem {
   id: string;
+  variantId?: string;
   name: string;
   nameAr: string;
   price: number;
   quantity: number;
   sku: string;
+  sizeName?: string;
+  colorName?: string;
 }
 
 interface POSCartProps {
