@@ -37,7 +37,7 @@ import {
   Image,
   Warehouse,
   Cog,
-  Database,
+  
   ChevronRight,
   Shield,
   CreditCard,
@@ -51,7 +51,7 @@ import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
 import ModuleSettings from '@/components/settings/ModuleSettings';
 import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
-import BackupManager from '@/components/settings/BackupManager';
+
 import PrintingSettings from '@/components/settings/PrintingSettings';
 import DataManagement from '@/components/settings/DataManagement';
 import AuditLogViewer from '@/components/settings/AuditLogViewer';
@@ -139,15 +139,6 @@ const Settings = () => {
       labelAr: 'المستخدمين والصلاحيات',
       description: 'Manage user access',
       descriptionAr: 'إدارة صلاحيات المستخدمين',
-      category: 'system'
-    },
-    { 
-      id: 'backup', 
-      icon: Database, 
-      label: 'Backup & Restore', 
-      labelAr: 'النسخ الاحتياطي',
-      description: 'Data backup management',
-      descriptionAr: 'إدارة النسخ الاحتياطية',
       category: 'system'
     },
     { 
@@ -751,8 +742,6 @@ const Settings = () => {
       case 'users':
         return <UsersPermissions />;
 
-      case 'backup':
-        return <BackupManager />;
 
       case 'data-management':
         return <DataManagement />;
