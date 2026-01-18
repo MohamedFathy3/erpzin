@@ -1,3 +1,24 @@
+/**
+ * AppContext - Application-wide state management
+ * 
+ * SECURITY NOTE: Client-Side Permissions (UX Only)
+ * ================================================
+ * The permissions in this context (canAccessPOS, canAccessFinance, etc.) are
+ * for UI/UX purposes ONLY. They control which menu items and pages are shown
+ * to users, but they do NOT provide actual security enforcement.
+ * 
+ * All actual security is enforced server-side through:
+ * 1. Supabase Row-Level Security (RLS) policies on all database tables
+ * 2. Edge function role verification for sensitive operations
+ * 3. Database functions like has_role() and has_permission()
+ * 
+ * A malicious user could manipulate these client-side permissions in DevTools,
+ * but any database operations would still be blocked by RLS policies.
+ * 
+ * Never rely on these client-side permissions for actual authorization decisions.
+ * They are purely for improving user experience by hiding irrelevant UI elements.
+ */
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -38,6 +59,13 @@ interface CartItem {
   discount: number;
 }
 
+/**
+ * UserPermissions - Client-side permission flags for UI control
+ * 
+ * SECURITY NOTE: These permissions are for UX ONLY.
+ * Actual authorization is enforced by RLS policies and server-side checks.
+ * Do not use these for security decisions - use server-side validation.
+ */
 interface UserPermissions {
   canAccessPOS: boolean;
   canAccessSales: boolean;
@@ -233,7 +261,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadWarehouses();
   }, [currentBranch]);
 
-  // Load user permissions
+  // Load user permissions for UI display
+  // SECURITY NOTE: These permissions control UI visibility only.
+  // All actual authorization is enforced server-side via RLS policies.
+  // A user modifying these values in DevTools cannot bypass RLS.
   useEffect(() => {
     const loadPermissions = async () => {
       if (!user) {
@@ -244,6 +275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       try {
         // Get user role from user_roles table
+        // Note: This role is verified server-side by RLS policies for all operations
         const { data: roleData } = await supabase
           .from('user_roles')
           .select('role')
@@ -252,7 +284,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         const role = roleData?.role as 'admin' | 'moderator' | 'cashier' | 'viewer' | null;
         
-        // Set permissions based on role
+        // Set permissions based on role (for UI control only)
         const rolePermissions: Record<string, UserPermissions> = {
           admin: {
             canAccessPOS: true,
