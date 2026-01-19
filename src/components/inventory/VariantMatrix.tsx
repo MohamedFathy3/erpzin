@@ -115,13 +115,22 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     }
   };
 
-  const updateVariantStock = (colorId: string, sizeId: string, stock: number) => {
-    onVariantChange(variants.map(v =>
-      v.colorId === colorId && v.sizeId === sizeId
-        ? { ...v, stock }
-        : v
-    ));
-  };
+  // Update all variants when base price/cost changes
+  useEffect(() => {
+    if (variants.length > 0) {
+      const updatedVariants = variants.map(v => ({
+        ...v,
+        cost: v.cost === 0 ? baseCost : v.cost,
+        price: v.price === 0 ? basePrice : v.price
+      }));
+      const hasChanges = variants.some((v, i) => 
+        v.cost !== updatedVariants[i].cost || v.price !== updatedVariants[i].price
+      );
+      if (hasChanges) {
+        onVariantChange(updatedVariants);
+      }
+    }
+  }, [baseCost, basePrice]);
 
   const updateVariantPrice = (colorId: string, sizeId: string, price: number) => {
     onVariantChange(variants.map(v =>
@@ -174,7 +183,6 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   };
 
   const enabledCount = variants.filter(v => v.enabled).length;
-  const totalStock = variants.filter(v => v.enabled).reduce((sum, v) => sum + v.stock, 0);
 
   if (sizesLoading || colorsLoading) {
     return (
@@ -256,10 +264,6 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
               <span>
                 {language === 'ar' ? 'المتغيرات النشطة:' : 'Active Variants:'}{' '}
                 <span className="font-semibold text-foreground">{enabledCount}</span>
-              </span>
-              <span>
-                {language === 'ar' ? 'إجمالي المخزون:' : 'Total Stock:'}{' '}
-                <span className="font-semibold text-foreground">{totalStock}</span>
               </span>
             </div>
           </div>
@@ -352,6 +356,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                                     onChange={(e) => updateVariantCost(color.id, size.id, parseFloat(e.target.value) || 0)}
                                     className="h-8 text-center"
                                     min={0}
+                                    placeholder={baseCost.toString()}
                                   />
                                 </div>
                                 {/* Price */}
@@ -365,19 +370,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                                     onChange={(e) => updateVariantPrice(color.id, size.id, parseFloat(e.target.value) || 0)}
                                     className="h-8 text-center"
                                     min={0}
-                                  />
-                                </div>
-                                {/* Stock */}
-                                <div>
-                                  <label className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'المخزون' : 'Stock'}
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    value={variant.stock}
-                                    onChange={(e) => updateVariantStock(color.id, size.id, parseInt(e.target.value) || 0)}
-                                    className="h-8 text-center"
-                                    min={0}
+                                    placeholder={basePrice.toString()}
                                   />
                                 </div>
                               </div>
