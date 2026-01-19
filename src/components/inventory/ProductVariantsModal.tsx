@@ -33,7 +33,9 @@ interface ProductVariantsModalProps {
     name: string;
     nameAr: string;
     price: number;
+    cost: number;
     sku: string;
+    stock: number;
     image?: string;
   } | null;
   onEditProduct?: () => void;
@@ -73,7 +75,9 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
     enabled: isOpen && !!product?.id
   });
 
-  const totalStock = variants.reduce((sum, v) => sum + v.stock, 0);
+  const variantsStock = variants.reduce((sum, v) => sum + v.stock, 0);
+  const baseStock = product?.stock || 0;
+  const totalStock = baseStock + variantsStock;
   const activeVariants = variants.filter(v => v.is_active);
 
   if (!product) return null;
@@ -107,15 +111,31 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
               <p className="text-sm text-muted-foreground">{product.sku}</p>
               <p className="text-primary font-semibold">{product.price.toLocaleString()} YER</p>
             </div>
-            <div className="text-end">
-              <div className="text-sm text-muted-foreground mb-1">
+          </div>
+
+          {/* Stock Summary */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-4 bg-primary/10 rounded-xl border border-primary/20 text-center">
+              <div className="text-2xl font-bold text-primary">{baseStock}</div>
+              <div className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'مخزون الصنف الأساسي' : 'Base Product Stock'}
+              </div>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-foreground">{variantsStock}</div>
+              <div className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'مخزون المتغيرات' : 'Variants Stock'}
+              </div>
+            </div>
+            <div className="bg-success/10 rounded-lg p-4 text-center border border-success/20">
+              <div className="text-2xl font-bold text-success">{totalStock}</div>
+              <div className="text-xs text-muted-foreground">
                 {language === 'ar' ? 'إجمالي المخزون' : 'Total Stock'}
               </div>
-              <div className="text-2xl font-bold text-foreground">{totalStock}</div>
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Variants Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-muted/50 rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-foreground">{variants.length}</div>
@@ -123,8 +143,8 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
                 {language === 'ar' ? 'إجمالي المتغيرات' : 'Total Variants'}
               </div>
             </div>
-            <div className="bg-success/10 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-success">{activeVariants.length}</div>
+            <div className="bg-primary/10 rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-primary">{activeVariants.length}</div>
               <div className="text-xs text-muted-foreground">
                 {language === 'ar' ? 'متغيرات نشطة' : 'Active Variants'}
               </div>

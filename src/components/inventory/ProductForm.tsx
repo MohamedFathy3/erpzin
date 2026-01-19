@@ -453,7 +453,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 value={formData.stock}
                 onChange={(e) => handleChange('stock', parseInt(e.target.value) || 0)}
                 min={0}
-                disabled={formData.hasVariants}
               />
             </div>
             <div>
