@@ -14,7 +14,7 @@ import InventoryCount from '@/components/inventory/InventoryCount';
 import InventoryMovements from '@/components/inventory/InventoryMovements';
 import OpeningBalances from '@/components/inventory/OpeningBalances';
 import ExcelImport from '@/components/inventory/ExcelImport';
-import SizeColorManager from '@/components/inventory/SizeColorManager';
+import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -237,7 +237,7 @@ const Inventory: React.FC = () => {
                 </TabsTrigger>
                 <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <Palette size={14} />
-                  {language === 'ar' ? 'المقاسات والألوان' : 'Variants'}
+                  {language === 'ar' ? 'الوحدات والمتغيرات' : 'Units & Variants'}
                 </TabsTrigger>
                 <TabsTrigger value="barcode" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <Tag size={14} />
@@ -461,7 +461,7 @@ const Inventory: React.FC = () => {
           <TabsContent value="import" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><ExcelImport /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="variants" className="flex-1 mt-0"><SizeColorManager /></TabsContent>
+          <TabsContent value="variants" className="flex-1 mt-0"><UnitsVariantsManager /></TabsContent>
           <TabsContent value="barcode" className="flex-1 mt-4">
             <BarcodePrintingCenter />
           </TabsContent>
