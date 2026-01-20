@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2 } from 'lucide-react';
@@ -126,7 +126,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const flatCategories = flattenDbCategories(dbCategories);
   
-  const [formData, setFormData] = useState<ProductFormData>(editProduct || {
+  const getInitialFormData = (): ProductFormData => ({
     name: '',
     nameAr: '',
     description: '',
@@ -145,6 +145,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
     status: 'active',
     imageUrl: ''
   });
+
+  const [formData, setFormData] = useState<ProductFormData>(editProduct || getInitialFormData());
+
+  // Update form data when editProduct changes (for editing existing products)
+  useEffect(() => {
+    if (isOpen && editProduct) {
+      setFormData(editProduct);
+    } else if (isOpen && !editProduct) {
+      setFormData(getInitialFormData());
+    }
+  }, [isOpen, editProduct]);
 
   const handleChange = (field: keyof ProductFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

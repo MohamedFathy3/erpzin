@@ -82,10 +82,11 @@ const Inventory: React.FC = () => {
     barcode: p.barcode,
     category: p.categories?.name || 'Uncategorized',
     categoryAr: p.categories?.name_ar || 'غير مصنف',
-    categoryId: p.categories?.id || '',
+    categoryId: p.category_id || '',
     price: Number(p.price),
     cost: Number(p.cost || 0),
     stock: p.stock,
+    minStock: p.min_stock || 5,
     variants: 0,
     image: p.image_url,
     status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active',
@@ -177,12 +178,23 @@ const Inventory: React.FC = () => {
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
   const handleEditProduct = (product: Product) => {
     setEditProduct({
-      id: product.id, name: product.name, nameAr: product.nameAr, description: '', descriptionAr: '',
-      sku: product.sku, barcode: product.barcode || '', categoryId: '', price: product.price,
-      cost: product.cost, hasVariants: product.variants > 0, variants: [], 
-      selectedSizes: [], selectedColors: [],
+      id: product.id, 
+      name: product.name, 
+      nameAr: product.nameAr, 
+      description: '', 
+      descriptionAr: '',
+      sku: product.sku, 
+      barcode: product.barcode || '', 
+      categoryId: product.categoryId || '', 
+      price: product.price,
+      cost: product.cost, 
+      hasVariants: product.hasVariants || false, 
+      variants: [], 
+      selectedSizes: [], 
+      selectedColors: [],
       stock: product.stock,
-      reorderPoint: 5, status: product.status === 'inactive' ? 'inactive' : 'active',
+      reorderPoint: product.minStock || 5, 
+      status: product.status === 'inactive' ? 'inactive' : 'active',
       imageUrl: product.image || ''
     });
     setShowProductForm(true);
