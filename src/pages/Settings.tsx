@@ -57,6 +57,7 @@ import PaymentMethodsManager from '@/components/settings/PaymentMethodsManager';
 
 import PrintingSettings from '@/components/settings/PrintingSettings';
 import DataManagement from '@/components/settings/DataManagement';
+import DataImportExport from '@/components/settings/DataImportExport';
 import AuditLogViewer from '@/components/settings/AuditLogViewer';
 import CurrencyTaxManager from '@/components/settings/CurrencyTaxManager';
 import { cn } from '@/lib/utils';
@@ -133,6 +134,15 @@ const Settings = () => {
       labelAr: 'الطباعة والمستندات',
       description: 'Invoice design and printers',
       descriptionAr: 'تصميم الفواتير والطابعات',
+      category: 'business'
+    },
+    { 
+      id: 'import-export', 
+      icon: FileText, 
+      label: 'Import & Export', 
+      labelAr: 'استيراد وتصدير البيانات',
+      description: 'Opening balances, customers, suppliers',
+      descriptionAr: 'أول المدة والعملاء والموردين',
       category: 'business'
     },
     // System Settings
@@ -742,6 +752,9 @@ const Settings = () => {
 
       case 'printing':
         return <PrintingSettings />;
+
+      case 'import-export':
+        return <DataImportExport />;
 
       case 'users':
         return <UsersPermissions />;
