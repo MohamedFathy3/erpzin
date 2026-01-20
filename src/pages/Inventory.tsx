@@ -12,7 +12,7 @@ import InventoryReports from '@/components/inventory/InventoryReports';
 import LowStockAlerts from '@/components/inventory/LowStockAlerts';
 import InventoryCount from '@/components/inventory/InventoryCount';
 import InventoryMovements from '@/components/inventory/InventoryMovements';
-import OpeningBalances from '@/components/inventory/OpeningBalances';
+// OpeningBalances moved to Settings
 import ExcelImport from '@/components/inventory/ExcelImport';
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
@@ -280,10 +280,6 @@ const Inventory: React.FC = () => {
                   <ClipboardList size={14} />
                   {language === 'ar' ? 'الجرد' : 'Count'}
                 </TabsTrigger>
-                <TabsTrigger value="opening" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <Wallet size={14} />
-                  {language === 'ar' ? 'أول المدة' : 'Opening'}
-                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -466,9 +462,6 @@ const Inventory: React.FC = () => {
           </TabsContent>
           <TabsContent value="movements" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryMovements /></CardContent></Card>
-          </TabsContent>
-          <TabsContent value="opening" className="flex-1 mt-4">
-            <Card className="shadow-md border-border"><CardContent className="p-4"><OpeningBalances /></CardContent></Card>
           </TabsContent>
           <TabsContent value="import" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><ExcelImport /></CardContent></Card>
