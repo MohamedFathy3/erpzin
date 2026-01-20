@@ -39,6 +39,9 @@ import {
   Cog,
   
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeft,
   Shield,
   CreditCard,
   Bell,
@@ -72,6 +75,7 @@ const Settings = () => {
   const { language, direction, setLanguage } = useLanguage();
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState('company');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isEditingCompany, setIsEditingCompany] = useState(false);
 
   const sections: SettingsSection[] = [
@@ -759,51 +763,83 @@ const Settings = () => {
       <div className="h-[calc(100vh-4rem)]" dir={direction}>
         <div className="flex h-full gap-6">
           {/* Sidebar Navigation */}
-          <div className="w-72 flex-shrink-0 hidden lg:block">
+          <div className={cn(
+            "flex-shrink-0 hidden lg:block transition-all duration-300 relative",
+            sidebarCollapsed ? "w-16" : "w-72"
+          )}>
+            {/* Collapse Toggle Button */}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={cn(
+                "absolute top-4 z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center",
+                "text-primary-foreground shadow-md hover:bg-primary/90 transition-colors",
+                direction === 'rtl' ? "-left-3" : "-right-3"
+              )}
+              title={sidebarCollapsed 
+                ? (language === 'ar' ? 'توسيع القائمة' : 'Expand menu')
+                : (language === 'ar' ? 'طي القائمة' : 'Collapse menu')
+              }
+            >
+              {direction === 'rtl' 
+                ? (sidebarCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />)
+                : (sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />)
+              }
+            </button>
+
             <Card className="h-full">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-                    <SettingsIcon className="text-primary" size={22} />
+              {!sidebarCollapsed && (
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
+                      <SettingsIcon className="text-primary" size={22} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{t.title}</CardTitle>
+                      <CardDescription className="text-xs">{language === 'ar' ? 'إدارة إعدادات النظام' : 'Manage system settings'}</CardDescription>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg">{t.title}</CardTitle>
-                    <CardDescription className="text-xs">{language === 'ar' ? 'إدارة إعدادات النظام' : 'Manage system settings'}</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[calc(100vh-12rem)]">
-                  <div className="px-3 pb-3 space-y-4">
+                </CardHeader>
+              )}
+              <CardContent className={cn("p-0", sidebarCollapsed && "pt-10")}>
+                <ScrollArea className={sidebarCollapsed ? "h-[calc(100vh-8rem)]" : "h-[calc(100vh-12rem)]"}>
+                  <div className={cn("pb-3 space-y-4", sidebarCollapsed ? "px-1" : "px-3")}>
                     {/* General */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.general}</p>
+                      {!sidebarCollapsed && (
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.general}</p>
+                      )}
                       <div className="space-y-1">
                         {getSectionsByCategory('general').map((section) => (
                           <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
+                            title={sidebarCollapsed ? (language === 'ar' ? section.labelAr : section.label) : undefined}
                             className={cn(
-                              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-start transition-all",
+                              "w-full flex items-center gap-3 rounded-lg text-start transition-all",
+                              sidebarCollapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                               activeSection === section.id
                                 ? "bg-primary text-primary-foreground shadow-md"
                                 : "hover:bg-muted"
                             )}
                           >
                             <section.icon size={18} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
-                              <p className={cn(
-                                "text-xs truncate",
-                                activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
-                              )}>
-                                {language === 'ar' ? section.descriptionAr : section.description}
-                              </p>
-                            </div>
-                            <ChevronRight size={16} className={cn(
-                              "transition-transform",
-                              activeSection === section.id && "rotate-90"
-                            )} />
+                            {!sidebarCollapsed && (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
+                                  <p className={cn(
+                                    "text-xs truncate",
+                                    activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
+                                  )}>
+                                    {language === 'ar' ? section.descriptionAr : section.description}
+                                  </p>
+                                </div>
+                                <ChevronRight size={16} className={cn(
+                                  "transition-transform",
+                                  activeSection === section.id && "rotate-90"
+                                )} />
+                              </>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -811,33 +847,41 @@ const Settings = () => {
 
                     {/* Business */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.business}</p>
+                      {!sidebarCollapsed && (
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.business}</p>
+                      )}
                       <div className="space-y-1">
                         {getSectionsByCategory('business').map((section) => (
                           <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
+                            title={sidebarCollapsed ? (language === 'ar' ? section.labelAr : section.label) : undefined}
                             className={cn(
-                              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-start transition-all",
+                              "w-full flex items-center gap-3 rounded-lg text-start transition-all",
+                              sidebarCollapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                               activeSection === section.id
                                 ? "bg-primary text-primary-foreground shadow-md"
                                 : "hover:bg-muted"
                             )}
                           >
                             <section.icon size={18} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
-                              <p className={cn(
-                                "text-xs truncate",
-                                activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
-                              )}>
-                                {language === 'ar' ? section.descriptionAr : section.description}
-                              </p>
-                            </div>
-                            <ChevronRight size={16} className={cn(
-                              "transition-transform",
-                              activeSection === section.id && "rotate-90"
-                            )} />
+                            {!sidebarCollapsed && (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
+                                  <p className={cn(
+                                    "text-xs truncate",
+                                    activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
+                                  )}>
+                                    {language === 'ar' ? section.descriptionAr : section.description}
+                                  </p>
+                                </div>
+                                <ChevronRight size={16} className={cn(
+                                  "transition-transform",
+                                  activeSection === section.id && "rotate-90"
+                                )} />
+                              </>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -845,33 +889,41 @@ const Settings = () => {
 
                     {/* System */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.system}</p>
+                      {!sidebarCollapsed && (
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-2">{t.system}</p>
+                      )}
                       <div className="space-y-1">
                         {getSectionsByCategory('system').map((section) => (
                           <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
+                            title={sidebarCollapsed ? (language === 'ar' ? section.labelAr : section.label) : undefined}
                             className={cn(
-                              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-start transition-all",
+                              "w-full flex items-center gap-3 rounded-lg text-start transition-all",
+                              sidebarCollapsed ? "justify-center px-2 py-3" : "px-3 py-2.5",
                               activeSection === section.id
                                 ? "bg-primary text-primary-foreground shadow-md"
                                 : "hover:bg-muted"
                             )}
                           >
                             <section.icon size={18} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
-                              <p className={cn(
-                                "text-xs truncate",
-                                activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
-                              )}>
-                                {language === 'ar' ? section.descriptionAr : section.description}
-                              </p>
-                            </div>
-                            <ChevronRight size={16} className={cn(
-                              "transition-transform",
-                              activeSection === section.id && "rotate-90"
-                            )} />
+                            {!sidebarCollapsed && (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{language === 'ar' ? section.labelAr : section.label}</p>
+                                  <p className={cn(
+                                    "text-xs truncate",
+                                    activeSection === section.id ? "text-primary-foreground/70" : "text-muted-foreground"
+                                  )}>
+                                    {language === 'ar' ? section.descriptionAr : section.description}
+                                  </p>
+                                </div>
+                                <ChevronRight size={16} className={cn(
+                                  "transition-transform",
+                                  activeSection === section.id && "rotate-90"
+                                )} />
+                              </>
+                            )}
                           </button>
                         ))}
                       </div>
