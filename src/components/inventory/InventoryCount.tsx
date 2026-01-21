@@ -13,6 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   ClipboardList, 
   Plus, 
@@ -35,6 +36,7 @@ const InventoryCount = () => {
   const [countNotes, setCountNotes] = useState('');
   const [countItems, setCountItems] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
 
   const t = {
     en: {
@@ -135,6 +137,77 @@ const InventoryCount = () => {
       return data;
     }
   });
+
+  // Filter fields for advanced filter
+  const filterFields: FilterField[] = useMemo(() => [
+    {
+      key: 'search',
+      label: 'Search',
+      labelAr: 'بحث',
+      type: 'text',
+      placeholder: 'Search by count number...',
+      placeholderAr: 'بحث برقم الجرد...'
+    },
+    {
+      key: 'warehouse',
+      label: 'Warehouse',
+      labelAr: 'المخزن',
+      type: 'select',
+      options: warehouses.map(w => ({
+        value: w.id,
+        label: w.name,
+        labelAr: w.name_ar || w.name
+      }))
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      labelAr: 'الحالة',
+      type: 'select',
+      options: [
+        { value: 'draft', label: 'Draft', labelAr: 'مسودة' },
+        { value: 'in_progress', label: 'In Progress', labelAr: 'قيد التنفيذ' },
+        { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
+        { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' }
+      ]
+    },
+    {
+      key: 'date',
+      label: 'Date',
+      labelAr: 'التاريخ',
+      type: 'dateRange'
+    }
+  ], [warehouses]);
+
+  // Filter counts based on filter values
+  const filteredCounts = useMemo(() => {
+    let filtered = counts;
+
+    if (filterValues.search) {
+      const query = filterValues.search.toLowerCase();
+      filtered = filtered.filter(c => c.count_number?.toLowerCase().includes(query));
+    }
+
+    if (filterValues.warehouse && filterValues.warehouse !== 'all') {
+      filtered = filtered.filter(c => c.warehouse_id === filterValues.warehouse);
+    }
+
+    if (filterValues.status && filterValues.status !== 'all') {
+      filtered = filtered.filter(c => c.status === filterValues.status);
+    }
+
+    if (filterValues.date_from) {
+      const fromDate = new Date(filterValues.date_from);
+      filtered = filtered.filter(c => new Date(c.count_date) >= fromDate);
+    }
+
+    if (filterValues.date_to) {
+      const toDate = new Date(filterValues.date_to);
+      filtered = filtered.filter(c => new Date(c.count_date) <= toDate);
+    }
+
+    return filtered;
+  }, [counts, filterValues]);
 
   // Fetch count items for selected count
   const { data: countItemsData = [] } = useQuery({
@@ -306,6 +379,15 @@ const InventoryCount = () => {
         </Button>
       </div>
 
+      {/* Advanced Filter */}
+      <AdvancedFilter
+        fields={filterFields}
+        values={filterValues}
+        onChange={setFilterValues}
+        onReset={() => setFilterValues({})}
+        language={language}
+      />
+
       {/* Counts Table */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
@@ -327,14 +409,14 @@ const InventoryCount = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {counts.length === 0 ? (
+                  {filteredCounts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         {t.noData}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    counts.map(count => (
+                    filteredCounts.map(count => (
                       <TableRow key={count.id}>
                         <TableCell className="font-medium">{count.count_number}</TableCell>
                         <TableCell>

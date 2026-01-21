@@ -8,12 +8,9 @@ import ProductVariantsModal from '@/components/inventory/ProductVariantsModal';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
 import BarcodePrintingCenter from '@/components/inventory/BarcodePrintingCenter';
 import StockTransfer from '@/components/inventory/StockTransfer';
-import InventoryReports from '@/components/inventory/InventoryReports';
 import LowStockAlerts from '@/components/inventory/LowStockAlerts';
 import InventoryCount from '@/components/inventory/InventoryCount';
-import InventoryMovements from '@/components/inventory/InventoryMovements';
-// OpeningBalances moved to Settings
-import ExcelImport from '@/components/inventory/ExcelImport';
+// Reports, Movements, Import moved to other sections
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
 import { Button } from '@/components/ui/button';
@@ -21,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Package, ArrowRightLeft, BarChart3, Bell, ClipboardList, ArrowUpDown, Wallet, FileSpreadsheet, Palette, Filter, X, Tag, SortAsc, Gift } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -255,10 +252,6 @@ const Inventory: React.FC = () => {
                   <Tag size={14} />
                   {language === 'ar' ? 'طباعة الباركود' : 'Barcode'}
                 </TabsTrigger>
-                <TabsTrigger value="import" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
-                  <FileSpreadsheet size={14} />
-                  {language === 'ar' ? 'استيراد' : 'Import'}
-                </TabsTrigger>
                 <TabsTrigger value="promotions" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <Gift size={14} />
                   {language === 'ar' ? 'العروض' : 'Promotions'}
@@ -283,20 +276,12 @@ const Inventory: React.FC = () => {
               </TabsList>
             </div>
 
-            {/* التقارير والمراقبة */}
+            {/* التنبيهات */}
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground px-1">
-                {language === 'ar' ? 'التقارير والمراقبة' : 'Reports & Monitoring'}
+                {language === 'ar' ? 'المراقبة' : 'Monitoring'}
               </span>
               <TabsList className="h-10 bg-violet-50/80 dark:bg-violet-950/30 p-1 rounded-lg shadow-sm">
-                <TabsTrigger value="reports" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <BarChart3 size={14} />
-                  {language === 'ar' ? 'التقارير' : 'Reports'}
-                </TabsTrigger>
-                <TabsTrigger value="movements" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <ArrowUpDown size={14} />
-                  {language === 'ar' ? 'الحركات' : 'Movements'}
-                </TabsTrigger>
                 <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
                   <Bell size={14} />
                   {language === 'ar' ? 'التنبيهات' : 'Alerts'}
@@ -451,20 +436,11 @@ const Inventory: React.FC = () => {
           <TabsContent value="transfers" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><StockTransfer /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="reports" className="flex-1 mt-4">
-            <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryReports /></CardContent></Card>
-          </TabsContent>
           <TabsContent value="alerts" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><LowStockAlerts /></CardContent></Card>
           </TabsContent>
           <TabsContent value="count" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryCount /></CardContent></Card>
-          </TabsContent>
-          <TabsContent value="movements" className="flex-1 mt-4">
-            <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryMovements /></CardContent></Card>
-          </TabsContent>
-          <TabsContent value="import" className="flex-1 mt-4">
-            <Card className="shadow-md border-border"><CardContent className="p-4"><ExcelImport /></CardContent></Card>
           </TabsContent>
           <TabsContent value="variants" className="flex-1 mt-0"><UnitsVariantsManager /></TabsContent>
           <TabsContent value="barcode" className="flex-1 mt-4">

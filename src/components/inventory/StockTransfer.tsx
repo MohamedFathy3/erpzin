@@ -15,6 +15,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   ArrowRightLeft, 
   Plus, 
@@ -90,6 +91,7 @@ const StockTransfer = () => {
   const [selectedTransfer, setSelectedTransfer] = useState<StockTransfer | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [filterValues, setFilterValues] = useState<FilterValues>({});
 
   // New transfer form state
   const [fromWarehouse, setFromWarehouse] = useState('');
@@ -433,13 +435,90 @@ const StockTransfer = () => {
     );
   }, [products, productSearchQuery]);
 
+  // Filter fields for advanced filter
+  const filterFields: FilterField[] = useMemo(() => [
+    {
+      key: 'search',
+      label: 'Search',
+      labelAr: 'بحث',
+      type: 'text',
+      placeholder: 'Search by transfer number...',
+      placeholderAr: 'بحث برقم النقل...'
+    },
+    {
+      key: 'from_warehouse',
+      label: 'From Warehouse',
+      labelAr: 'من المخزن',
+      type: 'select',
+      options: warehouses.map(w => ({
+        value: w.id,
+        label: w.name,
+        labelAr: w.name_ar || w.name
+      }))
+    },
+    {
+      key: 'to_warehouse',
+      label: 'To Warehouse',
+      labelAr: 'إلى المخزن',
+      type: 'select',
+      options: warehouses.map(w => ({
+        value: w.id,
+        label: w.name,
+        labelAr: w.name_ar || w.name
+      }))
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      labelAr: 'الحالة',
+      type: 'select',
+      options: [
+        { value: 'pending', label: 'Pending', labelAr: 'قيد الانتظار' },
+        { value: 'in_transit', label: 'In Transit', labelAr: 'في الطريق' },
+        { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
+        { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' }
+      ]
+    },
+    {
+      key: 'date',
+      label: 'Date',
+      labelAr: 'التاريخ',
+      type: 'dateRange'
+    }
+  ], [warehouses]);
+
   const filteredTransfers = useMemo(() => {
-    if (!searchQuery) return transfers;
-    const query = searchQuery.toLowerCase();
-    return transfers.filter(t => 
-      t.transfer_number.toLowerCase().includes(query)
-    );
-  }, [transfers, searchQuery]);
+    let filtered = transfers;
+
+    if (filterValues.search) {
+      const query = filterValues.search.toLowerCase();
+      filtered = filtered.filter(t => t.transfer_number?.toLowerCase().includes(query));
+    }
+
+    if (filterValues.from_warehouse && filterValues.from_warehouse !== 'all') {
+      filtered = filtered.filter(t => t.from_warehouse_id === filterValues.from_warehouse);
+    }
+
+    if (filterValues.to_warehouse && filterValues.to_warehouse !== 'all') {
+      filtered = filtered.filter(t => t.to_warehouse_id === filterValues.to_warehouse);
+    }
+
+    if (filterValues.status && filterValues.status !== 'all') {
+      filtered = filtered.filter(t => t.status === filterValues.status);
+    }
+
+    if (filterValues.date_from) {
+      const fromDate = new Date(filterValues.date_from);
+      filtered = filtered.filter(t => new Date(t.transfer_date) >= fromDate);
+    }
+
+    if (filterValues.date_to) {
+      const toDate = new Date(filterValues.date_to);
+      filtered = filtered.filter(t => new Date(t.transfer_date) <= toDate);
+    }
+
+    return filtered;
+  }, [transfers, filterValues]);
 
   const canCreateTransfer = fromWarehouse && toWarehouse && fromWarehouse !== toWarehouse && transferItems.length > 0;
 
@@ -464,21 +543,19 @@ const StockTransfer = () => {
         </Button>
       </div>
 
+      {/* Advanced Filter */}
+      <AdvancedFilter
+        fields={filterFields}
+        values={filterValues}
+        onChange={setFilterValues}
+        onReset={() => setFilterValues({})}
+        language={language}
+      />
+
       {/* Transfers Table */}
       <Card className="card-elevated">
         <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle>{t.allTransfers}</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-              <Input
-                placeholder={t.searchTransfers}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="ps-9"
-              />
-            </div>
-          </div>
+          <CardTitle>{t.allTransfers}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="h-[400px] w-full">
