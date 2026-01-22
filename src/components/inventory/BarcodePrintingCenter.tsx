@@ -41,6 +41,19 @@ interface PrintProduct {
   barcode: string;
   price: number;
   quantity: number;
+  isVariant?: boolean;
+  variantInfo?: string;
+  variantInfoAr?: string;
+}
+
+interface ProductVariant {
+  id: string;
+  sku: string;
+  barcode: string | null;
+  stock: number;
+  price_adjustment: number | null;
+  size?: { id: string; name: string; name_ar: string | null; code: string } | null;
+  color?: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
 }
 
 interface LabelDesign {
@@ -124,13 +137,46 @@ const BarcodePrintingCenter: React.FC = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, name_ar, sku, barcode, price')
+        .select('id, name, name_ar, sku, barcode, price, has_variants')
         .eq('is_active', true)
         .order('name');
       if (error) throw error;
       return data;
     }
   });
+
+  // Fetch product variants
+  const { data: productVariants = [] } = useQuery({
+    queryKey: ['barcode-product-variants'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_variants')
+        .select(`
+          id,
+          product_id,
+          sku,
+          barcode,
+          stock,
+          price_adjustment,
+          size:sizes(id, name, name_ar, code),
+          color:colors(id, name, name_ar, hex_code)
+        `)
+        .eq('is_active', true);
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Create a map of product id to its variants
+  const productVariantsMap = React.useMemo(() => {
+    const map = new Map<string, any[]>();
+    productVariants.forEach(v => {
+      const list = map.get(v.product_id) || [];
+      list.push(v);
+      map.set(v.product_id, list);
+    });
+    return map;
+  }, [productVariants]);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -139,26 +185,48 @@ const BarcodePrintingCenter: React.FC = () => {
     (p.barcode && p.barcode.includes(searchQuery))
   );
 
-  const handleAddProduct = (product: typeof products[0]) => {
-    const existing = selectedProducts.find(p => p.id === product.id);
+  const handleAddProduct = (product: typeof products[0], variant?: any) => {
+    const productId = variant ? `${product.id}-${variant.id}` : product.id;
+    const existing = selectedProducts.find(p => p.id === productId);
+    
     if (existing) {
       setSelectedProducts(prev => 
-        prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p)
+        prev.map(p => p.id === productId ? { ...p, quantity: p.quantity + 1 } : p)
       );
     } else {
+      const variantInfo = variant 
+        ? [variant.size?.name, variant.color?.name].filter(Boolean).join(' - ')
+        : undefined;
+      const variantInfoAr = variant 
+        ? [variant.size?.name_ar || variant.size?.name, variant.color?.name_ar || variant.color?.name].filter(Boolean).join(' - ')
+        : undefined;
+      
+      const price = variant 
+        ? product.price + (variant.price_adjustment || 0)
+        : product.price;
+      
       setSelectedProducts(prev => [...prev, {
-        id: product.id,
+        id: productId,
         name: product.name,
         nameAr: product.name_ar || product.name,
-        sku: product.sku,
-        barcode: product.barcode || product.sku,
-        price: product.price,
-        quantity: 1
+        sku: variant?.sku || product.sku,
+        barcode: variant?.barcode || variant?.sku || product.barcode || product.sku,
+        price: price,
+        quantity: 1,
+        isVariant: !!variant,
+        variantInfo,
+        variantInfoAr
       }]);
     }
+    
+    const displayName = isRTL ? product.name_ar || product.name : product.name;
+    const variantDisplay = variant 
+      ? ` (${isRTL ? (variant.size?.name_ar || variant.size?.name || '') : (variant.size?.name || '')} ${isRTL ? (variant.color?.name_ar || variant.color?.name || '') : (variant.color?.name || '')})`
+      : '';
+    
     toast({
       title: isRTL ? 'تمت الإضافة' : 'Added',
-      description: isRTL ? product.name_ar || product.name : product.name
+      description: `${displayName}${variantDisplay}`
     });
   };
 
@@ -209,6 +277,10 @@ const BarcodePrintingCenter: React.FC = () => {
     const labels: string[] = [];
     selectedProducts.forEach(product => {
       for (let i = 0; i < product.quantity; i++) {
+        const productLabel = product.isVariant 
+          ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
+          : (isRTL ? product.nameAr : product.name);
+        
         labels.push(`
           <div class="label" style="
             width: ${design.width}mm;
@@ -225,8 +297,8 @@ const BarcodePrintingCenter: React.FC = () => {
             margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
           ">
             ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
-            ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${isRTL ? product.nameAr : product.name}</div>` : ''}
-            ${design.showBarcode ? `<canvas id="bc-${product.id}-${i}"></canvas>` : ''}
+            ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
+            ${design.showBarcode ? `<canvas id="bc-${product.id.replace(/-/g, '_')}-${i}"></canvas>` : ''}
             ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
             ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} YER</div>` : ''}
           </div>
@@ -273,7 +345,7 @@ const BarcodePrintingCenter: React.FC = () => {
             ${selectedProducts.map((product, pIndex) => 
               Array.from({ length: product.quantity }, (_, i) => `
                 try {
-                  JsBarcode("#bc-${product.id}-${i}", "${product.barcode}", {
+                  JsBarcode("#bc-${product.id.replace(/-/g, '_')}-${i}", "${product.barcode}", {
                     format: "CODE128",
                     width: ${design.barcodeWidth},
                     height: ${design.barcodeHeight},
@@ -420,32 +492,87 @@ const BarcodePrintingCenter: React.FC = () => {
               {/* Products List */}
               <Card>
                 <CardContent className="p-0">
-                  <ScrollArea className="h-[300px]">
+                  <ScrollArea className="h-[350px]">
                     <div className="divide-y divide-border">
-                      {filteredProducts.map(product => (
-                        <div
-                          key={product.id}
-                          className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-foreground truncate">
-                              {isRTL ? product.name_ar || product.name : product.name}
-                            </p>
-                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                              <span className="font-mono">{product.sku}</span>
-                              <span>{product.price?.toLocaleString()} YER</span>
+                      {filteredProducts.map(product => {
+                        const variants = productVariantsMap.get(product.id) || [];
+                        const hasVariants = product.has_variants && variants.length > 0;
+                        
+                        return (
+                          <div key={product.id} className="border-b border-border last:border-0">
+                            {/* Main Product Row */}
+                            <div className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-foreground truncate">
+                                    {isRTL ? product.name_ar || product.name : product.name}
+                                  </p>
+                                  {hasVariants && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {variants.length} {isRTL ? 'متغيرات' : 'variants'}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                  <span className="font-mono">{product.sku}</span>
+                                  <span>{product.price?.toLocaleString()} YER</span>
+                                </div>
+                              </div>
+                              {!hasVariants && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleAddProduct(product)}
+                                  className="shrink-0"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
+                            
+                            {/* Variants List */}
+                            {hasVariants && (
+                              <div className="ps-6 pe-3 pb-2 space-y-1">
+                                {variants.map((variant: any) => {
+                                  const variantName = [
+                                    isRTL ? (variant.size?.name_ar || variant.size?.name) : variant.size?.name,
+                                    isRTL ? (variant.color?.name_ar || variant.color?.name) : variant.color?.name
+                                  ].filter(Boolean).join(' - ');
+                                  
+                                  return (
+                                    <div
+                                      key={variant.id}
+                                      className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg hover:bg-muted/60 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        {variant.color?.hex_code && (
+                                          <div
+                                            className="w-4 h-4 rounded-full border border-border"
+                                            style={{ backgroundColor: variant.color.hex_code }}
+                                          />
+                                        )}
+                                        <div>
+                                          <p className="text-sm font-medium">{variantName || variant.sku}</p>
+                                          <p className="text-xs text-muted-foreground font-mono">{variant.sku}</p>
+                                        </div>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleAddProduct(product, variant)}
+                                        className="h-7"
+                                      >
+                                        <Plus className="h-3 w-3 me-1" />
+                                        {isRTL ? 'إضافة' : 'Add'}
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleAddProduct(product)}
-                            className="shrink-0"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </CardContent>
@@ -475,9 +602,16 @@ const BarcodePrintingCenter: React.FC = () => {
                             className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
                           >
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">
-                                {isRTL ? product.nameAr : product.name}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium truncate">
+                                  {isRTL ? product.nameAr : product.name}
+                                </p>
+                                {product.isVariant && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {isRTL ? product.variantInfoAr : product.variantInfo}
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-sm text-muted-foreground font-mono">{product.sku}</p>
                             </div>
                             <div className="flex items-center gap-2">
