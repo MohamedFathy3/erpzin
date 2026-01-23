@@ -8,7 +8,8 @@ import {
   TrendingUp,
   Building2,
   FolderTree,
-  Wallet
+  Wallet,
+  BookOpen
 } from 'lucide-react';
 import FinanceDashboard from '@/components/finance/FinanceDashboard';
 import ExpenseManager from '@/components/finance/ExpenseManager';
@@ -16,6 +17,7 @@ import RevenueManager from '@/components/finance/RevenueManager';
 import AccountsPayable from '@/components/finance/AccountsPayable';
 import ChartOfAccounts from '@/components/finance/ChartOfAccounts';
 import TreasuryBankManager from '@/components/finance/TreasuryBankManager';
+import JournalEntryManager from '@/components/finance/JournalEntryManager';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 
 const Finance = () => {
@@ -25,6 +27,7 @@ const Finance = () => {
 
   const tabs = [
     { id: 'dashboard', label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', icon: LayoutDashboard },
+    { id: 'journal', label: language === 'ar' ? 'القيود' : 'Journal', icon: BookOpen },
     { id: 'revenues', label: language === 'ar' ? 'الإيرادات' : 'Revenues', icon: TrendingUp },
     { id: 'expenses', label: language === 'ar' ? 'المصروفات' : 'Expenses', icon: Receipt },
     { id: 'treasury', label: language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks', icon: Wallet },
@@ -34,6 +37,17 @@ const Finance = () => {
 
   // Finance filter fields based on active tab
   const getFilterFields = (): FilterField[] => {
+    if (activeTab === 'journal') {
+      return [
+        { key: 'search', label: 'Search', labelAr: 'بحث', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
+        { key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
+          { value: 'draft', label: 'Draft', labelAr: 'مسودة' },
+          { value: 'posted', label: 'Posted', labelAr: 'مرحل' },
+          { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
+        ]},
+        { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
+      ];
+    }
     if (activeTab === 'revenues' || activeTab === 'expenses') {
       return [
         { key: 'search', label: 'Search', labelAr: 'بحث', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
@@ -77,7 +91,7 @@ const Finance = () => {
     return [];
   };
 
-  const showFilter = ['revenues', 'expenses', 'treasury', 'payables'].includes(activeTab);
+  const showFilter = ['journal', 'revenues', 'expenses', 'treasury', 'payables'].includes(activeTab);
 
   return (
     <MainLayout activeItem="finance">
@@ -89,7 +103,7 @@ const Finance = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon size={16} />
@@ -112,6 +126,10 @@ const Finance = () => {
 
           <TabsContent value="dashboard" className="mt-6">
             <FinanceDashboard language={language} />
+          </TabsContent>
+
+          <TabsContent value="journal" className="mt-6">
+            <JournalEntryManager language={language} />
           </TabsContent>
 
           <TabsContent value="revenues" className="mt-6">
