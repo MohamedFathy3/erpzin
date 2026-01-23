@@ -96,7 +96,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
         name: data.name,
         name_ar: data.name_ar || null,
         account_type: data.account_type,
-        parent_id: data.parent_id || null,
+        parent_id: data.parent_id === 'none' ? null : data.parent_id || null,
         is_header: data.is_header,
         notes: data.notes || null
       });
@@ -119,7 +119,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
           name: data.name,
           name_ar: data.name_ar || null,
           account_type: data.account_type,
-          parent_id: data.parent_id || null,
+          parent_id: data.parent_id === 'none' ? null : data.parent_id || null,
           is_header: data.is_header,
           notes: data.notes || null
         })
@@ -406,7 +406,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                   <SelectValue placeholder={language === 'ar' ? 'اختر الحساب الأب' : 'Select parent'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                  <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
                   {headerAccounts.map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.code} - {language === 'ar' ? acc.name_ar || acc.name : acc.name}
