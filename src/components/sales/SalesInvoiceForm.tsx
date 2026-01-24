@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyTax } from "@/hooks/useCurrencyTax";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +38,7 @@ interface SalesInvoiceFormProps {
 const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProps) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [formData, setFormData] = useState({
@@ -47,9 +49,20 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     due_date: "",
     payment_method: "cash",
     discount_percent: 0,
-    tax_percent: 15,
+    tax_rate_id: "",
+    currency_id: "",
     notes: ""
   });
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !formData.tax_rate_id) {
+      setFormData(prev => ({ ...prev, tax_rate_id: defaultTaxRate.id }));
+    }
+    if (defaultCurrency && !formData.currency_id) {
+      setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
+    }
+  }, [defaultTaxRate, defaultCurrency, formData.tax_rate_id, formData.currency_id]);
 
   // Fetch customers
   const { data: customers } = useQuery({
@@ -155,10 +168,12 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
     const discountAmount = (subtotal * formData.discount_percent) / 100;
     const afterDiscount = subtotal - discountAmount;
-    const taxAmount = (afterDiscount * formData.tax_percent) / 100;
+    const selectedTaxRate = taxRates.find(t => t.id === formData.tax_rate_id);
+    const taxPercent = selectedTaxRate?.rate || 0;
+    const taxAmount = (afterDiscount * taxPercent) / 100;
     const totalAmount = afterDiscount + taxAmount;
     
-    return { subtotal, discountAmount, taxAmount, totalAmount };
+    return { subtotal, discountAmount, taxAmount, totalAmount, taxPercent };
   };
 
   const totals = calculateTotals();
@@ -242,7 +257,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
           discount_amount: totals.discountAmount,
           discount_percent: formData.discount_percent,
           tax_amount: totals.taxAmount,
-          tax_percent: formData.tax_percent,
+          tax_percent: totals.taxPercent,
           total_amount: totals.totalAmount,
           paid_amount: paidAmount,
           remaining_amount: totals.totalAmount - paidAmount,
@@ -358,7 +373,8 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       due_date: "",
       payment_method: "cash",
       discount_percent: 0,
-      tax_percent: 15,
+      tax_rate_id: defaultTaxRate?.id || "",
+      currency_id: defaultCurrency?.id || "",
       notes: ""
     });
   };
@@ -658,11 +674,33 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Currency Selection */}
+                <div className="flex items-center gap-2">
+                  <Label className="w-24">
+                    {language === 'ar' ? 'العملة' : 'Currency'}
+                  </Label>
+                  <Select
+                    value={formData.currency_id}
+                    onValueChange={(value) => setFormData({ ...formData, currency_id: value })}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((currency) => (
+                        <SelectItem key={currency.id} value={currency.id}>
+                          {getCurrencyName(currency)} ({currency.symbol})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
                     {language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}
                   </span>
-                  <span>{totals.subtotal.toLocaleString()}</span>
+                  <span>{formatAmount(totals.subtotal, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -682,16 +720,23 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
                 <div className="flex items-center gap-2">
                   <Label className="w-24">
-                    {language === 'ar' ? 'ضريبة %' : 'Tax %'}
+                    {language === 'ar' ? 'الضريبة' : 'Tax'}
                   </Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.tax_percent}
-                    onChange={(e) => setFormData({ ...formData, tax_percent: parseFloat(e.target.value) || 0 })}
-                    className="w-20"
-                  />
+                  <Select
+                    value={formData.tax_rate_id}
+                    onValueChange={(value) => setFormData({ ...formData, tax_rate_id: value })}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder={language === 'ar' ? 'اختر الضريبة' : 'Select tax'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {taxRates.map((rate) => (
+                        <SelectItem key={rate.id} value={rate.id}>
+                          {getTaxRateName(rate)} ({rate.rate}%)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <span className="text-primary">+{totals.taxAmount.toLocaleString()}</span>
                 </div>
 

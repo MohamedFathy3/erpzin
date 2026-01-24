@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyTax } from "@/hooks/useCurrencyTax";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +38,7 @@ interface PurchaseReturnFormProps {
 const PurchaseReturnForm = ({ isOpen, onClose, onSave }: PurchaseReturnFormProps) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   
   const [step, setStep] = useState<'search' | 'items'>('search');
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,6 +47,18 @@ const PurchaseReturnForm = ({ isOpen, onClose, onSave }: PurchaseReturnFormProps
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [refundMethod, setRefundMethod] = useState('credit');
+  const [taxRateId, setTaxRateId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !taxRateId) {
+      setTaxRateId(defaultTaxRate.id);
+    }
+    if (defaultCurrency && !currencyId) {
+      setCurrencyId(defaultCurrency.id);
+    }
+  }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
   // Fetch suppliers
   const { data: suppliers } = useQuery({
@@ -199,8 +213,10 @@ const PurchaseReturnForm = ({ isOpen, onClose, onSave }: PurchaseReturnFormProps
   const calculateTotals = () => {
     const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
     const subtotal = selectedItems.reduce((sum, item) => sum + item.total_cost, 0);
-    const taxAmount = (subtotal * 15) / 100;
-    return { subtotal, taxAmount, totalAmount: subtotal + taxAmount, itemCount: selectedItems.length };
+    const selectedTaxRate = taxRates.find(t => t.id === taxRateId);
+    const taxPercent = selectedTaxRate?.rate || 0;
+    const taxAmount = (subtotal * taxPercent) / 100;
+    return { subtotal, taxAmount, totalAmount: subtotal + taxAmount, itemCount: selectedItems.length, taxPercent };
   };
 
   const totals = calculateTotals();
