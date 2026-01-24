@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,6 +52,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -61,10 +63,22 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     invoice_date: new Date().toISOString().split('T')[0],
     due_date: '',
     payment_method: 'credit',
+    tax_rate_id: '',
+    currency_id: '',
     notes: ''
   });
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !formData.tax_rate_id) {
+      setFormData(prev => ({ ...prev, tax_rate_id: defaultTaxRate.id }));
+    }
+    if (defaultCurrency && !formData.currency_id) {
+      setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
+    }
+  }, [defaultTaxRate, defaultCurrency, formData.tax_rate_id, formData.currency_id]);
 
   // Fetch suppliers
   const { data: suppliers = [] } = useQuery({
@@ -484,6 +498,46 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Currency Selection */}
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
+              <Select 
+                value={formData.currency_id} 
+                onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {currencies.map((currency) => (
+                    <SelectItem key={currency.id} value={currency.id}>
+                      {getCurrencyName(currency)} ({currency.symbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tax Rate Selection */}
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'معدل الضريبة' : 'Tax Rate'}</Label>
+              <Select 
+                value={formData.tax_rate_id} 
+                onValueChange={(v) => setFormData(prev => ({ ...prev, tax_rate_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر الضريبة' : 'Select tax rate'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {taxRates.map((rate) => (
+                    <SelectItem key={rate.id} value={rate.id}>
+                      {getTaxRateName(rate)} ({rate.rate}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -657,19 +711,19 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 <div className="w-72 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{language === 'ar' ? 'المجموع' : 'Subtotal'}</span>
-                    <span>{totals.subtotal.toLocaleString()} YER</span>
+                    <span>{formatAmount(totals.subtotal, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{language === 'ar' ? 'الخصم' : 'Discount'}</span>
-                    <span className="text-destructive">-{totals.totalDiscount.toLocaleString()} YER</span>
+                    <span className="text-destructive">-{formatAmount(totals.totalDiscount, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'}</span>
-                    <span>+{totals.totalTax.toLocaleString()} YER</span>
+                    <span>+{formatAmount(totals.totalTax, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
                   </div>
                   <div className="flex justify-between pt-2 border-t font-bold text-lg">
                     <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                    <span className="text-primary">{totals.total.toLocaleString()} YER</span>
+                    <span className="text-primary">{formatAmount(totals.total, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
                   </div>
                 </div>
               </div>

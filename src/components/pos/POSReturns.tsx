@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,11 +93,25 @@ const DirectReturnInvoice: React.FC<{
   onComplete: (amount: number) => void;
   currentShiftId?: string;
 }> = ({ onComplete, currentShiftId }) => {
+  const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount, getTaxRateName, getCurrencyName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState('');
   const [items, setItems] = useState<DirectReturnItem[]>([]);
   const [returnReason, setReturnReason] = useState('');
   const [refundMethod, setRefundMethod] = useState('cash');
+  const [taxRateId, setTaxRateId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !taxRateId) {
+      setTaxRateId(defaultTaxRate.id);
+    }
+    if (defaultCurrency && !currencyId) {
+      setCurrencyId(defaultCurrency.id);
+    }
+  }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
   // Search products
   const { data: products } = useQuery({
@@ -154,7 +170,9 @@ const DirectReturnInvoice: React.FC<{
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-  const taxAmount = subtotal * 0.15;
+  const selectedTaxRate = taxRates.find(t => t.id === taxRateId);
+  const taxPercent = selectedTaxRate?.rate || 0;
+  const taxAmount = (subtotal * taxPercent) / 100;
   const total = subtotal + taxAmount;
 
   // Process direct return
@@ -347,11 +365,11 @@ const DirectReturnInvoice: React.FC<{
         <div className="flex items-center justify-between mb-3">
           <div className="space-y-1">
             <div className="flex items-center gap-4 text-sm text-white/70">
-              <span>المجموع الفرعي: {subtotal.toLocaleString()} ر.ي</span>
-              <span>الضريبة (15%): {taxAmount.toLocaleString()} ر.ي</span>
+              <span>{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'} {formatAmount(subtotal, currencies.find(c => c.id === currencyId)?.code)}</span>
+              <span>{language === 'ar' ? 'الضريبة' : 'Tax'} ({taxPercent}%): {formatAmount(taxAmount, currencies.find(c => c.id === currencyId)?.code)}</span>
             </div>
             <div className="text-2xl font-bold">
-              الإجمالي: {total.toLocaleString()} ر.ي
+              {language === 'ar' ? 'الإجمالي:' : 'Total:'} {formatAmount(total, currencies.find(c => c.id === currencyId)?.code)}
             </div>
           </div>
           <Button
@@ -375,7 +393,9 @@ const POSReturns: React.FC<POSReturnsProps> = ({
   currentShiftId,
   onReturnComplete 
 }) => {
+  const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount, getTaxRateName, getCurrencyName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
@@ -384,6 +404,18 @@ const POSReturns: React.FC<POSReturnsProps> = ({
   const [step, setStep] = useState<'invoice' | 'search' | 'select' | 'confirm'>('invoice');
   const [directReturnMode, setDirectReturnMode] = useState(true);
   const [allowDirectReturn, setAllowDirectReturn] = useState(true); // This can be controlled by settings
+  const [taxRateId, setTaxRateId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !taxRateId) {
+      setTaxRateId(defaultTaxRate.id);
+    }
+    if (defaultCurrency && !currencyId) {
+      setCurrencyId(defaultCurrency.id);
+    }
+  }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
   // Search for invoice
   const { data: searchResults, isLoading: isSearching, refetch: searchInvoice } = useQuery({
@@ -426,7 +458,9 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       const subtotal = selectedItems.reduce((sum, item) => 
         sum + (item.unit_price * item.return_quantity), 0
       );
-      const taxAmount = subtotal * 0.15; // Assuming 15% tax
+      const selectedTaxRate = taxRates.find(t => t.id === taxRateId);
+      const taxPercent = selectedTaxRate?.rate || 0;
+      const taxAmount = (subtotal * taxPercent) / 100;
       const totalAmount = subtotal + taxAmount;
 
       // Generate return number

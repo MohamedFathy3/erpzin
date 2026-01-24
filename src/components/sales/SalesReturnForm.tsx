@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyTax } from "@/hooks/useCurrencyTax";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ interface SalesReturnFormProps {
 const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
+  const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [formData, setFormData] = useState({
@@ -41,8 +43,20 @@ const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
     warehouse_id: "",
     refund_method: "cash",
     reason: "",
+    tax_rate_id: "",
+    currency_id: "",
     notes: ""
   });
+
+  // Set defaults when data loads
+  useEffect(() => {
+    if (defaultTaxRate && !formData.tax_rate_id) {
+      setFormData(prev => ({ ...prev, tax_rate_id: defaultTaxRate.id }));
+    }
+    if (defaultCurrency && !formData.currency_id) {
+      setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
+    }
+  }, [defaultTaxRate, defaultCurrency, formData.tax_rate_id, formData.currency_id]);
 
   // Fetch customers
   const { data: customers } = useQuery({
@@ -118,10 +132,12 @@ const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
   // Calculate totals
   const calculateTotals = () => {
     const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
-    const taxAmount = (subtotal * 15) / 100;
+    const selectedTaxRate = taxRates.find(t => t.id === formData.tax_rate_id);
+    const taxPercent = selectedTaxRate?.rate || 0;
+    const taxAmount = (subtotal * taxPercent) / 100;
     const totalAmount = subtotal + taxAmount;
     
-    return { subtotal, taxAmount, totalAmount };
+    return { subtotal, taxAmount, totalAmount, taxPercent };
   };
 
   const totals = calculateTotals();
@@ -259,6 +275,8 @@ const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
       warehouse_id: "",
       refund_method: "cash",
       reason: "",
+      tax_rate_id: defaultTaxRate?.id || "",
+      currency_id: defaultCurrency?.id || "",
       notes: ""
     });
   };
