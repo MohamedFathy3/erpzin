@@ -442,7 +442,7 @@ const Inventory: React.FC = () => {
           <TabsContent value="count" className="flex-1 mt-4">
             <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryCount /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="variants" className="flex-1 -mt-4"><UnitsVariantsManager /></TabsContent>
+          <TabsContent value="variants" className="flex-1 mt-0"><UnitsVariantsManager /></TabsContent>
           <TabsContent value="barcode" className="flex-1 mt-4">
             <BarcodePrintingCenter />
           </TabsContent>

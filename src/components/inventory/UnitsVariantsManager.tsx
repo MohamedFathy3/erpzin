@@ -198,7 +198,7 @@ const UnitsVariantsManager: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div>
       <Tabs defaultValue="units" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="units" className="flex items-center gap-2">
@@ -211,7 +211,7 @@ const UnitsVariantsManager: React.FC = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="units" className="mt-4">
+        <TabsContent value="units" className="mt-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -274,7 +274,7 @@ const UnitsVariantsManager: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="variants" className="mt-4">
+        <TabsContent value="variants" className="mt-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <CardTitle className="flex items-center gap-2 text-lg">
