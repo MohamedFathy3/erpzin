@@ -290,7 +290,7 @@ const Inventory: React.FC = () => {
             </div>
           </div>
 
-          <TabsContent value="products" className="flex-1 flex flex-col mt-4">
+          <TabsContent value="products" className="flex-1 flex flex-col mt-2">
             {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
               <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
@@ -433,20 +433,22 @@ const Inventory: React.FC = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="transfers" className="flex-1 mt-4">
+          <TabsContent value="transfers" className="flex-1 mt-2">
             <Card className="shadow-md border-border"><CardContent className="p-4"><StockTransfer /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="alerts" className="flex-1 mt-4">
+          <TabsContent value="alerts" className="flex-1 mt-2">
             <Card className="shadow-md border-border"><CardContent className="p-4"><LowStockAlerts /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="count" className="flex-1 mt-4">
+          <TabsContent value="count" className="flex-1 mt-2">
             <Card className="shadow-md border-border"><CardContent className="p-4"><InventoryCount /></CardContent></Card>
           </TabsContent>
-          <TabsContent value="variants" className="flex-1 mt-0"><UnitsVariantsManager /></TabsContent>
-          <TabsContent value="barcode" className="flex-1 mt-4">
+          <TabsContent value="variants" className="flex-1 mt-2">
+            <UnitsVariantsManager />
+          </TabsContent>
+          <TabsContent value="barcode" className="flex-1 mt-2">
             <BarcodePrintingCenter />
           </TabsContent>
-          <TabsContent value="promotions" className="flex-1 mt-4">
+          <TabsContent value="promotions" className="flex-1 mt-2">
             <PromotionsManager />
           </TabsContent>
         </Tabs>
