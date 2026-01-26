@@ -2,11 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useSizes, useColors } from '@/hooks/useVariantData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, ChevronRight, Check, X } from 'lucide-react';
+import { RefreshCw, ChevronRight, Check, X, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export interface VariantOption {
@@ -27,6 +26,12 @@ export interface ProductVariant {
   cost: number;
   price: number;
   enabled: boolean;
+}
+
+interface SizePricing {
+  sizeId: string;
+  cost: number;
+  price: number;
 }
 
 interface VariantMatrixProps {
@@ -64,6 +69,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   const { data: dbSizes = [], isLoading: sizesLoading } = useSizes();
   const { data: dbColors = [], isLoading: colorsLoading } = useColors();
   const [activeSizeId, setActiveSizeId] = useState<string | null>(null);
+  const [sizePricing, setSizePricing] = useState<SizePricing[]>([]);
 
   // Convert DB data to VariantOption format
   const sizes: VariantOption[] = dbSizes.map(s => ({
@@ -87,34 +93,32 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     return variants.find(v => v.colorId === colorId && v.sizeId === sizeId);
   };
 
-  const toggleVariant = (colorId: string, sizeId: string) => {
-    const existing = getVariant(colorId, sizeId);
+  // Get or create size pricing
+  const getSizePricing = (sizeId: string): SizePricing => {
+    const existing = sizePricing.find(sp => sp.sizeId === sizeId);
+    if (existing) return existing;
+    return { sizeId, cost: baseCost, price: basePrice };
+  };
+
+  // Update size pricing and apply to all variants of that size
+  const updateSizePricing = (sizeId: string, field: 'cost' | 'price', value: number) => {
+    const existingIndex = sizePricing.findIndex(sp => sp.sizeId === sizeId);
+    const newPricing = [...sizePricing];
     
-    if (existing) {
-      onVariantChange(variants.map(v => 
-        v.colorId === colorId && v.sizeId === sizeId
-          ? { ...v, enabled: !v.enabled }
-          : v
-      ));
+    if (existingIndex >= 0) {
+      newPricing[existingIndex] = { ...newPricing[existingIndex], [field]: value };
     } else {
-      const color = colors.find(c => c.id === colorId);
-      const size = sizes.find(s => s.id === sizeId);
-      
-      const newVariant: ProductVariant = {
-        id: `${colorId}-${sizeId}`,
-        colorId,
-        sizeId,
-        sku: generateSKU(baseSku, color?.value || '', size?.value || ''),
-        barcode: generateBarcode(),
-        customBarcode: false,
-        stock: 0,
-        cost: baseCost,
-        price: basePrice,
-        enabled: true
-      };
-      
-      onVariantChange([...variants, newVariant]);
+      newPricing.push({ sizeId, cost: field === 'cost' ? value : baseCost, price: field === 'price' ? value : basePrice });
     }
+    
+    setSizePricing(newPricing);
+    
+    // Update all variants of this size
+    onVariantChange(variants.map(v => 
+      v.sizeId === sizeId
+        ? { ...v, [field]: value }
+        : v
+    ));
   };
 
   // Add color for current size
@@ -125,6 +129,8 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     if (!selectedColors.includes(colorId) && onColorSelectionChange) {
       onColorSelectionChange([...selectedColors, colorId]);
     }
+    
+    const pricing = getSizePricing(activeSizeId);
     
     // Create the variant
     const existing = getVariant(colorId, activeSizeId);
@@ -140,8 +146,8 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
         barcode: generateBarcode(),
         customBarcode: false,
         stock: 0,
-        cost: baseCost,
-        price: basePrice,
+        cost: pricing.cost,
+        price: pricing.price,
         enabled: true
       };
       
@@ -149,7 +155,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     } else if (!existing.enabled) {
       onVariantChange(variants.map(v => 
         v.colorId === colorId && v.sizeId === activeSizeId
-          ? { ...v, enabled: true }
+          ? { ...v, enabled: true, cost: pricing.cost, price: pricing.price }
           : v
       ));
     }
@@ -165,54 +171,55 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     ));
   };
 
-  // Update all variants when base price/cost changes
-  useEffect(() => {
-    if (variants.length > 0) {
-      const updatedVariants = variants.map(v => ({
-        ...v,
-        cost: v.cost === 0 ? baseCost : v.cost,
-        price: v.price === 0 ? basePrice : v.price
-      }));
-      const hasChanges = variants.some((v, i) => 
-        v.cost !== updatedVariants[i].cost || v.price !== updatedVariants[i].price
-      );
-      if (hasChanges) {
-        onVariantChange(updatedVariants);
+  // Toggle all colors for a size
+  const toggleAllColorsForSize = (sizeId: string, enable: boolean) => {
+    const pricing = getSizePricing(sizeId);
+    
+    if (enable) {
+      // Add all colors for this size
+      const newVariants = [...variants];
+      colors.forEach(color => {
+        const existing = getVariant(color.id, sizeId);
+        if (!existing) {
+          const size = sizes.find(s => s.id === sizeId);
+          newVariants.push({
+            id: `${color.id}-${sizeId}`,
+            colorId: color.id,
+            sizeId,
+            sku: generateSKU(baseSku, color.value, size?.value || ''),
+            barcode: generateBarcode(),
+            customBarcode: false,
+            stock: 0,
+            cost: pricing.cost,
+            price: pricing.price,
+            enabled: true
+          });
+        }
+      });
+      onVariantChange(newVariants.map(v => 
+        v.sizeId === sizeId ? { ...v, enabled: true } : v
+      ));
+      if (onColorSelectionChange) {
+        onColorSelectionChange([...new Set([...selectedColors, ...colors.map(c => c.id)])]);
       }
+    } else {
+      // Disable all colors for this size
+      onVariantChange(variants.map(v => 
+        v.sizeId === sizeId ? { ...v, enabled: false } : v
+      ));
     }
-  }, [baseCost, basePrice]);
-
-  const updateVariantPrice = (colorId: string, sizeId: string, price: number) => {
-    onVariantChange(variants.map(v =>
-      v.colorId === colorId && v.sizeId === sizeId
-        ? { ...v, price }
-        : v
-    ));
   };
 
-  const updateVariantCost = (colorId: string, sizeId: string, cost: number) => {
-    onVariantChange(variants.map(v =>
-      v.colorId === colorId && v.sizeId === sizeId
-        ? { ...v, cost }
-        : v
-    ));
-  };
-
-  const updateVariantBarcode = (colorId: string, sizeId: string, barcode: string, customBarcode: boolean) => {
-    onVariantChange(variants.map(v =>
-      v.colorId === colorId && v.sizeId === sizeId
-        ? { ...v, barcode, customBarcode }
-        : v
-    ));
-  };
-
-  const regenerateVariantBarcode = (colorId: string, sizeId: string) => {
-    onVariantChange(variants.map(v =>
-      v.colorId === colorId && v.sizeId === sizeId
-        ? { ...v, barcode: generateBarcode(), customBarcode: false }
-        : v
-    ));
-  };
+  // Initialize size pricing from base values
+  useEffect(() => {
+    if (sizePricing.length === 0 && selectedSizes.length > 0) {
+      setSizePricing(selectedSizes.map(sizeId => ({
+        sizeId,
+        cost: baseCost,
+        price: basePrice
+      })));
+    }
+  }, [selectedSizes, baseCost, basePrice]);
 
   const toggleSize = (sizeId: string) => {
     if (!onSizeSelectionChange) return;
@@ -223,6 +230,8 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
       }
     } else {
       onSizeSelectionChange([...selectedSizes, sizeId]);
+      // Initialize pricing for new size
+      setSizePricing(prev => [...prev, { sizeId, cost: baseCost, price: basePrice }]);
     }
   };
 
@@ -258,273 +267,273 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
             {language === 'ar' ? 'الخطوة 1' : 'Step 1'}
           </Badge>
           <h4 className="font-semibold text-foreground">
-            {language === 'ar' ? 'اختر المقاسات المتاحة' : 'Select Available Sizes'}
+            {language === 'ar' ? 'اختر المقاسات وحدد الأسعار' : 'Select Sizes & Set Prices'}
           </h4>
         </div>
-        <div className="flex flex-wrap gap-2">
+        
+        <div className="grid gap-3">
           {sizes.map((size) => {
             const isSelected = selectedSizes.includes(size.id);
             const isActive = activeSizeId === size.id;
             const colorsCount = getColorsCountForSize(size.id);
+            const pricing = getSizePricing(size.id);
             
             return (
-              <button
+              <div
                 key={size.id}
-                type="button"
-                onClick={() => {
-                  if (!isSelected) {
-                    toggleSize(size.id);
-                  }
-                  setActiveSizeId(size.id);
-                }}
                 className={cn(
-                  'relative px-4 py-3 rounded-xl border-2 transition-all font-medium min-w-[70px]',
+                  'rounded-xl border-2 transition-all overflow-hidden',
                   isActive
-                    ? 'border-primary bg-primary text-primary-foreground shadow-lg scale-105'
+                    ? 'border-primary shadow-lg'
                     : isSelected
-                    ? 'border-primary/50 bg-primary/10 text-primary'
-                    : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50'
+                    ? 'border-primary/30 bg-primary/5'
+                    : 'border-border bg-muted/20'
                 )}
               >
-                <span className="block text-lg">{size.value}</span>
-                {isSelected && (
-                  <span className={cn(
-                    'text-xs mt-1 block',
-                    isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                {/* Size Header */}
+                <div 
+                  className={cn(
+                    'flex items-center gap-3 p-3 cursor-pointer',
+                    isActive ? 'bg-primary text-primary-foreground' : ''
+                  )}
+                  onClick={() => {
+                    if (!isSelected) {
+                      toggleSize(size.id);
+                    }
+                    setActiveSizeId(isActive ? null : size.id);
+                  }}
+                >
+                  <div className={cn(
+                    'w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg',
+                    isActive 
+                      ? 'bg-primary-foreground/20' 
+                      : isSelected 
+                      ? 'bg-primary/20 text-primary' 
+                      : 'bg-muted text-muted-foreground'
                   )}>
-                    {colorsCount} {language === 'ar' ? 'لون' : 'colors'}
-                  </span>
-                )}
-                {isSelected && !isActive && (
-                  <Check size={14} className="absolute top-1 end-1 text-primary" />
-                )}
+                    {size.value}
+                  </div>
+                  
+                  <div className="flex-1">
+                    <p className={cn(
+                      'font-medium',
+                      isActive ? 'text-primary-foreground' : 'text-foreground'
+                    )}>
+                      {language === 'ar' ? size.valueAr : size.value}
+                    </p>
+                    {isSelected && (
+                      <p className={cn(
+                        'text-sm',
+                        isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                      )}>
+                        {colorsCount} {language === 'ar' ? 'لون متاح' : 'colors selected'}
+                      </p>
+                    )}
+                  </div>
+
+                  {isSelected && (
+                    <Badge className={cn(
+                      isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-success/10 text-success'
+                    )}>
+                      <Check size={12} className="me-1" />
+                      {language === 'ar' ? 'مفعّل' : 'Active'}
+                    </Badge>
+                  )}
+                  
+                  <ChevronRight 
+                    size={20} 
+                    className={cn(
+                      'transition-transform',
+                      isActive ? 'rotate-90' : ''
+                    )} 
+                  />
+                </div>
+
+                {/* Size Details (when active) */}
                 {isActive && (
-                  <ChevronRight size={16} className="absolute top-1/2 -translate-y-1/2 end-1" />
+                  <div className="p-4 border-t border-primary/20 bg-background space-y-4">
+                    {/* Pricing for this size */}
+                    <div className="grid grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          {language === 'ar' ? 'تكلفة المقاس' : 'Size Cost'}
+                        </label>
+                        <Input
+                          type="number"
+                          value={pricing.cost}
+                          onChange={(e) => updateSizePricing(size.id, 'cost', parseFloat(e.target.value) || 0)}
+                          className="h-10 text-center font-medium"
+                          min={0}
+                          placeholder={baseCost.toString()}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          {language === 'ar' ? 'سعر البيع' : 'Selling Price'}
+                        </label>
+                        <Input
+                          type="number"
+                          value={pricing.price}
+                          onChange={(e) => updateSizePricing(size.id, 'price', parseFloat(e.target.value) || 0)}
+                          className="h-10 text-center font-medium"
+                          min={0}
+                          placeholder={basePrice.toString()}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleAllColorsForSize(size.id, true)}
+                        className="flex-1"
+                      >
+                        <Plus size={14} className="me-1" />
+                        {language === 'ar' ? 'إضافة كل الألوان' : 'Add All Colors'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleAllColorsForSize(size.id, false)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X size={14} className="me-1" />
+                        {language === 'ar' ? 'إزالة الكل' : 'Remove All'}
+                      </Button>
+                    </div>
+
+                    {/* Color Selection */}
+                    <div>
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        {language === 'ar' ? 'اختر الألوان المتاحة:' : 'Select Available Colors:'}
+                      </p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                        {colors.map((color) => {
+                          const isEnabled = enabledColorsForActiveSize.includes(color.id);
+                          
+                          return (
+                            <button
+                              key={color.id}
+                              type="button"
+                              onClick={() => isEnabled ? removeColorForSize(color.id) : addColorForSize(color.id)}
+                              className={cn(
+                                'flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all',
+                                isEnabled
+                                  ? 'border-primary bg-primary/10'
+                                  : 'border-border bg-background hover:border-primary/50'
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  'w-8 h-8 rounded-full border-2 flex items-center justify-center',
+                                  isEnabled ? 'border-primary' : 'border-border'
+                                )}
+                                style={{ backgroundColor: color.hexCode || '#888' }}
+                              >
+                                {isEnabled && (
+                                  <Check size={14} className="text-white drop-shadow-md" />
+                                )}
+                              </div>
+                              <span className={cn(
+                                'text-xs truncate w-full text-center',
+                                isEnabled ? 'text-primary font-medium' : 'text-muted-foreground'
+                              )}>
+                                {language === 'ar' ? color.valueAr : color.value}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
       </div>
 
-      {/* Step 2: Color Selection for Active Size */}
-      {activeSizeId && (
-        <div className="space-y-3 p-4 bg-muted/30 rounded-xl border border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {language === 'ar' ? 'الخطوة 2' : 'Step 2'}
-              </Badge>
-              <h4 className="font-semibold text-foreground">
-                {language === 'ar' ? 'اختر الألوان للمقاس' : 'Select Colors for Size'}
-                <Badge variant="default" className="ms-2">
-                  {sizes.find(s => s.id === activeSizeId)?.value}
-                </Badge>
-              </h4>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveSizeId(null)}
-              className="text-xs text-destructive hover:underline flex items-center gap-1"
-            >
-              <X size={14} />
-              {language === 'ar' ? 'إغلاق' : 'Close'}
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {colors.map((color) => {
-              const isEnabled = enabledColorsForActiveSize.includes(color.id);
-              const variant = getVariant(color.id, activeSizeId);
-              
-              return (
-                <button
-                  key={color.id}
-                  type="button"
-                  onClick={() => isEnabled ? removeColorForSize(color.id) : addColorForSize(color.id)}
-                  className={cn(
-                    'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-start',
-                    isEnabled
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border bg-background hover:border-primary/50'
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'w-8 h-8 rounded-lg border-2 flex-shrink-0 flex items-center justify-center',
-                      isEnabled ? 'border-primary' : 'border-border'
-                    )}
-                    style={{ backgroundColor: color.hexCode || '#888' }}
-                  >
-                    {isEnabled && (
-                      <Check size={16} className="text-white drop-shadow-md" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      'font-medium truncate',
-                      isEnabled ? 'text-primary' : 'text-foreground'
-                    )}>
-                      {language === 'ar' ? color.valueAr : color.value}
-                    </p>
-                    {isEnabled && variant && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {variant.sku}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Summary & Matrix */}
+      {/* Summary */}
       {enabledCount > 0 && (
-        <>
+        <div className="space-y-4">
           <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg border border-success/20">
             <span className="text-sm font-medium text-foreground">
-              {language === 'ar' ? 'إجمالي المتغيرات النشطة' : 'Total Active Variants'}
+              {language === 'ar' ? 'إجمالي المتغيرات' : 'Total Variants'}
             </span>
             <Badge variant="default" className="bg-success text-success-foreground">
               {enabledCount}
             </Badge>
           </div>
 
-          {/* Compact Matrix View */}
+          {/* Compact Summary Table */}
           <div className="overflow-x-auto border border-border rounded-lg">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50">
                   <th className="p-3 text-start font-medium text-muted-foreground border-b border-border">
-                    {language === 'ar' ? 'اللون / المقاس' : 'Color / Size'}
+                    {language === 'ar' ? 'المقاس' : 'Size'}
                   </th>
-                  {activeSizes.map((size) => (
-                    <th 
-                      key={size.id} 
-                      className="p-3 text-center font-medium text-muted-foreground border-b border-border min-w-[100px]"
-                    >
-                      {language === 'ar' ? size.valueAr : size.value}
-                    </th>
-                  ))}
+                  <th className="p-3 text-start font-medium text-muted-foreground border-b border-border">
+                    {language === 'ar' ? 'الألوان' : 'Colors'}
+                  </th>
+                  <th className="p-3 text-center font-medium text-muted-foreground border-b border-border">
+                    {language === 'ar' ? 'التكلفة' : 'Cost'}
+                  </th>
+                  <th className="p-3 text-center font-medium text-muted-foreground border-b border-border">
+                    {language === 'ar' ? 'السعر' : 'Price'}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {activeColors.map((color, colorIdx) => {
-                  // Only show colors that have at least one enabled variant
-                  const hasEnabledVariants = activeSizes.some(size => {
-                    const v = getVariant(color.id, size.id);
-                    return v?.enabled;
-                  });
+                {activeSizes.map((size, idx) => {
+                  const sizeVariants = variants.filter(v => v.sizeId === size.id && v.enabled);
+                  if (sizeVariants.length === 0) return null;
                   
-                  if (!hasEnabledVariants) return null;
-                  
+                  const pricing = getSizePricing(size.id);
+                  const sizeColors = sizeVariants.map(v => {
+                    const color = colors.find(c => c.id === v.colorId);
+                    return color;
+                  }).filter(Boolean);
+
                   return (
-                    <tr key={color.id} className={colorIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                      <td className="p-3 font-medium text-foreground border-e border-border">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-4 h-4 rounded-full border border-border"
-                            style={{ backgroundColor: color.hexCode || '#888' }}
-                          />
-                          {language === 'ar' ? color.valueAr : color.value}
+                    <tr key={size.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      <td className="p-3 font-medium text-foreground">
+                        <Badge variant="secondary">{size.value}</Badge>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {sizeColors.map((color) => color && (
+                            <div
+                              key={color.id}
+                              className="w-6 h-6 rounded-full border border-border"
+                              style={{ backgroundColor: color.hexCode || '#888' }}
+                              title={language === 'ar' ? color.valueAr : color.value}
+                            />
+                          ))}
                         </div>
                       </td>
-                      {activeSizes.map((size) => {
-                        const variant = getVariant(color.id, size.id);
-                        const isEnabled = variant?.enabled ?? false;
-
-                        return (
-                          <td key={size.id} className="p-2 border-e border-border last:border-e-0">
-                            {isEnabled && variant ? (
-                              <div className="p-2 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={true}
-                                    onCheckedChange={() => toggleVariant(color.id, size.id)}
-                                  />
-                                  <span className="text-xs text-muted-foreground truncate">
-                                    {variant.sku}
-                                  </span>
-                                </div>
-                                
-                                {/* Barcode */}
-                                <div>
-                                  <label className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'الباركود' : 'Barcode'}
-                                  </label>
-                                  <div className="flex gap-1">
-                                    <Input
-                                      type="text"
-                                      value={variant.barcode}
-                                      onChange={(e) => updateVariantBarcode(color.id, size.id, e.target.value, true)}
-                                      className="h-8 text-center font-mono text-xs"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-8 w-8 shrink-0"
-                                      onClick={() => regenerateVariantBarcode(color.id, size.id)}
-                                      title={language === 'ar' ? 'توليد باركود جديد' : 'Generate new barcode'}
-                                    >
-                                      <RefreshCw size={12} />
-                                    </Button>
-                                  </div>
-                                </div>
-                                {/* Cost */}
-                                <div>
-                                  <label className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'التكلفة' : 'Cost'}
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    value={variant.cost}
-                                    onChange={(e) => updateVariantCost(color.id, size.id, parseFloat(e.target.value) || 0)}
-                                    className="h-8 text-center"
-                                    min={0}
-                                    placeholder={baseCost.toString()}
-                                  />
-                                </div>
-                                {/* Price */}
-                                <div>
-                                  <label className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'سعر البيع' : 'Selling Price'}
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    value={variant.price}
-                                    onChange={(e) => updateVariantPrice(color.id, size.id, parseFloat(e.target.value) || 0)}
-                                    className="h-8 text-center"
-                                    min={0}
-                                    placeholder={basePrice.toString()}
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="p-4 rounded-lg border border-dashed border-border bg-muted/30 text-center">
-                                <span className="text-xs text-muted-foreground">-</span>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
+                      <td className="p-3 text-center font-medium">
+                        {pricing.cost.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center font-medium text-primary">
+                        {pricing.price.toLocaleString()}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-        </>
+        </div>
       )}
 
       {enabledCount === 0 && (
         <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-border rounded-lg">
-          {language === 'ar' 
-            ? 'اختر مقاساً ثم حدد الألوان المتاحة له'
-            : 'Select a size then choose available colors for it'
-          }
+          <p>{language === 'ar' ? 'اضغط على مقاس لتحديد الألوان والأسعار' : 'Click on a size to set colors and prices'}</p>
         </div>
       )}
     </div>
