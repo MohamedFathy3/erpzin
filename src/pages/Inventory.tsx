@@ -175,7 +175,69 @@ const Inventory: React.FC = () => {
   const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
 
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
-  const handleEditProduct = (product: Product) => {
+  const handleEditProduct = async (product: Product) => {
+    // Fetch existing variants for this product
+    let variants: any[] = [];
+    let selectedSizes: string[] = [];
+    let selectedColors: string[] = [];
+    
+    if (product.hasVariants) {
+      const { data: existingVariants } = await supabase
+        .from('product_variants')
+        .select(`
+          id,
+          sku,
+          barcode,
+          stock,
+          price_adjustment,
+          cost_adjustment,
+          is_active,
+          size_id,
+          color_id,
+          size:sizes(id, name, name_ar, code),
+          color:colors(id, name, name_ar, hex_code)
+        `)
+        .eq('product_id', product.id);
+      
+      if (existingVariants && existingVariants.length > 0) {
+        // Extract unique sizes and colors
+        const uniqueSizeIds = new Set<string>();
+        const uniqueColorIds = new Set<string>();
+        
+        existingVariants.forEach(v => {
+          if (v.size_id) uniqueSizeIds.add(v.size_id);
+          if (v.color_id) uniqueColorIds.add(v.color_id);
+        });
+        
+        selectedSizes = Array.from(uniqueSizeIds);
+        selectedColors = Array.from(uniqueColorIds);
+        
+        // Group variants by size to extract size-level pricing
+        const sizeMap = new Map<string, { cost: number; price: number; barcode: string }>();
+        existingVariants.forEach(v => {
+          if (v.size_id && !sizeMap.has(v.size_id)) {
+            sizeMap.set(v.size_id, {
+              cost: product.cost + (v.cost_adjustment || 0),
+              price: product.price + (v.price_adjustment || 0),
+              barcode: v.barcode || ''
+            });
+          }
+        });
+        
+        // Convert to variant format expected by VariantMatrix
+        variants = existingVariants.map(v => ({
+          sizeId: v.size_id,
+          colorId: v.color_id,
+          sku: v.sku,
+          barcode: v.barcode || '',
+          stock: v.stock,
+          cost: product.cost + (v.cost_adjustment || 0),
+          price: product.price + (v.price_adjustment || 0),
+          isEnabled: v.is_active ?? true
+        }));
+      }
+    }
+
     setEditProduct({
       id: product.id, 
       name: product.name, 
@@ -188,9 +250,9 @@ const Inventory: React.FC = () => {
       price: product.price,
       cost: product.cost, 
       hasVariants: product.hasVariants || false, 
-      variants: [], 
-      selectedSizes: [], 
-      selectedColors: [],
+      variants,
+      selectedSizes,
+      selectedColors,
       stock: product.stock,
       reorderPoint: product.minStock || 5, 
       status: product.status === 'inactive' ? 'inactive' : 'active',
