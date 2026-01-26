@@ -1192,6 +1192,30 @@ export type Database = {
           },
         ]
       }
+      module_settings: {
+        Row: {
+          created_at: string
+          id: string
+          module_name: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_name: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_name?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           category: string

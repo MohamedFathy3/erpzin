@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ShoppingCart, 
   Package, 
@@ -35,9 +37,10 @@ import {
 const ModuleSettings = () => {
   const { language } = useLanguage();
   const [activeModule, setActiveModule] = useState('pos');
+  const queryClient = useQueryClient();
 
-  // POS Settings
-  const [posSettings, setPosSettings] = useState({
+  // Default POS Settings
+  const defaultPosSettings = {
     enableQuickSale: true,
     requireCustomer: false,
     printReceiptAutomatically: true,
@@ -54,6 +57,59 @@ const ModuleSettings = () => {
     receiptPrinterName: '',
     receiptHeader: '',
     receiptFooter: ''
+  };
+
+  // Fetch POS settings from database
+  const { data: dbPosSettings } = useQuery({
+    queryKey: ['module-settings', 'pos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('module_settings')
+        .select('settings')
+        .eq('module_name', 'pos')
+        .single();
+      
+      if (error) return defaultPosSettings;
+      const dbSettings = (data?.settings || {}) as Record<string, unknown>;
+      return { ...defaultPosSettings, ...dbSettings } as typeof defaultPosSettings;
+    }
+  });
+
+  const [posSettings, setPosSettings] = useState(defaultPosSettings);
+
+  // Sync local state with database
+  useEffect(() => {
+    if (dbPosSettings) {
+      setPosSettings(dbPosSettings);
+    }
+  }, [dbPosSettings]);
+
+  // Mutation to save settings
+  const saveSettingsMutation = useMutation({
+    mutationFn: async ({ moduleName, settings }: { moduleName: string; settings: any }) => {
+      const { error } = await supabase
+        .from('module_settings')
+        .upsert({
+          module_name: moduleName,
+          settings,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'module_name' });
+      
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['module-settings', variables.moduleName] });
+      queryClient.invalidateQueries({ queryKey: ['pos-settings'] });
+      toast({ 
+        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Settings saved successfully'
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: language === 'ar' ? 'خطأ في الحفظ' : 'Failed to save settings',
+        variant: 'destructive'
+      });
+    }
   });
 
   // Inventory Settings
@@ -208,10 +264,37 @@ const ModuleSettings = () => {
   });
 
   const handleSave = (module: string) => {
-    toast({ 
-      title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Settings saved successfully',
-      description: language === 'ar' ? `تم حفظ إعدادات ${getModuleName(module)}` : `${getModuleName(module)} settings saved`
-    });
+    let settings: any;
+    switch (module) {
+      case 'pos':
+        settings = posSettings;
+        break;
+      case 'inventory':
+        settings = inventorySettings;
+        break;
+      case 'finance':
+        settings = financeSettings;
+        break;
+      case 'purchasing':
+        settings = purchasingSettings;
+        break;
+      case 'sales':
+        settings = salesSettings;
+        break;
+      case 'hr':
+        settings = hrSettings;
+        break;
+      case 'crm':
+        settings = crmSettings;
+        break;
+      case 'reports':
+        settings = reportsSettings;
+        break;
+      default:
+        return;
+    }
+    
+    saveSettingsMutation.mutate({ moduleName: module, settings });
   };
 
   const handleReset = (module: string) => {
