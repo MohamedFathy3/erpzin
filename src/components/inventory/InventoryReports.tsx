@@ -14,15 +14,35 @@ import {
   TrendingDown, 
   TrendingUp, 
   AlertTriangle,
-  Warehouse,
   Download,
-  FileText
+  FileText,
+  Layers
 } from 'lucide-react';
+
+interface ProductVariant {
+  id: string;
+  sku: string;
+  stock: number;
+  price_adjustment: number | null;
+  cost_adjustment: number | null;
+  size: { id: string; name: string; name_ar: string | null } | null;
+  color: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+  product: {
+    id: string;
+    name: string;
+    name_ar: string | null;
+    sku: string;
+    cost: number | null;
+    price: number;
+    min_stock: number | null;
+  };
+}
 
 const InventoryReports = () => {
   const { language } = useLanguage();
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>('all');
   const [reportType, setReportType] = useState<string>('stock_levels');
+  const [viewMode, setViewMode] = useState<'products' | 'variants'>('products');
 
   const t = {
     en: {
@@ -42,12 +62,18 @@ const InventoryReports = () => {
       cost: 'Cost',
       totalValue: 'Total Value',
       totalProducts: 'Total Products',
+      totalVariants: 'Total Variants',
       lowStockItems: 'Low Stock Items',
       outOfStock: 'Out of Stock',
       inStock: 'In Stock',
       exportPdf: 'Export PDF',
       exportExcel: 'Export Excel',
-      noData: 'No data available'
+      noData: 'No data available',
+      productsView: 'Products',
+      variantsView: 'Variants',
+      size: 'Size',
+      color: 'Color',
+      variant: 'Variant'
     },
     ar: {
       title: 'تقارير المخزون',
@@ -66,12 +92,18 @@ const InventoryReports = () => {
       cost: 'التكلفة',
       totalValue: 'القيمة الإجمالية',
       totalProducts: 'إجمالي المنتجات',
+      totalVariants: 'إجمالي المتغيرات',
       lowStockItems: 'منتجات منخفضة المخزون',
       outOfStock: 'نفاد المخزون',
       inStock: 'متوفر',
       exportPdf: 'تصدير PDF',
       exportExcel: 'تصدير Excel',
-      noData: 'لا توجد بيانات'
+      noData: 'لا توجد بيانات',
+      productsView: 'المنتجات',
+      variantsView: 'المتغيرات',
+      size: 'المقاس',
+      color: 'اللون',
+      variant: 'المتغير'
     }
   }[language];
 
@@ -99,13 +131,49 @@ const InventoryReports = () => {
     }
   });
 
+  // Fetch product variants with size and color data
+  const { data: variants = [] } = useQuery({
+    queryKey: ['inventory-report-variants'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_variants')
+        .select(`
+          id,
+          sku,
+          stock,
+          price_adjustment,
+          cost_adjustment,
+          size:sizes(id, name, name_ar),
+          color:colors(id, name, name_ar, hex_code),
+          product:products(id, name, name_ar, sku, cost, price, min_stock)
+        `)
+        .eq('is_active', true)
+        .order('stock', { ascending: true });
+      if (error) throw error;
+      return data as ProductVariant[];
+    }
+  });
+
   // Calculate statistics
-  const stats = {
+  const productStats = {
     totalProducts: products.length,
     lowStockItems: products.filter(p => p.stock > 0 && p.stock <= (p.min_stock || 5)).length,
     outOfStock: products.filter(p => p.stock === 0).length,
     totalValue: products.reduce((sum, p) => sum + (Number(p.cost || 0) * p.stock), 0)
   };
+
+  const variantStats = {
+    totalVariants: variants.length,
+    lowStockItems: variants.filter(v => v.stock > 0 && v.stock <= (v.product?.min_stock || 5)).length,
+    outOfStock: variants.filter(v => v.stock === 0).length,
+    totalValue: variants.reduce((sum, v) => {
+      const baseCost = Number(v.product?.cost || 0);
+      const costAdj = Number(v.cost_adjustment || 0);
+      return sum + ((baseCost + costAdj) * v.stock);
+    }, 0)
+  };
+
+  const stats = viewMode === 'variants' ? variantStats : productStats;
 
   const getStockStatus = (stock: number, minStock: number) => {
     if (stock === 0) return { label: t.outOfStock, variant: 'destructive' as const };
@@ -116,6 +184,10 @@ const InventoryReports = () => {
   const filteredProducts = reportType === 'lowStock' 
     ? products.filter(p => p.stock <= (p.min_stock || 5))
     : products;
+
+  const filteredVariants = reportType === 'lowStock'
+    ? variants.filter(v => v.stock <= (v.product?.min_stock || 5))
+    : variants;
 
   return (
     <div className="space-y-6">
@@ -151,8 +223,12 @@ const InventoryReports = () => {
                 <Package className="text-blue-500" size={20} />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t.totalProducts}</p>
-                <p className="text-2xl font-bold">{stats.totalProducts}</p>
+                <p className="text-sm text-muted-foreground">
+                  {viewMode === 'variants' ? t.totalVariants : t.totalProducts}
+                </p>
+                <p className="text-2xl font-bold">
+                  {viewMode === 'variants' ? variantStats.totalVariants : productStats.totalProducts}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -203,6 +279,17 @@ const InventoryReports = () => {
 
       {/* Filters */}
       <div className="flex items-center gap-4 flex-wrap">
+        <Select value={viewMode} onValueChange={(v: 'products' | 'variants') => setViewMode(v)}>
+          <SelectTrigger className="w-40">
+            <Layers size={16} className="me-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="products">{t.productsView}</SelectItem>
+            <SelectItem value="variants">{t.variantsView}</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={reportType} onValueChange={setReportType}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -235,53 +322,126 @@ const InventoryReports = () => {
           <CardTitle className="flex items-center gap-2">
             <Package size={18} />
             {reportType === 'lowStock' ? t.lowStock : t.stockLevels}
+            {viewMode === 'variants' && ` - ${t.variantsView}`}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <ScrollArea className="h-[400px] w-full">
-            <div className="min-w-[800px]">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">{t.product}</TableHead>
-                    <TableHead className="min-w-[120px]">{t.sku}</TableHead>
-                    <TableHead className="min-w-[100px]">{t.currentStock}</TableHead>
-                    <TableHead className="min-w-[100px]">{t.minStock}</TableHead>
-                    <TableHead className="min-w-[100px]">{t.cost}</TableHead>
-                    <TableHead className="min-w-[120px]">{t.value}</TableHead>
-                    <TableHead className="min-w-[100px]">{t.status}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.length === 0 ? (
+            <div className="min-w-[900px]">
+              {viewMode === 'products' ? (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {t.noData}
-                      </TableCell>
+                      <TableHead className="min-w-[200px]">{t.product}</TableHead>
+                      <TableHead className="min-w-[120px]">{t.sku}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.currentStock}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.minStock}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.cost}</TableHead>
+                      <TableHead className="min-w-[120px]">{t.value}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.status}</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredProducts.map(product => {
-                      const status = getStockStatus(product.stock, product.min_stock || 5);
-                      const value = Number(product.cost || 0) * product.stock;
-                      return (
-                        <TableRow key={product.id}>
-                          <TableCell className="font-medium">
-                            {language === 'ar' ? product.name_ar || product.name : product.name}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{product.sku}</TableCell>
-                          <TableCell className="font-semibold">{product.stock}</TableCell>
-                          <TableCell>{product.min_stock || 5}</TableCell>
-                          <TableCell>{Number(product.cost || 0).toLocaleString()}</TableCell>
-                          <TableCell className="font-semibold">{value.toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={status.variant}>{status.label}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          {t.noData}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredProducts.map(product => {
+                        const status = getStockStatus(product.stock, product.min_stock || 5);
+                        const value = Number(product.cost || 0) * product.stock;
+                        return (
+                          <TableRow key={product.id}>
+                            <TableCell className="font-medium">
+                              {language === 'ar' ? product.name_ar || product.name : product.name}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground font-mono text-xs">{product.sku}</TableCell>
+                            <TableCell className="font-semibold">{product.stock}</TableCell>
+                            <TableCell>{product.min_stock || 5}</TableCell>
+                            <TableCell>{Number(product.cost || 0).toLocaleString()}</TableCell>
+                            <TableCell className="font-semibold">{value.toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Badge variant={status.variant}>{status.label}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="min-w-[180px]">{t.product}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.size}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.color}</TableHead>
+                      <TableHead className="min-w-[120px]">{t.sku}</TableHead>
+                      <TableHead className="min-w-[80px]">{t.currentStock}</TableHead>
+                      <TableHead className="min-w-[80px]">{t.cost}</TableHead>
+                      <TableHead className="min-w-[100px]">{t.value}</TableHead>
+                      <TableHead className="min-w-[90px]">{t.status}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredVariants.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          {t.noData}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredVariants.map(variant => {
+                        const minStock = variant.product?.min_stock || 5;
+                        const status = getStockStatus(variant.stock, minStock);
+                        const baseCost = Number(variant.product?.cost || 0);
+                        const costAdj = Number(variant.cost_adjustment || 0);
+                        const totalCost = baseCost + costAdj;
+                        const value = totalCost * variant.stock;
+                        
+                        return (
+                          <TableRow key={variant.id}>
+                            <TableCell className="font-medium">
+                              {language === 'ar' 
+                                ? variant.product?.name_ar || variant.product?.name 
+                                : variant.product?.name}
+                            </TableCell>
+                            <TableCell>
+                              {variant.size 
+                                ? (language === 'ar' ? variant.size.name_ar || variant.size.name : variant.size.name)
+                                : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {variant.color?.hex_code && (
+                                  <span 
+                                    className="w-4 h-4 rounded-full border border-border flex-shrink-0"
+                                    style={{ backgroundColor: variant.color.hex_code }}
+                                  />
+                                )}
+                                <span>
+                                  {variant.color 
+                                    ? (language === 'ar' ? variant.color.name_ar || variant.color.name : variant.color.name)
+                                    : '-'}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground font-mono text-xs">{variant.sku}</TableCell>
+                            <TableCell className="font-semibold">{variant.stock}</TableCell>
+                            <TableCell>{totalCost.toLocaleString()}</TableCell>
+                            <TableCell className="font-semibold">{value.toLocaleString()}</TableCell>
+                            <TableCell>
+                              <Badge variant={status.variant}>{status.label}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
