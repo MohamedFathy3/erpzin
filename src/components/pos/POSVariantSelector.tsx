@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Check, ChevronRight } from 'lucide-react';
+import { X, Check, ShoppingCart, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ProductVariant {
   id: string;
@@ -16,6 +17,19 @@ interface ProductVariant {
   cost_adjustment: number | null;
   size: { id: string; name: string; name_ar: string | null; code: string } | null;
   color: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+}
+
+interface SelectedVariant {
+  variantId: string;
+  sizeId: string;
+  colorId: string;
+  sizeName: string;
+  colorName: string;
+  price: number;
+  stock: number;
+  sku: string;
+  hexCode: string | null;
+  quantity: number;
 }
 
 interface POSVariantSelectorProps {
@@ -48,7 +62,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
   onSelectVariant
 }) => {
   const { language } = useLanguage();
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
 
   const { data: variants, isLoading } = useQuery({
     queryKey: ['product-variants-pos', product.id],
@@ -74,72 +88,111 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     enabled: isOpen
   });
 
-  // Extract unique sizes
-  const sizes = useMemo(() => {
+  // Group variants by size with their available colors
+  const sizeColorMatrix = useMemo(() => {
     if (!variants) return [];
-    const sizeMap = new Map();
+    
+    const sizeMap = new Map<string, {
+      size: ProductVariant['size'];
+      colors: Array<{
+        variant: ProductVariant;
+        color: NonNullable<ProductVariant['color']>;
+        stock: number;
+        price: number;
+      }>;
+    }>();
+
     variants.forEach(v => {
-      if (v.size && !sizeMap.has(v.size.id)) {
-        // Count available colors for this size
-        const colorsForSize = variants.filter(
-          variant => variant.size?.id === v.size?.id && variant.stock > 0
-        ).length;
-        const totalColorsForSize = variants.filter(
-          variant => variant.size?.id === v.size?.id
-        ).length;
-        sizeMap.set(v.size.id, { 
-          ...v.size, 
-          availableColors: colorsForSize,
-          totalColors: totalColorsForSize
+      if (v.size && v.color) {
+        if (!sizeMap.has(v.size.id)) {
+          sizeMap.set(v.size.id, {
+            size: v.size,
+            colors: []
+          });
+        }
+        sizeMap.get(v.size.id)!.colors.push({
+          variant: v,
+          color: v.color,
+          stock: v.stock,
+          price: product.price + (v.price_adjustment || 0)
         });
       }
     });
+
     return Array.from(sizeMap.values());
-  }, [variants]);
+  }, [variants, product.price]);
 
-  // Get colors available for selected size
-  const colorsForSelectedSize = useMemo(() => {
-    if (!variants || !selectedSize) return [];
-    return variants
-      .filter(v => v.size?.id === selectedSize && v.color)
-      .map(v => ({
-        variant: v,
-        color: v.color!,
-        stock: v.stock,
-        price: product.price + (v.price_adjustment || 0)
-      }));
-  }, [variants, selectedSize, product.price]);
+  const isVariantSelected = (variantId: string) => {
+    return selectedVariants.some(v => v.variantId === variantId);
+  };
 
-  const handleColorSelect = (variant: ProductVariant) => {
+  const getSelectedVariant = (variantId: string) => {
+    return selectedVariants.find(v => v.variantId === variantId);
+  };
+
+  const toggleVariant = (variant: ProductVariant, price: number) => {
     if (variant.stock === 0) return;
 
     const sizeName = variant.size 
       ? (language === 'ar' ? variant.size.name_ar || variant.size.name : variant.size.name)
-      : undefined;
+      : '';
     const colorName = variant.color
       ? (language === 'ar' ? variant.color.name_ar || variant.color.name : variant.color.name)
-      : undefined;
+      : '';
 
-    const variantPrice = product.price + (variant.price_adjustment || 0);
+    if (isVariantSelected(variant.id)) {
+      setSelectedVariants(prev => prev.filter(v => v.variantId !== variant.id));
+    } else {
+      setSelectedVariants(prev => [...prev, {
+        variantId: variant.id,
+        sizeId: variant.size?.id || '',
+        colorId: variant.color?.id || '',
+        sizeName,
+        colorName,
+        price,
+        stock: variant.stock,
+        sku: variant.sku,
+        hexCode: variant.color?.hex_code || null,
+        quantity: 1
+      }]);
+    }
+  };
 
-    onSelectVariant({
-      id: product.id,
-      variantId: variant.id,
-      name: product.name,
-      nameAr: product.nameAr,
-      price: variantPrice,
-      sku: variant.sku,
-      sizeName,
-      colorName
+  const updateQuantity = (variantId: string, delta: number) => {
+    setSelectedVariants(prev => prev.map(v => {
+      if (v.variantId === variantId) {
+        const newQty = Math.max(1, Math.min(v.stock, v.quantity + delta));
+        return { ...v, quantity: newQty };
+      }
+      return v;
+    }));
+  };
+
+  const handleAddToCart = () => {
+    selectedVariants.forEach(sv => {
+      for (let i = 0; i < sv.quantity; i++) {
+        onSelectVariant({
+          id: product.id,
+          variantId: sv.variantId,
+          name: product.name,
+          nameAr: product.nameAr,
+          price: sv.price,
+          sku: sv.sku,
+          sizeName: sv.sizeName,
+          colorName: sv.colorName
+        });
+      }
     });
-    onClose();
-    setSelectedSize(null);
+    handleClose();
   };
 
   const handleClose = () => {
     onClose();
-    setSelectedSize(null);
+    setSelectedVariants([]);
   };
+
+  const totalItems = selectedVariants.reduce((sum, v) => sum + v.quantity, 0);
+  const totalPrice = selectedVariants.reduce((sum, v) => sum + (v.price * v.quantity), 0);
 
   if (!isOpen) return null;
 
@@ -149,6 +202,31 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     return { color: 'bg-success/10 text-success', label: stock.toString() };
   };
 
+  const t = {
+    en: {
+      selectVariants: 'Select Variants',
+      size: 'Size',
+      colors: 'Colors',
+      addToCart: 'Add to Cart',
+      items: 'items',
+      total: 'Total',
+      selectedItems: 'Selected Items',
+      noSelection: 'Select size and color combinations',
+      tapToSelect: 'Tap colors to select multiple variants'
+    },
+    ar: {
+      selectVariants: 'اختر المتغيرات',
+      size: 'المقاس',
+      colors: 'الألوان',
+      addToCart: 'إضافة للسلة',
+      items: 'عناصر',
+      total: 'المجموع',
+      selectedItems: 'العناصر المحددة',
+      noSelection: 'اختر تركيبات المقاس واللون',
+      tapToSelect: 'اضغط على الألوان لاختيار متغيرات متعددة'
+    }
+  }[language];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div 
@@ -156,9 +234,9 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
         onClick={handleClose}
       />
       
-      <div className="relative w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-2xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
               {product.image ? (
@@ -182,152 +260,171 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
           </button>
         </div>
 
-        <div className="p-4">
+        {/* Content */}
+        <div className="flex-1 overflow-hidden flex flex-col">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : !selectedSize ? (
-            /* Step 1: Size Selection */
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-4">
-                <Badge variant="secondary" className="text-xs">
-                  {language === 'ar' ? 'الخطوة 1' : 'Step 1'}
-                </Badge>
-                <span className="text-sm font-medium text-foreground">
-                  {language === 'ar' ? 'اختر المقاس' : 'Select Size'}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2">
-                {sizes.map((size: any) => {
-                  const hasStock = size.availableColors > 0;
-                  return (
-                    <button
-                      key={size.id}
-                      onClick={() => hasStock && setSelectedSize(size.id)}
-                      disabled={!hasStock}
-                      className={cn(
-                        'relative p-4 rounded-xl border-2 font-bold text-lg transition-all',
-                        hasStock
-                          ? 'bg-background border-border hover:border-primary hover:bg-primary/5 cursor-pointer'
-                          : 'bg-muted/50 border-muted text-muted-foreground cursor-not-allowed opacity-50'
-                      )}
-                    >
-                      <span>{language === 'ar' ? size.name_ar || size.name : size.name}</span>
-                      <div className="flex items-center justify-center gap-1 mt-1">
-                        <span className={cn(
-                          'text-xs',
-                          hasStock ? 'text-success' : 'text-destructive'
-                        )}>
-                          {size.availableColors}/{size.totalColors}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {language === 'ar' ? 'لون' : 'colors'}
-                        </span>
-                      </div>
-                      {hasStock && (
-                        <ChevronRight 
-                          size={16} 
-                          className="absolute top-1/2 -translate-y-1/2 end-2 text-muted-foreground" 
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           ) : (
-            /* Step 2: Color Selection */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {language === 'ar' ? 'الخطوة 2' : 'Step 2'}
-                  </Badge>
-                  <span className="text-sm font-medium text-foreground">
-                    {language === 'ar' ? 'اختر اللون' : 'Select Color'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setSelectedSize(null)}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  {language === 'ar' ? 'تغيير المقاس' : 'Change Size'}
-                </button>
-              </div>
+            <>
+              {/* Size-Color Matrix */}
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
+                  {sizeColorMatrix.map(({ size, colors }) => {
+                    const availableCount = colors.filter(c => c.stock > 0).length;
+                    
+                    return (
+                      <div key={size?.id} className="border border-border rounded-xl overflow-hidden">
+                        {/* Size Header */}
+                        <div className="flex items-center justify-between p-3 bg-muted/50">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-bold text-base px-3 py-1">
+                              {language === 'ar' ? size?.name_ar || size?.name : size?.name}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({availableCount}/{colors.length} {t.colors})
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Colors for this size */}
+                        <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {colors.map(({ variant, color, stock, price }) => {
+                            const isSelected = isVariantSelected(variant.id);
+                            const selectedData = getSelectedVariant(variant.id);
+                            const stockStatus = getStockStatus(stock);
+                            const isOutOfStock = stock === 0;
+                            
+                            return (
+                              <button
+                                key={variant.id}
+                                onClick={() => toggleVariant(variant, price)}
+                                disabled={isOutOfStock}
+                                className={cn(
+                                  'relative flex flex-col items-center p-2 rounded-lg border-2 transition-all',
+                                  isOutOfStock
+                                    ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
+                                    : isSelected
+                                    ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
+                                    : 'bg-background border-border hover:border-primary/50'
+                                )}
+                              >
+                                {/* Color Swatch */}
+                                <div 
+                                  className={cn(
+                                    "w-8 h-8 rounded-full border-2 flex-shrink-0 relative",
+                                    isSelected ? "border-primary" : "border-border"
+                                  )}
+                                  style={{ backgroundColor: color.hex_code || '#ccc' }}
+                                >
+                                  {isSelected && (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <Check size={16} className="text-white drop-shadow-lg" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Color Name */}
+                                <p className="text-xs font-medium text-foreground truncate w-full text-center mt-1">
+                                  {language === 'ar' ? color.name_ar || color.name : color.name}
+                                </p>
+                                
+                                {/* Stock Badge */}
+                                <Badge className={cn('text-[10px] mt-1 px-1.5', stockStatus.color)}>
+                                  {stockStatus.label}
+                                </Badge>
 
-              {/* Selected Size Badge */}
-              <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg mb-4">
-                <span className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'المقاس:' : 'Size:'}
-                </span>
-                <Badge variant="default" className="font-bold">
-                  {(() => {
-                    const size = sizes.find((s: any) => s.id === selectedSize);
-                    return size ? (language === 'ar' ? size.name_ar || size.name : size.name) : '';
-                  })()}
-                </Badge>
-              </div>
-
-              {/* Colors Grid */}
-              <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
-                {colorsForSelectedSize.map(({ variant, color, stock, price }) => {
-                  const stockStatus = getStockStatus(stock);
-                  const isOutOfStock = stock === 0;
-                  
-                  return (
-                    <button
-                      key={variant.id}
-                      onClick={() => handleColorSelect(variant)}
-                      disabled={isOutOfStock}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-start',
-                        isOutOfStock
-                          ? 'bg-muted/50 border-muted cursor-not-allowed opacity-60'
-                          : 'bg-background border-border hover:border-primary hover:bg-primary/5'
-                      )}
-                    >
-                      {/* Color Swatch */}
-                      <div 
-                        className="w-10 h-10 rounded-lg border-2 border-border flex-shrink-0"
-                        style={{ backgroundColor: color.hex_code || '#ccc' }}
-                      />
-                      
-                      {/* Color Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {language === 'ar' ? color.name_ar || color.name : color.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge className={cn('text-xs', stockStatus.color)}>
-                            {stockStatus.label}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {price.toLocaleString()}
-                          </span>
+                                {/* Quantity controls when selected */}
+                                {isSelected && selectedData && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateQuantity(variant.id, -1);
+                                      }}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                    >
+                                      <Minus size={12} />
+                                    </button>
+                                    <span className="text-xs font-bold min-w-[16px] text-center">
+                                      {selectedData.quantity}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateQuantity(variant.id, 1);
+                                      }}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                    >
+                                      <Plus size={12} />
+                                    </button>
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
 
-                      {!isOutOfStock && (
-                        <Check size={18} className="text-success flex-shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {/* Selected Items Summary */}
+              {selectedVariants.length > 0 && (
+                <div className="border-t border-border bg-muted/30 p-3 flex-shrink-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">{t.selectedItems}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {totalItems} {t.items}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                    {selectedVariants.map(sv => (
+                      <Badge 
+                        key={sv.variantId} 
+                        variant="secondary"
+                        className="flex items-center gap-1.5 py-1"
+                      >
+                        {sv.hexCode && (
+                          <span 
+                            className="w-3 h-3 rounded-full border border-border"
+                            style={{ backgroundColor: sv.hexCode }}
+                          />
+                        )}
+                        <span>{sv.sizeName} - {sv.colorName}</span>
+                        <span className="text-muted-foreground">×{sv.quantity}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Footer hint */}
-        <div className="p-3 border-t border-border bg-muted/20 text-center">
-          <p className="text-xs text-muted-foreground">
-            {!selectedSize 
-              ? (language === 'ar' ? 'اضغط على المقاس لعرض الألوان المتاحة' : 'Tap a size to see available colors')
-              : (language === 'ar' ? 'اضغط على اللون لإضافته للسلة' : 'Tap a color to add to cart')
-            }
-          </p>
+        {/* Footer */}
+        <div className="p-4 border-t border-border bg-background flex-shrink-0">
+          {selectedVariants.length > 0 ? (
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">{t.total}</p>
+                <p className="text-xl font-bold text-foreground">{totalPrice.toLocaleString()} YER</p>
+              </div>
+              <Button 
+                onClick={handleAddToCart}
+                className="flex-1 h-12 text-base gap-2"
+              >
+                <ShoppingCart size={20} />
+                {t.addToCart} ({totalItems})
+              </Button>
+            </div>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground">
+              {t.tapToSelect}
+            </p>
+          )}
         </div>
       </div>
     </div>
