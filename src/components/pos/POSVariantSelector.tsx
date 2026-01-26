@@ -322,7 +322,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                         {/* Size Header - Inline with colors */}
                         <div className="flex items-center gap-2 p-2 bg-muted/30 flex-wrap">
                           {/* Size Badge */}
-                          <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 shrink-0">
+                          <Badge variant="outline" className="font-semibold text-sm px-3 py-1.5 shrink-0">
                             {language === 'ar' ? size?.name_ar || size?.name : size?.name}
                             {hasColors && (
                               <span className="text-muted-foreground font-normal ms-1">
@@ -332,7 +332,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                           </Badge>
                           
                           {/* Color swatches inline */}
-                          <div className="flex items-center gap-1 flex-wrap flex-1">
+                          <div className="flex items-center gap-2 flex-wrap flex-1">
                             {sizeVariants.map(({ variant, color, stock, price }) => {
                               const isSelected = isVariantSelected(variant.id);
                               const selectedData = getSelectedVariant(variant.id);
@@ -348,7 +348,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                     onClick={() => toggleVariant(variant, price)}
                                     disabled={isDisabled}
                                     className={cn(
-                                      'relative flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-all',
+                                      'relative flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all min-h-[40px]',
                                       isDisabled
                                         ? 'bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50'
                                         : isSelected
@@ -357,7 +357,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                     )}
                                   >
                                     {t.noColor}
-                                    <span className={cn('text-[8px] px-1 rounded', stockStatus.color)}>
+                                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded', stockStatus.color)}>
                                       {stockStatus.label}
                                     </span>
                                     {isSelected && selectedData && (
@@ -375,7 +375,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                   disabled={isDisabled}
                                   title={`${language === 'ar' ? color.name_ar || color.name : color.name} (${stockStatus.label})`}
                                   className={cn(
-                                    'relative flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all',
+                                    'relative flex items-center gap-1.5 px-2 py-1.5 rounded-full transition-all min-h-[44px]',
                                     isDisabled
                                       ? 'opacity-40 cursor-not-allowed'
                                       : isSelected
@@ -386,7 +386,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                   {/* Color Circle with stock indicator */}
                                   <div 
                                     className={cn(
-                                      "w-6 h-6 rounded-full border-2 flex items-center justify-center relative",
+                                      "w-9 h-9 rounded-full border-2 flex items-center justify-center relative",
                                       isOutOfStock ? "border-destructive/50" : 
                                       stock <= 5 ? "border-warning/50" : "border-transparent",
                                       isSelected && "border-primary"
@@ -394,12 +394,12 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                     style={{ backgroundColor: color.hex_code || '#ccc' }}
                                   >
                                     {isSelected && (
-                                      <Check size={12} className="text-white drop-shadow-md" />
+                                      <Check size={16} className="text-white drop-shadow-md" />
                                     )}
                                     {/* Stock indicator dot */}
                                     <span 
                                       className={cn(
-                                        "absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full border border-background text-[6px] flex items-center justify-center font-bold",
+                                        "absolute -bottom-0.5 -end-0.5 w-4 h-4 rounded-full border-2 border-background text-[8px] flex items-center justify-center font-bold",
                                         isOutOfStock ? "bg-destructive text-destructive-foreground" :
                                         stock <= 5 ? "bg-warning text-warning-foreground" : "bg-success text-success-foreground"
                                       )}
@@ -410,17 +410,17 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                   
                                   {/* Quantity badge when selected */}
                                   {isSelected && selectedData && (
-                                    <div className="flex items-center bg-primary/10 rounded-full px-1">
+                                    <div className="flex items-center bg-primary/10 rounded-full px-1.5">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           updateQuantity(variant.id, -1);
                                         }}
-                                        className="w-4 h-4 flex items-center justify-center hover:bg-primary/20 rounded-full"
+                                        className="w-6 h-6 flex items-center justify-center hover:bg-primary/20 rounded-full"
                                       >
-                                        <Minus size={8} />
+                                        <Minus size={12} />
                                       </button>
-                                      <span className="text-[10px] font-bold min-w-[12px] text-center">
+                                      <span className="text-sm font-bold min-w-[20px] text-center">
                                         {selectedData.quantity}
                                       </span>
                                       <button
@@ -428,9 +428,9 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                           e.stopPropagation();
                                           updateQuantity(variant.id, 1);
                                         }}
-                                        className="w-4 h-4 flex items-center justify-center hover:bg-primary/20 rounded-full"
+                                        className="w-6 h-6 flex items-center justify-center hover:bg-primary/20 rounded-full"
                                       >
-                                        <Plus size={8} />
+                                        <Plus size={12} />
                                       </button>
                                     </div>
                                   )}
