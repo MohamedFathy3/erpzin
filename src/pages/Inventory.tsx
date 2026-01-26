@@ -21,7 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 const ITEMS_PER_PAGE = 10;
@@ -46,6 +46,8 @@ const Inventory: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_desc');
   const [isCategoryCollapsed, setIsCategoryCollapsed] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
@@ -204,17 +206,115 @@ const Inventory: React.FC = () => {
     setShowBarcodePrinter(true);
   };
   const handleViewVariants = (product: Product) => {
+    const dbProduct = dbProducts.find(p => p.id === product.id);
     setSelectedProductForVariants({
       id: product.id,
       name: product.name,
       nameAr: product.nameAr,
       price: product.price,
+      cost: product.cost,
       sku: product.sku,
-      image: product.image
+      stock: product.stock,
+      image: product.image,
+      minStock: product.minStock
     });
     setShowVariantsModal(true);
   };
-  const handleSaveProduct = () => { toast({ title: language === 'ar' ? 'تم الحفظ' : 'Saved' }); refetch(); };
+
+  // Save product with variants to database
+  const handleSaveProduct = async (formData: ProductFormData) => {
+    try {
+      let productId = formData.id;
+
+      // Prepare product data
+      const productData = {
+        name: formData.name,
+        name_ar: formData.nameAr,
+        sku: formData.sku,
+        barcode: formData.barcode || null,
+        category_id: formData.categoryId || null,
+        price: formData.price,
+        cost: formData.cost,
+        stock: formData.stock,
+        min_stock: formData.reorderPoint,
+        is_active: formData.status === 'active',
+        has_variants: formData.hasVariants && formData.variants.filter(v => v.enabled).length > 0,
+        image_url: formData.imageUrl || null
+      };
+
+      if (productId) {
+        // Update existing product
+        const { error: updateError } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', productId);
+        
+        if (updateError) throw updateError;
+      } else {
+        // Insert new product
+        const { data: newProduct, error: insertError } = await supabase
+          .from('products')
+          .insert(productData)
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        productId = newProduct.id;
+      }
+
+      // Save variants if product has variants
+      if (formData.hasVariants && productId) {
+        // Delete existing variants
+        await supabase
+          .from('product_variants')
+          .delete()
+          .eq('product_id', productId);
+
+        // Get enabled variants and transform them for DB
+        const enabledVariants = formData.variants.filter(v => v.enabled);
+        
+        if (enabledVariants.length > 0) {
+          const variantsToInsert = enabledVariants.map(v => ({
+            product_id: productId,
+            size_id: v.sizeId,
+            color_id: v.colorId,
+            sku: v.sku,
+            barcode: v.barcode,
+            stock: v.stock || 0,
+            price_adjustment: v.price - formData.price, // Store as adjustment from base price
+            cost_adjustment: v.cost - formData.cost,    // Store as adjustment from base cost
+            is_active: true
+          }));
+
+          const { error: variantsError } = await supabase
+            .from('product_variants')
+            .insert(variantsToInsert);
+
+          if (variantsError) throw variantsError;
+        }
+      }
+
+      toast({ 
+        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
+        description: language === 'ar' 
+          ? `تم حفظ المنتج "${formData.name}" مع ${formData.variants.filter(v => v.enabled).length} متغير`
+          : `Product "${formData.name}" saved with ${formData.variants.filter(v => v.enabled).length} variants`
+      });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      queryClient.invalidateQueries({ queryKey: ['product-variants'] });
+      queryClient.invalidateQueries({ queryKey: ['product-variants-inventory'] });
+      refetch();
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      toast({ 
+        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
     if (found) handleEditProduct(found);

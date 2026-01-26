@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 interface ProductFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: ProductFormData) => void;
+  onSave: (product: ProductFormData) => void | Promise<void>;
   categories?: any[]; // Keep for backwards compatibility but we'll fetch from DB
   editProduct?: ProductFormData | null;
 }
@@ -216,9 +216,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
     handleChange('imageUrl', '');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    await onSave(formData);
     onClose();
   };
 
