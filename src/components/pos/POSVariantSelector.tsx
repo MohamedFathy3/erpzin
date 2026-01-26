@@ -88,34 +88,41 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     enabled: isOpen
   });
 
-  // Group variants by size with their available colors
+  // Group variants by size with their available colors (colors are optional)
   const sizeColorMatrix = useMemo(() => {
     if (!variants) return [];
     
     const sizeMap = new Map<string, {
       size: ProductVariant['size'];
-      colors: Array<{
+      variants: Array<{
         variant: ProductVariant;
-        color: NonNullable<ProductVariant['color']>;
+        color: ProductVariant['color'];
         stock: number;
         price: number;
       }>;
+      hasColors: boolean;
     }>();
 
     variants.forEach(v => {
-      if (v.size && v.color) {
+      // Size is required, color is optional
+      if (v.size) {
         if (!sizeMap.has(v.size.id)) {
           sizeMap.set(v.size.id, {
             size: v.size,
-            colors: []
+            variants: [],
+            hasColors: false
           });
         }
-        sizeMap.get(v.size.id)!.colors.push({
+        const sizeEntry = sizeMap.get(v.size.id)!;
+        sizeEntry.variants.push({
           variant: v,
           color: v.color,
           stock: v.stock,
           price: product.price + (v.price_adjustment || 0)
         });
+        if (v.color) {
+          sizeEntry.hasColors = true;
+        }
       }
     });
 
@@ -212,9 +219,11 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
       total: 'Total',
       selectedItems: 'Selected Items',
       noSelection: 'Select size and color combinations',
-      tapToSelect: 'Tap colors to select multiple variants',
+      tapToSelect: 'Tap to select variants',
       noVariants: 'No variants available',
-      noVariantsDesc: 'This product has no configured variants. Please add variants from the inventory page.'
+      noVariantsDesc: 'This product has no configured variants. Please add variants from the inventory page.',
+      noColor: 'Default',
+      select: 'Select'
     },
     ar: {
       selectVariants: 'اختر المتغيرات',
@@ -225,9 +234,11 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
       total: 'المجموع',
       selectedItems: 'العناصر المحددة',
       noSelection: 'اختر تركيبات المقاس واللون',
-      tapToSelect: 'اضغط على الألوان لاختيار متغيرات متعددة',
+      tapToSelect: 'اضغط للاختيار',
       noVariants: 'لا توجد متغيرات متاحة',
-      noVariantsDesc: 'هذا المنتج ليس له متغيرات مُعدّة. يرجى إضافة المتغيرات من صفحة المخزون.'
+      noVariantsDesc: 'هذا المنتج ليس له متغيرات مُعدّة. يرجى إضافة المتغيرات من صفحة المخزون.',
+      noColor: 'افتراضي',
+      select: 'اختر'
     }
   }[language];
 
@@ -284,8 +295,8 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
               {/* Size-Color Matrix */}
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
-                  {sizeColorMatrix.map(({ size, colors }) => {
-                    const availableCount = colors.filter(c => c.stock > 0).length;
+                  {sizeColorMatrix.map(({ size, variants: sizeVariants, hasColors }) => {
+                    const availableCount = sizeVariants.filter(v => v.stock > 0).length;
                     
                     return (
                       <div key={size?.id} className="border border-border rounded-xl overflow-hidden">
@@ -295,20 +306,84 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                             <Badge variant="outline" className="font-bold text-base px-3 py-1">
                               {language === 'ar' ? size?.name_ar || size?.name : size?.name}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              ({availableCount}/{colors.length} {t.colors})
-                            </span>
+                            {hasColors && (
+                              <span className="text-xs text-muted-foreground">
+                                ({availableCount}/{sizeVariants.length} {t.colors})
+                              </span>
+                            )}
                           </div>
                         </div>
                         
-                        {/* Colors for this size */}
+                        {/* Variants for this size */}
                         <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                          {colors.map(({ variant, color, stock, price }) => {
+                          {sizeVariants.map(({ variant, color, stock, price }) => {
                             const isSelected = isVariantSelected(variant.id);
                             const selectedData = getSelectedVariant(variant.id);
                             const stockStatus = getStockStatus(stock);
                             const isOutOfStock = stock === 0;
                             
+                            // If no color, show a simple "select" button for this size
+                            if (!color) {
+                              return (
+                                <button
+                                  key={variant.id}
+                                  onClick={() => toggleVariant(variant, price)}
+                                  disabled={isOutOfStock}
+                                  className={cn(
+                                    'relative flex flex-col items-center p-3 rounded-lg border-2 transition-all',
+                                    isOutOfStock
+                                      ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
+                                      : isSelected
+                                      ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
+                                      : 'bg-background border-border hover:border-primary/50'
+                                  )}
+                                >
+                                  {isSelected && (
+                                    <div className="absolute top-1 end-1">
+                                      <Check size={14} className="text-primary" />
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-sm font-medium text-foreground">
+                                    {t.select}
+                                  </p>
+                                  
+                                  {/* Stock Badge */}
+                                  <Badge className={cn('text-[10px] mt-1 px-1.5', stockStatus.color)}>
+                                    {stockStatus.label}
+                                  </Badge>
+
+                                  {/* Quantity controls when selected */}
+                                  {isSelected && selectedData && (
+                                    <div className="flex items-center gap-1 mt-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateQuantity(variant.id, -1);
+                                        }}
+                                        className="w-6 h-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                      >
+                                        <Minus size={14} />
+                                      </button>
+                                      <span className="text-sm font-bold min-w-[20px] text-center">
+                                        {selectedData.quantity}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateQuantity(variant.id, 1);
+                                        }}
+                                        className="w-6 h-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                      >
+                                        <Plus size={14} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            }
+                            
+                            // With color - show color swatch
                             return (
                               <button
                                 key={variant.id}
@@ -406,7 +481,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                             style={{ backgroundColor: sv.hexCode }}
                           />
                         )}
-                        <span>{sv.sizeName} - {sv.colorName}</span>
+                        <span>{sv.sizeName}{sv.colorName ? ` - ${sv.colorName}` : ''}</span>
                         <span className="text-muted-foreground">×{sv.quantity}</span>
                       </Badge>
                     ))}
