@@ -12,8 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Save, Printer, Crown, Star } from "lucide-react";
+import { Plus, Trash2, Save, Printer, Crown, Star } from "lucide-react";
 import { format } from "date-fns";
+import QuickProductSearch from "@/components/shared/QuickProductSearch";
 
 interface InvoiceItem {
   id: string;
@@ -39,7 +40,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
-  const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -133,26 +133,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     }
   });
 
-  // Fetch products for search
-  const { data: products } = useQuery({
-    queryKey: ['products-search', searchQuery],
-    queryFn: async () => {
-      let query = supabase
-        .from('products')
-        .select('*')
-        .eq('is_active', true);
-      
-      if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%,barcode.ilike.%${searchQuery}%`);
-      }
-      
-      const { data, error } = await query.limit(20);
-      if (error) throw error;
-      return data;
-    },
-    enabled: searchQuery.length > 0
-  });
-
   // Generate invoice number
   const { data: invoiceNumber } = useQuery({
     queryKey: ['new-invoice-number'],
@@ -203,7 +183,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       };
       setItems([...items, newItem]);
     }
-    setSearchQuery("");
   };
 
   // Update item
@@ -547,34 +526,14 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder={language === 'ar' ? 'ابحث عن منتج...' : 'Search product...'}
-                    className="pl-10"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  {products && products.length > 0 && searchQuery && (
-                    <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      {products.map((product) => (
-                        <div
-                          key={product.id}
-                          className="p-3 hover:bg-muted cursor-pointer border-b last:border-0"
-                          onClick={() => addProduct(product)}
-                        >
-                          <div className="font-medium">{product.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {product.sku} - {product.price.toLocaleString()} 
-                            <span className="mx-2">|</span>
-                            {language === 'ar' ? 'المخزون:' : 'Stock:'} {product.stock}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {/* Quick Product Search */}
+                <QuickProductSearch
+                  onSelectProduct={addProduct}
+                  priceField="price"
+                  placeholder={language === 'ar' ? 'بحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
+                  autoFocus
+                  showStock
+                />
 
                 {/* Items Table */}
                 <div className="border rounded-lg overflow-hidden">
