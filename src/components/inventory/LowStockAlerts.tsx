@@ -9,6 +9,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { formatDate } from '@/lib/utils';
 import { 
   AlertTriangle, 
   Bell, 
@@ -268,7 +269,7 @@ const LowStockAlerts = () => {
                         <TableCell>{alert.threshold_quantity}</TableCell>
                         <TableCell>{getAlertTypeBadge(alert.alert_type)}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {new Date(alert.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                          {formatDate(alert.created_at)}
                         </TableCell>
                         <TableCell>{getStatusBadge(alert.is_read, alert.is_resolved)}</TableCell>
                         <TableCell>

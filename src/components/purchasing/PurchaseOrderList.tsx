@@ -11,6 +11,7 @@ import { Plus, Search, MoreVertical, Eye, Edit2, FileText, Truck, CheckCircle, X
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { formatDate } from '@/lib/utils';
 import PurchaseOrderForm from './PurchaseOrderForm';
 import PurchaseOrderDetails from './PurchaseOrderDetails';
 
@@ -164,13 +165,10 @@ const PurchaseOrderList: React.FC = () => {
                     <TableCell>{language === 'ar' ? order.suppliers?.name_ar || order.suppliers?.name : order.suppliers?.name}</TableCell>
                     <TableCell className="font-medium">{Number(order.total_amount).toLocaleString()} YER</TableCell>
                     <TableCell>
-                      {order.expected_date 
-                        ? new Date(order.expected_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')
-                        : '-'
-                      }
+                      {order.expected_date ? formatDate(order.expected_date) : '-'}
                     </TableCell>
                     <TableCell>{getStatusBadge(order.status)}</TableCell>
-                    <TableCell>{new Date(order.order_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</TableCell>
+                    <TableCell>{formatDate(order.order_date)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

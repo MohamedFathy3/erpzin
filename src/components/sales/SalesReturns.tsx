@@ -14,8 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { RotateCcw, FileText, Plus } from "lucide-react";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { formatDate } from "@/lib/utils";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 
 import SalesReturnForm from "./SalesReturnForm";
@@ -464,7 +463,7 @@ const SalesReturns = () => {
                             : invoice.customer?.name || '-'}
                         </TableCell>
                         <TableCell>
-                          {format(new Date(invoice.date), 'yyyy/MM/dd HH:mm', { locale: language === 'ar' ? ar : undefined })}
+                          {formatDate(invoice.date, true)}
                         </TableCell>
                         <TableCell className="font-medium">{invoice.total_amount?.toLocaleString()}</TableCell>
                         <TableCell>{getStatusBadge(invoice)}</TableCell>

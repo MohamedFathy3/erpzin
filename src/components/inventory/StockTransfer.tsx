@@ -15,6 +15,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   ArrowRightLeft, 
@@ -579,7 +580,7 @@ const StockTransfer = () => {
                       <TableCell className="font-mono font-medium">{transfer.transfer_number}</TableCell>
                       <TableCell>{getWarehouseName(transfer.from_warehouse_id)}</TableCell>
                       <TableCell>{getWarehouseName(transfer.to_warehouse_id)}</TableCell>
-                      <TableCell>{new Date(transfer.transfer_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}</TableCell>
+                      <TableCell>{formatDate(transfer.transfer_date)}</TableCell>
                       <TableCell>{transfer.total_items}</TableCell>
                       <TableCell>{transfer.total_quantity}</TableCell>
                       <TableCell>{getStatusBadge(transfer.status)}</TableCell>
@@ -903,12 +904,12 @@ const StockTransfer = () => {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-muted-foreground text-xs">{t.createdAt}</Label>
-                  <p>{new Date(selectedTransfer.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}</p>
+                  <p>{formatDate(selectedTransfer.created_at)}</p>
                 </div>
                 {selectedTransfer.completed_date && (
                   <div className="space-y-1">
                     <Label className="text-muted-foreground text-xs">{t.completedAt}</Label>
-                    <p>{new Date(selectedTransfer.completed_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}</p>
+                    <p>{formatDate(selectedTransfer.completed_date)}</p>
                   </div>
                 )}
               </div>

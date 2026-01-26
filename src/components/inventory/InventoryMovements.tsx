@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDate } from '@/lib/utils';
 import { 
   ArrowUpDown, 
   ArrowUp, 
@@ -226,10 +227,7 @@ const InventoryMovements = () => {
                     filteredMovements.map(movement => (
                       <TableRow key={movement.id}>
                         <TableCell className="text-muted-foreground">
-                          {new Date(movement.created_at).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US', {
-                            dateStyle: 'short',
-                            timeStyle: 'short'
-                          })}
+                          {formatDate(movement.created_at, true)}
                         </TableCell>
                         <TableCell className="font-medium">
                           {language === 'ar' 

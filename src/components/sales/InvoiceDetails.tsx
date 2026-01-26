@@ -7,8 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, RotateCcw } from "lucide-react";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { formatDate } from "@/lib/utils";
 import CompanyHeader from "@/components/shared/CompanyHeader";
 
 interface InvoiceDetailsProps {
@@ -79,9 +78,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
             <div>
               <h3 className="text-xl font-bold">{invoice.invoice_number}</h3>
               <p className="text-muted-foreground">
-                {format(new Date(invoice.invoice_date), 'yyyy/MM/dd HH:mm', {
-                  locale: language === 'ar' ? ar : undefined
-                })}
+                {formatDate(invoice.invoice_date, true)}
               </p>
             </div>
             <div>
@@ -119,7 +116,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                       <span className="text-muted-foreground">
                         {language === 'ar' ? 'الاستحقاق:' : 'Due:'}
                       </span>
-                      <span>{format(new Date(invoice.due_date), 'yyyy/MM/dd')}</span>
+                      <span>{formatDate(invoice.due_date)}</span>
                     </>
                   )}
                   {invoice.salesman && (

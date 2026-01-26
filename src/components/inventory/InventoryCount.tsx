@@ -13,6 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { 
   ClipboardList, 
@@ -426,7 +427,7 @@ const InventoryCount = () => {
                           }
                         </TableCell>
                         <TableCell>
-                          {new Date(count.count_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                          {formatDate(count.count_date)}
                         </TableCell>
                         <TableCell>{count.total_items || 0}</TableCell>
                         <TableCell className={count.variance_items ? 'text-amber-500 font-semibold' : ''}>

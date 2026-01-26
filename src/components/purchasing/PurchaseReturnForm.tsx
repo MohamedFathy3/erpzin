@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { formatDate } from "@/lib/utils";
 import { Search, RotateCcw, Package, Plus, Minus, Loader2 } from "lucide-react";
 
 interface ReturnItem {
@@ -380,7 +381,7 @@ const PurchaseReturnForm = ({ isOpen, onClose, onSave }: PurchaseReturnFormProps
                           {language === 'ar' ? invoice.supplier?.name_ar || invoice.supplier?.name : invoice.supplier?.name}
                         </TableCell>
                         <TableCell>{Number(invoice.total_amount).toLocaleString()} YER</TableCell>
-                        <TableCell>{new Date(invoice.invoice_date).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatDate(invoice.invoice_date)}</TableCell>
                         <TableCell>
                           <Button size="sm" variant="outline" onClick={() => handleSelectInvoice(invoice)}>
                             {language === 'ar' ? 'اختيار' : 'Select'}
@@ -423,7 +424,7 @@ const PurchaseReturnForm = ({ isOpen, onClose, onSave }: PurchaseReturnFormProps
                   </div>
                   <div>
                     <span className="text-muted-foreground">{language === 'ar' ? 'التاريخ:' : 'Date:'}</span>
-                    <span className="font-medium ml-2">{new Date(selectedInvoice.invoice_date).toLocaleDateString()}</span>
+                    <span className="font-medium ml-2">{formatDate(selectedInvoice.invoice_date)}</span>
                   </div>
                 </div>
               </CardContent>
