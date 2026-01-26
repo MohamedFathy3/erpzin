@@ -15,7 +15,7 @@ import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
 import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
 import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 import { 
   Plus, FileText, Building2, Phone, 
   Wallet, Receipt, ShoppingCart, RotateCcw
@@ -244,7 +244,7 @@ const Purchasing = () => {
                               {inv.payment_status === 'paid' ? (language === 'ar' ? 'مدفوعة' : 'Paid') : inv.payment_status === 'partial' ? (language === 'ar' ? 'جزئي' : 'Partial') : (language === 'ar' ? 'غير مدفوعة' : 'Unpaid')}
                             </Badge>
                           </TableCell>
-                          <TableCell>{new Date(inv.invoice_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</TableCell>
+                          <TableCell>{formatDate(inv.invoice_date)}</TableCell>
                         </TableRow>
                       ))
                     )}

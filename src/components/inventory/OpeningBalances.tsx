@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { formatDate } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { 
   Wallet, 
@@ -572,7 +573,7 @@ const OpeningBalances = () => {
                           {Number(balance.total_value).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {new Date(balance.balance_date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                          {formatDate(balance.balance_date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

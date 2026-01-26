@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Eye, Printer } from "lucide-react";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
@@ -178,9 +177,7 @@ const SalesInvoiceList = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {format(new Date(invoice.invoice_date), 'yyyy/MM/dd', {
-                          locale: language === 'ar' ? ar : undefined
-                        })}
+                        {formatDate(invoice.invoice_date)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {invoice.total_amount?.toLocaleString()}

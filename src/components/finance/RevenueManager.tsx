@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { toast } from 'sonner';
 import { Plus, Search, Edit, Trash2, Calendar as CalendarIcon, Filter, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDate, cn } from '@/lib/utils';
 
 interface RevenueManagerProps {
   language: string;
@@ -282,7 +282,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {format(new Date(revenue.revenue_date), 'yyyy/MM/dd', { locale: language === 'ar' ? ar : undefined })}
+                        {formatDate(revenue.revenue_date)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {revenue.reference_number || '-'}

@@ -13,6 +13,7 @@ import QuickAccessGrid from '@/components/dashboard/QuickAccessGrid';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDateLong } from '@/lib/utils';
 import {
   Wallet,
   ShoppingCart,
@@ -158,12 +159,7 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">
-              {new Date().toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
+              {formatDateLong(new Date(), language)}
             </p>
           </div>
         </div>

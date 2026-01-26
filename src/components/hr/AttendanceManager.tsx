@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { formatDate } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import {
   Plus,
@@ -533,7 +534,7 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
                             ? record.employees?.name_ar || record.employees?.name
                             : record.employees?.name}
                         </TableCell>
-                        <TableCell>{new Date(record.date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</TableCell>
+                        <TableCell>{formatDate(record.date)}</TableCell>
                         <TableCell>{record.check_in || '-'}</TableCell>
                         <TableCell>{record.check_out || '-'}</TableCell>
                         <TableCell>{getStatusBadge(record.status)}</TableCell>

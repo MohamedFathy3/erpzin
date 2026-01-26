@@ -26,9 +26,7 @@ import {
   LogOut,
   RefreshCw
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { formatDate, cn } from '@/lib/utils';
 
 interface AuditLog {
   id: string;
@@ -150,7 +148,7 @@ const AuditLogViewer: React.FC = () => {
   const handleExport = () => {
     const headers = ['Date', 'User', 'Action', 'Table', 'Record ID', 'Notes'];
     const rows = filteredLogs.map(log => [
-      format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+      formatDate(log.created_at, true),
       log.user_name || '-',
       log.action,
       log.table_name || '-',
@@ -166,7 +164,7 @@ const AuditLogViewer: React.FC = () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `audit_log_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.download = `audit_log_${formatDate(new Date())}.csv`;
     link.click();
   };
 
@@ -258,9 +256,7 @@ const AuditLogViewer: React.FC = () => {
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-2">
                         <Calendar size={14} className="text-muted-foreground" />
-                        {format(new Date(log.created_at), 'yyyy-MM-dd HH:mm', {
-                          locale: language === 'ar' ? ar : undefined
-                        })}
+                        {formatDate(log.created_at, true)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -313,7 +309,7 @@ const AuditLogViewer: React.FC = () => {
                                   <div>
                                     <p className="text-sm text-muted-foreground">{t.date}</p>
                                     <p className="font-medium">
-                                      {format(new Date(selectedLog.created_at), 'yyyy-MM-dd HH:mm:ss')}
+                                      {formatDate(selectedLog.created_at, true)}
                                     </p>
                                   </div>
                                   <div>

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
+import { cn, formatDate } from '@/lib/utils';
 
 interface SupplierDetailsProps {
   isOpen: boolean;
@@ -232,7 +232,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                       transactions.map((tx: any) => (
                         <TableRow key={tx.id}>
                           <TableCell>
-                            {new Date(tx.transaction_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}
+                            {formatDate(tx.transaction_date)}
                           </TableCell>
                           <TableCell>
                             <Badge variant={tx.transaction_type === 'payment' ? 'default' : 'secondary'}>
@@ -286,7 +286,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                         <TableRow key={inv.id}>
                           <TableCell className="font-mono">{inv.invoice_number}</TableCell>
                           <TableCell>
-                            {new Date(inv.invoice_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}
+                            {formatDate(inv.invoice_date)}
                           </TableCell>
                           <TableCell>{Number(inv.total_amount).toLocaleString()} YER</TableCell>
                           <TableCell>{Number(inv.paid_amount).toLocaleString()} YER</TableCell>
@@ -334,7 +334,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                         <TableRow key={order.id}>
                           <TableCell className="font-mono">{order.order_number}</TableCell>
                           <TableCell>
-                            {new Date(order.order_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}
+                            {formatDate(order.order_date)}
                           </TableCell>
                           <TableCell>{Number(order.total_amount).toLocaleString()} YER</TableCell>
                           <TableCell>
