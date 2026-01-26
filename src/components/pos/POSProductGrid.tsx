@@ -12,6 +12,7 @@ interface Product {
   barcode: string;
   stock: number;
   category: string;
+  hasVariants?: boolean;
 }
 
 interface POSProductGridProps {
