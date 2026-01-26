@@ -293,7 +293,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                 {/* Size Header */}
                 <div 
                   className={cn(
-                    'flex items-center gap-3 p-3 cursor-pointer',
+                    'flex items-center gap-2 p-2 cursor-pointer',
                     isActive ? 'bg-primary text-primary-foreground' : ''
                   )}
                   onClick={() => {
@@ -304,10 +304,10 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                   }}
                 >
                   <div className={cn(
-                    'w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg',
+                    'w-8 h-8 rounded-md flex items-center justify-center font-semibold text-sm',
                     isActive 
                       ? 'bg-primary-foreground/20' 
-                      : isSelected 
+                      : isSelected
                       ? 'bg-primary/20 text-primary' 
                       : 'bg-muted text-muted-foreground'
                   )}>
@@ -411,7 +411,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                       <p className="text-sm font-medium text-foreground mb-2">
                         {language === 'ar' ? 'اختر الألوان المتاحة:' : 'Select Available Colors:'}
                       </p>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
                         {colors.map((color) => {
                           const isEnabled = enabledColorsForActiveSize.includes(color.id);
                           
@@ -421,7 +421,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                               type="button"
                               onClick={() => isEnabled ? removeColorForSize(color.id) : addColorForSize(color.id)}
                               className={cn(
-                                'flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all',
+                                'flex flex-col items-center gap-0.5 p-1.5 rounded-md border transition-all',
                                 isEnabled
                                   ? 'border-primary bg-primary/10'
                                   : 'border-border bg-background hover:border-primary/50'
@@ -429,17 +429,17 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                             >
                               <div
                                 className={cn(
-                                  'w-8 h-8 rounded-full border-2 flex items-center justify-center',
+                                  'w-5 h-5 rounded-full border flex items-center justify-center',
                                   isEnabled ? 'border-primary' : 'border-border'
                                 )}
                                 style={{ backgroundColor: color.hexCode || '#888' }}
                               >
                                 {isEnabled && (
-                                  <Check size={14} className="text-white drop-shadow-md" />
+                                  <Check size={10} className="text-white drop-shadow-md" />
                                 )}
                               </div>
                               <span className={cn(
-                                'text-xs truncate w-full text-center',
+                                'text-[10px] truncate w-full text-center leading-tight',
                                 isEnabled ? 'text-primary font-medium' : 'text-muted-foreground'
                               )}>
                                 {language === 'ar' ? color.valueAr : color.value}
