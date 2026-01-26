@@ -1,12 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useSizes, useColors, Size, Color } from '@/hooks/useVariantData';
+import { useSizes, useColors } from '@/hooks/useVariantData';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Barcode } from 'lucide-react';
+import { RefreshCw, ChevronRight, Check, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export interface VariantOption {
   id: string;
@@ -62,6 +63,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   const { language } = useLanguage();
   const { data: dbSizes = [], isLoading: sizesLoading } = useSizes();
   const { data: dbColors = [], isLoading: colorsLoading } = useColors();
+  const [activeSizeId, setActiveSizeId] = useState<string | null>(null);
 
   // Convert DB data to VariantOption format
   const sizes: VariantOption[] = dbSizes.map(s => ({
@@ -113,6 +115,54 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
       
       onVariantChange([...variants, newVariant]);
     }
+  };
+
+  // Add color for current size
+  const addColorForSize = (colorId: string) => {
+    if (!activeSizeId) return;
+    
+    // Add color to selected if not already
+    if (!selectedColors.includes(colorId) && onColorSelectionChange) {
+      onColorSelectionChange([...selectedColors, colorId]);
+    }
+    
+    // Create the variant
+    const existing = getVariant(colorId, activeSizeId);
+    if (!existing) {
+      const color = colors.find(c => c.id === colorId);
+      const size = sizes.find(s => s.id === activeSizeId);
+      
+      const newVariant: ProductVariant = {
+        id: `${colorId}-${activeSizeId}`,
+        colorId,
+        sizeId: activeSizeId,
+        sku: generateSKU(baseSku, color?.value || '', size?.value || ''),
+        barcode: generateBarcode(),
+        customBarcode: false,
+        stock: 0,
+        cost: baseCost,
+        price: basePrice,
+        enabled: true
+      };
+      
+      onVariantChange([...variants, newVariant]);
+    } else if (!existing.enabled) {
+      onVariantChange(variants.map(v => 
+        v.colorId === colorId && v.sizeId === activeSizeId
+          ? { ...v, enabled: true }
+          : v
+      ));
+    }
+  };
+
+  // Remove color for current size
+  const removeColorForSize = (colorId: string) => {
+    if (!activeSizeId) return;
+    onVariantChange(variants.map(v => 
+      v.colorId === colorId && v.sizeId === activeSizeId
+        ? { ...v, enabled: false }
+        : v
+    ));
   };
 
   // Update all variants when base price/cost changes
@@ -168,20 +218,26 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     if (!onSizeSelectionChange) return;
     if (selectedSizes.includes(sizeId)) {
       onSizeSelectionChange(selectedSizes.filter(id => id !== sizeId));
+      if (activeSizeId === sizeId) {
+        setActiveSizeId(null);
+      }
     } else {
       onSizeSelectionChange([...selectedSizes, sizeId]);
     }
   };
 
-  const toggleColor = (colorId: string) => {
-    if (!onColorSelectionChange) return;
-    if (selectedColors.includes(colorId)) {
-      onColorSelectionChange(selectedColors.filter(id => id !== colorId));
-    } else {
-      onColorSelectionChange([...selectedColors, colorId]);
-    }
+  // Get colors count for a specific size
+  const getColorsCountForSize = (sizeId: string) => {
+    return variants.filter(v => v.sizeId === sizeId && v.enabled).length;
   };
 
+  // Get enabled colors for active size
+  const getEnabledColorsForActiveSize = () => {
+    if (!activeSizeId) return [];
+    return variants.filter(v => v.sizeId === activeSizeId && v.enabled).map(v => v.colorId);
+  };
+
+  const enabledColorsForActiveSize = getEnabledColorsForActiveSize();
   const enabledCount = variants.filter(v => v.enabled).length;
 
   if (sizesLoading || colorsLoading) {
@@ -195,79 +251,148 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Size Selection */}
+      {/* Step 1: Size Selection */}
       <div className="space-y-3">
-        <h4 className="font-semibold text-foreground">
-          {language === 'ar' ? 'اختر المقاسات المتاحة' : 'Select Available Sizes'}
-        </h4>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs">
+            {language === 'ar' ? 'الخطوة 1' : 'Step 1'}
+          </Badge>
+          <h4 className="font-semibold text-foreground">
+            {language === 'ar' ? 'اختر المقاسات المتاحة' : 'Select Available Sizes'}
+          </h4>
+        </div>
         <div className="flex flex-wrap gap-2">
-          {sizes.map((size) => (
-            <button
-              key={size.id}
-              type="button"
-              onClick={() => toggleSize(size.id)}
-              className={cn(
-                'px-4 py-2 rounded-lg border-2 transition-all font-medium',
-                selectedSizes.includes(size.id)
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50'
-              )}
-            >
-              {size.value}
-            </button>
-          ))}
+          {sizes.map((size) => {
+            const isSelected = selectedSizes.includes(size.id);
+            const isActive = activeSizeId === size.id;
+            const colorsCount = getColorsCountForSize(size.id);
+            
+            return (
+              <button
+                key={size.id}
+                type="button"
+                onClick={() => {
+                  if (!isSelected) {
+                    toggleSize(size.id);
+                  }
+                  setActiveSizeId(size.id);
+                }}
+                className={cn(
+                  'relative px-4 py-3 rounded-xl border-2 transition-all font-medium min-w-[70px]',
+                  isActive
+                    ? 'border-primary bg-primary text-primary-foreground shadow-lg scale-105'
+                    : isSelected
+                    ? 'border-primary/50 bg-primary/10 text-primary'
+                    : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50'
+                )}
+              >
+                <span className="block text-lg">{size.value}</span>
+                {isSelected && (
+                  <span className={cn(
+                    'text-xs mt-1 block',
+                    isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                  )}>
+                    {colorsCount} {language === 'ar' ? 'لون' : 'colors'}
+                  </span>
+                )}
+                {isSelected && !isActive && (
+                  <Check size={14} className="absolute top-1 end-1 text-primary" />
+                )}
+                {isActive && (
+                  <ChevronRight size={16} className="absolute top-1/2 -translate-y-1/2 end-1" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Color Selection */}
-      <div className="space-y-3">
-        <h4 className="font-semibold text-foreground">
-          {language === 'ar' ? 'اختر الألوان المتاحة' : 'Select Available Colors'}
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {colors.map((color) => (
-            <button
-              key={color.id}
-              type="button"
-              onClick={() => toggleColor(color.id)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all',
-                selectedColors.includes(color.id)
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border bg-muted/30 hover:border-primary/50'
-              )}
-            >
-              <div
-                className="w-5 h-5 rounded-full border border-border"
-                style={{ backgroundColor: color.hexCode || '#888' }}
-              />
-              <span className={cn(
-                'font-medium',
-                selectedColors.includes(color.id) ? 'text-primary' : 'text-muted-foreground'
-              )}>
-                {language === 'ar' ? color.valueAr : color.value}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Matrix Table */}
-      {activeSizes.length > 0 && activeColors.length > 0 && (
-        <>
-          {/* Header */}
+      {/* Step 2: Color Selection for Active Size */}
+      {activeSizeId && (
+        <div className="space-y-3 p-4 bg-muted/30 rounded-xl border border-border">
           <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-foreground">
-              {language === 'ar' ? 'مصفوفة المتغيرات' : 'Variant Matrix'}
-            </h4>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>
-                {language === 'ar' ? 'المتغيرات النشطة:' : 'Active Variants:'}{' '}
-                <span className="font-semibold text-foreground">{enabledCount}</span>
-              </span>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {language === 'ar' ? 'الخطوة 2' : 'Step 2'}
+              </Badge>
+              <h4 className="font-semibold text-foreground">
+                {language === 'ar' ? 'اختر الألوان للمقاس' : 'Select Colors for Size'}
+                <Badge variant="default" className="ms-2">
+                  {sizes.find(s => s.id === activeSizeId)?.value}
+                </Badge>
+              </h4>
             </div>
+            <button
+              type="button"
+              onClick={() => setActiveSizeId(null)}
+              className="text-xs text-destructive hover:underline flex items-center gap-1"
+            >
+              <X size={14} />
+              {language === 'ar' ? 'إغلاق' : 'Close'}
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {colors.map((color) => {
+              const isEnabled = enabledColorsForActiveSize.includes(color.id);
+              const variant = getVariant(color.id, activeSizeId);
+              
+              return (
+                <button
+                  key={color.id}
+                  type="button"
+                  onClick={() => isEnabled ? removeColorForSize(color.id) : addColorForSize(color.id)}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-start',
+                    isEnabled
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border bg-background hover:border-primary/50'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'w-8 h-8 rounded-lg border-2 flex-shrink-0 flex items-center justify-center',
+                      isEnabled ? 'border-primary' : 'border-border'
+                    )}
+                    style={{ backgroundColor: color.hexCode || '#888' }}
+                  >
+                    {isEnabled && (
+                      <Check size={16} className="text-white drop-shadow-md" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      'font-medium truncate',
+                      isEnabled ? 'text-primary' : 'text-foreground'
+                    )}>
+                      {language === 'ar' ? color.valueAr : color.value}
+                    </p>
+                    {isEnabled && variant && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {variant.sku}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Summary & Matrix */}
+      {enabledCount > 0 && (
+        <>
+          <div className="flex items-center justify-between p-3 bg-success/10 rounded-lg border border-success/20">
+            <span className="text-sm font-medium text-foreground">
+              {language === 'ar' ? 'إجمالي المتغيرات النشطة' : 'Total Active Variants'}
+            </span>
+            <Badge variant="default" className="bg-success text-success-foreground">
+              {enabledCount}
+            </Badge>
           </div>
 
+          {/* Compact Matrix View */}
           <div className="overflow-x-auto border border-border rounded-lg">
             <table className="w-full text-sm">
               <thead>
@@ -286,41 +411,44 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {activeColors.map((color, colorIdx) => (
-                  <tr key={color.id} className={colorIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                    <td className="p-3 font-medium text-foreground border-e border-border">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-4 h-4 rounded-full border border-border"
-                          style={{ backgroundColor: color.hexCode || '#888' }}
-                        />
-                        {language === 'ar' ? color.valueAr : color.value}
-                      </div>
-                    </td>
-                    {activeSizes.map((size) => {
-                      const variant = getVariant(color.id, size.id);
-                      const isEnabled = variant?.enabled ?? false;
+                {activeColors.map((color, colorIdx) => {
+                  // Only show colors that have at least one enabled variant
+                  const hasEnabledVariants = activeSizes.some(size => {
+                    const v = getVariant(color.id, size.id);
+                    return v?.enabled;
+                  });
+                  
+                  if (!hasEnabledVariants) return null;
+                  
+                  return (
+                    <tr key={color.id} className={colorIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                      <td className="p-3 font-medium text-foreground border-e border-border">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-4 h-4 rounded-full border border-border"
+                            style={{ backgroundColor: color.hexCode || '#888' }}
+                          />
+                          {language === 'ar' ? color.valueAr : color.value}
+                        </div>
+                      </td>
+                      {activeSizes.map((size) => {
+                        const variant = getVariant(color.id, size.id);
+                        const isEnabled = variant?.enabled ?? false;
 
-                      return (
-                        <td key={size.id} className="p-2 border-e border-border last:border-e-0">
-                          <div className={cn(
-                            'p-2 rounded-lg border transition-all',
-                            isEnabled 
-                              ? 'border-primary/30 bg-primary/5' 
-                              : 'border-dashed border-border bg-muted/30'
-                          )}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Checkbox
-                                checked={isEnabled}
-                                onCheckedChange={() => toggleVariant(color.id, size.id)}
-                              />
-                              <span className="text-xs text-muted-foreground truncate">
-                                {variant?.sku || generateSKU(baseSku, color.value, size.value)}
-                              </span>
-                            </div>
-                            
-                            {isEnabled && variant && (
-                              <div className="space-y-2">
+                        return (
+                          <td key={size.id} className="p-2 border-e border-border last:border-e-0">
+                            {isEnabled && variant ? (
+                              <div className="p-2 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={true}
+                                    onCheckedChange={() => toggleVariant(color.id, size.id)}
+                                  />
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {variant.sku}
+                                  </span>
+                                </div>
+                                
                                 {/* Barcode */}
                                 <div>
                                   <label className="text-xs text-muted-foreground">
@@ -374,24 +502,28 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                                   />
                                 </div>
                               </div>
+                            ) : (
+                              <div className="p-4 rounded-lg border border-dashed border-border bg-muted/30 text-center">
+                                <span className="text-xs text-muted-foreground">-</span>
+                              </div>
                             )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </>
       )}
 
-      {(activeSizes.length === 0 || activeColors.length === 0) && (
+      {enabledCount === 0 && (
         <div className="text-center py-8 text-muted-foreground border-2 border-dashed border-border rounded-lg">
           {language === 'ar' 
-            ? 'اختر المقاسات والألوان لإنشاء مصفوفة المتغيرات'
-            : 'Select sizes and colors to create the variant matrix'
+            ? 'اختر مقاساً ثم حدد الألوان المتاحة له'
+            : 'Select a size then choose available colors for it'
           }
         </div>
       )}
