@@ -336,17 +336,34 @@ const Inventory: React.FC = () => {
         const enabledVariants = formData.variants.filter(v => v.enabled);
         
         if (enabledVariants.length > 0) {
-          const variantsToInsert = enabledVariants.map(v => ({
-            product_id: productId,
-            size_id: v.sizeId,
-            color_id: v.colorId,
-            sku: v.sku,
-            barcode: v.barcode,
-            stock: v.stock || 0,
-            price_adjustment: v.price - formData.price, // Store as adjustment from base price
-            cost_adjustment: v.cost - formData.cost,    // Store as adjustment from base cost
-            is_active: true
-          }));
+          // Track used barcodes to avoid duplicates
+          const usedBarcodes = new Set<string>();
+          
+          const variantsToInsert = enabledVariants.map(v => {
+            // Handle barcode - must be unique or null
+            let barcode: string | null = v.barcode?.trim() || null;
+            
+            // If barcode is empty or duplicate, set to null
+            if (barcode) {
+              if (usedBarcodes.has(barcode)) {
+                barcode = null; // Duplicate within batch, set to null
+              } else {
+                usedBarcodes.add(barcode);
+              }
+            }
+            
+            return {
+              product_id: productId,
+              size_id: v.sizeId || null,
+              color_id: v.colorId || null,
+              sku: v.sku,
+              barcode: barcode,
+              stock: v.stock || 0,
+              price_adjustment: v.price - formData.price, // Store as adjustment from base price
+              cost_adjustment: v.cost - formData.cost,    // Store as adjustment from base cost
+              is_active: true
+            };
+          });
 
           const { error: variantsError } = await supabase
             .from('product_variants')
