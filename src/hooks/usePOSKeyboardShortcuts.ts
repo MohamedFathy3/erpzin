@@ -58,6 +58,7 @@ export const getPOSShortcuts = (handlers: {
   onShowDelivery?: () => void;
   onShowReturns?: () => void;
   onShowShift?: () => void;
+  onShowVariants?: () => void;
   onGoHome?: () => void;
   onEscape?: () => void;
   onIncreaseQuantity?: () => void;
@@ -125,6 +126,13 @@ export const getPOSShortcuts = (handlers: {
     action: () => handlers.onFocusSearch?.(),
     description: 'Focus Search',
     descriptionAr: 'البحث'
+  },
+  // F10 - Variants selector
+  {
+    key: 'F10',
+    action: () => handlers.onShowVariants?.(),
+    description: 'Select Variants',
+    descriptionAr: 'اختيار المتغيرات'
   },
   // F12 - Home
   {

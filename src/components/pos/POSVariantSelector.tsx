@@ -320,9 +320,9 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                     return (
                       <div key={size?.id} className="border border-border rounded-xl overflow-hidden">
                         {/* Size Header */}
-                        <div className="flex items-center justify-between p-3 bg-muted/50">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="font-bold text-base px-3 py-1">
+                        <div className="flex items-center justify-between p-2 bg-muted/50">
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="font-medium text-xs px-2 py-0.5">
                               {language === 'ar' ? size?.name_ar || size?.name : size?.name}
                             </Badge>
                             {hasColors && (
@@ -334,7 +334,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                         </div>
                         
                         {/* Variants for this size */}
-                        <div className="p-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        <div className="p-2 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
                           {sizeVariants.map(({ variant, color, stock, price }) => {
                             const isSelected = isVariantSelected(variant.id);
                             const selectedData = getSelectedVariant(variant.id);
@@ -350,42 +350,42 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                   onClick={() => toggleVariant(variant, price)}
                                   disabled={isDisabled}
                                   className={cn(
-                                    'relative flex flex-col items-center p-3 rounded-lg border-2 transition-all',
+                                    'relative flex flex-col items-center p-1.5 rounded-md border transition-all',
                                     isDisabled
                                       ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
                                       : isSelected
-                                      ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
+                                      ? 'bg-primary/10 border-primary ring-1 ring-primary/30'
                                       : 'bg-background border-border hover:border-primary/50'
                                   )}
                                 >
                                   {isSelected && (
-                                    <div className="absolute top-1 end-1">
-                                      <Check size={14} className="text-primary" />
+                                    <div className="absolute top-0.5 end-0.5">
+                                      <Check size={10} className="text-primary" />
                                     </div>
                                   )}
                                   
-                                  <p className="text-sm font-medium text-foreground">
+                                  <p className="text-[10px] font-medium text-foreground">
                                     {t.select}
                                   </p>
                                   
                                   {/* Stock Badge */}
-                                  <Badge className={cn('text-[10px] mt-1 px-1.5', stockStatus.color)}>
+                                  <Badge className={cn('text-[8px] mt-0.5 px-1 py-0', stockStatus.color)}>
                                     {stockStatus.label}
                                   </Badge>
 
                                   {/* Quantity controls when selected */}
                                   {isSelected && selectedData && (
-                                    <div className="flex items-center gap-1 mt-2">
+                                    <div className="flex items-center gap-0.5 mt-1">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           updateQuantity(variant.id, -1);
                                         }}
-                                        className="w-6 h-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                        className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
                                       >
-                                        <Minus size={14} />
+                                        <Minus size={10} />
                                       </button>
-                                      <span className="text-sm font-bold min-w-[20px] text-center">
+                                      <span className="text-[10px] font-bold min-w-[14px] text-center">
                                         {selectedData.quantity}
                                       </span>
                                       <button
@@ -393,9 +393,9 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                           e.stopPropagation();
                                           updateQuantity(variant.id, 1);
                                         }}
-                                        className="w-6 h-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                        className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
                                       >
-                                        <Plus size={14} />
+                                        <Plus size={10} />
                                       </button>
                                     </div>
                                   )}
@@ -410,52 +410,52 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                 onClick={() => toggleVariant(variant, price)}
                                 disabled={isDisabled}
                                 className={cn(
-                                  'relative flex flex-col items-center p-2 rounded-lg border-2 transition-all',
+                                  'relative flex flex-col items-center p-1.5 rounded-md border transition-all',
                                   isDisabled
                                     ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
                                     : isSelected
-                                    ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
+                                    ? 'bg-primary/10 border-primary ring-1 ring-primary/30'
                                     : 'bg-background border-border hover:border-primary/50'
                                 )}
                               >
                                 {/* Color Swatch */}
                                 <div 
                                   className={cn(
-                                    "w-8 h-8 rounded-full border-2 flex-shrink-0 relative",
+                                    "w-5 h-5 rounded-full border flex-shrink-0 relative",
                                     isSelected ? "border-primary" : "border-border"
                                   )}
                                   style={{ backgroundColor: color.hex_code || '#ccc' }}
                                 >
                                   {isSelected && (
                                     <div className="absolute inset-0 flex items-center justify-center">
-                                      <Check size={16} className="text-white drop-shadow-lg" />
+                                      <Check size={10} className="text-white drop-shadow-lg" />
                                     </div>
                                   )}
                                 </div>
                                 
                                 {/* Color Name */}
-                                <p className="text-xs font-medium text-foreground truncate w-full text-center mt-1">
+                                <p className="text-[9px] font-medium text-foreground truncate w-full text-center mt-0.5">
                                   {language === 'ar' ? color.name_ar || color.name : color.name}
                                 </p>
                                 
                                 {/* Stock Badge */}
-                                <Badge className={cn('text-[10px] mt-1 px-1.5', stockStatus.color)}>
+                                <Badge className={cn('text-[8px] mt-0.5 px-1 py-0', stockStatus.color)}>
                                   {stockStatus.label}
                                 </Badge>
 
                                 {/* Quantity controls when selected */}
                                 {isSelected && selectedData && (
-                                  <div className="flex items-center gap-1 mt-1">
+                                  <div className="flex items-center gap-0.5 mt-0.5">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         updateQuantity(variant.id, -1);
                                       }}
-                                      className="w-5 h-5 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                      className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
                                     >
-                                      <Minus size={12} />
+                                      <Minus size={8} />
                                     </button>
-                                    <span className="text-xs font-bold min-w-[16px] text-center">
+                                    <span className="text-[9px] font-bold min-w-[12px] text-center">
                                       {selectedData.quantity}
                                     </span>
                                     <button
@@ -463,9 +463,9 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                         e.stopPropagation();
                                         updateQuantity(variant.id, 1);
                                       }}
-                                      className="w-5 h-5 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                      className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
                                     >
-                                      <Plus size={12} />
+                                      <Plus size={8} />
                                     </button>
                                   </div>
                                 )}
