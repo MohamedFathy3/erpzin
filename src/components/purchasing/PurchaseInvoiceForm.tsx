@@ -17,19 +17,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { 
-  FileText, Plus, Trash2, Package, Search, Building2, 
-  Warehouse, CreditCard, Calendar, Loader2
+  FileText, Trash2, Package, Search, Building2, 
+  Warehouse, CreditCard, Calendar, Loader2, Layers
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import PurchaseVariantSelector from './PurchaseVariantSelector';
 
 interface InvoiceItem {
   id: string;
   product_id: string;
+  product_variant_id?: string;
   product_name: string;
   product_sku: string;
+  size_name?: string;
+  color_name?: string;
   quantity: number;
   unit_cost: number;
   discount_percent: number;
@@ -55,6 +59,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [variantProduct, setVariantProduct] = useState<any>(null);
   
   const [formData, setFormData] = useState({
     supplier_id: '',
@@ -157,8 +162,17 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     (p.barcode && p.barcode.includes(searchQuery))
   );
 
+  const handleProductClick = (product: any) => {
+    if (product.has_variants) {
+      setVariantProduct(product);
+    } else {
+      addProduct(product);
+    }
+    setSearchQuery('');
+  };
+
   const addProduct = (product: any) => {
-    const existingIndex = items.findIndex(item => item.product_id === product.id);
+    const existingIndex = items.findIndex(item => item.product_id === product.id && !item.product_variant_id);
     
     if (existingIndex >= 0) {
       const newItems = [...items];
@@ -181,7 +195,44 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       };
       setItems([...items, newItem]);
     }
-    setSearchQuery('');
+  };
+
+  const addVariant = (variant: {
+    product_id: string;
+    variant_id: string;
+    product_name: string;
+    product_sku: string;
+    unit_cost: number;
+    size_name?: string;
+    color_name?: string;
+  }) => {
+    const existingIndex = items.findIndex(item => item.product_variant_id === variant.variant_id);
+    
+    if (existingIndex >= 0) {
+      const newItems = [...items];
+      newItems[existingIndex].quantity += 1;
+      recalculateItem(newItems, existingIndex);
+      setItems(newItems);
+    } else {
+      const newItem: InvoiceItem = {
+        id: crypto.randomUUID(),
+        product_id: variant.product_id,
+        product_variant_id: variant.variant_id,
+        product_name: variant.product_name,
+        product_sku: variant.product_sku,
+        size_name: variant.size_name,
+        color_name: variant.color_name,
+        quantity: 1,
+        unit_cost: variant.unit_cost,
+        discount_percent: 0,
+        discount_amount: 0,
+        tax_percent: 0,
+        tax_amount: 0,
+        total_cost: variant.unit_cost
+      };
+      setItems([...items, newItem]);
+    }
+    setVariantProduct(null);
   };
 
   const recalculateItem = (itemsArray: InvoiceItem[], index: number) => {
@@ -276,6 +327,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       const invoiceItems = items.map(item => ({
         invoice_id: invoice.id,
         product_id: item.product_id,
+        product_variant_id: item.product_variant_id || null,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
         discount_percent: item.discount_percent,
@@ -291,45 +343,61 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
       if (itemsError) throw itemsError;
 
-      // Update product stock and calculate weighted average cost
+      // Update stock for each item
       for (const item of items) {
-        const product = products.find(p => p.id === item.product_id);
-        if (product) {
-          const currentStock = product.stock || 0;
-          const currentAvgCost = Number(product.average_cost) || Number(product.cost) || 0;
-          const newQuantity = item.quantity;
-          const newCost = item.unit_cost;
+        if (item.product_variant_id) {
+          // Update variant stock
+          const { data: variant } = await supabase
+            .from('product_variants')
+            .select('stock')
+            .eq('id', item.product_variant_id)
+            .single();
+          
+          if (variant) {
+            await supabase
+              .from('product_variants')
+              .update({ stock: variant.stock + item.quantity })
+              .eq('id', item.product_variant_id);
+          }
+        } else {
+          // Update product stock
+          const product = products.find(p => p.id === item.product_id);
+          if (product) {
+            const currentStock = product.stock || 0;
+            const currentAvgCost = Number(product.average_cost) || Number(product.cost) || 0;
+            const newQuantity = item.quantity;
+            const newCost = item.unit_cost;
 
-          // Calculate weighted average cost
-          const totalValue = (currentStock * currentAvgCost) + (newQuantity * newCost);
-          const newTotalStock = currentStock + newQuantity;
-          const newAvgCost = newTotalStock > 0 ? totalValue / newTotalStock : newCost;
+            // Calculate weighted average cost
+            const totalValue = (currentStock * currentAvgCost) + (newQuantity * newCost);
+            const newTotalStock = currentStock + newQuantity;
+            const newAvgCost = newTotalStock > 0 ? totalValue / newTotalStock : newCost;
 
-          // Update product
-          await supabase
-            .from('products')
-            .update({
-              stock: newTotalStock,
-              average_cost: newAvgCost,
-              cost: newCost // Update last cost
-            })
-            .eq('id', item.product_id);
-
-          // Create inventory movement
-          await supabase
-            .from('inventory_movements')
-            .insert({
-              product_id: item.product_id,
-              warehouse_id: formData.warehouse_id,
-              movement_type: 'purchase',
-              quantity: newQuantity,
-              previous_stock: currentStock,
-              new_stock: newTotalStock,
-              reference_type: 'purchase_invoice',
-              reference_id: invoice.id,
-              notes: `فاتورة شراء رقم ${invoiceNumber}`
-            });
+            await supabase
+              .from('products')
+              .update({
+                stock: newTotalStock,
+                average_cost: newAvgCost,
+                cost: newCost
+              })
+              .eq('id', item.product_id);
+          }
         }
+
+        // Create inventory movement
+        await supabase
+          .from('inventory_movements')
+          .insert({
+            product_id: item.product_id,
+            warehouse_id: formData.warehouse_id,
+            movement_type: 'purchase',
+            quantity: item.quantity,
+            previous_stock: 0,
+            new_stock: item.quantity,
+            reference_type: 'purchase_invoice',
+            reference_id: invoice.id,
+            notes: `فاتورة شراء رقم ${invoiceNumber}`
+          });
       }
 
       // Update supplier balance if credit
@@ -343,7 +411,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           .update({ balance: newBalance })
           .eq('id', formData.supplier_id);
 
-        // Create supplier transaction
         await supabase
           .from('supplier_transactions')
           .insert({
@@ -365,13 +432,13 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           : `Purchase invoice ${invoiceNumber} created`
       });
 
-      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
+      queryClient.invalidateQueries({ queryKey: ['product-variants'] });
 
       onSave();
       onClose();
@@ -389,376 +456,394 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const totals = calculateTotals();
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[95vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="p-6 pb-4 border-b">
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <FileText className="text-primary" size={24} />
-            {language === 'ar' ? 'فاتورة شراء جديدة' : 'New Purchase Invoice'}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-5xl max-h-[95vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-4 pb-3 border-b">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <FileText className="text-primary" size={20} />
+              {language === 'ar' ? 'فاتورة شراء جديدة' : 'New Purchase Invoice'}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Header Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Supplier */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Building2 size={14} />
-                {language === 'ar' ? 'المورد' : 'Supplier'} *
-              </Label>
-              <Select 
-                value={formData.supplier_id} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, supplier_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر المورد' : 'Select supplier'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s: any) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {language === 'ar' ? s.name_ar || s.name : s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Branch */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
-              <Select 
-                value={formData.branch_id} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, branch_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b: any) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {language === 'ar' ? b.name_ar || b.name : b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Warehouse */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Warehouse size={14} />
-                {language === 'ar' ? 'المستودع' : 'Warehouse'} *
-              </Label>
-              <Select 
-                value={formData.warehouse_id} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, warehouse_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر المستودع' : 'Select warehouse'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((w: any) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {language === 'ar' ? w.name_ar || w.name : w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <CreditCard size={14} />
-                {language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}
-              </Label>
-              <Select 
-                value={formData.payment_method} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentMethods.length > 0 ? (
-                    paymentMethods.map((method) => (
-                      <SelectItem key={method.code} value={method.code}>
-                        {language === 'ar' ? method.name_ar : method.name}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Header Info */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Supplier */}
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1">
+                  <Building2 size={12} />
+                  {language === 'ar' ? 'المورد' : 'Supplier'} *
+                </Label>
+                <Select 
+                  value={formData.supplier_id} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, supplier_id: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {language === 'ar' ? s.name_ar || s.name : s.name}
                       </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                      <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
-                      <SelectItem value="bank_transfer">{language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer'}</SelectItem>
-                      <SelectItem value="check">{language === 'ar' ? 'شيك' : 'Check'}</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Currency Selection */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
-              <Select 
-                value={formData.currency_id} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.id} value={currency.id}>
-                      {getCurrencyName(currency)} ({currency.symbol})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Branch */}
+              <div className="space-y-1">
+                <Label className="text-xs">{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                <Select 
+                  value={formData.branch_id} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, branch_id: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b: any) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {language === 'ar' ? b.name_ar || b.name : b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Tax Rate Selection */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'معدل الضريبة' : 'Tax Rate'}</Label>
-              <Select 
-                value={formData.tax_rate_id} 
-                onValueChange={(v) => setFormData(prev => ({ ...prev, tax_rate_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر الضريبة' : 'Select tax rate'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {taxRates.map((rate) => (
-                    <SelectItem key={rate.id} value={rate.id}>
-                      {getTaxRateName(rate)} ({rate.rate}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              {/* Warehouse */}
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1">
+                  <Warehouse size={12} />
+                  {language === 'ar' ? 'المستودع' : 'Warehouse'} *
+                </Label>
+                <Select 
+                  value={formData.warehouse_id} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, warehouse_id: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w: any) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {language === 'ar' ? w.name_ar || w.name : w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Invoice Date */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Calendar size={14} />
-                {language === 'ar' ? 'تاريخ الفاتورة' : 'Invoice Date'}
-              </Label>
-              <Input
-                type="date"
-                value={formData.invoice_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, invoice_date: e.target.value }))}
-              />
-            </div>
+              {/* Payment Method */}
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1">
+                  <CreditCard size={12} />
+                  {language === 'ar' ? 'الدفع' : 'Payment'}
+                </Label>
+                <Select 
+                  value={formData.payment_method} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentMethods.length > 0 ? (
+                      paymentMethods.map((method) => (
+                        <SelectItem key={method.code} value={method.code}>
+                          {language === 'ar' ? method.name_ar : method.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <>
+                        <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                        <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Due Date */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
-              <Input
-                type="date"
-                value={formData.due_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          {/* Product Search */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Package size={18} />
-                {language === 'ar' ? 'المنتجات' : 'Products'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              {/* Invoice Date */}
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1">
+                  <Calendar size={12} />
+                  {language === 'ar' ? 'التاريخ' : 'Date'}
+                </Label>
                 <Input
-                  placeholder={language === 'ar' ? 'بحث بالاسم أو SKU أو الباركود...' : 'Search by name, SKU, or barcode...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="ps-10"
+                  type="date"
+                  value={formData.invoice_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, invoice_date: e.target.value }))}
+                  className="h-8 text-sm"
                 />
               </div>
 
-              {/* Search Results */}
-              {searchQuery && (
-                <div className="border rounded-lg max-h-40 overflow-y-auto">
-                  {filteredProducts.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">
-                      {language === 'ar' ? 'لا توجد نتائج' : 'No results'}
-                    </div>
-                  ) : (
-                    filteredProducts.slice(0, 10).map(product => (
-                      <div
-                        key={product.id}
-                        onClick={() => addProduct(product)}
-                        className="flex items-center justify-between p-3 hover:bg-muted/50 cursor-pointer border-b last:border-b-0"
-                      >
-                        <div>
-                          <p className="font-medium">
-                            {language === 'ar' ? product.name_ar || product.name : product.name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{product.sku}</p>
-                        </div>
-                        <div className="text-end">
-                          <p className="font-semibold">{Number(product.cost || 0).toLocaleString()} YER</p>
-                          <p className="text-xs text-muted-foreground">
-                            {language === 'ar' ? 'المخزون:' : 'Stock:'} {product.stock}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
+              {/* Due Date */}
+              <div className="space-y-1">
+                <Label className="text-xs">{language === 'ar' ? 'الاستحقاق' : 'Due'}</Label>
+                <Input
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+              </div>
 
-              {/* Items Table */}
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-8">#</TableHead>
-                      <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                      <TableHead className="w-24">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                      <TableHead className="w-28">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
-                      <TableHead className="w-20">{language === 'ar' ? 'خصم %' : 'Disc %'}</TableHead>
-                      <TableHead className="w-20">{language === 'ar' ? 'ضريبة %' : 'Tax %'}</TableHead>
-                      <TableHead className="w-28 text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          {language === 'ar' ? 'لم يتم إضافة منتجات بعد' : 'No products added yet'}
-                        </TableCell>
-                      </TableRow>
+              {/* Currency */}
+              <div className="space-y-1">
+                <Label className="text-xs">{language === 'ar' ? 'العملة' : 'Currency'}</Label>
+                <Select 
+                  value={formData.currency_id} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.id} value={currency.id}>
+                        {currency.symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tax Rate */}
+              <div className="space-y-1">
+                <Label className="text-xs">{language === 'ar' ? 'الضريبة' : 'Tax'}</Label>
+                <Select 
+                  value={formData.tax_rate_id} 
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, tax_rate_id: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {taxRates.map((rate) => (
+                      <SelectItem key={rate.id} value={rate.id}>
+                        {rate.rate}%
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Product Search */}
+            <Card>
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Package size={14} />
+                  {language === 'ar' ? 'المنتجات' : 'Products'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0 space-y-3">
+                <div className="relative">
+                  <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                  <Input
+                    placeholder={language === 'ar' ? 'بحث...' : 'Search...'}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="ps-8 h-8 text-sm"
+                  />
+                </div>
+
+                {/* Search Results */}
+                {searchQuery && (
+                  <div className="border rounded-lg max-h-32 overflow-y-auto">
+                    {filteredProducts.length === 0 ? (
+                      <div className="p-3 text-center text-muted-foreground text-sm">
+                        {language === 'ar' ? 'لا توجد نتائج' : 'No results'}
+                      </div>
                     ) : (
-                      items.map((item, index) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>
+                      filteredProducts.slice(0, 10).map(product => (
+                        <div
+                          key={product.id}
+                          onClick={() => handleProductClick(product)}
+                          className="flex items-center justify-between p-2 hover:bg-muted/50 cursor-pointer border-b last:border-b-0"
+                        >
+                          <div className="flex items-center gap-2">
+                            {product.has_variants && (
+                              <Layers size={12} className="text-primary" />
+                            )}
                             <div>
-                              <p className="font-medium">{item.product_name}</p>
-                              <p className="text-xs text-muted-foreground">{item.product_sku}</p>
+                              <p className="font-medium text-sm">
+                                {language === 'ar' ? product.name_ar || product.name : product.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{product.sku}</p>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                              className="w-20 h-8"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={item.unit_cost}
-                              onChange={(e) => updateItem(index, 'unit_cost', Number(e.target.value))}
-                              className="w-24 h-8"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={item.discount_percent}
-                              onChange={(e) => updateItem(index, 'discount_percent', Number(e.target.value))}
-                              className="w-16 h-8"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={item.tax_percent}
-                              onChange={(e) => updateItem(index, 'tax_percent', Number(e.target.value))}
-                              className="w-16 h-8"
-                            />
-                          </TableCell>
-                          <TableCell className="text-end font-semibold">
-                            {item.total_cost.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => removeItem(index)}
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                          </div>
+                          <div className="text-end">
+                            <p className="font-semibold text-sm">{Number(product.cost || 0).toLocaleString()}</p>
+                            {product.has_variants && (
+                              <Badge variant="outline" className="text-[9px] px-1">
+                                {language === 'ar' ? 'متغيرات' : 'Variants'}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       ))
                     )}
-                  </TableBody>
-                </Table>
-              </div>
+                  </div>
+                )}
 
-              {/* Totals */}
-              <div className="flex justify-end">
-                <div className="w-72 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{language === 'ar' ? 'المجموع' : 'Subtotal'}</span>
-                    <span>{formatAmount(totals.subtotal, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{language === 'ar' ? 'الخصم' : 'Discount'}</span>
-                    <span className="text-destructive">-{formatAmount(totals.totalDiscount, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'}</span>
-                    <span>+{formatAmount(totals.totalTax, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t font-bold text-lg">
-                    <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                    <span className="text-primary">{formatAmount(totals.total, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
+                {/* Items Table */}
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <TableHead className="w-8 py-2 text-xs">#</TableHead>
+                        <TableHead className="py-2 text-xs">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                        <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                        <TableHead className="w-20 py-2 text-xs text-center">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                        <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'خصم%' : 'Disc%'}</TableHead>
+                        <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'ضريبة%' : 'Tax%'}</TableHead>
+                        <TableHead className="w-20 py-2 text-xs text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                        <TableHead className="w-8 py-2"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-sm">
+                            {language === 'ar' ? 'لم يتم إضافة منتجات' : 'No products added'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        items.map((item, index) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="py-1.5 text-xs text-center">{index + 1}</TableCell>
+                            <TableCell className="py-1.5">
+                              <div>
+                                <p className="font-medium text-xs">{item.product_name}</p>
+                                <p className="text-[10px] text-muted-foreground">{item.product_sku}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-1.5 text-center">
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                                className="w-14 h-7 text-xs text-center mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5 text-center">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={item.unit_cost}
+                                onChange={(e) => updateItem(index, 'unit_cost', Number(e.target.value))}
+                                className="w-18 h-7 text-xs text-center mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5 text-center">
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={item.discount_percent}
+                                onChange={(e) => updateItem(index, 'discount_percent', Number(e.target.value))}
+                                className="w-12 h-7 text-xs text-center mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5 text-center">
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={item.tax_percent}
+                                onChange={(e) => updateItem(index, 'tax_percent', Number(e.target.value))}
+                                className="w-12 h-7 text-xs text-center mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5 text-end font-semibold text-xs">
+                              {item.total_cost.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                onClick={() => removeItem(index)}
+                              >
+                                <Trash2 size={12} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-56 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'المجموع' : 'Subtotal'}</span>
+                      <span>{totals.subtotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'الخصم' : 'Discount'}</span>
+                      <span className="text-destructive">-{totals.totalDiscount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'}</span>
+                      <span>+{totals.totalTax.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between pt-1.5 border-t font-bold">
+                      <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
+                      <span className="text-primary">{totals.total.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-            <Textarea
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'}
-              rows={2}
-            />
+            {/* Notes */}
+            <div className="space-y-1">
+              <Label className="text-xs">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+              <Textarea
+                value={formData.notes}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder={language === 'ar' ? 'ملاحظات...' : 'Notes...'}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
           </div>
-        </div>
 
-        <DialogFooter className="p-6 pt-4 border-t bg-muted/30">
-          <Button variant="outline" onClick={onClose}>
-            {language === 'ar' ? 'إلغاء' : 'Cancel'}
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading} className="min-w-32">
-            {loading ? (
-              <>
-                <Loader2 size={16} className="me-2 animate-spin" />
-                {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
-              </>
-            ) : (
-              language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter className="p-4 pt-3 border-t bg-muted/30">
+            <Button variant="outline" onClick={onClose} size="sm">
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={handleSubmit} disabled={loading} size="sm" className="min-w-24">
+              {loading ? (
+                <>
+                  <Loader2 size={14} className="me-1.5 animate-spin" />
+                  {language === 'ar' ? 'جاري...' : 'Saving...'}
+                </>
+              ) : (
+                language === 'ar' ? 'حفظ' : 'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Variant Selector */}
+      {variantProduct && (
+        <PurchaseVariantSelector
+          isOpen={!!variantProduct}
+          onClose={() => setVariantProduct(null)}
+          product={variantProduct}
+          onSelectVariant={addVariant}
+        />
+      )}
+    </>
   );
 };
 
