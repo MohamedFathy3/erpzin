@@ -245,20 +245,28 @@ const POS: React.FC = () => {
     });
   };
 
-  const updateQuantity = (id: string, quantity: number) => {
+  const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
     if (quantity < 1) {
-      setCartItems(prev => prev.filter(item => item.id !== id));
+      removeItem(itemKey, variantId);
     } else {
       setCartItems(prev =>
-        prev.map(item =>
-          item.id === id ? { ...item, quantity } : item
-        )
+        prev.map(item => {
+          const match = variantId 
+            ? item.variantId === variantId 
+            : item.id === itemKey && !item.variantId;
+          return match ? { ...item, quantity } : item;
+        })
       );
     }
   };
 
-  const removeItem = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
+  const removeItem = (itemKey: string, variantId?: string) => {
+    setCartItems(prev => prev.filter(item => {
+      if (variantId) {
+        return item.variantId !== variantId;
+      }
+      return !(item.id === itemKey && !item.variantId);
+    }));
   };
 
   const clearCart = () => {
