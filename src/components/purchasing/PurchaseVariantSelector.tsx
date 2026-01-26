@@ -78,38 +78,40 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
     enabled: isOpen
   });
 
-  // Extract unique sizes
+  // Extract unique sizes with their variants (colors are optional)
   const sizes = useMemo(() => {
     if (!variants) return [];
     const sizeMap = new Map();
     variants.forEach(v => {
       if (v.size && !sizeMap.has(v.size.id)) {
-        const colorsForSize = variants.filter(
+        const variantsForSize = variants.filter(
           variant => variant.size?.id === v.size?.id
-        ).length;
+        );
+        const hasColors = variantsForSize.some(variant => variant.color);
         sizeMap.set(v.size.id, { 
           ...v.size, 
-          colorCount: colorsForSize
+          variantCount: variantsForSize.length,
+          hasColors
         });
       }
     });
     return Array.from(sizeMap.values());
   }, [variants]);
 
-  // Get colors available for selected size
-  const colorsForSelectedSize = useMemo(() => {
+  // Get variants available for selected size (with or without colors)
+  const variantsForSelectedSize = useMemo(() => {
     if (!variants || !selectedSize) return [];
     return variants
-      .filter(v => v.size?.id === selectedSize && v.color)
+      .filter(v => v.size?.id === selectedSize)
       .map(v => ({
         variant: v,
-        color: v.color!,
+        color: v.color,
         stock: v.stock,
         cost: (product.cost || 0) + (v.cost_adjustment || 0)
       }));
   }, [variants, selectedSize, product.cost]);
 
-  const handleColorSelect = (variant: ProductVariant) => {
+  const handleVariantSelect = (variant: ProductVariant) => {
     const sizeName = variant.size 
       ? (language === 'ar' ? variant.size.name_ar || variant.size.name : variant.size.name)
       : undefined;
@@ -184,20 +186,20 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                   >
                     <span>{language === 'ar' ? size.name_ar || size.name : size.name}</span>
                     <span className="block text-[10px] text-muted-foreground mt-0.5">
-                      {size.colorCount} {language === 'ar' ? 'لون' : 'colors'}
+                      {size.variantCount} {language === 'ar' ? (size.hasColors ? 'لون' : 'متغير') : (size.hasColors ? 'colors' : 'variant')}
                     </span>
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            /* Step 2: Color Selection */
+            /* Step 2: Variant Selection */
             <div className="space-y-3">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">2</Badge>
                   <span className="text-xs font-medium text-foreground">
-                    {language === 'ar' ? 'اختر اللون' : 'Select Color'}
+                    {language === 'ar' ? 'اختر المتغير' : 'Select Variant'}
                   </span>
                 </div>
                 <button
@@ -221,27 +223,36 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                 </Badge>
               </div>
 
-              {/* Colors Grid */}
+              {/* Variants Grid */}
               <div className="grid grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto">
-                {colorsForSelectedSize.map(({ variant, color, stock, cost }) => (
+                {variantsForSelectedSize.map(({ variant, color, stock, cost }) => (
                   <button
                     key={variant.id}
-                    onClick={() => handleColorSelect(variant)}
+                    onClick={() => handleVariantSelect(variant)}
                     className={cn(
                       'flex items-center gap-2 p-2 rounded-lg border transition-all text-start',
                       'bg-background border-border hover:border-primary hover:bg-primary/5'
                     )}
                   >
-                    {/* Color Swatch */}
-                    <div 
-                      className="w-6 h-6 rounded border border-border flex-shrink-0"
-                      style={{ backgroundColor: color.hex_code || '#ccc' }}
-                    />
+                    {/* Color Swatch (if color exists) */}
+                    {color ? (
+                      <div 
+                        className="w-6 h-6 rounded border border-border flex-shrink-0"
+                        style={{ backgroundColor: color.hex_code || '#ccc' }}
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded border border-border flex-shrink-0 bg-muted flex items-center justify-center">
+                        <Package size={12} className="text-muted-foreground" />
+                      </div>
+                    )}
                     
-                    {/* Color Info */}
+                    {/* Variant Info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-xs text-foreground truncate">
-                        {language === 'ar' ? color.name_ar || color.name : color.name}
+                        {color 
+                          ? (language === 'ar' ? color.name_ar || color.name : color.name)
+                          : (language === 'ar' ? 'افتراضي' : 'Default')
+                        }
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[10px] text-muted-foreground">
