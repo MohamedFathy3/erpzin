@@ -312,80 +312,115 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
           ) : (
             <>
               {/* Size-Color Matrix */}
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
+              <ScrollArea className="flex-1 p-3">
+                <div className="space-y-2">
                   {sizeColorMatrix.map(({ size, variants: sizeVariants, hasColors }) => {
                     const availableCount = sizeVariants.filter(v => v.stock > 0).length;
                     
                     return (
-                      <div key={size?.id} className="border border-border rounded-xl overflow-hidden">
-                        {/* Size Header */}
-                        <div className="flex items-center justify-between p-2 bg-muted/50">
-                          <div className="flex items-center gap-1.5">
-                            <Badge variant="outline" className="font-medium text-xs px-2 py-0.5">
-                              {language === 'ar' ? size?.name_ar || size?.name : size?.name}
-                            </Badge>
+                      <div key={size?.id} className="border border-border rounded-lg overflow-hidden">
+                        {/* Size Header - Inline with colors */}
+                        <div className="flex items-center gap-2 p-2 bg-muted/30 flex-wrap">
+                          {/* Size Badge */}
+                          <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 shrink-0">
+                            {language === 'ar' ? size?.name_ar || size?.name : size?.name}
                             {hasColors && (
-                              <span className="text-xs text-muted-foreground">
-                                ({availableCount}/{sizeVariants.length} {t.colors})
+                              <span className="text-muted-foreground font-normal ms-1">
+                                ({availableCount}/{sizeVariants.length})
                               </span>
                             )}
-                          </div>
-                        </div>
-                        
-                        {/* Variants for this size */}
-                        <div className="p-2 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1.5">
-                          {sizeVariants.map(({ variant, color, stock, price }) => {
-                            const isSelected = isVariantSelected(variant.id);
-                            const selectedData = getSelectedVariant(variant.id);
-                            const stockStatus = getStockStatus(stock);
-                            const isOutOfStock = stock === 0;
-                            const isDisabled = isOutOfStock && !allowNegativeStock;
-                            
-                            // If no color, show a simple "select" button for this size
-                            if (!color) {
+                          </Badge>
+                          
+                          {/* Color swatches inline */}
+                          <div className="flex items-center gap-1 flex-wrap flex-1">
+                            {sizeVariants.map(({ variant, color, stock, price }) => {
+                              const isSelected = isVariantSelected(variant.id);
+                              const selectedData = getSelectedVariant(variant.id);
+                              const stockStatus = getStockStatus(stock);
+                              const isOutOfStock = stock === 0;
+                              const isDisabled = isOutOfStock && !allowNegativeStock;
+                              
+                              // If no color, show a simple chip
+                              if (!color) {
+                                return (
+                                  <button
+                                    key={variant.id}
+                                    onClick={() => toggleVariant(variant, price)}
+                                    disabled={isDisabled}
+                                    className={cn(
+                                      'relative flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-all',
+                                      isDisabled
+                                        ? 'bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50'
+                                        : isSelected
+                                        ? 'bg-primary text-primary-foreground ring-2 ring-primary/30'
+                                        : 'bg-background border border-border hover:border-primary/50'
+                                    )}
+                                  >
+                                    {t.noColor}
+                                    <span className={cn('text-[8px] px-1 rounded', stockStatus.color)}>
+                                      {stockStatus.label}
+                                    </span>
+                                    {isSelected && selectedData && (
+                                      <span className="font-bold">×{selectedData.quantity}</span>
+                                    )}
+                                  </button>
+                                );
+                              }
+                              
+                              // With color - compact swatch
                               return (
                                 <button
                                   key={variant.id}
                                   onClick={() => toggleVariant(variant, price)}
                                   disabled={isDisabled}
+                                  title={`${language === 'ar' ? color.name_ar || color.name : color.name} (${stockStatus.label})`}
                                   className={cn(
-                                    'relative flex flex-col items-center p-1.5 rounded-md border transition-all',
+                                    'relative flex items-center gap-1 px-1.5 py-0.5 rounded-full transition-all',
                                     isDisabled
-                                      ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
+                                      ? 'opacity-40 cursor-not-allowed'
                                       : isSelected
-                                      ? 'bg-primary/10 border-primary ring-1 ring-primary/30'
-                                      : 'bg-background border-border hover:border-primary/50'
+                                      ? 'ring-2 ring-primary ring-offset-1'
+                                      : 'hover:ring-1 hover:ring-primary/50'
                                   )}
                                 >
-                                  {isSelected && (
-                                    <div className="absolute top-0.5 end-0.5">
-                                      <Check size={10} className="text-primary" />
-                                    </div>
-                                  )}
+                                  {/* Color Circle with stock indicator */}
+                                  <div 
+                                    className={cn(
+                                      "w-6 h-6 rounded-full border-2 flex items-center justify-center relative",
+                                      isOutOfStock ? "border-destructive/50" : 
+                                      stock <= 5 ? "border-warning/50" : "border-transparent",
+                                      isSelected && "border-primary"
+                                    )}
+                                    style={{ backgroundColor: color.hex_code || '#ccc' }}
+                                  >
+                                    {isSelected && (
+                                      <Check size={12} className="text-white drop-shadow-md" />
+                                    )}
+                                    {/* Stock indicator dot */}
+                                    <span 
+                                      className={cn(
+                                        "absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full border border-background text-[6px] flex items-center justify-center font-bold",
+                                        isOutOfStock ? "bg-destructive text-destructive-foreground" :
+                                        stock <= 5 ? "bg-warning text-warning-foreground" : "bg-success text-success-foreground"
+                                      )}
+                                    >
+                                      {!isOutOfStock && stock <= 9 ? stock : ''}
+                                    </span>
+                                  </div>
                                   
-                                  <p className="text-[10px] font-medium text-foreground">
-                                    {t.select}
-                                  </p>
-                                  
-                                  {/* Stock Badge */}
-                                  <Badge className={cn('text-[8px] mt-0.5 px-1 py-0', stockStatus.color)}>
-                                    {stockStatus.label}
-                                  </Badge>
-
-                                  {/* Quantity controls when selected */}
+                                  {/* Quantity badge when selected */}
                                   {isSelected && selectedData && (
-                                    <div className="flex items-center gap-0.5 mt-1">
+                                    <div className="flex items-center bg-primary/10 rounded-full px-1">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           updateQuantity(variant.id, -1);
                                         }}
-                                        className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                        className="w-4 h-4 flex items-center justify-center hover:bg-primary/20 rounded-full"
                                       >
-                                        <Minus size={10} />
+                                        <Minus size={8} />
                                       </button>
-                                      <span className="text-[10px] font-bold min-w-[14px] text-center">
+                                      <span className="text-[10px] font-bold min-w-[12px] text-center">
                                         {selectedData.quantity}
                                       </span>
                                       <button
@@ -393,85 +428,16 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                           e.stopPropagation();
                                           updateQuantity(variant.id, 1);
                                         }}
-                                        className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
+                                        className="w-4 h-4 flex items-center justify-center hover:bg-primary/20 rounded-full"
                                       >
-                                        <Plus size={10} />
+                                        <Plus size={8} />
                                       </button>
                                     </div>
                                   )}
                                 </button>
                               );
-                            }
-                            
-                            // With color - show color swatch
-                            return (
-                              <button
-                                key={variant.id}
-                                onClick={() => toggleVariant(variant, price)}
-                                disabled={isDisabled}
-                                className={cn(
-                                  'relative flex flex-col items-center p-1.5 rounded-md border transition-all',
-                                  isDisabled
-                                    ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
-                                    : isSelected
-                                    ? 'bg-primary/10 border-primary ring-1 ring-primary/30'
-                                    : 'bg-background border-border hover:border-primary/50'
-                                )}
-                              >
-                                {/* Color Swatch */}
-                                <div 
-                                  className={cn(
-                                    "w-5 h-5 rounded-full border flex-shrink-0 relative",
-                                    isSelected ? "border-primary" : "border-border"
-                                  )}
-                                  style={{ backgroundColor: color.hex_code || '#ccc' }}
-                                >
-                                  {isSelected && (
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                      <Check size={10} className="text-white drop-shadow-lg" />
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                {/* Color Name */}
-                                <p className="text-[9px] font-medium text-foreground truncate w-full text-center mt-0.5">
-                                  {language === 'ar' ? color.name_ar || color.name : color.name}
-                                </p>
-                                
-                                {/* Stock Badge */}
-                                <Badge className={cn('text-[8px] mt-0.5 px-1 py-0', stockStatus.color)}>
-                                  {stockStatus.label}
-                                </Badge>
-
-                                {/* Quantity controls when selected */}
-                                {isSelected && selectedData && (
-                                  <div className="flex items-center gap-0.5 mt-0.5">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        updateQuantity(variant.id, -1);
-                                      }}
-                                      className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
-                                    >
-                                      <Minus size={8} />
-                                    </button>
-                                    <span className="text-[9px] font-bold min-w-[12px] text-center">
-                                      {selectedData.quantity}
-                                    </span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        updateQuantity(variant.id, 1);
-                                      }}
-                                      className="w-4 h-4 flex items-center justify-center rounded bg-muted hover:bg-muted/80"
-                                    >
-                                      <Plus size={8} />
-                                    </button>
-                                  </div>
-                                )}
-                              </button>
-                            );
-                          })}
+                            })}
+                          </div>
                         </div>
                       </div>
                     );
