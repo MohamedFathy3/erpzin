@@ -64,6 +64,24 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
   const { language } = useLanguage();
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
 
+  // Fetch POS settings to check allowNegativeStock
+  const { data: posSettings } = useQuery({
+    queryKey: ['pos-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('module_settings')
+        .select('settings')
+        .eq('module_name', 'pos')
+        .single();
+      
+      if (error) return { allowNegativeStock: false };
+      return data?.settings as { allowNegativeStock?: boolean } || { allowNegativeStock: false };
+    },
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+  });
+
+  const allowNegativeStock = posSettings?.allowNegativeStock || false;
+
   const { data: variants, isLoading } = useQuery({
     queryKey: ['product-variants-pos', product.id],
     queryFn: async () => {
@@ -138,7 +156,8 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
   };
 
   const toggleVariant = (variant: ProductVariant, price: number) => {
-    if (variant.stock === 0) return;
+    // Only block if stock is 0 AND negative stock is not allowed
+    if (variant.stock === 0 && !allowNegativeStock) return;
 
     const sizeName = variant.size 
       ? (language === 'ar' ? variant.size.name_ar || variant.size.name : variant.size.name)
@@ -321,6 +340,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                             const selectedData = getSelectedVariant(variant.id);
                             const stockStatus = getStockStatus(stock);
                             const isOutOfStock = stock === 0;
+                            const isDisabled = isOutOfStock && !allowNegativeStock;
                             
                             // If no color, show a simple "select" button for this size
                             if (!color) {
@@ -328,10 +348,10 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                                 <button
                                   key={variant.id}
                                   onClick={() => toggleVariant(variant, price)}
-                                  disabled={isOutOfStock}
+                                  disabled={isDisabled}
                                   className={cn(
                                     'relative flex flex-col items-center p-3 rounded-lg border-2 transition-all',
-                                    isOutOfStock
+                                    isDisabled
                                       ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
                                       : isSelected
                                       ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
@@ -388,10 +408,10 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                               <button
                                 key={variant.id}
                                 onClick={() => toggleVariant(variant, price)}
-                                disabled={isOutOfStock}
+                                disabled={isDisabled}
                                 className={cn(
                                   'relative flex flex-col items-center p-2 rounded-lg border-2 transition-all',
-                                  isOutOfStock
+                                  isDisabled
                                     ? 'bg-muted/50 border-muted cursor-not-allowed opacity-50'
                                     : isSelected
                                     ? 'bg-primary/10 border-primary ring-2 ring-primary/30'
