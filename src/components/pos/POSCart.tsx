@@ -19,8 +19,8 @@ interface CartItem {
 
 interface POSCartProps {
   items: CartItem[];
-  onUpdateQuantity: (id: string, quantity: number) => void;
-  onRemoveItem: (id: string) => void;
+  onUpdateQuantity: (id: string, quantity: number, variantId?: string) => void;
+  onRemoveItem: (id: string, variantId?: string) => void;
   onClearCart: () => void;
   onHoldOrder: () => void;
   onPay: () => void;
@@ -88,53 +88,61 @@ const POSCart: React.FC<POSCartProps> = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {items.map((item, index) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border hover:border-primary/50 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-foreground truncate">
-                    {language === 'ar' ? item.nameAr : item.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{item.sku}</p>
-                  <p className="text-sm font-semibold text-primary mt-1">
-                    {item.price.toLocaleString()} {currencySymbol}
-                  </p>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-                    className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                      'bg-muted hover:bg-muted/80 text-foreground'
-                    )}
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="w-8 text-center font-semibold text-foreground">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                    className={cn(
-                      'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                      'bg-primary hover:bg-primary/90 text-primary-foreground'
-                    )}
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-                
-                <button
-                  onClick={() => onRemoveItem(item.id)}
-                  className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+            {items.map((item) => {
+              const itemKey = item.variantId || item.id;
+              return (
+                <div
+                  key={itemKey}
+                  className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border hover:border-primary/50 transition-colors"
                 >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-foreground truncate">
+                      {language === 'ar' ? item.nameAr : item.name}
+                    </p>
+                    {(item.sizeName || item.colorName) && (
+                      <p className="text-xs text-primary">
+                        {[item.sizeName, item.colorName].filter(Boolean).join(' - ')}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">{item.sku}</p>
+                    <p className="text-sm font-semibold text-primary mt-1">
+                      {item.price.toLocaleString()} {currencySymbol}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onUpdateQuantity(item.id, item.quantity - 1, item.variantId)}
+                      className={cn(
+                        'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                        'bg-muted hover:bg-muted/80 text-foreground'
+                      )}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="w-8 text-center font-semibold text-foreground">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => onUpdateQuantity(item.id, item.quantity + 1, item.variantId)}
+                      className={cn(
+                        'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                        'bg-primary hover:bg-primary/90 text-primary-foreground'
+                      )}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  
+                  <button
+                    onClick={() => onRemoveItem(item.id, item.variantId)}
+                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
