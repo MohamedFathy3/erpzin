@@ -527,7 +527,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="all-branches"
-                    checked={formData.branchIds.length === 0}
+                    checked={(formData.branchIds || []).length === 0}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         handleChange('branchIds', []);
@@ -542,12 +542,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   <div key={branch.id} className="flex items-center gap-2">
                     <Checkbox
                       id={`branch-${branch.id}`}
-                      checked={formData.branchIds.includes(branch.id)}
+                      checked={(formData.branchIds || []).includes(branch.id)}
                       onCheckedChange={(checked) => {
+                        const currentIds = formData.branchIds || [];
                         if (checked) {
-                          handleChange('branchIds', [...formData.branchIds, branch.id]);
+                          handleChange('branchIds', [...currentIds, branch.id]);
                         } else {
-                          handleChange('branchIds', formData.branchIds.filter(id => id !== branch.id));
+                          handleChange('branchIds', currentIds.filter(id => id !== branch.id));
                         }
                       }}
                     />
@@ -569,7 +570,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="all-warehouses"
-                    checked={formData.warehouseIds.length === 0}
+                    checked={(formData.warehouseIds || []).length === 0}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         handleChange('warehouseIds', []);
@@ -584,12 +585,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   <div key={warehouse.id} className="flex items-center gap-2">
                     <Checkbox
                       id={`warehouse-${warehouse.id}`}
-                      checked={formData.warehouseIds.includes(warehouse.id)}
+                      checked={(formData.warehouseIds || []).includes(warehouse.id)}
                       onCheckedChange={(checked) => {
+                        const currentIds = formData.warehouseIds || [];
                         if (checked) {
-                          handleChange('warehouseIds', [...formData.warehouseIds, warehouse.id]);
+                          handleChange('warehouseIds', [...currentIds, warehouse.id]);
                         } else {
-                          handleChange('warehouseIds', formData.warehouseIds.filter(id => id !== warehouse.id));
+                          handleChange('warehouseIds', currentIds.filter(id => id !== warehouse.id));
                         }
                       }}
                     />
