@@ -31,7 +31,9 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Gift
+  Gift,
+  Building2,
+  Warehouse
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -90,6 +92,8 @@ const PromotionsManager = () => {
     is_active: true,
     min_quantity: 1,
     max_uses: null as number | null,
+    branch_id: '' as string,
+    warehouse_ids: [] as string[],
   });
 
   const t = {
@@ -168,6 +172,34 @@ const PromotionsManager = () => {
       const { data, error } = await supabase
         .from('products')
         .select('id, name, name_ar, sku, price, image_url')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch branches for selection
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches-for-promotions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('id, name, name_ar')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Fetch warehouses for selection
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses-for-promotions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('warehouses')
+        .select('id, name, name_ar')
         .eq('is_active', true)
         .order('name');
       if (error) throw error;
@@ -310,6 +342,8 @@ const PromotionsManager = () => {
       is_active: true,
       min_quantity: 1,
       max_uses: null,
+      branch_id: '',
+      warehouse_ids: [],
     });
     setSelectedProducts([]);
     setEditingPromotion(null);
@@ -333,6 +367,8 @@ const PromotionsManager = () => {
       is_active: promotion.is_active,
       min_quantity: promotion.min_quantity,
       max_uses: promotion.max_uses,
+      branch_id: promotion.branch_id || '',
+      warehouse_ids: [],
     });
     
     // Get selected products for this promotion
@@ -609,6 +645,75 @@ const PromotionsManager = () => {
                         value={formData.end_time} 
                         onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                       />
+                    </div>
+                  </div>
+
+                  {/* Branch & Warehouse Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg border border-border">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Building2 size={16} className="text-primary" />
+                        {language === 'ar' ? 'الفرع' : 'Branch'}
+                      </Label>
+                      <Select 
+                        value={formData.branch_id || 'all'} 
+                        onValueChange={(val) => setFormData({ ...formData, branch_id: val === 'all' ? '' : val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={language === 'ar' ? 'جميع الفروع' : 'All Branches'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            {language === 'ar' ? 'جميع الفروع' : 'All Branches'}
+                          </SelectItem>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Warehouse size={16} className="text-primary" />
+                        {language === 'ar' ? 'المخازن' : 'Warehouses'}
+                      </Label>
+                      <div className="space-y-2 max-h-28 overflow-y-auto p-2 bg-background rounded-md border">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="all-warehouses-promo"
+                            checked={formData.warehouse_ids.length === 0}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setFormData({ ...formData, warehouse_ids: [] });
+                              }
+                            }}
+                          />
+                          <label htmlFor="all-warehouses-promo" className="text-sm cursor-pointer">
+                            {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
+                          </label>
+                        </div>
+                        {warehouses.map((warehouse) => (
+                          <div key={warehouse.id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`warehouse-promo-${warehouse.id}`}
+                              checked={formData.warehouse_ids.includes(warehouse.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setFormData({ ...formData, warehouse_ids: [...formData.warehouse_ids, warehouse.id] });
+                                } else {
+                                  setFormData({ ...formData, warehouse_ids: formData.warehouse_ids.filter(id => id !== warehouse.id) });
+                                }
+                              }}
+                            />
+                            <label htmlFor={`warehouse-promo-${warehouse.id}`} className="text-sm cursor-pointer">
+                              {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
