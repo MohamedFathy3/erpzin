@@ -256,7 +256,10 @@ const Inventory: React.FC = () => {
       stock: product.stock,
       reorderPoint: product.minStock || 5, 
       status: product.status === 'inactive' ? 'inactive' : 'active',
-      imageUrl: product.image || ''
+      imageUrl: product.image || '',
+      branchIds: [],
+      warehouseIds: [],
+      valuationMethod: 'fifo'
     });
     setShowProductForm(true);
   };

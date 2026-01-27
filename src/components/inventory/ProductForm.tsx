@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2 } from 'lucide-react';
+import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2, Building2, Warehouse, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import VariantMatrix, { VariantOption, ProductVariant } from './VariantMatrix';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +47,10 @@ export interface ProductFormData {
   reorderPoint: number;
   status: 'active' | 'inactive';
   imageUrl: string;
+  // New fields for branch/warehouse/valuation
+  branchIds: string[];
+  warehouseIds: string[];
+  valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
 }
 
 // Default sizes and colors are now loaded from database via VariantMatrix
@@ -124,6 +129,36 @@ const ProductForm: React.FC<ProductFormProps> = ({
     enabled: isOpen,
   });
 
+  // Fetch branches from database
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches-for-form'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('id, name, name_ar')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen,
+  });
+
+  // Fetch warehouses from database
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses-for-form'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('warehouses')
+        .select('id, name, name_ar')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen,
+  });
+
   const flatCategories = flattenDbCategories(dbCategories);
   
   const getInitialFormData = (): ProductFormData => ({
@@ -143,7 +178,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
     stock: 0,
     reorderPoint: 5,
     status: 'active',
-    imageUrl: ''
+    imageUrl: '',
+    branchIds: [],
+    warehouseIds: [],
+    valuationMethod: 'fifo'
   });
 
   const [formData, setFormData] = useState<ProductFormData>(editProduct || getInitialFormData());
@@ -474,6 +512,125 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 onChange={(e) => handleChange('reorderPoint', parseInt(e.target.value) || 0)}
                 min={0}
               />
+            </div>
+          </div>
+
+          {/* Branch, Warehouse & Valuation Method */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg border border-border">
+            {/* Branches Selection */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Building2 size={16} className="text-primary" />
+                {language === 'ar' ? 'الفروع' : 'Branches'}
+              </Label>
+              <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-background rounded-md border">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="all-branches"
+                    checked={formData.branchIds.length === 0}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        handleChange('branchIds', []);
+                      }
+                    }}
+                  />
+                  <label htmlFor="all-branches" className="text-sm cursor-pointer">
+                    {language === 'ar' ? 'جميع الفروع' : 'All Branches'}
+                  </label>
+                </div>
+                {branches.map((branch) => (
+                  <div key={branch.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`branch-${branch.id}`}
+                      checked={formData.branchIds.includes(branch.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          handleChange('branchIds', [...formData.branchIds, branch.id]);
+                        } else {
+                          handleChange('branchIds', formData.branchIds.filter(id => id !== branch.id));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`branch-${branch.id}`} className="text-sm cursor-pointer">
+                      {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Warehouses Selection */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Warehouse size={16} className="text-primary" />
+                {language === 'ar' ? 'المخازن' : 'Warehouses'}
+              </Label>
+              <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-background rounded-md border">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="all-warehouses"
+                    checked={formData.warehouseIds.length === 0}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        handleChange('warehouseIds', []);
+                      }
+                    }}
+                  />
+                  <label htmlFor="all-warehouses" className="text-sm cursor-pointer">
+                    {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
+                  </label>
+                </div>
+                {warehouses.map((warehouse) => (
+                  <div key={warehouse.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`warehouse-${warehouse.id}`}
+                      checked={formData.warehouseIds.includes(warehouse.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          handleChange('warehouseIds', [...formData.warehouseIds, warehouse.id]);
+                        } else {
+                          handleChange('warehouseIds', formData.warehouseIds.filter(id => id !== warehouse.id));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer">
+                      {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Valuation Method */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Calculator size={16} className="text-primary" />
+                {language === 'ar' ? 'طريقة تقييم المخزون' : 'Inventory Valuation Method'}
+              </Label>
+              <Select 
+                value={formData.valuationMethod} 
+                onValueChange={(val: 'fifo' | 'lifo' | 'weighted_average') => handleChange('valuationMethod', val)}
+              >
+                <SelectTrigger className="bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border border-border z-50">
+                  <SelectItem value="fifo">
+                    {language === 'ar' ? 'الوارد أولاً صادر أولاً (FIFO)' : 'First In, First Out (FIFO)'}
+                  </SelectItem>
+                  <SelectItem value="lifo">
+                    {language === 'ar' ? 'الوارد أخيراً صادر أولاً (LIFO)' : 'Last In, First Out (LIFO)'}
+                  </SelectItem>
+                  <SelectItem value="weighted_average">
+                    {language === 'ar' ? 'المتوسط المرجح' : 'Weighted Average'}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.valuationMethod === 'fifo' && (language === 'ar' ? 'أقدم المخزون يُباع أولاً' : 'Oldest inventory sold first')}
+                {formData.valuationMethod === 'lifo' && (language === 'ar' ? 'أحدث المخزون يُباع أولاً' : 'Newest inventory sold first')}
+                {formData.valuationMethod === 'weighted_average' && (language === 'ar' ? 'متوسط تكلفة جميع الوحدات' : 'Average cost of all units')}
+              </p>
             </div>
           </div>
 
