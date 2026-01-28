@@ -238,6 +238,9 @@ const Inventory: React.FC = () => {
       }
     }
 
+    // Fetch product details including new fields
+    const dbProduct = dbProducts.find(p => p.id === product.id);
+
     setEditProduct({
       id: product.id, 
       name: product.name, 
@@ -257,9 +260,9 @@ const Inventory: React.FC = () => {
       reorderPoint: product.minStock || 5, 
       status: product.status === 'inactive' ? 'inactive' : 'active',
       imageUrl: product.image || '',
-      branchIds: [],
-      warehouseIds: [],
-      valuationMethod: 'fifo'
+      branchIds: (dbProduct?.branch_ids as string[]) || [],
+      warehouseIds: (dbProduct?.warehouse_ids as string[]) || [],
+      valuationMethod: (dbProduct?.valuation_method as 'fifo' | 'lifo' | 'weighted_average') || 'fifo'
     });
     setShowProductForm(true);
   };
@@ -291,7 +294,7 @@ const Inventory: React.FC = () => {
     try {
       let productId = formData.id;
 
-      // Prepare product data
+      // Prepare product data including new fields
       const productData = {
         name: formData.name,
         name_ar: formData.nameAr,
@@ -304,7 +307,11 @@ const Inventory: React.FC = () => {
         min_stock: formData.reorderPoint,
         is_active: formData.status === 'active',
         has_variants: formData.hasVariants && formData.variants.filter(v => v.enabled).length > 0,
-        image_url: formData.imageUrl || null
+        image_url: formData.imageUrl || null,
+        // New fields for branch/warehouse scoping and valuation
+        branch_ids: formData.branchIds || [],
+        warehouse_ids: formData.warehouseIds || [],
+        valuation_method: formData.valuationMethod || 'fifo'
       };
 
       if (productId) {

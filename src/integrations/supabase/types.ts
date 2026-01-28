@@ -1757,6 +1757,7 @@ export type Database = {
         Row: {
           average_cost: number | null
           barcode: string | null
+          branch_ids: string[] | null
           category_id: string | null
           cost: number | null
           created_at: string
@@ -1771,10 +1772,13 @@ export type Database = {
           sku: string
           stock: number
           updated_at: string
+          valuation_method: string | null
+          warehouse_ids: string[] | null
         }
         Insert: {
           average_cost?: number | null
           barcode?: string | null
+          branch_ids?: string[] | null
           category_id?: string | null
           cost?: number | null
           created_at?: string
@@ -1789,10 +1793,13 @@ export type Database = {
           sku: string
           stock?: number
           updated_at?: string
+          valuation_method?: string | null
+          warehouse_ids?: string[] | null
         }
         Update: {
           average_cost?: number | null
           barcode?: string | null
+          branch_ids?: string[] | null
           category_id?: string | null
           cost?: number | null
           created_at?: string
@@ -1807,6 +1814,8 @@ export type Database = {
           sku?: string
           stock?: number
           updated_at?: string
+          valuation_method?: string | null
+          warehouse_ids?: string[] | null
         }
         Relationships: [
           {
