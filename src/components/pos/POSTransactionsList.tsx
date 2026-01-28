@@ -49,7 +49,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [selectedReturn, setSelectedReturn] = useState<any>(null);
 
   const t = {
-    title: language === 'ar' ? 'فواتير نقاط البيع' : 'POS Transactions',
+    title: language === 'ar' ? 'فواتير نقطة البيع' : 'POS Invoices',
     sales: language === 'ar' ? 'المبيعات' : 'Sales',
     returns: language === 'ar' ? 'المرتجعات' : 'Returns',
     search: language === 'ar' ? 'بحث برقم الفاتورة أو العميل...' : 'Search by invoice or customer...',

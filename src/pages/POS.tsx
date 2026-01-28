@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
-import { Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, Truck, RotateCcw, DollarSign, Building2, Warehouse, Receipt } from 'lucide-react';
+import { Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, Truck, RotateCcw, DollarSign, Building2, Warehouse } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -21,7 +21,7 @@ import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
 import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
-import POSTransactionsList from '@/components/pos/POSTransactionsList';
+
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
@@ -81,7 +81,7 @@ const POS: React.FC = () => {
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
-  const [showTransactions, setShowTransactions] = useState(false);
+  
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -499,16 +499,6 @@ const POS: React.FC = () => {
               <span className="text-xs font-medium">{language === 'ar' ? 'مرتجع' : 'Returns'}</span>
             </Button>
 
-            {/* Transactions Index */}
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setShowTransactions(true)}
-              className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 gap-1.5 px-2"
-            >
-              <Receipt size={16} />
-              <span className="text-xs font-medium">{language === 'ar' ? 'الفواتير' : 'Invoices'}</span>
-            </Button>
 
             {/* Shift */}
             <Button 
@@ -721,12 +711,6 @@ const POS: React.FC = () => {
         }}
       />
 
-      {/* Transactions List Modal */}
-      <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <POSTransactionsList onClose={() => setShowTransactions(false)} />
-        </DialogContent>
-      </Dialog>
     </div>
     </TooltipProvider>
   );
