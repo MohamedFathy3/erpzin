@@ -126,7 +126,10 @@ const BranchesWarehouses = () => {
       manageWarehouses: 'Manage warehouses and link them to branches',
       selectBranches: 'Select Branches',
       noBranches: 'No branches yet',
-      noWarehouses: 'No warehouses yet'
+      noWarehouses: 'No warehouses yet',
+      createWarehousesForBranches: 'Create Warehouses for All Branches',
+      warehousesCreated: 'Warehouses created successfully',
+      creatingWarehouses: 'Creating warehouses...'
     },
     ar: {
       branches: 'الفروع',
@@ -161,7 +164,10 @@ const BranchesWarehouses = () => {
       manageWarehouses: 'إدارة المخازن وربطها بالفروع',
       selectBranches: 'اختر الفروع',
       noBranches: 'لا توجد فروع بعد',
-      noWarehouses: 'لا توجد مخازن بعد'
+      noWarehouses: 'لا توجد مخازن بعد',
+      createWarehousesForBranches: 'إنشاء مخازن لجميع الفروع',
+      warehousesCreated: 'تم إنشاء المخازن بنجاح',
+      creatingWarehouses: 'جاري إنشاء المخازن...'
     }
   }[language];
 
@@ -321,6 +327,68 @@ const BranchesWarehouses = () => {
     },
     onError: () => {
       toast({ title: language === 'ar' ? 'خطأ في الحذف' : 'Error deleting', variant: 'destructive' });
+    }
+  });
+
+  // Create warehouses for all branches mutation
+  const createWarehousesForBranchesMutation = useMutation({
+    mutationFn: async () => {
+      // Get branches that don't have warehouses yet
+      const branchesWithoutWarehouses = branches.filter(branch => {
+        const hasWarehouse = branchWarehouses.some(bw => bw.branch_id === branch.id);
+        return !hasWarehouse;
+      });
+
+      if (branchesWithoutWarehouses.length === 0) {
+        throw new Error('All branches already have warehouses');
+      }
+
+      // Create warehouses for each branch without one
+      for (const branch of branchesWithoutWarehouses) {
+        const warehouseName = `${branch.name} Warehouse`;
+        const warehouseNameAr = branch.name_ar ? `مخزن ${branch.name_ar}` : null;
+        const warehouseCode = branch.code ? `WH-${branch.code}` : null;
+
+        // Create warehouse
+        const { data: newWarehouse, error: warehouseError } = await supabase
+          .from('warehouses')
+          .insert({
+            name: warehouseName,
+            name_ar: warehouseNameAr,
+            code: warehouseCode,
+            address: branch.address,
+            phone: branch.phone,
+            is_active: true,
+            is_main: branch.is_main ?? false
+          })
+          .select('id')
+          .single();
+
+        if (warehouseError) throw warehouseError;
+
+        // Link warehouse to branch
+        const { error: linkError } = await supabase
+          .from('branch_warehouses')
+          .insert({
+            branch_id: branch.id,
+            warehouse_id: newWarehouse.id,
+            is_primary: true
+          });
+
+        if (linkError) throw linkError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      queryClient.invalidateQueries({ queryKey: ['branch-warehouses'] });
+      toast({ title: language === 'ar' ? 'تم إنشاء المخازن بنجاح' : 'Warehouses created successfully' });
+    },
+    onError: (error: Error) => {
+      if (error.message === 'All branches already have warehouses') {
+        toast({ title: language === 'ar' ? 'جميع الفروع لديها مخازن بالفعل' : 'All branches already have warehouses' });
+      } else {
+        toast({ title: language === 'ar' ? 'خطأ في إنشاء المخازن' : 'Error creating warehouses', variant: 'destructive' });
+      }
     }
   });
 
@@ -633,13 +701,33 @@ const BranchesWarehouses = () => {
               </CardTitle>
               <CardDescription>{t.manageWarehouses}</CardDescription>
             </div>
-            <Dialog open={warehouseDialogOpen} onOpenChange={(open) => {
-              setWarehouseDialogOpen(open);
-              if (!open) resetWarehouseForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button className="gradient-success">
-                  <Plus size={16} className="me-2" />
+            <div className="flex items-center gap-2">
+              {/* Create Warehouses for All Branches Button */}
+              <Button 
+                variant="outline"
+                onClick={() => createWarehousesForBranchesMutation.mutate()}
+                disabled={createWarehousesForBranchesMutation.isPending || branches.length === 0}
+              >
+                {createWarehousesForBranchesMutation.isPending ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 me-2 border-2 border-current border-t-transparent rounded-full" />
+                    {t.creatingWarehouses}
+                  </>
+                ) : (
+                  <>
+                    <Store size={16} className="me-2" />
+                    {t.createWarehousesForBranches}
+                  </>
+                )}
+              </Button>
+              
+              <Dialog open={warehouseDialogOpen} onOpenChange={(open) => {
+                setWarehouseDialogOpen(open);
+                if (!open) resetWarehouseForm();
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="gradient-success">
+                    <Plus size={16} className="me-2" />
                   {t.addWarehouse}
                 </Button>
               </DialogTrigger>
@@ -767,9 +855,10 @@ const BranchesWarehouses = () => {
                   >
                     {t.save}
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
