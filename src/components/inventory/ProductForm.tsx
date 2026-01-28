@@ -159,6 +159,69 @@ const ProductForm: React.FC<ProductFormProps> = ({
     enabled: isOpen,
   });
 
+  // Fetch branch-warehouse relationships
+  const { data: branchWarehouses = [] } = useQuery({
+    queryKey: ['branch-warehouses-for-form'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branch_warehouses')
+        .select('branch_id, warehouse_id');
+      if (error) throw error;
+      return data;
+    },
+    enabled: isOpen,
+  });
+
+  // Auto-select branches when warehouse is selected
+  const handleWarehouseChange = (warehouseId: string, checked: boolean) => {
+    const currentWarehouseIds = formData.warehouseIds || [];
+    let newWarehouseIds: string[];
+    
+    if (checked) {
+      newWarehouseIds = [...currentWarehouseIds, warehouseId];
+    } else {
+      newWarehouseIds = currentWarehouseIds.filter(id => id !== warehouseId);
+    }
+    
+    handleChange('warehouseIds', newWarehouseIds);
+    
+    // Auto-select related branches
+    if (checked) {
+      const relatedBranchIds = branchWarehouses
+        .filter(bw => bw.warehouse_id === warehouseId)
+        .map(bw => bw.branch_id);
+      
+      const currentBranchIds = formData.branchIds || [];
+      const newBranchIds = [...new Set([...currentBranchIds, ...relatedBranchIds])];
+      handleChange('branchIds', newBranchIds);
+    }
+  };
+
+  // Auto-select warehouses when branch is selected
+  const handleBranchChange = (branchId: string, checked: boolean) => {
+    const currentBranchIds = formData.branchIds || [];
+    let newBranchIds: string[];
+    
+    if (checked) {
+      newBranchIds = [...currentBranchIds, branchId];
+    } else {
+      newBranchIds = currentBranchIds.filter(id => id !== branchId);
+    }
+    
+    handleChange('branchIds', newBranchIds);
+    
+    // Auto-select related warehouses
+    if (checked) {
+      const relatedWarehouseIds = branchWarehouses
+        .filter(bw => bw.branch_id === branchId)
+        .map(bw => bw.warehouse_id);
+      
+      const currentWarehouseIds = formData.warehouseIds || [];
+      const newWarehouseIds = [...new Set([...currentWarehouseIds, ...relatedWarehouseIds])];
+      handleChange('warehouseIds', newWarehouseIds);
+    }
+  };
+
   const flatCategories = flattenDbCategories(dbCategories);
   
   const getInitialFormData = (): ProductFormData => ({
@@ -476,7 +539,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           </div>
 
           {/* Pricing */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>{language === 'ar' ? 'سعر البيع' : 'Selling Price'}</Label>
               <Input
@@ -492,15 +555,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 type="number"
                 value={formData.cost}
                 onChange={(e) => handleChange('cost', parseFloat(e.target.value) || 0)}
-                min={0}
-              />
-            </div>
-            <div>
-              <Label>{language === 'ar' ? 'المخزون' : 'Stock'}</Label>
-              <Input
-                type="number"
-                value={formData.stock}
-                onChange={(e) => handleChange('stock', parseInt(e.target.value) || 0)}
                 min={0}
               />
             </div>
@@ -543,14 +597,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     <Checkbox
                       id={`branch-${branch.id}`}
                       checked={(formData.branchIds || []).includes(branch.id)}
-                      onCheckedChange={(checked) => {
-                        const currentIds = formData.branchIds || [];
-                        if (checked) {
-                          handleChange('branchIds', [...currentIds, branch.id]);
-                        } else {
-                          handleChange('branchIds', currentIds.filter(id => id !== branch.id));
-                        }
-                      }}
+                      onCheckedChange={(checked) => handleBranchChange(branch.id, !!checked)}
                     />
                     <label htmlFor={`branch-${branch.id}`} className="text-sm cursor-pointer">
                       {language === 'ar' ? branch.name_ar || branch.name : branch.name}
@@ -586,14 +633,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     <Checkbox
                       id={`warehouse-${warehouse.id}`}
                       checked={(formData.warehouseIds || []).includes(warehouse.id)}
-                      onCheckedChange={(checked) => {
-                        const currentIds = formData.warehouseIds || [];
-                        if (checked) {
-                          handleChange('warehouseIds', [...currentIds, warehouse.id]);
-                        } else {
-                          handleChange('warehouseIds', currentIds.filter(id => id !== warehouse.id));
-                        }
-                      }}
+                      onCheckedChange={(checked) => handleWarehouseChange(warehouse.id, !!checked)}
                     />
                     <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer">
                       {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
