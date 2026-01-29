@@ -42,9 +42,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [timeFrom, setTimeFrom] = useState('');
+  const [timeTo, setTimeTo] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedUser, setSelectedUser] = useState('all');
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [selectedReturn, setSelectedReturn] = useState<any>(null);
 
@@ -55,12 +58,16 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     search: language === 'ar' ? 'بحث برقم الفاتورة أو العميل...' : 'Search by invoice or customer...',
     dateFrom: language === 'ar' ? 'من تاريخ' : 'From Date',
     dateTo: language === 'ar' ? 'إلى تاريخ' : 'To Date',
+    timeFrom: language === 'ar' ? 'من وقت' : 'From Time',
+    timeTo: language === 'ar' ? 'إلى وقت' : 'To Time',
     branch: language === 'ar' ? 'الفرع' : 'Branch',
     allBranches: language === 'ar' ? 'جميع الفروع' : 'All Branches',
     paymentMethod: language === 'ar' ? 'طريقة الدفع' : 'Payment Method',
     allMethods: language === 'ar' ? 'الكل' : 'All Methods',
     status: language === 'ar' ? 'الحالة' : 'Status',
     allStatuses: language === 'ar' ? 'الكل' : 'All',
+    user: language === 'ar' ? 'المستخدم' : 'User',
+    allUsers: language === 'ar' ? 'جميع المستخدمين' : 'All Users',
     invoiceNumber: language === 'ar' ? 'رقم الفاتورة' : 'Invoice #',
     date: language === 'ar' ? 'التاريخ' : 'Date',
     customer: language === 'ar' ? 'العميل' : 'Customer',
@@ -86,13 +93,49 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     tax: language === 'ar' ? 'الضريبة' : 'Tax',
     discount: language === 'ar' ? 'الخصم' : 'Discount',
     netTotal: language === 'ar' ? 'الإجمالي الصافي' : 'Net Total',
+    cashier: language === 'ar' ? 'الكاشير' : 'Cashier',
   };
+
+  // Fetch cashiers from pos_shifts for filter
+  const { data: cashiers = [] } = useQuery({
+    queryKey: ['cashiers-pos-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pos_shifts')
+        .select('cashier_id')
+        .not('cashier_id', 'is', null);
+      if (error) throw error;
+      
+      // Get unique cashier IDs
+      const uniqueCashierIds = [...new Set(data?.map(s => s.cashier_id).filter(Boolean))];
+      
+      if (uniqueCashierIds.length === 0) return [];
+      
+      // Fetch profiles for these cashiers
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, full_name_ar')
+        .in('id', uniqueCashierIds);
+      
+      return profiles || [];
+    }
+  });
 
   // Fetch POS sales
   const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ['pos-sales', dateFrom, dateTo, selectedBranch],
+    queryKey: ['pos-sales', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // First, get shift IDs for selected user if filtering by user
+      let userShiftIds: string[] = [];
+      if (selectedUser !== 'all') {
+        const { data: shifts } = await supabase
+          .from('pos_shifts')
+          .select('id')
+          .eq('cashier_id', selectedUser);
+        userShiftIds = shifts?.map(s => s.id) || [];
+      }
+
+      let query = supabase
         .from('sales')
         .select(`
           id, invoice_number, sale_date, status, payment_method,
@@ -104,12 +147,23 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         .order('created_at', { ascending: false })
         .limit(500);
 
+      const { data, error } = await query;
+
       if (error) throw error;
       
       // Apply client-side filters
       let filtered = data || [];
-      if (dateFrom) filtered = filtered.filter(s => s.sale_date >= dateFrom);
-      if (dateTo) filtered = filtered.filter(s => s.sale_date <= dateTo);
+      
+      // Date and time filtering
+      if (dateFrom) {
+        const fromDateTime = timeFrom ? `${dateFrom}T${timeFrom}` : `${dateFrom}T00:00:00`;
+        filtered = filtered.filter(s => s.sale_date >= fromDateTime || s.created_at >= fromDateTime);
+      }
+      if (dateTo) {
+        const toDateTime = timeTo ? `${dateTo}T${timeTo}` : `${dateTo}T23:59:59`;
+        filtered = filtered.filter(s => s.sale_date <= toDateTime || s.created_at <= toDateTime);
+      }
+      
       if (selectedBranch !== 'all') filtered = filtered.filter(s => s.branch === selectedBranch);
       
       return filtered;
@@ -199,9 +253,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     setSearchTerm('');
     setDateFrom('');
     setDateTo('');
+    setTimeFrom('');
+    setTimeTo('');
     setSelectedBranch('all');
     setSelectedPaymentMethod('all');
     setSelectedStatus('all');
+    setSelectedUser('all');
   };
 
   return (
@@ -278,7 +335,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             <div className="col-span-2 relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -294,6 +351,16 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 placeholder={t.dateFrom}
+                title={t.dateFrom}
+              />
+            </div>
+            <div>
+              <Input
+                type="time"
+                value={timeFrom}
+                onChange={(e) => setTimeFrom(e.target.value)}
+                placeholder={t.timeFrom}
+                title={t.timeFrom}
               />
             </div>
             <div>
@@ -302,6 +369,16 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 placeholder={t.dateTo}
+                title={t.dateTo}
+              />
+            </div>
+            <div>
+              <Input
+                type="time"
+                value={timeTo}
+                onChange={(e) => setTimeTo(e.target.value)}
+                placeholder={t.timeTo}
+                title={t.timeTo}
               />
             </div>
             <div>
@@ -320,6 +397,35 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               </Select>
             </div>
             <div>
+              <Select value={selectedUser} onValueChange={setSelectedUser}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t.allUsers} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.allUsers}</SelectItem>
+                  {cashiers.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {language === 'ar' ? c.full_name_ar || c.full_name : c.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            <div>
+              <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t.allMethods} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.allMethods}</SelectItem>
+                  <SelectItem value="cash">{t.cash}</SelectItem>
+                  <SelectItem value="card">{t.card}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allStatuses} />
@@ -332,12 +438,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="flex justify-end mt-3">
-            <Button variant="outline" size="sm" onClick={clearFilters} className="gap-2">
-              <Filter size={14} />
-              {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
-            </Button>
+            <div className="col-span-2 flex justify-end">
+              <Button variant="outline" size="sm" onClick={clearFilters} className="gap-2">
+                <Filter size={14} />
+                {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
