@@ -4,11 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DatePicker } from '@/components/ui/date-picker';
+import { TimePicker } from '@/components/ui/time-picker';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -334,54 +337,62 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div className="col-span-2 relative">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={t.search}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="ps-10"
-              />
-            </div>
-            <div>
-              <Input
-                type="date"
+        <CardContent className="p-4 space-y-4">
+          {/* Row 1: Search */}
+          <div className="relative">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t.search}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="ps-10"
+            />
+          </div>
+
+          {/* Row 2: Date & Time Filters */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.dateFrom}</Label>
+              <DatePicker
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                onChange={setDateFrom}
                 placeholder={t.dateFrom}
-                title={t.dateFrom}
+                language={language}
               />
             </div>
-            <div>
-              <Input
-                type="time"
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.timeFrom}</Label>
+              <TimePicker
                 value={timeFrom}
-                onChange={(e) => setTimeFrom(e.target.value)}
+                onChange={setTimeFrom}
                 placeholder={t.timeFrom}
-                title={t.timeFrom}
+                language={language}
               />
             </div>
-            <div>
-              <Input
-                type="date"
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.dateTo}</Label>
+              <DatePicker
                 value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+                onChange={setDateTo}
                 placeholder={t.dateTo}
-                title={t.dateTo}
+                language={language}
               />
             </div>
-            <div>
-              <Input
-                type="time"
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.timeTo}</Label>
+              <TimePicker
                 value={timeTo}
-                onChange={(e) => setTimeTo(e.target.value)}
+                onChange={setTimeTo}
                 placeholder={t.timeTo}
-                title={t.timeTo}
+                language={language}
               />
             </div>
-            <div>
+          </div>
+
+          {/* Row 3: Selects */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.branch}</Label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allBranches} />
@@ -396,7 +407,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.user}</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allUsers} />
@@ -411,9 +423,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-            <div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.paymentMethod}</Label>
               <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allMethods} />
@@ -425,7 +436,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">{t.status}</Label>
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allStatuses} />
@@ -438,12 +450,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 flex justify-end">
-              <Button variant="outline" size="sm" onClick={clearFilters} className="gap-2">
-                <Filter size={14} />
-                {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
-              </Button>
-            </div>
+          </div>
+
+          {/* Clear Filters Button */}
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={clearFilters} className="gap-2">
+              <Filter size={14} />
+              {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
+            </Button>
           </div>
         </CardContent>
       </Card>
