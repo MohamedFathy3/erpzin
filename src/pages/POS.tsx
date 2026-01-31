@@ -307,10 +307,16 @@ const POS: React.FC = () => {
     setHeldOrders(prev => prev.filter(o => o.id !== orderId));
   };
 
+  const calculateSubtotal = () => {
+    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  const calculateTax = () => {
+    return calculateSubtotal() * 0.05;
+  };
+
   const calculateTotal = () => {
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.05;
-    return subtotal + tax;
+    return calculateSubtotal() + calculateTax();
   };
 
   const handlePaymentComplete = (payments: { method: string; amount: number }[]) => {
@@ -649,9 +655,14 @@ const POS: React.FC = () => {
         isOpen={showPayment}
         onClose={() => setShowPayment(false)}
         total={calculateTotal()}
+        subtotal={calculateSubtotal()}
+        tax={calculateTax()}
+        cartItems={cartItems}
         onComplete={handlePaymentComplete}
         customer={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name, loyalty_points: selectedCustomer.loyalty_points } : null}
         deliveryPerson={selectedDelivery ? { id: selectedDelivery.id, name: selectedDelivery.name } : null}
+        shiftId={currentShift?.id || null}
+        branchId={userBranch?.id || currentBranch?.id || null}
       />
 
       <POSHeldOrders
