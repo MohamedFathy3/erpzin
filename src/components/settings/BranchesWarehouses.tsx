@@ -701,27 +701,7 @@ const BranchesWarehouses = () => {
               </CardTitle>
               <CardDescription>{t.manageWarehouses}</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              {/* Create Warehouses for All Branches Button */}
-              <Button 
-                variant="outline"
-                onClick={() => createWarehousesForBranchesMutation.mutate()}
-                disabled={createWarehousesForBranchesMutation.isPending || branches.length === 0}
-              >
-                {createWarehousesForBranchesMutation.isPending ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 me-2 border-2 border-current border-t-transparent rounded-full" />
-                    {t.creatingWarehouses}
-                  </>
-                ) : (
-                  <>
-                    <Store size={16} className="me-2" />
-                    {t.createWarehousesForBranches}
-                  </>
-                )}
-              </Button>
-              
-              <Dialog open={warehouseDialogOpen} onOpenChange={(open) => {
+            <Dialog open={warehouseDialogOpen} onOpenChange={(open) => {
                 setWarehouseDialogOpen(open);
                 if (!open) resetWarehouseForm();
               }}>
@@ -855,10 +835,9 @@ const BranchesWarehouses = () => {
                   >
                     {t.save}
                   </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent>
