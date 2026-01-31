@@ -220,7 +220,6 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           invoice_number: invoiceNumber,
           sale_date: new Date().toISOString(),
           customer_id: customer?.id || null,
-          subtotal: subtotal,
           tax_amount: tax,
           discount_amount: 0,
           total_amount: total,
