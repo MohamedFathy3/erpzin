@@ -26,22 +26,44 @@ const defaultPaymentMethods: PaymentMethod[] = [
   { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'F4' },
 ];
 
+interface CartItem {
+  id: string;
+  variantId?: string;
+  name: string;
+  nameAr: string;
+  price: number;
+  quantity: number;
+  sku: string;
+  sizeName?: string;
+  colorName?: string;
+}
+
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
+  subtotal: number;
+  tax: number;
+  cartItems: CartItem[];
   onComplete: (payments: { method: string; amount: number }[]) => void;
   customer?: { id: string; name: string; loyalty_points?: number | null } | null;
   deliveryPerson?: { id: string; name: string } | null;
+  shiftId?: string | null;
+  branchId?: string | null;
 }
 
 const POSPaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
   total,
+  subtotal,
+  tax,
+  cartItems,
   onComplete,
   customer,
-  deliveryPerson
+  deliveryPerson,
+  shiftId,
+  branchId
 }) => {
   const { language } = useLanguage();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
@@ -167,9 +189,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     return true; // For electronic payments
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
       let payments: { method: string; amount: number }[] = [];
       
       if (paymentMethod === 'split') {
@@ -184,10 +206,71 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       } else {
         payments = [{ method: paymentMethod, amount: total }];
       }
+
+      // Generate invoice number
+      const invoiceNumber = `POS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      
+      // Get primary payment method for the sale record
+      const primaryPaymentMethod = payments.length > 0 ? payments[0].method : 'cash';
+
+      // Save sale to database
+      const { data: sale, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          invoice_number: invoiceNumber,
+          sale_date: new Date().toISOString(),
+          customer_id: customer?.id || null,
+          subtotal: subtotal,
+          tax_amount: tax,
+          discount_amount: 0,
+          total_amount: total,
+          payment_method: primaryPaymentMethod,
+          status: 'completed',
+          branch: branchId || null,
+          notes: deliveryPerson ? `Delivery: ${deliveryPerson.name}` : null
+        })
+        .select('id')
+        .single();
+
+      if (saleError) throw saleError;
+
+      // Save sale items
+      if (cartItems.length > 0 && sale) {
+        const saleItems = cartItems.map(item => ({
+          sale_id: sale.id,
+          product_id: item.id,
+          product_variant_id: item.variantId || null,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
+          discount_amount: 0
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('sale_items')
+          .insert(saleItems);
+
+        if (itemsError) throw itemsError;
+      }
+
+      // Update customer loyalty points if customer exists
+      if (customer?.id) {
+        const pointsToAdd = Math.floor(total / 1000);
+        await supabase
+          .from('customers')
+          .update({ 
+            loyalty_points: (customer.loyalty_points || 0) + pointsToAdd,
+            total_purchases: supabase.rpc ? total : total // Simple increment
+          })
+          .eq('id', customer.id);
+      }
       
       onComplete(payments);
+    } catch (error) {
+      console.error('Error saving sale:', error);
+    } finally {
       setIsProcessing(false);
-    }, 1000);
+    }
   };
 
   // Payment modal keyboard shortcuts
