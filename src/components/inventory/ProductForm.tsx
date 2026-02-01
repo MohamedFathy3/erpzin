@@ -607,39 +607,60 @@ const ProductForm: React.FC<ProductFormProps> = ({
               </div>
             </div>
 
-            {/* Warehouses Selection */}
+            {/* Warehouses Selection - filtered by selected branches */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Warehouse size={16} className="text-primary" />
                 {language === 'ar' ? 'المخازن' : 'Warehouses'}
               </Label>
               <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-background rounded-md border">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="all-warehouses"
-                    checked={(formData.warehouseIds || []).length === 0}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        handleChange('warehouseIds', []);
-                      }
-                    }}
-                  />
-                  <label htmlFor="all-warehouses" className="text-sm cursor-pointer">
-                    {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
-                  </label>
-                </div>
-                {warehouses.map((warehouse) => (
-                  <div key={warehouse.id} className="flex items-center gap-2">
+                {/* Show "All Warehouses" only when no branches selected */}
+                {(formData.branchIds || []).length === 0 && (
+                  <div className="flex items-center gap-2">
                     <Checkbox
-                      id={`warehouse-${warehouse.id}`}
-                      checked={(formData.warehouseIds || []).includes(warehouse.id)}
-                      onCheckedChange={(checked) => handleWarehouseChange(warehouse.id, !!checked)}
+                      id="all-warehouses"
+                      checked={(formData.warehouseIds || []).length === 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          handleChange('warehouseIds', []);
+                        }
+                      }}
                     />
-                    <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer">
-                      {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                    <label htmlFor="all-warehouses" className="text-sm cursor-pointer">
+                      {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
                     </label>
                   </div>
-                ))}
+                )}
+                {/* Filter warehouses based on selected branches */}
+                {(() => {
+                  const selectedBranchIds = formData.branchIds || [];
+                  const filteredWarehouses = selectedBranchIds.length === 0
+                    ? warehouses
+                    : warehouses.filter(wh => 
+                        branchWarehouses.some(bw => 
+                          selectedBranchIds.includes(bw.branch_id) && bw.warehouse_id === wh.id
+                        )
+                      );
+                  
+                  return filteredWarehouses.length > 0 ? (
+                    filteredWarehouses.map((warehouse) => (
+                      <div key={warehouse.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`warehouse-${warehouse.id}`}
+                          checked={(formData.warehouseIds || []).includes(warehouse.id)}
+                          onCheckedChange={(checked) => handleWarehouseChange(warehouse.id, !!checked)}
+                        />
+                        <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer">
+                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                        </label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">
+                      {language === 'ar' ? 'لا توجد مخازن مرتبطة بالفروع المختارة' : 'No warehouses linked to selected branches'}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
 
