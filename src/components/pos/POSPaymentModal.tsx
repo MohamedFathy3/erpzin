@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { usePOSKeyboardShortcuts, getPaymentShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-
+import { toast } from 'sonner';
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
 interface PaymentMethod {
@@ -238,11 +238,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         const saleItems = cartItems.map(item => ({
           sale_id: sale.id,
           product_id: item.id,
-          product_variant_id: item.variantId || null,
           quantity: item.quantity,
           unit_price: item.price,
           total_price: item.price * item.quantity,
-          discount_amount: 0
+          discount: 0
         }));
 
         const { error: itemsError } = await supabase
@@ -264,9 +263,11 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           .eq('id', customer.id);
       }
       
+      toast.success(language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully');
       onComplete(payments);
     } catch (error) {
       console.error('Error saving sale:', error);
+      toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
     } finally {
       setIsProcessing(false);
     }
