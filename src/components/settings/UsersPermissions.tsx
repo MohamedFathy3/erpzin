@@ -541,16 +541,30 @@ const UsersPermissions = () => {
         .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('user_roles')
           .update({ role })
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .select();
+        
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error(language === 'ar' 
+            ? 'ليس لديك صلاحية لتغيير الأدوار. يجب أن تكون مسؤولاً.' 
+            : 'You do not have permission to change roles. Admin access required.');
+        }
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('user_roles')
-          .insert({ user_id: userId, role });
+          .insert({ user_id: userId, role })
+          .select();
+        
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error(language === 'ar' 
+            ? 'ليس لديك صلاحية لتغيير الأدوار. يجب أن تكون مسؤولاً.' 
+            : 'You do not have permission to change roles. Admin access required.');
+        }
       }
     },
     onSuccess: () => {
