@@ -1,73 +1,93 @@
 
-# خطة إصلاح مشكلة حفظ الفاتورة في نقطة البيع
+# خطة إصلاح مشكلة تفعيل الأدوار
 
 ## المشكلة المكتشفة
 
-عند إتمام الدفع في نقطة البيع، يظهر خطأ في قاعدة البيانات:
-```
-Could not find the 'discount_amount' column of 'sale_items' in the schema cache
-```
+بعد فحص قاعدة البيانات والكود، وجدت المشكلة التالية:
 
-**السبب:** الكود يحاول إدراج بيانات في أعمدة غير موجودة في جدول `sale_items`:
-1. `discount_amount` - غير موجود (الموجود هو `discount`)
-2. `product_variant_id` - غير موجود في الجدول
+### السبب الرئيسي
+1. **سياسة الأمان (RLS)** على جدول `user_roles` تسمح فقط للمستخدمين الذين لديهم دور `admin` بتعديل الأدوار
+2. **لا يوجد مسؤول**: جميع المستخدمين في النظام حالياً لديهم دور `viewer` فقط
+3. **فشل صامت**: عند محاولة التحديث، لا يظهر خطأ لكن التعديل لا يتم
+
+### البيانات الحالية
+جميع المستخدمين السبعة في النظام لديهم دور `viewer`:
+- sameh, samehsaber484@gmail.com, ahmed, injaz.taiz@gmail.com, mohamed, zts.egy@gmail.com
 
 ## الحل المقترح
 
-### الخطوة 1: تصحيح ملف POSPaymentModal.tsx
+### الخطوة 1: ترقية مستخدم إلى مسؤول (Admin)
+يجب تشغيل الأمر التالي في قاعدة البيانات لترقية مستخدم واحد على الأقل إلى admin:
 
-**تعديل الأسطر 238-246** لإزالة الأعمدة غير الموجودة:
-
-**قبل:**
-```typescript
-const saleItems = cartItems.map(item => ({
-  sale_id: sale.id,
-  product_id: item.id,
-  product_variant_id: item.variantId || null,
-  quantity: item.quantity,
-  unit_price: item.price,
-  total_price: item.price * item.quantity,
-  discount_amount: 0
-}));
+```sql
+UPDATE user_roles 
+SET role = 'admin' 
+WHERE user_id = (SELECT id FROM profiles WHERE email = 'samehsaber484@gmail.com' LIMIT 1);
 ```
 
-**بعد:**
+### الخطوة 2: تحسين الكود لمعالجة الفشل الصامت
+تعديل ملف `src/components/settings/UsersPermissions.tsx`:
+
+- إضافة التحقق من عدد الصفوف المتأثرة بعد التحديث
+- عرض رسالة خطأ واضحة إذا لم يتم التحديث بسبب عدم وجود صلاحيات
+- إضافة تنبيه للمستخدم عند محاولة تغيير الدور بدون صلاحيات كافية
+
+### التغييرات في الكود
+
+**الملف:** `src/components/settings/UsersPermissions.tsx`
+
+**التعديل:** تحسين `updateRoleMutation` للتحقق من نجاح العملية:
+
 ```typescript
-const saleItems = cartItems.map(item => ({
-  sale_id: sale.id,
-  product_id: item.id,
-  quantity: item.quantity,
-  unit_price: item.price,
-  total_price: item.price * item.quantity,
-  discount: 0
-}));
+const updateRoleMutation = useMutation({
+  mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+    const { data: existing } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error, count } = await supabase
+        .from('user_roles')
+        .update({ role })
+        .eq('user_id', userId)
+        .select();
+      
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(language === 'ar' 
+          ? 'ليس لديك صلاحية لتغيير الأدوار. يجب أن تكون مسؤولاً.' 
+          : 'You do not have permission to change roles. Admin access required.');
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role })
+        .select();
+      
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(language === 'ar' 
+          ? 'ليس لديك صلاحية لتغيير الأدوار. يجب أن تكون مسؤولاً.' 
+          : 'You do not have permission to change roles. Admin access required.');
+      }
+    }
+  },
+  // ... باقي الكود
+});
 ```
-
-### الخطوة 2: إضافة إشعار للمستخدم
-
-إضافة رسالة نجاح (toast notification) عند إتمام الحفظ بنجاح وإغلاق النافذة تلقائياً.
-
-### الخطوة 3: تحسين معالجة الأخطاء
-
-إضافة رسالة خطأ واضحة للمستخدم في حالة فشل الحفظ بدلاً من الفشل الصامت.
 
 ---
 
-## التفاصيل التقنية
+## ملخص الحل
 
-### ملف يتم تعديله:
-- `src/components/pos/POSPaymentModal.tsx`
+| الخطوة | الإجراء |
+|--------|---------|
+| 1 | ترقية مستخدم إلى admin من قاعدة البيانات |
+| 2 | تحسين معالجة الأخطاء في الكود |
+| 3 | عرض رسالة واضحة عند عدم وجود صلاحيات |
 
-### التغييرات المطلوبة:
-1. تغيير `discount_amount: 0` إلى `discount: 0`
-2. إزالة `product_variant_id` من كائن الإدراج
-3. إضافة `toast.success()` عند نجاح الحفظ
-4. إضافة `toast.error()` عند فشل الحفظ
+## ملاحظة هامة
 
-### سبب المشكلة:
-جدول `sale_items` في قاعدة البيانات يحتوي على الأعمدة التالية:
-- `id`, `created_at`, `sale_id`, `product_id`, `quantity`, `unit_price`, `total_price`, `discount`
-
-بينما الكود كان يحاول استخدام:
-- `discount_amount` (الصحيح: `discount`)
-- `product_variant_id` (غير موجود)
+بعد تنفيذ الخطوة الأولى (ترقية مستخدم إلى admin)، سيتمكن هذا المستخدم من إدارة أدوار باقي المستخدمين من واجهة النظام.
