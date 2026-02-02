@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppProvider } from "@/contexts/AppContext";
+import { RegionalSettingsProvider } from "@/contexts/RegionalSettingsContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -26,10 +27,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
       <AuthProvider>
-        <AppProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
+        <RegionalSettingsProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
@@ -49,9 +51,10 @@ const App = () => (
             </BrowserRouter>
           </TooltipProvider>
         </AppProvider>
-      </AuthProvider>
-    </LanguageProvider>
-  </QueryClientProvider>
+      </RegionalSettingsProvider>
+    </AuthProvider>
+  </LanguageProvider>
+</QueryClientProvider>
 );
 
 export default App;
