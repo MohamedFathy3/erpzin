@@ -48,7 +48,8 @@ import {
   Palette,
   Flag,
   Calendar,
-  Printer
+  Printer,
+  HardDrive
 } from 'lucide-react';
 import UsersPermissions from '@/components/settings/UsersPermissions';
 import BranchesWarehouses from '@/components/settings/BranchesWarehouses';
@@ -60,6 +61,7 @@ import DataManagement from '@/components/settings/DataManagement';
 import DataImportExport from '@/components/settings/DataImportExport';
 import AuditLogViewer from '@/components/settings/AuditLogViewer';
 import CurrencyTaxManager from '@/components/settings/CurrencyTaxManager';
+import BackupManager from '@/components/settings/BackupManager';
 import { cn } from '@/lib/utils';
 
 interface SettingsSection {
@@ -171,6 +173,15 @@ const Settings = () => {
       labelAr: 'سجل المراجعة',
       description: 'Track all system changes',
       descriptionAr: 'تتبع جميع تغييرات النظام',
+      category: 'system'
+    },
+    { 
+      id: 'backup', 
+      icon: HardDrive, 
+      label: 'Backup & Restore', 
+      labelAr: 'النسخ الاحتياطي',
+      description: 'Export and import backups',
+      descriptionAr: 'تصدير واستيراد النسخ الاحتياطية',
       category: 'system'
     },
   ];
@@ -765,6 +776,9 @@ const Settings = () => {
 
       case 'audit-log':
         return <AuditLogViewer />;
+
+      case 'backup':
+        return <BackupManager />;
 
       default:
         return null;
