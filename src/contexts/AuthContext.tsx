@@ -7,6 +7,7 @@ import api from '@/lib/api';
 interface User {
   id: number;
   name: string;
+  username?: string | null;
   email: string;
   logoUrl?: string;
   logo?: number | null;
@@ -41,13 +42,13 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (identifier: string, password: string) => Promise<{ 
-    error: Error | null; 
+  signIn: (identifier: string, password: string) => Promise<{
+    error: Error | null;
     user?: User;
     token?: string;
   }>;
-  signUp: (email: string, password: string, fullName: string, image?: number) => Promise<{ 
-    error: Error | null; 
+  signUp: (email: string, password: string, fullName: string, image?: number) => Promise<{
+    error: Error | null;
     user?: User;
     token?: string;
   }>;
@@ -75,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchCurrentUser = async (token?: string): Promise<User | null> => {
     try {
       const authToken = token || Cookies.get('token');
-      
+
       if (!authToken) {
         return null;
       }
@@ -87,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       console.log('Fetch current user response:', response.data);
-      
+
       // بناءً على الـ response اللي شايفه
       if (response.data?.data) {
         // إذا كان فيه data داخل data
@@ -96,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // إذا كان data مباشر (لكن غالباً مش هيكون هنا)
         return response.data;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to fetch user:', error);
@@ -108,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getUserProfile = async (token?: string): Promise<User | null> => {
     try {
       const authToken = token || Cookies.get('token');
-      
+
       if (!authToken) {
         return null;
       }
@@ -120,12 +121,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       console.log('Get user profile response:', response.data);
-      
+
       // بناءً على الـ response اللي أرسلته
       if (response.data?.data) {
         return response.data.data;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to get user profile:', error);
@@ -138,18 +139,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const token = Cookies.get('token');
         console.log('Loading session, token:', token);
-        
+
         if (token) {
           // حاول أولاً باستخدام get-admin
           let userData = await fetchCurrentUser(token);
-          
+
           // إذا ما لقيناش بيانات، جرب endpoint تاني
           if (!userData) {
             userData = await getUserProfile(token);
           }
-          
+
           console.log('Loaded user data:', userData);
-          
+
           if (userData) {
             setUser(userData);
             setSession({
@@ -181,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (identifier: string, password: string) => {
     try {
       console.log('Sign in attempt:', identifier);
-      
+
       // تحديد إذا كان Identifier هو email أم username
       const isEmail = identifier.includes('@');
       let payload;
@@ -204,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (response.data?.token && response.data?.data) {
         const { token, data: userData } = response.data;
-        
+
         // حفظ التوكن في الـ cookies
         Cookies.set('token', token, {
           expires: 7, // 7 أيام
@@ -213,7 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         console.log('Setting user:', userData);
-        
+
         setUser(userData);
         setSession({
           token,
@@ -231,9 +232,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      
+
       let errorMessage = 'Login failed';
-      
+
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
         console.log('Error message:', errorMessage);
@@ -253,104 +254,104 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // التسجيل
-// في AuthContext.tsx - دالة signUp
-const signUp = async (email: string, password: string, fullName: string, image?: number) => {
-  try {
-    console.log('Sign up attempt:', { email, name: fullName, image });
-    
-    const payload: any = {
-      name: fullName,
-      email,
-      password,
-      password_confirmation: password
-    };
-    
-    // فقط أضف image إذا كان موجود
-    if (image) {
-      payload.image = image;
-    }
+  // في AuthContext.tsx - دالة signUp
+  const signUp = async (email: string, password: string, fullName: string, image?: number) => {
+    try {
+      console.log('Sign up attempt:', { email, name: fullName, image });
 
-    const response = await api.post('/admin', payload);
-    console.log('Signup response:', response.data);
-
-    // بعد التسجيل الناجح، اسجل الدخول تلقائياً
-    if (response.data?.data) {
-      const userData = response.data.data;
-      
-      console.log('User created successfully, now logging in...');
-      
-      // الآن اسجل الدخول باستخدام نفس البيانات
-      const loginResponse = await api.post('/admin/login', {
+      const payload: any = {
+        name: fullName,
         email,
-        password
-      });
-      
-      console.log('Auto login response:', loginResponse.data);
-      
-      if (loginResponse.data?.token && loginResponse.data?.data) {
-        const { token } = loginResponse.data;
-        
-        // حفظ التوكن في الـ cookies
-        Cookies.set('token', token, {
-          expires: 7,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict'
-        });
+        password,
+        password_confirmation: password
+      };
 
-        console.log('Setting user after auto login:', loginResponse.data.data);
-        
-        setUser(loginResponse.data.data);
-        setSession({
-          token,
-          user: loginResponse.data.data
-        });
-
-        return {
-          error: null,
-          user: loginResponse.data.data,
-          token
-        };
-      } else {
-        // إذا ما نجح تسجيل الدخول التلقائي، بس يرجع المستخدم
-        console.log('User created but auto login failed');
-        return {
-          error: null,
-          user: userData,
-          token: undefined
-        };
+      // فقط أضف image إذا كان موجود
+      if (image) {
+        payload.image = image;
       }
-    } else {
-      console.error('Invalid signup response:', response.data);
-      throw new Error('Registration failed - invalid response');
-    }
-  } catch (error: any) {
-    console.error('Registration error:', error);
-    console.error('Error response:', error.response?.data);
-    
-    let errorMessage = 'Registration failed';
-    
-    if (error.response?.data?.errors) {
-      // معالجة أخطاء الـ validation
-      const errors = error.response.data.errors;
-      errorMessage = Object.values(errors).flat().join(', ');
-    } else if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.error) {
-      errorMessage = error.response.data.error;
-    }
 
-    return {
-      error: new Error(errorMessage)
-    };
-  }
-};
+      const response = await api.post('/admin', payload);
+      console.log('Signup response:', response.data);
+
+      // بعد التسجيل الناجح، اسجل الدخول تلقائياً
+      if (response.data?.data) {
+        const userData = response.data.data;
+
+        console.log('User created successfully, now logging in...');
+
+        // الآن اسجل الدخول باستخدام نفس البيانات
+        const loginResponse = await api.post('/admin/login', {
+          email,
+          password
+        });
+
+        console.log('Auto login response:', loginResponse.data);
+
+        if (loginResponse.data?.token && loginResponse.data?.data) {
+          const { token } = loginResponse.data;
+
+          // حفظ التوكن في الـ cookies
+          Cookies.set('token', token, {
+            expires: 7,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+          });
+
+          console.log('Setting user after auto login:', loginResponse.data.data);
+
+          setUser(loginResponse.data.data);
+          setSession({
+            token,
+            user: loginResponse.data.data
+          });
+
+          return {
+            error: null,
+            user: loginResponse.data.data,
+            token
+          };
+        } else {
+          // إذا ما نجح تسجيل الدخول التلقائي، بس يرجع المستخدم
+          console.log('User created but auto login failed');
+          return {
+            error: null,
+            user: userData,
+            token: undefined
+          };
+        }
+      } else {
+        console.error('Invalid signup response:', response.data);
+        throw new Error('Registration failed - invalid response');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      console.error('Error response:', error.response?.data);
+
+      let errorMessage = 'Registration failed';
+
+      if (error.response?.data?.errors) {
+        // معالجة أخطاء الـ validation
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+
+      return {
+        error: new Error(errorMessage)
+      };
+    }
+  };
 
   // تسجيل الخروج
   const signOut = async () => {
     try {
       const token = Cookies.get('token');
       console.log('Signing out with token:', token);
-      
+
       if (token) {
         await api.post('/admin/logout', {}, {
           headers: {
@@ -367,7 +368,7 @@ const signUp = async (email: string, password: string, fullName: string, image?:
       setUser(null);
       setSession(null);
       console.log('Signed out successfully');
-      
+
       // إعادة توجيه إلى صفحة تسجيل الدخول
       window.location.href = '/auth';
     }
@@ -377,26 +378,26 @@ const signUp = async (email: string, password: string, fullName: string, image?:
   const updateUser = async (userData: Partial<User>) => {
     try {
       console.log('Updating user with:', userData);
-      
+
       const response = await api.put('/admin', userData, {
         headers: {
           Authorization: `Bearer ${Cookies.get('token')}`
         }
       });
-      
+
       console.log('Update response:', response.data);
-      
+
       if (response.data?.data) {
         const updatedUser = response.data.data;
-        
+
         console.log('Updated user:', updatedUser);
-        
+
         setUser(updatedUser);
         setSession(prev => prev ? { ...prev, user: updatedUser } : null);
-        
+
         return { error: null };
       }
-      
+
       throw new Error('Update failed - no data in response');
     } catch (error: any) {
       console.error('Update user error:', error);
@@ -410,10 +411,10 @@ const signUp = async (email: string, password: string, fullName: string, image?:
     try {
       const token = Cookies.get('token');
       console.log('Refreshing session with token:', token);
-      
+
       if (token) {
         const userData = await fetchCurrentUser(token);
-        
+
         if (userData) {
           console.log('Session refreshed with user:', userData);
           setUser(userData);
@@ -455,9 +456,9 @@ export const withAuth = <P extends object>(
 ): React.FC<P> => {
   const AuthenticatedComponent: React.FC<P> = (props) => {
     const { user, loading } = useAuth();
-    
+
     console.log('withAuth - user:', user, 'loading:', loading);
-    
+
     if (loading) {
       return (
         <div className="flex items-center justify-center min-h-screen">
@@ -465,17 +466,17 @@ export const withAuth = <P extends object>(
         </div>
       );
     }
-    
+
     if (!user) {
       console.log('withAuth - no user, redirecting');
       // إعادة توجيه إلى صفحة المصادقة
       window.location.href = '/auth';
       return null;
     }
-    
+
     return <Component {...props} />;
   };
-  
+
   return AuthenticatedComponent;
 };
 
