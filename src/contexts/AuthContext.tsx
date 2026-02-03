@@ -7,7 +7,6 @@ import api from '@/lib/api';
 interface User {
   id: number;
   name: string;
-  username?: string | null;
   email: string;
   logoUrl?: string;
   logo?: number | null;
