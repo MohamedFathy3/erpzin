@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,7 @@ import CustomerSupplierMovement from '@/components/reports/CustomerSupplierMovem
 
 const Reports = () => {
   const { language, direction } = useLanguage();
+  const { formatCurrency: formatRegionalCurrency } = useRegionalSettings();
   const printRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dateRange, setDateRange] = useState('month');

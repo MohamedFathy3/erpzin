@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
 import KPICard from '@/components/dashboard/KPICard';
 import SalesTrendChart from '@/components/dashboard/SalesTrendChart';
@@ -27,6 +28,7 @@ const Dashboard: React.FC = () => {
   const { language, t } = useLanguage();
   const { currentBranch } = useApp();
   const { user } = useAuth();
+  const { formatCurrency, getCurrencySymbol } = useRegionalSettings();
 
   // Fetch aggregated dashboard data
   const { data: dashboardData, isLoading } = useQuery({
@@ -130,9 +132,6 @@ const Dashboard: React.FC = () => {
     refetchInterval: 60000, // Refresh every minute
   });
 
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString(language === 'ar' ? 'ar-YE' : 'en-US');
-  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();

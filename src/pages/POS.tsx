@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
 import { Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, Truck, RotateCcw, DollarSign, Building2, Warehouse } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -65,6 +66,7 @@ interface DeliveryPerson {
 const POS: React.FC = () => {
   const { language, t } = useLanguage();
   const { userBranch, userWarehouse, currentBranch, currentWarehouse } = useApp();
+  const { formatCurrency } = useRegionalSettings();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -328,8 +330,8 @@ const POS: React.FC = () => {
     toast({
       title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
       description: language === 'ar' 
-        ? `المبلغ: ${calculateTotal().toLocaleString()} ر.ي` 
-        : `Amount: ${calculateTotal().toLocaleString()} YER`
+        ? `المبلغ: ${formatCurrency(calculateTotal())}` 
+        : `Amount: ${formatCurrency(calculateTotal())}`
     });
   };
 

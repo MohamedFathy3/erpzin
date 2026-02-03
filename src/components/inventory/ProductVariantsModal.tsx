@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
 import { Package, Layers, Edit2, Box, DollarSign, Barcode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
   onEditProduct
 }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
   const { data: variants = [], isLoading } = useQuery({
     queryKey: ['product-variants-inventory', product?.id],
@@ -135,7 +137,7 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
               {/* Price & Stock Progress */}
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-primary font-bold text-lg">{product.price.toLocaleString()} YER</span>
+                  <span className="text-primary font-bold text-lg">{formatCurrency(product.price)}</span>
                   <span className="text-muted-foreground">
                     {language === 'ar' ? 'إجمالي المخزون:' : 'Total Stock:'} <span className="font-bold text-foreground">{totalStock}</span>
                   </span>

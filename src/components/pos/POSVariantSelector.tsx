@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
 import { X, Check, ShoppingCart, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
   onSelectVariant
 }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
   const [selectedVariants, setSelectedVariants] = useState<SelectedVariant[]>([]);
 
   // Fetch POS settings to check allowNegativeStock
@@ -283,7 +285,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
               <h2 className="text-lg font-bold text-foreground">
                 {language === 'ar' ? product.nameAr : product.name}
               </h2>
-              <p className="text-sm text-muted-foreground">{product.price.toLocaleString()} YER</p>
+              <p className="text-sm text-muted-foreground">{formatCurrency(product.price)}</p>
             </div>
           </div>
           <button

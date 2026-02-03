@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ interface PurchaseOrderFormProps {
 
 const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, onSave, editOrder }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
   
   const [supplierId, setSupplierId] = useState('');
@@ -270,7 +272,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
               <div>
                 <Label>{language === 'ar' ? 'الإجمالي' : 'Total'}</Label>
                 <div className="h-10 px-3 flex items-center bg-muted rounded-md text-lg font-bold text-primary">
-                  {totalAmount.toLocaleString()} YER
+                  {formatCurrency(totalAmount)}
                 </div>
               </div>
             </div>
@@ -312,7 +314,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
                             </div>
                           </div>
                           <div className="text-end">
-                            <p className="font-medium">{Number(product.cost || 0).toLocaleString()} YER</p>
+                            <p className="font-medium">{formatCurrency(Number(product.cost || 0))}</p>
                             <Badge variant="outline" className="text-xs">
                               {language === 'ar' ? 'المتوفر:' : 'Stock:'} {product.stock}
                             </Badge>
@@ -369,7 +371,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
                             />
                           </TableCell>
                           <TableCell className="font-medium">
-                            {item.total_cost.toLocaleString()} YER
+                            {formatCurrency(item.total_cost)}
                           </TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(index)}>
@@ -400,7 +402,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
         {/* Actions */}
         <div className="flex justify-between items-center pt-4 border-t">
           <div className="text-lg font-bold">
-            {language === 'ar' ? 'الإجمالي:' : 'Total:'} {totalAmount.toLocaleString()} YER
+            {language === 'ar' ? 'الإجمالي:' : 'Total:'} {formatCurrency(totalAmount)}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>
