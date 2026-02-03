@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Store, Warehouse } from 'lucide-react';
 import {
@@ -25,35 +25,47 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// تعريف الأنواع بناءً على الـ response الجديد
 interface Branch {
-  id: string;
+  id: number;
   name: string;
-  name_ar: string | null;
+  name_ar?: string | null;
   code: string | null;
   address: string | null;
   phone: string | null;
-  manager_name: string | null;
-  is_active: boolean | null;
-  is_main: boolean | null;
+  manager: string | null;
+  active: boolean;
+  main_branch: boolean;
+  image?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
+// ✅ تعديل WarehouseType علشان branch_id يكون object
 interface WarehouseType {
-  id: string;
+  id: number;
   name: string;
   name_ar: string | null;
   code: string | null;
   address: string | null;
   phone: string | null;
-  manager_name: string | null;
-  is_active: boolean | null;
-  is_main: boolean | null;
-  notes: string | null;
+  manager: string | null;
+  active: boolean;
+  main_branch: boolean;
+  note: string | null;
+  branch_id: Branch | null; // ✅ أصبح object كامل (ممكن يكون null)
+  image: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-interface BranchWarehouse {
-  branch_id: string;
-  warehouse_id: string;
-  is_primary: boolean;
+interface ApiResponse<T> {
+  data: T | T[];
+  message?: string;
+  status: string | number;
+  result?: string;
+  links?: any;
+  meta?: any;
 }
 
 const BranchesWarehouses = () => {
@@ -62,32 +74,33 @@ const BranchesWarehouses = () => {
 
   // Branch form state
   const [branchForm, setBranchForm] = useState({
-    id: '',
+    id: 0,
     name: '',
     name_ar: '',
     code: '',
     address: '',
     phone: '',
-    manager_name: '',
-    is_active: true,
-    is_main: false
+    manager: '',
+    active: true,
+    main_branch: false,
+    image: null as string | null
   });
   const [isEditingBranch, setIsEditingBranch] = useState(false);
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
 
   // Warehouse form state
   const [warehouseForm, setWarehouseForm] = useState({
-    id: '',
+    id: 0,
     name: '',
     name_ar: '',
     code: '',
     address: '',
     phone: '',
-    manager_name: '',
-    is_active: true,
-    is_main: false,
-    notes: '',
-    branch_ids: [] as string[]
+    manager: '',
+    active: true,
+    main_branch: false,
+    note: '',
+    branch_id: null as number | null // ✅ الـ ID فقط للـ form
   });
   const [isEditingWarehouse, setIsEditingWarehouse] = useState(false);
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
@@ -127,6 +140,7 @@ const BranchesWarehouses = () => {
       selectBranches: 'Select Branches',
       noBranches: 'No branches yet',
       noWarehouses: 'No warehouses yet',
+      loading: 'Loading...',
       createWarehousesForBranches: 'Create Warehouses for All Branches',
       warehousesCreated: 'Warehouses created successfully',
       creatingWarehouses: 'Creating warehouses...'
@@ -165,168 +179,205 @@ const BranchesWarehouses = () => {
       selectBranches: 'اختر الفروع',
       noBranches: 'لا توجد فروع بعد',
       noWarehouses: 'لا توجد مخازن بعد',
+      loading: 'جاري التحميل...',
       createWarehousesForBranches: 'إنشاء مخازن لجميع الفروع',
       warehousesCreated: 'تم إنشاء المخازن بنجاح',
       creatingWarehouses: 'جاري إنشاء المخازن...'
     }
   }[language];
 
-  // Fetch branches
-  const { data: branches = [] } = useQuery({
+  // Fetch branches من API Laravel
+  const { data: branches = [], isLoading: isLoadingBranches } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('branches').select('*').order('is_main', { ascending: false });
-      if (error) throw error;
-      return data as Branch[];
+      const response = await api.get<ApiResponse<Branch[]>>('/branch');
+      return Array.isArray(response.data.data) ? response.data.data : [];
+    },
+    onError: (error) => {
+      toast({
+        title: language === 'ar' ? 'خطأ في تحميل الفروع' : 'Error loading branches',
+        variant: 'destructive'
+      });
     }
   });
 
-  // Fetch warehouses with their linked branches
-  const { data: warehouses = [] } = useQuery({
+  // Fetch warehouses من API Laravel
+  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('warehouses').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as WarehouseType[];
-    }
-  });
-
-  // Fetch branch-warehouse relationships
-  const { data: branchWarehouses = [] } = useQuery({
-    queryKey: ['branch-warehouses'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('branch_warehouses').select('*');
-      if (error) throw error;
-      return data as BranchWarehouse[];
+      const response = await api.get<ApiResponse<WarehouseType[]>>('/warehouse');
+      return Array.isArray(response.data.data) ? response.data.data : [];
+    },
+    onError: (error) => {
+      toast({
+        title: language === 'ar' ? 'خطأ في تحميل المخازن' : 'Error loading warehouses',
+        variant: 'destructive'
+      });
     }
   });
 
   // Branch mutations
   const saveBranchMutation = useMutation({
     mutationFn: async (branch: typeof branchForm) => {
+      const payload = {
+        name: branch.name,
+        name_ar: branch.name_ar || null,
+        code: branch.code || null,
+        address: branch.address || null,
+        phone: branch.phone || null,
+        manager: branch.manager || null,
+        active: branch.active,
+        main_branch: branch.main_branch,
+        image: branch.image || null
+      };
+
       if (branch.id) {
-        const { error } = await supabase.from('branches').update({
-          name: branch.name,
-          name_ar: branch.name_ar || null,
-          code: branch.code || null,
-          address: branch.address || null,
-          phone: branch.phone || null,
-          manager_name: branch.manager_name || null,
-          is_active: branch.is_active,
-          is_main: branch.is_main
-        }).eq('id', branch.id);
-        if (error) throw error;
+        // Update existing branch
+        const response = await api.put<ApiResponse<Branch>>(`/branch/${branch.id}`, payload);
+        return response.data.data;
       } else {
-        const { error } = await supabase.from('branches').insert({
-          name: branch.name,
-          name_ar: branch.name_ar || null,
-          code: branch.code || null,
-          address: branch.address || null,
-          phone: branch.phone || null,
-          manager_name: branch.manager_name || null,
-          is_active: branch.is_active,
-          is_main: branch.is_main
-        });
-        if (error) throw error;
+        // Create new branch
+        const response = await api.post<ApiResponse<Branch>>('/branch', payload);
+        return response.data.data;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      toast({ title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully' });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      toast({ 
+        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
+        description: language === 'ar' ? 'تم حفظ بيانات الفرع' : 'Branch data saved'
+      });
       resetBranchForm();
       setBranchDialogOpen(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الحفظ' : 'Error saving', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error saving branch:', error);
+      let errorMessage = language === 'ar' ? 'خطأ في الحفظ' : 'Error saving';
+      
+      if (error.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({ 
+        title: errorMessage,
+        variant: 'destructive' 
+      });
     }
   });
 
   const deleteBranchMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('branches').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      return await api.delete('/branch/delete/', {
+        data: {
+          items: [id],
+        }
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] });
-      queryClient.invalidateQueries({ queryKey: ['branch-warehouses'] });
-      toast({ title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully' });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      toast({ 
+        title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully',
+        description: language === 'ar' ? 'تم حذف الفرع' : 'Branch deleted'
+      });
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الحذف' : 'Error deleting', variant: 'destructive' });
+    onError: (error: any) => {
+      let errorMessage = language === 'ar' ? 'خطأ في الحذف' : 'Error deleting';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({ 
+        title: errorMessage,
+        variant: 'destructive' 
+      });
     }
   });
 
   // Warehouse mutations
   const saveWarehouseMutation = useMutation({
     mutationFn: async (warehouse: typeof warehouseForm) => {
-      let warehouseId = warehouse.id;
-      
-      if (warehouse.id) {
-        const { error } = await supabase.from('warehouses').update({
-          name: warehouse.name,
-          name_ar: warehouse.name_ar || null,
-          code: warehouse.code || null,
-          address: warehouse.address || null,
-          phone: warehouse.phone || null,
-          manager_name: warehouse.manager_name || null,
-          is_active: warehouse.is_active,
-          is_main: warehouse.is_main,
-          notes: warehouse.notes || null
-        }).eq('id', warehouse.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from('warehouses').insert({
-          name: warehouse.name,
-          name_ar: warehouse.name_ar || null,
-          code: warehouse.code || null,
-          address: warehouse.address || null,
-          phone: warehouse.phone || null,
-          manager_name: warehouse.manager_name || null,
-          is_active: warehouse.is_active,
-          is_main: warehouse.is_main,
-          notes: warehouse.notes || null
-        }).select('id').single();
-        if (error) throw error;
-        warehouseId = data.id;
-      }
+      const payload = {
+        name: warehouse.name,
+        name_ar: warehouse.name_ar || null,
+        code: warehouse.code || null,
+        address: warehouse.address || null,
+        phone: warehouse.phone || null,
+        manager: warehouse.manager || null,
+        active: warehouse.active,
+        main_branch: warehouse.main_branch,
+        note: warehouse.note || null,
+        branch_id: warehouse.branch_id // ✅ إرسال الـ ID فقط
+      };
 
-      // Update branch-warehouse relationships
-      await supabase.from('branch_warehouses').delete().eq('warehouse_id', warehouseId);
-      
-      if (warehouse.branch_ids.length > 0) {
-        const relationships = warehouse.branch_ids.map((branchId, index) => ({
-          branch_id: branchId,
-          warehouse_id: warehouseId,
-          is_primary: index === 0
-        }));
-        const { error } = await supabase.from('branch_warehouses').insert(relationships);
-        if (error) throw error;
+      if (warehouse.id) {
+        // Update existing warehouse
+        const response = await api.put<ApiResponse<WarehouseType>>(`/warehouse/${warehouse.id}`, payload);
+        return response.data.data;
+      } else {
+        // Create new warehouse
+        const response = await api.post<ApiResponse<WarehouseType>>('/warehouse', payload);
+        return response.data.data;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-      queryClient.invalidateQueries({ queryKey: ['branch-warehouses'] });
-      toast({ title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully' });
+      toast({ 
+        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
+        description: language === 'ar' ? 'تم حفظ بيانات المخزن' : 'Warehouse data saved'
+      });
       resetWarehouseForm();
       setWarehouseDialogOpen(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الحفظ' : 'Error saving', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error saving warehouse:', error);
+      let errorMessage = language === 'ar' ? 'خطأ في الحفظ' : 'Error saving';
+      
+      if (error.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({ 
+        title: errorMessage,
+        variant: 'destructive' 
+      });
     }
   });
 
   const deleteWarehouseMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('warehouses').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      await api.delete('/warehouse/delete/', {
+        data: {
+          items: [id],
+        }
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-      queryClient.invalidateQueries({ queryKey: ['branch-warehouses'] });
-      toast({ title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully' });
+      toast({ 
+        title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully',
+        description: language === 'ar' ? 'تم حذف المخزن' : 'Warehouse deleted'
+      });
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الحذف' : 'Error deleting', variant: 'destructive' });
+    onError: (error: any) => {
+      let errorMessage = language === 'ar' ? 'خطأ في الحذف' : 'Error deleting';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({ 
+        title: errorMessage,
+        variant: 'destructive' 
+      });
     }
   });
 
@@ -394,32 +445,33 @@ const BranchesWarehouses = () => {
 
   const resetBranchForm = () => {
     setBranchForm({
-      id: '',
+      id: 0,
       name: '',
       name_ar: '',
       code: '',
       address: '',
       phone: '',
-      manager_name: '',
-      is_active: true,
-      is_main: false
+      manager: '',
+      active: true,
+      main_branch: false,
+      image: null
     });
     setIsEditingBranch(false);
   };
 
   const resetWarehouseForm = () => {
     setWarehouseForm({
-      id: '',
+      id: 0,
       name: '',
       name_ar: '',
       code: '',
       address: '',
       phone: '',
-      manager_name: '',
-      is_active: true,
-      is_main: false,
-      notes: '',
-      branch_ids: []
+      manager: '',
+      active: true,
+      main_branch: false,
+      note: '',
+      branch_id: null
     });
     setIsEditingWarehouse(false);
   };
@@ -432,19 +484,20 @@ const BranchesWarehouses = () => {
       code: branch.code || '',
       address: branch.address || '',
       phone: branch.phone || '',
-      manager_name: branch.manager_name || '',
-      is_active: branch.is_active ?? true,
-      is_main: branch.is_main ?? false
+      manager: branch.manager || '',
+      active: branch.active,
+      main_branch: branch.main_branch,
+      image: branch.image || null
     });
     setIsEditingBranch(true);
     setBranchDialogOpen(true);
   };
 
+  // ✅ التصحيح هنا!
   const editWarehouse = (warehouse: WarehouseType) => {
-    const linkedBranchIds = branchWarehouses
-      .filter(bw => bw.warehouse_id === warehouse.id)
-      .map(bw => bw.branch_id);
-
+    console.log('Warehouse data for edit:', warehouse);
+    console.log('Branch ID from object:', warehouse.branch_id?.id);
+    
     setWarehouseForm({
       id: warehouse.id,
       name: warehouse.name,
@@ -452,38 +505,48 @@ const BranchesWarehouses = () => {
       code: warehouse.code || '',
       address: warehouse.address || '',
       phone: warehouse.phone || '',
-      manager_name: warehouse.manager_name || '',
-      is_active: warehouse.is_active ?? true,
-      is_main: warehouse.is_main ?? false,
-      notes: warehouse.notes || '',
-      branch_ids: linkedBranchIds
+      manager: warehouse.manager || '',
+      active: warehouse.active,
+      main_branch: warehouse.main_branch,
+      note: warehouse.note || '',
+      // ✅ التصحيح المهم: ناخد الـ ID فقط من الـ object
+      branch_id: warehouse.branch_id?.id || null
     });
     setIsEditingWarehouse(true);
     setWarehouseDialogOpen(true);
   };
 
-  const getWarehouseBranches = (warehouseId: string) => {
-    const branchIds = branchWarehouses
-      .filter(bw => bw.warehouse_id === warehouseId)
-      .map(bw => bw.branch_id);
-    return branches.filter(b => branchIds.includes(b.id));
+  // ✅ دالة لعرض اسم الفرع في الجدول
+  const getWarehouseBranchName = (warehouse: WarehouseType) => {
+    if (!warehouse.branch_id) return '-';
+    return language === 'ar' ? 
+      warehouse.branch_id.name_ar || warehouse.branch_id.name : 
+      warehouse.branch_id.name;
   };
 
-  const getBranchWarehouses = (branchId: string) => {
-    const warehouseIds = branchWarehouses
-      .filter(bw => bw.branch_id === branchId)
-      .map(bw => bw.warehouse_id);
-    return warehouses.filter(w => warehouseIds.includes(w.id));
+  // ✅ دالة لحساب عدد المخازن لكل فرع
+  const getBranchWarehousesCount = (branchId: number) => {
+    return warehouses.filter(w => w.branch_id?.id === branchId).length;
   };
 
-  const toggleBranchSelection = (branchId: string) => {
+  // ✅ تصحيح دالة toggleBranchSelection
+  const toggleBranchSelection = (branchId: number) => {
     setWarehouseForm(prev => ({
       ...prev,
-      branch_ids: prev.branch_ids.includes(branchId)
-        ? prev.branch_ids.filter(id => id !== branchId)
-        : [...prev.branch_ids, branchId]
+      branch_id: prev.branch_id === branchId ? null : branchId
     }));
   };
+
+  if (isLoadingBranches || isLoadingWarehouses) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">{t.loading}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -562,8 +625,8 @@ const BranchesWarehouses = () => {
                   <div className="space-y-2">
                     <Label>{t.manager}</Label>
                     <Input 
-                      value={branchForm.manager_name}
-                      onChange={(e) => setBranchForm({ ...branchForm, manager_name: e.target.value })}
+                      value={branchForm.manager}
+                      onChange={(e) => setBranchForm({ ...branchForm, manager: e.target.value })}
                       placeholder={t.manager}
                     />
                   </div>
@@ -571,16 +634,16 @@ const BranchesWarehouses = () => {
                     <div className="flex items-center gap-2">
                       <Switch 
                         id="branch_active"
-                        checked={branchForm.is_active}
-                        onCheckedChange={(checked) => setBranchForm({ ...branchForm, is_active: checked })}
+                        checked={branchForm.active}
+                        onCheckedChange={(checked) => setBranchForm({ ...branchForm, active: checked })}
                       />
                       <Label htmlFor="branch_active">{t.active}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <Switch 
                         id="branch_main"
-                        checked={branchForm.is_main}
-                        onCheckedChange={(checked) => setBranchForm({ ...branchForm, is_main: checked })}
+                        checked={branchForm.main_branch}
+                        onCheckedChange={(checked) => setBranchForm({ ...branchForm, main_branch: checked })}
                       />
                       <Label htmlFor="branch_main">{t.mainBranch}</Label>
                     </div>
@@ -595,7 +658,12 @@ const BranchesWarehouses = () => {
                     onClick={() => saveBranchMutation.mutate(branchForm)}
                     disabled={!branchForm.name || saveBranchMutation.isPending}
                   >
-                    {t.save}
+                    {saveBranchMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </>
+                    ) : t.save}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -626,35 +694,36 @@ const BranchesWarehouses = () => {
                   <TableCell className="max-w-[150px] truncate">{branch.address || '-'}</TableCell>
                   <TableCell dir="ltr">{branch.phone || '-'}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {getBranchWarehouses(branch.id).slice(0, 2).map(w => (
-                        <Badge key={w.id} variant="outline" className="text-xs">
-                          {language === 'ar' ? w.name_ar || w.name : w.name}
-                        </Badge>
-                      ))}
-                      {getBranchWarehouses(branch.id).length > 2 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{getBranchWarehouses(branch.id).length - 2}
-                        </Badge>
-                      )}
-                    </div>
+                    <Badge variant="outline">
+                      {getBranchWarehousesCount(branch.id)} {t.warehouses}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    {branch.is_main && <Badge className="bg-primary">{t.mainBranch}</Badge>}
+                    {branch.main_branch && <Badge className="bg-primary">{t.mainBranch}</Badge>}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={branch.is_active ? 'default' : 'secondary'}>
-                      {branch.is_active ? t.active : t.inactive}
+                    <Badge variant={branch.active ? 'default' : 'secondary'}>
+                      {branch.active ? t.active : t.inactive}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => editBranch(branch)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => editBranch(branch)}
+                        disabled={saveBranchMutation.isPending}
+                      >
                         <Edit size={16} />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:text-destructive"
+                            disabled={deleteBranchMutation.isPending}
+                          >
                             <Trash2 size={16} />
                           </Button>
                         </AlertDialogTrigger>
@@ -668,8 +737,14 @@ const BranchesWarehouses = () => {
                             <AlertDialogAction 
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               onClick={() => deleteBranchMutation.mutate(branch.id)}
+                              disabled={deleteBranchMutation.isPending}
                             >
-                              {t.delete}
+                              {deleteBranchMutation.isPending ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  {language === 'ar' ? 'جاري الحذف...' : 'Deleting...'}
+                                </>
+                              ) : t.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -765,16 +840,16 @@ const BranchesWarehouses = () => {
                   <div className="space-y-2">
                     <Label>{t.manager}</Label>
                     <Input 
-                      value={warehouseForm.manager_name}
-                      onChange={(e) => setWarehouseForm({ ...warehouseForm, manager_name: e.target.value })}
+                      value={warehouseForm.manager}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, manager: e.target.value })}
                       placeholder={t.manager}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>{t.notes}</Label>
                     <Input 
-                      value={warehouseForm.notes}
-                      onChange={(e) => setWarehouseForm({ ...warehouseForm, notes: e.target.value })}
+                      value={warehouseForm.note}
+                      onChange={(e) => setWarehouseForm({ ...warehouseForm, note: e.target.value })}
                       placeholder={t.notes}
                     />
                   </div>
@@ -790,12 +865,12 @@ const BranchesWarehouses = () => {
                           <div key={branch.id} className="flex items-center gap-2">
                             <Checkbox
                               id={`branch-${branch.id}`}
-                              checked={warehouseForm.branch_ids.includes(branch.id)}
+                              checked={warehouseForm.branch_id === branch.id}
                               onCheckedChange={() => toggleBranchSelection(branch.id)}
                             />
                             <Label htmlFor={`branch-${branch.id}`} className="cursor-pointer flex-1">
                               {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                              {branch.is_main && (
+                              {branch.main_branch && (
                                 <Badge variant="outline" className="ms-2 text-xs">{t.mainBranch}</Badge>
                               )}
                             </Label>
@@ -809,16 +884,16 @@ const BranchesWarehouses = () => {
                     <div className="flex items-center gap-2">
                       <Switch 
                         id="warehouse_active"
-                        checked={warehouseForm.is_active}
-                        onCheckedChange={(checked) => setWarehouseForm({ ...warehouseForm, is_active: checked })}
+                        checked={warehouseForm.active}
+                        onCheckedChange={(checked) => setWarehouseForm({ ...warehouseForm, active: checked })}
                       />
                       <Label htmlFor="warehouse_active">{t.active}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <Switch 
                         id="warehouse_main"
-                        checked={warehouseForm.is_main}
-                        onCheckedChange={(checked) => setWarehouseForm({ ...warehouseForm, is_main: checked })}
+                        checked={warehouseForm.main_branch}
+                        onCheckedChange={(checked) => setWarehouseForm({ ...warehouseForm, main_branch: checked })}
                       />
                       <Label htmlFor="warehouse_main">{t.mainWarehouse}</Label>
                     </div>
@@ -833,7 +908,12 @@ const BranchesWarehouses = () => {
                     onClick={() => saveWarehouseMutation.mutate(warehouseForm)}
                     disabled={!warehouseForm.name || saveWarehouseMutation.isPending}
                   >
-                    {t.save}
+                    {saveWarehouseMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </>
+                    ) : t.save}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -862,37 +942,36 @@ const BranchesWarehouses = () => {
                     {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {getWarehouseBranches(warehouse.id).slice(0, 2).map(b => (
-                        <Badge key={b.id} variant="outline" className="text-xs">
-                          {language === 'ar' ? b.name_ar || b.name : b.name}
-                        </Badge>
-                      ))}
-                      {getWarehouseBranches(warehouse.id).length > 2 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{getWarehouseBranches(warehouse.id).length - 2}
-                        </Badge>
-                      )}
-                    </div>
+                    {getWarehouseBranchName(warehouse)}
                   </TableCell>
                   <TableCell className="max-w-[150px] truncate">{warehouse.address || '-'}</TableCell>
                   <TableCell dir="ltr">{warehouse.phone || '-'}</TableCell>
                   <TableCell>
-                    {warehouse.is_main && <Badge className="bg-primary">{t.mainWarehouse}</Badge>}
+                    {warehouse.main_branch && <Badge className="bg-primary">{t.mainWarehouse}</Badge>}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={warehouse.is_active ? 'default' : 'secondary'}>
-                      {warehouse.is_active ? t.active : t.inactive}
+                    <Badge variant={warehouse.active ? 'default' : 'secondary'}>
+                      {warehouse.active ? t.active : t.inactive}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => editWarehouse(warehouse)}>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => editWarehouse(warehouse)}
+                        disabled={saveWarehouseMutation.isPending}
+                      >
                         <Edit size={16} />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="text-destructive hover:text-destructive"
+                            disabled={deleteWarehouseMutation.isPending}
+                          >
                             <Trash2 size={16} />
                           </Button>
                         </AlertDialogTrigger>
@@ -906,8 +985,14 @@ const BranchesWarehouses = () => {
                             <AlertDialogAction 
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               onClick={() => deleteWarehouseMutation.mutate(warehouse.id)}
+                              disabled={deleteWarehouseMutation.isPending}
                             >
-                              {t.delete}
+                              {deleteWarehouseMutation.isPending ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  {language === 'ar' ? 'جاري الحذف...' : 'Deleting...'}
+                                </>
+                              ) : t.delete}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>

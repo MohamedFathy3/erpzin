@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,17 +36,16 @@ import {
   Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
   Camera, Gamepad2, Book, Palette, Sparkles, Heart, Star, Crown,
   Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell,
-  PanelLeftClose, PanelLeft
+  PanelLeftClose, PanelLeft, Tv
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface DbCategory {
-  id: string;
+  id: number;
   name: string;
-  name_ar: string | null;
-  parent_id: string | null;
-  icon: string | null;
+  name_ar?: string;
+  parent_id?: number;
+  icon?: string;
 }
 
 export interface CategoryWithCount extends DbCategory {
@@ -95,6 +94,7 @@ const CATEGORY_ICONS = [
   { value: 'Music', label: 'Music', labelAr: 'موسيقى', color: 'purple' },
   { value: 'Film', label: 'Entertainment', labelAr: 'ترفيه', color: 'pink' },
   { value: 'Dumbbell', label: 'Fitness', labelAr: 'لياقة', color: 'orange' },
+  { value: 'Tv', label: 'Electronics', labelAr: 'إلكترونيات', color: 'blue' },
 ];
 
 const ICON_COLORS: Record<string, string> = {
@@ -125,7 +125,7 @@ const IconComponent: React.FC<{ iconName: string; size?: number; className?: str
     Package, Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
     Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
     Camera, Gamepad2, Book, Palette, Sparkles, Heart, Star, Crown,
-    Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell,
+    Layers, Tag, Briefcase, Car, Bike, Plane, Music, Film, Dumbbell, Tv,
   };
   const Icon = icons[iconName] || Package;
   const colorClass = ICON_COLORS[getIconColor(iconName)] || ICON_COLORS.blue;
@@ -152,7 +152,7 @@ const CategoryNode: React.FC<{
 }> = ({ category, level, selectedCategory, onSelectCategory, onEdit, onDelete, language }) => {
   const [expanded, setExpanded] = useState(level < 2);
   const hasChildren = category.children.length > 0;
-  const isSelected = selectedCategory === category.id;
+  const isSelected = selectedCategory === category.id.toString();
 
   return (
     <div className="animate-fade-in">
@@ -164,7 +164,7 @@ const CategoryNode: React.FC<{
             : 'hover:bg-muted/80'
         )}
         style={{ paddingInlineStart: `${level * 16 + 8}px` }}
-        onClick={() => onSelectCategory(category.id)}
+        onClick={() => onSelectCategory(category.id.toString())}
       >
         {hasChildren ? (
           <button
@@ -281,20 +281,32 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     name_ar: '',
-    parent_id: '',
+    parent_id: '' as string | number | '',
     icon: 'Package',
   });
 
-  // Fetch categories
+  // Fetch categories from Laravel API
   const { data: categories = [], isLoading } = useQuery({
-    queryKey: ['categories'],
+    queryKey: ['categories-tree'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data as DbCategory[];
+      try {
+        const response = await api.post('/category/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
+          variant: 'destructive'
+        });
+        return [];
+      }
     },
   });
 
@@ -302,18 +314,30 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   const { data: productCounts = {} } = useQuery({
     queryKey: ['category-product-counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('category_id');
-      if (error) throw error;
-      
-      const counts: Record<string, number> = {};
-      data.forEach((p) => {
-        if (p.category_id) {
-          counts[p.category_id] = (counts[p.category_id] || 0) + 1;
-        }
-      });
-      return counts;
+      try {
+        const response = await api.post('/product/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        const products = response.data.data || [];
+        const counts: Record<string, number> = {};
+        
+        products.forEach((p: any) => {
+          if (p.category_id) {
+            const catId = p.category_id.toString();
+            counts[catId] = (counts[catId] || 0) + 1;
+          }
+        });
+        
+        return counts;
+      } catch (error) {
+        console.error('Error fetching product counts:', error);
+        return {};
+      }
     },
   });
 
@@ -346,62 +370,93 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; name_ar: string; parent_id: string | null; icon: string }) => {
-      const { error } = await supabase.from('categories').insert({
-        name: data.name,
-        name_ar: data.name_ar || null,
-        parent_id: data.parent_id || null,
-        icon: data.icon,
-      });
-      if (error) throw error;
+    mutationFn: async (data: { 
+      name: string; 
+      name_ar?: string; 
+      parent_id?: number; 
+      icon: string 
+    }) => {
+      const response = await api.post('/category', data);
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast({ title: language === 'ar' ? 'تم إضافة التصنيف' : 'Category added' });
+      queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
+      toast({ 
+        title: language === 'ar' ? 'تم إضافة التصنيف' : 'Category added',
+        variant: 'default'
+      });
       resetForm();
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error creating category:', error);
+      toast({ 
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', 
+        description: error.response?.data?.message || 'Failed to create category',
+        variant: 'destructive' 
+      });
     },
   });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; name_ar: string; parent_id: string | null; icon: string }) => {
-      const { error } = await supabase
-        .from('categories')
-        .update({
-          name: data.name,
-          name_ar: data.name_ar || null,
-          parent_id: data.parent_id || null,
-          icon: data.icon,
-        })
-        .eq('id', data.id);
-      if (error) throw error;
+    mutationFn: async (data: { 
+      id: number; 
+      name: string; 
+      name_ar?: string; 
+      parent_id?: number; 
+      icon: string 
+    }) => {
+      const response = await api.put(`/category/${data.id}`, data);
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast({ title: language === 'ar' ? 'تم تحديث التصنيف' : 'Category updated' });
+      queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
+      toast({ 
+        title: language === 'ar' ? 'تم تحديث التصنيف' : 'Category updated',
+        variant: 'default'
+      });
       resetForm();
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error updating category:', error);
+      toast({ 
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: error.response?.data?.message || 'Failed to update category',
+        variant: 'destructive' 
+      });
     },
   });
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('categories').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/category/${id}`, {
+        data: {
+          items: [id],
+        },
+      })
+      
+      return response.data
+      
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast({ title: language === 'ar' ? 'تم حذف التصنيف' : 'Category deleted' });
+      queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
+      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
+      toast({ 
+        title: language === 'ar' ? 'تم حذف التصنيف' : 'Category deleted',
+        variant: 'default'
+      });
       setDeleteCategory(null);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error deleting category:', error);
+      toast({ 
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: error.response?.data?.message || 'Failed to delete category',
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -430,25 +485,27 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
 
   const handleSubmit = () => {
     if (!formData.name.trim()) {
-      toast({ title: language === 'ar' ? 'اسم التصنيف مطلوب' : 'Category name is required', variant: 'destructive' });
+      toast({ 
+        title: language === 'ar' ? 'اسم التصنيف مطلوب' : 'Category name is required', 
+        variant: 'destructive' 
+      });
       return;
     }
+
+    const categoryData = {
+      name: formData.name,
+      name_ar: formData.name_ar || undefined,
+      parent_id: formData.parent_id ? Number(formData.parent_id) : undefined,
+      icon: formData.icon,
+    };
 
     if (editingCategory) {
       updateMutation.mutate({
         id: editingCategory.id,
-        name: formData.name,
-        name_ar: formData.name_ar,
-        parent_id: formData.parent_id || null,
-        icon: formData.icon,
+        ...categoryData
       });
     } else {
-      createMutation.mutate({
-        name: formData.name,
-        name_ar: formData.name_ar,
-        parent_id: formData.parent_id || null,
-        icon: formData.icon,
-      });
+      createMutation.mutate(categoryData);
     }
   };
 
@@ -493,6 +550,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
           size="sm" 
           onClick={handleAdd} 
           className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:rotate-90"
+          disabled={createMutation.isPending || updateMutation.isPending}
         >
           <Plus size={16} />
         </Button>
@@ -596,8 +654,8 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
             <div>
               <Label>{language === 'ar' ? 'التصنيف الأب' : 'Parent Category'}</Label>
               <Select
-                value={formData.parent_id}
-                onValueChange={(val) => setFormData({ ...formData, parent_id: val === 'none' ? '' : val })}
+                value={formData.parent_id.toString()}
+                onValueChange={(val) => setFormData({ ...formData, parent_id: val === 'none' ? '' : Number(val) })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={language === 'ar' ? 'بدون (تصنيف رئيسي)' : 'None (root category)'} />
@@ -605,9 +663,9 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
                 <SelectContent>
                   <SelectItem value="none">{language === 'ar' ? 'بدون (تصنيف رئيسي)' : 'None (root category)'}</SelectItem>
                   {categories
-                    .filter((c) => c.id !== editingCategory?.id)
+                    .filter((c) => !editingCategory || c.id !== editingCategory.id)
                     .map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
+                      <SelectItem key={cat.id} value={cat.id.toString()}>
                         {language === 'ar' ? (cat.name_ar || cat.name) : cat.name}
                       </SelectItem>
                     ))}
@@ -640,10 +698,20 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
             <Button variant="outline" onClick={resetForm}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
-              {editingCategory
-                ? (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
-                : (language === 'ar' ? 'إضافة' : 'Add')}
+            <Button 
+              onClick={handleSubmit} 
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {(createMutation.isPending || updateMutation.isPending) ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent me-2" />
+                  {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                </>
+              ) : editingCategory ? (
+                language === 'ar' ? 'حفظ التغييرات' : 'Save Changes'
+              ) : (
+                language === 'ar' ? 'إضافة' : 'Add'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -667,8 +735,16 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
             <AlertDialogAction
               onClick={() => deleteCategory && deleteMutation.mutate(deleteCategory.id)}
               className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
             >
-              {language === 'ar' ? 'حذف' : 'Delete'}
+              {deleteMutation.isPending ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent me-2" />
+                  {language === 'ar' ? 'جاري الحذف...' : 'Deleting...'}
+                </>
+              ) : (
+                language === 'ar' ? 'حذف' : 'Delete'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

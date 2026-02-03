@@ -13,10 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { format, isAfter, isBefore, isWithinInterval, parseISO } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format, isAfter, isBefore } from 'date-fns';
 import { 
   Plus, 
   Edit, 
@@ -36,9 +34,10 @@ import {
   Warehouse
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import api from '@/lib/api'; // تأكد من استيراد api من هنا
 
 interface Promotion {
-  id: string;
+  id: number;
   name: string;
   name_ar: string | null;
   description: string | null;
@@ -50,23 +49,29 @@ interface Promotion {
   min_quantity: number;
   max_uses: number | null;
   current_uses: number;
-  branch_id: string | null;
+  branch_id: number | null;
   created_at: string;
-}
-
-interface PromotionProduct {
-  id: string;
-  promotion_id: string;
-  product_id: string;
-  product_variant_id: string | null;
-  special_discount_value: number | null;
-  products?: {
-    id: string;
+  product_ids?: number[]; // لإضافة معرّفات المنتجات
+  products?: Array<{
+    id: number;
     name: string;
     name_ar: string | null;
     sku: string;
     price: number;
-  };
+  }>;
+}
+
+interface APIProduct {
+  id: number;
+  name: string;
+  name_ar?: string;
+  sku: string;
+  price: number;
+  cost_price?: number;
+  sell_price?: number;
+  stock?: number;
+  image_url?: string;
+  is_active?: boolean;
 }
 
 const PromotionsManager = () => {
@@ -76,7 +81,7 @@ const PromotionsManager = () => {
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'scheduled' | 'expired'>('all');
 
   const [formData, setFormData] = useState({
@@ -140,44 +145,68 @@ const PromotionsManager = () => {
     product: language === 'ar' ? 'منتج' : 'product',
   };
 
-  // Fetch promotions
+  // Fetch promotions from Laravel API
   const { data: promotions = [], isLoading } = useQuery({
     queryKey: ['promotions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('promotions')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Promotion[];
+      try {
+        const response = await api.post('/offer/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching promotions:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب العروض' : 'Error fetching promotions',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
 
-  // Fetch promotion products
-  const { data: promotionProducts = [] } = useQuery({
-    queryKey: ['promotion-products'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('promotion_products')
-        .select('*, products(id, name, name_ar, sku, price)');
-      if (error) throw error;
-      return data as PromotionProduct[];
-    }
-  });
-
-  // Fetch products for selection
+  // Fetch products for selection - مستخدم من نفس الاستعلام في Inventory
   const { data: products = [] } = useQuery({
-    queryKey: ['products-for-promotions'],
+    queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, price, image_url')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/product/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
+
+  // Transform API products to simple format
+  const simpleProducts = React.useMemo(() => {
+    return products.map((p: APIProduct) => ({
+      id: p.id,
+      name: p.name,
+      name_ar: p.name_ar || p.name,
+      sku: p.sku,
+      price: p.sell_price || p.price || 0,
+      image_url: p.image_url,
+      is_active: p.is_active
+    })).filter(p => p.is_active !== false);
+  }, [products]);
 
   // Fetch branches for selection
   const { data: branches = [] } = useQuery({
@@ -209,122 +238,106 @@ const PromotionsManager = () => {
 
   // Create promotion mutation
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData & { products: string[] }) => {
-      const startDateTime = `${data.start_date}T${data.start_time}:00`;
-      const endDateTime = `${data.end_date}T${data.end_time}:00`;
+    mutationFn: async (data: typeof formData & { products: number[] }) => {
+      const requestData = {
+        name: data.name,
+        name_ar: data.name_ar || null,
+        description: data.description || null,
+        discount_type: data.discount_type,
+        discount_value: data.discount_value,
+        min_quantity: data.min_quantity,
+        start_date: data.start_date,
+        start_time: data.start_time,
+        end_date: data.end_date,
+        end_time: data.end_time,
+        is_active: data.is_active,
+        max_uses: data.max_uses,
+        product_ids: data.products, // مصفوفة من معرّفات المنتجات
+      };
 
-      const { data: promotion, error: promotionError } = await supabase
-        .from('promotions')
-        .insert({
-          name: data.name,
-          name_ar: data.name_ar || null,
-          description: data.description || null,
-          discount_type: data.discount_type,
-          discount_value: data.discount_value,
-          start_date: startDateTime,
-          end_date: endDateTime,
-          is_active: data.is_active,
-          min_quantity: data.min_quantity,
-          max_uses: data.max_uses,
-        })
-        .select()
-        .single();
-
-      if (promotionError) throw promotionError;
-
-      // Add products to promotion
-      if (data.products.length > 0) {
-        const productInserts = data.products.map(productId => ({
-          promotion_id: promotion.id,
-          product_id: productId,
-        }));
-
-        const { error: productsError } = await supabase
-          .from('promotion_products')
-          .insert(productInserts);
-
-        if (productsError) throw productsError;
-      }
-
-      return promotion;
+      const response = await api.post('/offer', requestData);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['promotions'] });
-      queryClient.invalidateQueries({ queryKey: ['promotion-products'] });
-      toast({ title: language === 'ar' ? 'تم إنشاء العرض بنجاح' : 'Promotion created successfully' });
+      toast({ 
+        title: language === 'ar' ? 'تم إنشاء العرض بنجاح' : 'Promotion created successfully',
+        variant: 'default'
+      });
       resetForm();
       setIsDialogOpen(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في إنشاء العرض' : 'Error creating promotion', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error creating promotion:', error);
+      toast({ 
+        title: language === 'ar' ? 'خطأ في إنشاء العرض' : 'Error creating promotion', 
+        description: error.response?.data?.message || 'Something went wrong',
+        variant: 'destructive' 
+      });
     }
   });
 
   // Update promotion mutation
   const updateMutation = useMutation({
-    mutationFn: async (data: typeof formData & { id: string; products: string[] }) => {
-      const startDateTime = `${data.start_date}T${data.start_time}:00`;
-      const endDateTime = `${data.end_date}T${data.end_time}:00`;
+    mutationFn: async (data: typeof formData & { id: number; products: number[] }) => {
+      const requestData = {
+        name: data.name,
+        name_ar: data.name_ar || null,
+        description: data.description || null,
+        discount_type: data.discount_type,
+        discount_value: data.discount_value,
+        min_quantity: data.min_quantity,
+        start_date: data.start_date,
+        start_time: data.start_time,
+        end_date: data.end_date,
+        end_time: data.end_time,
+        is_active: data.is_active,
+        max_uses: data.max_uses,
+        product_ids: data.products,
+      };
 
-      const { error: promotionError } = await supabase
-        .from('promotions')
-        .update({
-          name: data.name,
-          name_ar: data.name_ar || null,
-          description: data.description || null,
-          discount_type: data.discount_type,
-          discount_value: data.discount_value,
-          start_date: startDateTime,
-          end_date: endDateTime,
-          is_active: data.is_active,
-          min_quantity: data.min_quantity,
-          max_uses: data.max_uses,
-        })
-        .eq('id', data.id);
-
-      if (promotionError) throw promotionError;
-
-      // Delete existing products and add new ones
-      await supabase.from('promotion_products').delete().eq('promotion_id', data.id);
-
-      if (data.products.length > 0) {
-        const productInserts = data.products.map(productId => ({
-          promotion_id: data.id,
-          product_id: productId,
-        }));
-
-        const { error: productsError } = await supabase
-          .from('promotion_products')
-          .insert(productInserts);
-
-        if (productsError) throw productsError;
-      }
+      const response = await api.put(`/offer/${data.id}`, requestData);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['promotions'] });
-      queryClient.invalidateQueries({ queryKey: ['promotion-products'] });
-      toast({ title: language === 'ar' ? 'تم تحديث العرض بنجاح' : 'Promotion updated successfully' });
+      toast({ 
+        title: language === 'ar' ? 'تم تحديث العرض بنجاح' : 'Promotion updated successfully',
+        variant: 'default'
+      });
       resetForm();
       setIsDialogOpen(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في تحديث العرض' : 'Error updating promotion', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error updating promotion:', error);
+      toast({ 
+        title: language === 'ar' ? 'خطأ في تحديث العرض' : 'Error updating promotion',
+        description: error.response?.data?.message || 'Something went wrong',
+        variant: 'destructive' 
+      });
     }
   });
 
   // Delete promotion mutation
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('promotions').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/offer/${id}`);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['promotions'] });
-      queryClient.invalidateQueries({ queryKey: ['promotion-products'] });
-      toast({ title: language === 'ar' ? 'تم حذف العرض' : 'Promotion deleted' });
+      toast({ 
+        title: language === 'ar' ? 'تم حذف العرض' : 'Promotion deleted',
+        variant: 'default'
+      });
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في حذف العرض' : 'Error deleting promotion', variant: 'destructive' });
+    onError: (error: any) => {
+      console.error('Error deleting promotion:', error);
+      toast({ 
+        title: language === 'ar' ? 'خطأ في حذف العرض' : 'Error deleting promotion',
+        description: error.response?.data?.message || 'Something went wrong',
+        variant: 'destructive' 
+      });
     }
   });
 
@@ -372,16 +385,25 @@ const PromotionsManager = () => {
     });
     
     // Get selected products for this promotion
-    const promoProducts = promotionProducts
-      .filter(pp => pp.promotion_id === promotion.id)
-      .map(pp => pp.product_id);
+    const promoProducts = promotion.product_ids || [];
     setSelectedProducts(promoProducts);
     setIsDialogOpen(true);
   };
 
   const handleSubmit = () => {
-    if (!formData.name || !formData.start_date || !formData.end_date) {
-      toast({ title: language === 'ar' ? 'يرجى ملء الحقول المطلوبة' : 'Please fill required fields', variant: 'destructive' });
+    if (!formData.name || !formData.start_date || !formData.end_date || !formData.discount_value) {
+      toast({ 
+        title: language === 'ar' ? 'يرجى ملء الحقول المطلوبة' : 'Please fill required fields', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    if (selectedProducts.length === 0) {
+      toast({ 
+        title: language === 'ar' ? 'يرجى اختيار منتج واحد على الأقل' : 'Please select at least one product', 
+        variant: 'destructive' 
+      });
       return;
     }
 
@@ -392,7 +414,7 @@ const PromotionsManager = () => {
     }
   };
 
-  const toggleProduct = (productId: string) => {
+  const toggleProduct = (productId: number) => {
     setSelectedProducts(prev => 
       prev.includes(productId) 
         ? prev.filter(id => id !== productId)
@@ -428,7 +450,7 @@ const PromotionsManager = () => {
     );
   };
 
-  const filteredPromotions = promotions.filter(promo => {
+  const filteredPromotions = promotions.filter((promo: Promotion) => {
     const matchesSearch = promo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (promo.name_ar && promo.name_ar.includes(searchTerm));
     
@@ -436,7 +458,7 @@ const PromotionsManager = () => {
     return matchesSearch && getPromotionStatus(promo) === filterStatus;
   });
 
-  const filteredProducts = products.filter(p => 
+  const filteredSimpleProducts = simpleProducts.filter(p => 
     p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
     (p.name_ar && p.name_ar.includes(productSearchTerm)) ||
     p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
@@ -444,13 +466,13 @@ const PromotionsManager = () => {
 
   const stats = {
     total: promotions.length,
-    active: promotions.filter(p => getPromotionStatus(p) === 'active').length,
-    scheduled: promotions.filter(p => getPromotionStatus(p) === 'scheduled').length,
-    expired: promotions.filter(p => getPromotionStatus(p) === 'expired').length,
+    active: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'active').length,
+    scheduled: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'scheduled').length,
+    expired: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'expired').length,
   };
 
-  const getProductCount = (promotionId: string) => {
-    return promotionProducts.filter(pp => pp.promotion_id === promotionId).length;
+  const getProductCount = (promotion: Promotion) => {
+    return promotion.product_ids?.length || 0;
   };
 
   return (
@@ -563,7 +585,7 @@ const PromotionsManager = () => {
                   {/* Discount Settings */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label>{t.discountType}</Label>
+                      <Label>{t.discountType} *</Label>
                       <Select 
                         value={formData.discount_type} 
                         onValueChange={(val: 'percentage' | 'fixed') => setFormData({ ...formData, discount_type: val })}
@@ -595,6 +617,8 @@ const PromotionsManager = () => {
                           value={formData.discount_value} 
                           onChange={(e) => setFormData({ ...formData, discount_value: Number(e.target.value) })}
                           className="pe-8"
+                          min="0"
+                          step={formData.discount_type === 'percentage' ? "0.01" : "1"}
                         />
                         <span className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                           {formData.discount_type === 'percentage' ? '%' : '﷼'}
@@ -602,7 +626,7 @@ const PromotionsManager = () => {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>{t.minQuantity}</Label>
+                      <Label>{t.minQuantity} *</Label>
                       <Input 
                         type="number"
                         min={1}
@@ -623,7 +647,7 @@ const PromotionsManager = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t.startTime}</Label>
+                      <Label>{t.startTime} *</Label>
                       <Input 
                         type="time"
                         value={formData.start_time} 
@@ -639,7 +663,7 @@ const PromotionsManager = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>{t.endTime}</Label>
+                      <Label>{t.endTime} *</Label>
                       <Input 
                         type="time"
                         value={formData.end_time} 
@@ -734,6 +758,7 @@ const PromotionsManager = () => {
                         placeholder={t.unlimited}
                         value={formData.max_uses || ''} 
                         onChange={(e) => setFormData({ ...formData, max_uses: e.target.value ? Number(e.target.value) : null })}
+                        min="0"
                       />
                     </div>
                   </div>
@@ -742,7 +767,7 @@ const PromotionsManager = () => {
                   <div className="space-y-3">
                     <Label className="text-base font-semibold flex items-center gap-2">
                       <Package size={16} />
-                      {t.selectProducts}
+                      {t.selectProducts} *
                       <Badge variant="secondary">{selectedProducts.length} {t.product}</Badge>
                     </Label>
                     <div className="relative">
@@ -756,7 +781,7 @@ const PromotionsManager = () => {
                     </div>
                     <ScrollArea className="h-[200px] border rounded-lg p-2">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {filteredProducts.map(product => (
+                        {filteredSimpleProducts.map(product => (
                           <div 
                             key={product.id}
                             className={cn(
@@ -788,7 +813,9 @@ const PromotionsManager = () => {
                       {t.cancel}
                     </Button>
                     <Button onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>
-                      {t.save}
+                      {createMutation.isPending || updateMutation.isPending 
+                        ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
+                        : t.save}
                     </Button>
                   </div>
                 </div>
@@ -822,7 +849,11 @@ const PromotionsManager = () => {
           </div>
 
           {/* Promotions Table */}
-          {filteredPromotions.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+            </div>
+          ) : filteredPromotions.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Gift className="mx-auto h-12 w-12 mb-4 opacity-20" />
               <p>{t.noPromotions}</p>
@@ -842,7 +873,7 @@ const PromotionsManager = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPromotions.map(promo => (
+                  {filteredPromotions.map((promo: Promotion) => (
                     <TableRow key={promo.id}>
                       <TableCell>
                         <div>
@@ -865,7 +896,7 @@ const PromotionsManager = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{getProductCount(promo.id)} {t.product}</Badge>
+                        <Badge variant="secondary">{getProductCount(promo)} {t.product}</Badge>
                       </TableCell>
                       <TableCell>
                         {promo.max_uses ? `${promo.current_uses}/${promo.max_uses}` : promo.current_uses}
@@ -873,7 +904,12 @@ const PromotionsManager = () => {
                       <TableCell>{getStatusBadge(getPromotionStatus(promo))}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(promo)}>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleEdit(promo)}
+                            disabled={deleteMutation.isPending}
+                          >
                             <Edit size={16} />
                           </Button>
                           <Button 
@@ -881,8 +917,13 @@ const PromotionsManager = () => {
                             size="icon" 
                             className="text-destructive"
                             onClick={() => deleteMutation.mutate(promo.id)}
+                            disabled={deleteMutation.isPending}
                           >
-                            <Trash2 size={16} />
+                            {deleteMutation.isPending ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
                           </Button>
                         </div>
                       </TableCell>

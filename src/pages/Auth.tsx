@@ -1,16 +1,18 @@
+// pages/Auth.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe } from 'lucide-react';
+import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe, Upload } from 'lucide-react';
 import { z } from 'zod';
 import logoFull from '@/assets/logo-full.png';
+import FileUploader from '@/components/FileUploader'; // استورد الكمبوننت
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +43,7 @@ const Auth = () => {
   
   const [activeTab, setActiveTab] = useState('login');
   const [loading, setLoading] = useState(false);
+  const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]); // لحفظ IDs للصور
   
   // Login form
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -73,6 +76,7 @@ const Auth = () => {
       password: 'Password',
       confirmPassword: 'Confirm Password',
       fullName: 'Full Name',
+      profileImage: 'Profile Image (Optional)',
       login: 'Sign In',
       signup: 'Create Account',
       noAccount: "Don't have an account?",
@@ -82,7 +86,7 @@ const Auth = () => {
       passwordPlaceholder: 'Enter your password',
       namePlaceholder: 'Enter your full name',
       loginSuccess: 'Logged in successfully',
-      signupSuccess: 'Account created! Please check your email to verify.',
+      signupSuccess: 'Account created successfully!',
       error: 'Error',
       invalidCredentials: 'Invalid username/email or password',
       emailExists: 'An account with this email already exists',
@@ -99,6 +103,7 @@ const Auth = () => {
       password: 'كلمة المرور',
       confirmPassword: 'تأكيد كلمة المرور',
       fullName: 'الاسم الكامل',
+      profileImage: 'صورة الملف الشخصي (اختياري)',
       login: 'تسجيل الدخول',
       signup: 'إنشاء حساب',
       noAccount: 'ليس لديك حساب؟',
@@ -108,7 +113,7 @@ const Auth = () => {
       passwordPlaceholder: 'أدخل كلمة المرور',
       namePlaceholder: 'أدخل اسمك الكامل',
       loginSuccess: 'تم تسجيل الدخول بنجاح',
-      signupSuccess: 'تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني.',
+      signupSuccess: 'تم إنشاء الحساب بنجاح!',
       error: 'خطأ',
       invalidCredentials: 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة',
       emailExists: 'يوجد حساب بهذا البريد الإلكتروني بالفعل',
@@ -117,6 +122,21 @@ const Auth = () => {
   };
 
   const t = translations[language];
+
+  // دالة معالجة رفع الصور الناجح
+  const handleImageUploadSuccess = (ids: number[]) => {
+    setUploadedImageIds(ids);
+    console.log('Uploaded image IDs:', ids);
+  };
+
+  // دالة معالجة أخطاء الرفع
+  const handleImageUploadError = (error: Error) => {
+    toast({
+      title: t.error,
+      description: 'Failed to upload image',
+      variant: 'destructive'
+    });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,17 +186,26 @@ const Auth = () => {
     }
 
     setLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupName);
+    // أرسل أول صورة فقط (إذا وجدت)
+    const imageId = uploadedImageIds.length > 0 ? uploadedImageIds[0] : undefined;
+    
+    const { error } = await signUp(signupEmail, signupPassword, signupName, imageId);
     setLoading(false);
 
     if (error) {
       let message = t.genericError;
-      if (error.message.includes('already registered')) {
+      if (error.message.includes('already registered') || error.message.includes('email exists')) {
         message = t.emailExists;
       }
       toast({ title: t.error, description: message, variant: 'destructive' });
     } else {
       toast({ title: t.signupSuccess });
+      // إعادة تعيين الحقول
+      setSignupName('');
+      setSignupEmail('');
+      setSignupPassword('');
+      setSignupConfirmPassword('');
+      setUploadedImageIds([]);
       setActiveTab('login');
     }
   };
@@ -347,6 +376,24 @@ const Auth = () => {
                     dir="ltr"
                   />
                 </div>
+                
+                {/* File Uploader Component هنا أضف */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Upload size={14} />
+                    {t.profileImage}
+                  </Label>
+                  <FileUploader
+                    label=""
+                    onUploadSuccess={handleImageUploadSuccess}
+                    onUploadError={handleImageUploadError}
+                    multiple={false}
+                    accept="image/*"
+                    maxFiles={1}
+                    maxSize={5 * 1024 * 1024} // 5MB
+                  />
+                </div>
+
                 <Button type="submit" className="w-full gradient-success" disabled={loading}>
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin me-2" />

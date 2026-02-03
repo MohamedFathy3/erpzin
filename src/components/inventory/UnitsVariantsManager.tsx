@@ -21,68 +21,215 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import {
-  useSizes,
-  useColors,
-  useAddSize,
-  useAddColor,
-  useUpdateSize,
-  useUpdateColor,
-  useDeleteSize,
-  useDeleteColor,
-  Size,
-  Color,
-} from '@/hooks/useVariantData';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 
-// Unit types for categorization
-const unitTypes = [
-  { value: 'size', label: 'Size', labelAr: 'مقاس' },
-  { value: 'weight', label: 'Weight', labelAr: 'وزن' },
-  { value: 'volume', label: 'Volume', labelAr: 'حجم' },
-  { value: 'length', label: 'Length', labelAr: 'طول' },
-  { value: 'quantity', label: 'Quantity', labelAr: 'كمية' },
-  { value: 'custom', label: 'Custom', labelAr: 'مخصص' },
-];
+interface Unit {
+  id: number;
+  name: string;
+  type_unit: string;
+  code: string;
+  position: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Color {
+  id: number;
+  name: string;
+  code: string;
+  hex_code: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Custom hooks for units
+const useUnits = () => {
+  return useQuery({
+    queryKey: ['units'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/unit/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching units:', error);
+        toast.error('Error fetching units');
+        return [];
+      }
+    }
+  });
+};
+
+const useAddUnit = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; code: string; type_unit?: string; position?: string }) => {
+      const response = await api.post('/unit', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units'] });
+    }
+  });
+};
+
+const useUpdateUnit = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: number; name: string; code: string; type_unit?: string; position?: string }) => {
+      const response = await api.put(`/unit/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units'] });
+    }
+  });
+};
+
+const useDeleteUnit = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/unit/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units'] });
+    }
+  });
+};
+
+// Custom hooks for colors
+const useColors = () => {
+  return useQuery({
+    queryKey: ['colors'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/color/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching colors:', error);
+        toast.error('Error fetching colors');
+        return [];
+      }
+    }
+  });
+};
+
+const useAddColor = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; code: string; hex_code?: string }) => {
+      const response = await api.post('/color', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colors'] });
+    }
+  });
+};
+
+const useUpdateColor = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: number; name: string; code: string; hex_code?: string }) => {
+      const response = await api.put(`/color/${id}`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colors'] });
+    }
+  });
+};
+
+const useDeleteColor = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/color/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colors'] });
+    }
+  });
+};
 
 const UnitsVariantsManager: React.FC = () => {
   const { language } = useLanguage();
-  const { data: units = [], isLoading: unitsLoading } = useSizes();
-  const { data: variants = [], isLoading: variantsLoading } = useColors();
+  const { data: units = [], isLoading: unitsLoading, refetch: refetchUnits } = useUnits();
+  const { data: colors = [], isLoading: colorsLoading, refetch: refetchColors } = useColors();
   
-  const addUnit = useAddSize();
-  const addVariant = useAddColor();
-  const updateUnit = useUpdateSize();
-  const updateVariant = useUpdateColor();
-  const deleteUnit = useDeleteSize();
-  const deleteVariant = useDeleteColor();
+  const addUnit = useAddUnit();
+  const addColor = useAddColor();
+  const updateUnit = useUpdateUnit();
+  const updateColor = useUpdateColor();
+  const deleteUnit = useDeleteUnit();
+  const deleteColor = useDeleteColor();
   
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
-  const [variantDialogOpen, setVariantDialogOpen] = useState(false);
-  const [editingUnit, setEditingUnit] = useState<Size | null>(null);
-  const [editingVariant, setEditingVariant] = useState<Color | null>(null);
+  const [colorDialogOpen, setColorDialogOpen] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [editingColor, setEditingColor] = useState<Color | null>(null);
   
-  const [newUnit, setNewUnit] = useState({ name: '', name_ar: '', code: '', sort_order: 0, unit_type: 'size' });
-  const [newVariant, setNewVariant] = useState({ name: '', name_ar: '', code: '', hex_code: '#3B82F6' });
+  const [newUnit, setNewUnit] = useState({ 
+    name: '', 
+    name_ar: '', 
+    code: '', 
+    position: '1', 
+    type_unit: 'size' 
+  });
+  const [newColor, setNewColor] = useState({ 
+    name: '', 
+    name_ar: '', 
+    code: '', 
+    hex_code: '#3B82F6' 
+  });
 
   const resetUnitForm = () => {
-    setNewUnit({ name: '', name_ar: '', code: '', sort_order: 0, unit_type: 'size' });
+    setNewUnit({ 
+      name: '', 
+      name_ar: '', 
+      code: '', 
+      position: '1', 
+      type_unit: 'size' 
+    });
     setEditingUnit(null);
   };
 
-  const resetVariantForm = () => {
-    setNewVariant({ name: '', name_ar: '', code: '', hex_code: '#3B82F6' });
-    setEditingVariant(null);
+  const resetColorForm = () => {
+    setNewColor({ 
+      name: '', 
+      name_ar: '', 
+      code: '', 
+      hex_code: '#3B82F6' 
+    });
+    setEditingColor(null);
   };
 
-  const openUnitDialog = (unit?: Size) => {
+  const openUnitDialog = (unit?: Unit) => {
     if (unit) {
       setEditingUnit(unit);
       setNewUnit({
         name: unit.name,
-        name_ar: unit.name_ar || '',
+        name_ar: unit.name,
         code: unit.code,
-        sort_order: unit.sort_order || 0,
-        unit_type: 'size'
+        position: unit.position || '1',
+        type_unit: unit.type_unit || 'size'
       });
     } else {
       resetUnitForm();
@@ -90,128 +237,146 @@ const UnitsVariantsManager: React.FC = () => {
     setUnitDialogOpen(true);
   };
 
-  const openVariantDialog = (variant?: Color) => {
-    if (variant) {
-      setEditingVariant(variant);
-      setNewVariant({
-        name: variant.name,
-        name_ar: variant.name_ar || '',
-        code: variant.code,
-        hex_code: variant.hex_code || '#3B82F6'
+  const openColorDialog = (color?: Color) => {
+    if (color) {
+      setEditingColor(color);
+      setNewColor({
+        name: color.name,
+        name_ar: color.name,
+        code: color.code,
+        hex_code: color.hex_code || '#3B82F6'
       });
     } else {
-      resetVariantForm();
+      resetColorForm();
     }
-    setVariantDialogOpen(true);
+    setColorDialogOpen(true);
   };
 
   const handleSaveUnit = async () => {
-    if (!newUnit.name || !newUnit.code) {
+    if (!newUnit.name.trim() || !newUnit.code.trim()) {
       toast.error(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
       return;
     }
     
     try {
+      const unitData = {
+        name: newUnit.name.trim(),
+        code: newUnit.code.trim().toUpperCase(),
+        type_unit: newUnit.type_unit,
+        position: newUnit.position
+      };
+
       if (editingUnit) {
         await updateUnit.mutateAsync({
           id: editingUnit.id,
-          name: newUnit.name,
-          name_ar: newUnit.name_ar || null,
-          code: newUnit.code.toUpperCase(),
-          sort_order: newUnit.sort_order,
+          ...unitData
         });
         toast.success(language === 'ar' ? 'تم تحديث الوحدة بنجاح' : 'Unit updated successfully');
       } else {
-        await addUnit.mutateAsync({
-          name: newUnit.name,
-          name_ar: newUnit.name_ar || null,
-          code: newUnit.code.toUpperCase(),
-          sort_order: newUnit.sort_order,
-          is_active: true
-        });
+        await addUnit.mutateAsync(unitData);
         toast.success(language === 'ar' ? 'تم إضافة الوحدة بنجاح' : 'Unit added successfully');
       }
+      
       resetUnitForm();
       setUnitDialogOpen(false);
-    } catch (error) {
-      toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+      refetchUnits();
+    } catch (error: any) {
+      console.error('Error saving unit:', error);
+      const errorMessage = error.response?.data?.message || 
+        (language === 'ar' ? 'حدث خطأ أثناء حفظ الوحدة' : 'Error saving unit');
+      toast.error(errorMessage);
     }
   };
 
-  const handleSaveVariant = async () => {
-    if (!newVariant.name || !newVariant.code) {
+  const handleSaveColor = async () => {
+    if (!newColor.name.trim() || !newColor.code.trim()) {
       toast.error(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
       return;
     }
     
     try {
-      if (editingVariant) {
-        await updateVariant.mutateAsync({
-          id: editingVariant.id,
-          name: newVariant.name,
-          name_ar: newVariant.name_ar || null,
-          code: newVariant.code.toUpperCase(),
-          hex_code: newVariant.hex_code,
+      const colorData = {
+        name: newColor.name.trim(),
+        code: newColor.code.trim().toUpperCase(),
+        hex_code: newColor.hex_code
+      };
+
+      if (editingColor) {
+        await updateColor.mutateAsync({
+          id: editingColor.id,
+          ...colorData
         });
-        toast.success(language === 'ar' ? 'تم تحديث المتغير بنجاح' : 'Variant updated successfully');
+        toast.success(language === 'ar' ? 'تم تحديث اللون بنجاح' : 'Color updated successfully');
       } else {
-        await addVariant.mutateAsync({
-          name: newVariant.name,
-          name_ar: newVariant.name_ar || null,
-          code: newVariant.code.toUpperCase(),
-          hex_code: newVariant.hex_code,
-          is_active: true
-        });
-        toast.success(language === 'ar' ? 'تم إضافة المتغير بنجاح' : 'Variant added successfully');
+        await addColor.mutateAsync(colorData);
+        toast.success(language === 'ar' ? 'تم إضافة اللون بنجاح' : 'Color added successfully');
       }
-      resetVariantForm();
-      setVariantDialogOpen(false);
-    } catch (error) {
-      toast.error(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+      
+      resetColorForm();
+      setColorDialogOpen(false);
+      refetchColors();
+    } catch (error: any) {
+      console.error('Error saving color:', error);
+      const errorMessage = error.response?.data?.message || 
+        (language === 'ar' ? 'حدث خطأ أثناء حفظ اللون' : 'Error saving color');
+      toast.error(errorMessage);
     }
   };
 
-  const handleDeleteUnit = async (id: string) => {
-    try {
-      await deleteUnit.mutateAsync(id);
-      toast.success(language === 'ar' ? 'تم حذف الوحدة' : 'Unit deleted');
-    } catch (error) {
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء الحذف' : 'Error deleting');
+  const handleDeleteUnit = async (id: number) => {
+    if (confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذه الوحدة؟' : 'Are you sure you want to delete this unit?')) {
+      try {
+        await deleteUnit.mutateAsync(id);
+        toast.success(language === 'ar' ? 'تم حذف الوحدة' : 'Unit deleted');
+        refetchUnits();
+      } catch (error: any) {
+        console.error('Error deleting unit:', error);
+        const errorMessage = error.response?.data?.message || 
+          (language === 'ar' ? 'حدث خطأ أثناء حذف الوحدة' : 'Error deleting unit');
+        toast.error(errorMessage);
+      }
     }
   };
 
-  const handleDeleteVariant = async (id: string) => {
-    try {
-      await deleteVariant.mutateAsync(id);
-      toast.success(language === 'ar' ? 'تم حذف المتغير' : 'Variant deleted');
-    } catch (error) {
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء الحذف' : 'Error deleting');
+  const handleDeleteColor = async (id: number) => {
+    if (confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا اللون؟' : 'Are you sure you want to delete this color?')) {
+      try {
+        await deleteColor.mutateAsync(id);
+        toast.success(language === 'ar' ? 'تم حذف اللون' : 'Color deleted');
+        refetchColors();
+      } catch (error: any) {
+        console.error('Error deleting color:', error);
+        const errorMessage = error.response?.data?.message || 
+          (language === 'ar' ? 'حدث خطأ أثناء حذف اللون' : 'Error deleting color');
+        toast.error(errorMessage);
+      }
     }
   };
 
-  const getUnitTypeIcon = (type: string) => {
-    switch (type) {
-      case 'weight': return <Scale size={14} />;
-      case 'length': return <Ruler size={14} />;
-      default: return <Layers size={14} />;
-    }
-  };
+  const unitTypes = [
+    { value: 'size', label: 'Size', labelAr: 'مقاس' },
+    { value: 'weight', label: 'Weight', labelAr: 'وزن' },
+    { value: 'volume', label: 'Volume', labelAr: 'حجم' },
+    { value: 'length', label: 'Length', labelAr: 'طول' },
+    { value: 'quantity', label: 'Quantity', labelAr: 'كمية' },
+    { value: 'code', label: 'Code', labelAr: 'كود' },
+  ];
 
   return (
-    <div>
+    <div className="space-y-6">
       <Tabs defaultValue="units" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="units" className="flex items-center gap-2">
             <Scale size={16} />
             {language === 'ar' ? 'الوحدات' : 'Units'}
           </TabsTrigger>
-          <TabsTrigger value="variants" className="flex items-center gap-2">
+          <TabsTrigger value="colors" className="flex items-center gap-2">
             <Layers size={16} />
-            {language === 'ar' ? 'المتغيرات' : 'Variants'}
+            {language === 'ar' ? 'الألوان' : 'Colors'}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="units" className="mt-2">
+        <TabsContent value="units" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -229,6 +394,7 @@ const UnitsVariantsManager: React.FC = () => {
                   ? 'أضف وحدات مختلفة مثل: المقاسات (S, M, L, XL)، الأوزان (كجم، جرام)، الأحجام (لتر، مل)، وغيرها' 
                   : 'Add different units like: Sizes (S, M, L, XL), Weights (kg, g), Volumes (L, ml), and more'}
               </p>
+              
               {unitsLoading ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
@@ -238,34 +404,49 @@ const UnitsVariantsManager: React.FC = () => {
                   {language === 'ar' ? 'لا توجد وحدات. أضف وحدة جديدة للبدء.' : 'No units. Add a new unit to get started.'}
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {units.map((unit) => (
                     <div
                       key={unit.id}
-                      className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border group hover:border-primary/50 transition-colors"
+                      className="flex items-center justify-between p-4 bg-card rounded-lg border border-border group hover:border-primary/50 transition-all"
                     >
-                      <Badge variant="outline" className="font-mono bg-primary/10">
-                        {unit.code}
-                      </Badge>
-                      <span className="font-medium">
-                        {language === 'ar' ? unit.name_ar || unit.name : unit.name}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => openUnitDialog(unit)}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteUnit(unit.id)}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono bg-primary/10">
+                              {unit.code}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {unit.type_unit}
+                            </Badge>
+                          </div>
+                          <span className="font-medium mt-1">
+                            {unit.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground mt-1">
+                            {language === 'ar' ? 'الترتيب:' : 'Order:'} {unit.position}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openUnitDialog(unit)}
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteUnit(unit.id)}
+                          disabled={deleteUnit.isPending}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -274,65 +455,78 @@ const UnitsVariantsManager: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="variants" className="mt-2">
+        <TabsContent value="colors" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Layers size={20} />
-                {language === 'ar' ? 'إدارة المتغيرات' : 'Variants Management'}
+                {language === 'ar' ? 'إدارة الألوان' : 'Colors Management'}
               </CardTitle>
-              <Button size="sm" className="gap-2" onClick={() => openVariantDialog()}>
+              <Button size="sm" className="gap-2" onClick={() => openColorDialog()}>
                 <Plus size={16} />
-                {language === 'ar' ? 'إضافة متغير' : 'Add Variant'}
+                {language === 'ar' ? 'إضافة لون' : 'Add Color'}
               </Button>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
                 {language === 'ar' 
-                  ? 'أضف متغيرات مختلفة مثل: الألوان، النكهات، المواد، وأي خصائص أخرى للمنتج' 
-                  : 'Add different variants like: Colors, Flavors, Materials, and any other product attributes'}
+                  ? 'أضف ألوان مختلفة للمنتجات والمواد' 
+                  : 'Add different colors for products and materials'}
               </p>
-              {variantsLoading ? (
+              
+              {colorsLoading ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                 </div>
-              ) : variants.length === 0 ? (
+              ) : colors.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {language === 'ar' ? 'لا توجد متغيرات. أضف متغير جديد للبدء.' : 'No variants. Add a new variant to get started.'}
+                  {language === 'ar' ? 'لا توجد ألوان. أضف لون جديد للبدء.' : 'No colors. Add a new color to get started.'}
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  {variants.map((variant) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {colors.map((color) => (
                     <div
-                      key={variant.id}
-                      className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg border border-border group hover:border-primary/50 transition-colors"
+                      key={color.id}
+                      className="flex items-center justify-between p-4 bg-card rounded-lg border border-border group hover:border-primary/50 transition-all"
                     >
-                      <div
-                        className="w-6 h-6 rounded-full border-2 border-border shadow-sm"
-                        style={{ backgroundColor: variant.hex_code || '#3B82F6' }}
-                      />
-                      <Badge variant="outline" className="font-mono">
-                        {variant.code}
-                      </Badge>
-                      <span className="font-medium">
-                        {language === 'ar' ? variant.name_ar || variant.name : variant.name}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => openVariantDialog(variant)}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteVariant(variant.id)}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-full border-2 border-border shadow-sm"
+                          style={{ backgroundColor: color.hex_code || '#3B82F6' }}
+                        />
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono">
+                              {color.code}
+                            </Badge>
+                          </div>
+                          <span className="font-medium mt-1">
+                            {color.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground mt-1 font-mono">
+                            {color.hex_code}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openColorDialog(color)}
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteColor(color.id)}
+                          disabled={deleteColor.isPending}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -343,7 +537,10 @@ const UnitsVariantsManager: React.FC = () => {
       </Tabs>
 
       {/* Unit Dialog */}
-      <Dialog open={unitDialogOpen} onOpenChange={(open) => { setUnitDialogOpen(open); if (!open) resetUnitForm(); }}>
+      <Dialog open={unitDialogOpen} onOpenChange={(open) => { 
+        setUnitDialogOpen(open); 
+        if (!open) resetUnitForm(); 
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -356,7 +553,10 @@ const UnitsVariantsManager: React.FC = () => {
           <div className="space-y-4 py-4">
             <div>
               <Label>{language === 'ar' ? 'نوع الوحدة' : 'Unit Type'}</Label>
-              <Select value={newUnit.unit_type} onValueChange={(value) => setNewUnit({ ...newUnit, unit_type: value })}>
+              <Select 
+                value={newUnit.type_unit} 
+                onValueChange={(value) => setNewUnit({ ...newUnit, type_unit: value })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -369,45 +569,42 @@ const UnitsVariantsManager: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'الاسم (إنجليزي)' : 'Name (English)'}</Label>
-                <Input
-                  value={newUnit.name}
-                  onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })}
-                  placeholder="Medium, 500g, 1L..."
-                />
-              </div>
-              <div>
-                <Label>{language === 'ar' ? 'الاسم (عربي)' : 'Name (Arabic)'}</Label>
-                <Input
-                  value={newUnit.name_ar}
-                  onChange={(e) => setNewUnit({ ...newUnit, name_ar: e.target.value })}
-                  placeholder="وسط، 500 جرام، 1 لتر..."
-                  dir="rtl"
-                />
-              </div>
+            
+            <div>
+              <Label>{language === 'ar' ? 'اسم الوحدة' : 'Unit Name'} *</Label>
+              <Input
+                value={newUnit.name}
+                onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })}
+                placeholder={language === 'ar' ? 'مثل: وسط، 500 جرام، 1 لتر...' : 'e.g., Medium, 500g, 1L...'}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'الرمز' : 'Code'}</Label>
-                <Input
-                  value={newUnit.code}
-                  onChange={(e) => setNewUnit({ ...newUnit, code: e.target.value })}
-                  placeholder="M, 500G, 1L..."
-                  maxLength={10}
-                />
-              </div>
-              <div>
-                <Label>{language === 'ar' ? 'الترتيب' : 'Sort Order'}</Label>
-                <Input
-                  type="number"
-                  value={newUnit.sort_order}
-                  onChange={(e) => setNewUnit({ ...newUnit, sort_order: parseInt(e.target.value) || 0 })}
-                />
-              </div>
+            
+            <div>
+              <Label>{language === 'ar' ? 'كود الوحدة' : 'Unit Code'} *</Label>
+              <Input
+                value={newUnit.code}
+                onChange={(e) => setNewUnit({ ...newUnit, code: e.target.value })}
+                placeholder={language === 'ar' ? 'مثل: M، 500G، 1L...' : 'e.g., M, 500G, 1L...'}
+                maxLength={10}
+              />
             </div>
-            <Button onClick={handleSaveUnit} className="w-full" disabled={addUnit.isPending || updateUnit.isPending}>
+            
+            <div>
+              <Label>{language === 'ar' ? 'الترتيب' : 'Position'}</Label>
+              <Input
+                type="number"
+                min="1"
+                value={newUnit.position}
+                onChange={(e) => setNewUnit({ ...newUnit, position: e.target.value })}
+                placeholder="1"
+              />
+            </div>
+            
+            <Button 
+              onClick={handleSaveUnit} 
+              className="w-full" 
+              disabled={addUnit.isPending || updateUnit.isPending}
+            >
               {(addUnit.isPending || updateUnit.isPending)
                 ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
                 : (language === 'ar' ? 'حفظ' : 'Save')
@@ -417,67 +614,64 @@ const UnitsVariantsManager: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Variant Dialog */}
-      <Dialog open={variantDialogOpen} onOpenChange={(open) => { setVariantDialogOpen(open); if (!open) resetVariantForm(); }}>
+      {/* Color Dialog */}
+      <Dialog open={colorDialogOpen} onOpenChange={(open) => { 
+        setColorDialogOpen(open); 
+        if (!open) resetColorForm(); 
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingVariant 
-                ? (language === 'ar' ? 'تعديل المتغير' : 'Edit Variant')
-                : (language === 'ar' ? 'إضافة متغير جديد' : 'Add New Variant')
+              {editingColor 
+                ? (language === 'ar' ? 'تعديل اللون' : 'Edit Color')
+                : (language === 'ar' ? 'إضافة لون جديد' : 'Add New Color')
               }
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'الاسم (إنجليزي)' : 'Name (English)'}</Label>
+            <div>
+              <Label>{language === 'ar' ? 'اسم اللون' : 'Color Name'} *</Label>
+              <Input
+                value={newColor.name}
+                onChange={(e) => setNewColor({ ...newColor, name: e.target.value })}
+                placeholder={language === 'ar' ? 'مثل: أزرق، أحمر، أخضر...' : 'e.g., Blue, Red, Green...'}
+              />
+            </div>
+            
+            <div>
+              <Label>{language === 'ar' ? 'كود اللون' : 'Color Code'} *</Label>
+              <Input
+                value={newColor.code}
+                onChange={(e) => setNewColor({ ...newColor, code: e.target.value })}
+                placeholder={language === 'ar' ? 'مثل: BLU، RED، GRN...' : 'e.g., BLU, RED, GRN...'}
+                maxLength={10}
+              />
+            </div>
+            
+            <div>
+              <Label>{language === 'ar' ? 'اللون التمييزي' : 'Display Color'}</Label>
+              <div className="flex gap-2">
                 <Input
-                  value={newVariant.name}
-                  onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
-                  placeholder="Blue, Vanilla, Cotton..."
+                  type="color"
+                  value={newColor.hex_code}
+                  onChange={(e) => setNewColor({ ...newColor, hex_code: e.target.value })}
+                  className="w-14 h-10 p-1 cursor-pointer"
                 />
-              </div>
-              <div>
-                <Label>{language === 'ar' ? 'الاسم (عربي)' : 'Name (Arabic)'}</Label>
                 <Input
-                  value={newVariant.name_ar}
-                  onChange={(e) => setNewVariant({ ...newVariant, name_ar: e.target.value })}
-                  placeholder="أزرق، فانيليا، قطن..."
-                  dir="rtl"
+                  value={newColor.hex_code}
+                  onChange={(e) => setNewColor({ ...newColor, hex_code: e.target.value })}
+                  placeholder="#3B82F6"
+                  className="font-mono flex-1"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'الرمز' : 'Code'}</Label>
-                <Input
-                  value={newVariant.code}
-                  onChange={(e) => setNewVariant({ ...newVariant, code: e.target.value })}
-                  placeholder="BLU, VAN, COT..."
-                  maxLength={10}
-                />
-              </div>
-              <div>
-                <Label>{language === 'ar' ? 'اللون التمييزي' : 'Display Color'}</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="color"
-                    value={newVariant.hex_code}
-                    onChange={(e) => setNewVariant({ ...newVariant, hex_code: e.target.value })}
-                    className="w-14 h-10 p-1 cursor-pointer"
-                  />
-                  <Input
-                    value={newVariant.hex_code}
-                    onChange={(e) => setNewVariant({ ...newVariant, hex_code: e.target.value })}
-                    placeholder="#3B82F6"
-                    className="font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-            <Button onClick={handleSaveVariant} className="w-full" disabled={addVariant.isPending || updateVariant.isPending}>
-              {(addVariant.isPending || updateVariant.isPending)
+            
+            <Button 
+              onClick={handleSaveColor} 
+              className="w-full" 
+              disabled={addColor.isPending || updateColor.isPending}
+            >
+              {(addColor.isPending || updateColor.isPending)
                 ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
                 : (language === 'ar' ? 'حفظ' : 'Save')
               }
