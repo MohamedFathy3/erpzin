@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ interface RevenueManagerProps {
 
 const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
+  const { formatCurrency } = useRegionalSettings();
   const [showForm, setShowForm] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -227,7 +229,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                   {language === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue'}
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  {totalAmount.toLocaleString()} <span className="text-sm">ر.ي</span>
+                  {formatCurrency(totalAmount)}
                 </p>
               </div>
             </div>
@@ -274,7 +276,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                         {revenue.description || '-'}
                       </TableCell>
                       <TableCell className="font-bold text-green-600">
-                        {Number(revenue.amount).toLocaleString()} ر.ي
+                        {formatCurrency(Number(revenue.amount))}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">

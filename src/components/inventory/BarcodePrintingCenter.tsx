@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,6 +123,7 @@ const printerPresets = {
 
 const BarcodePrintingCenter: React.FC = () => {
   const { language } = useLanguage();
+  const { getCurrencySymbol, formatCurrency } = useRegionalSettings();
   const isRTL = language === 'ar';
   
   const [selectedProducts, setSelectedProducts] = useState<PrintProduct[]>([]);
@@ -300,7 +302,7 @@ const BarcodePrintingCenter: React.FC = () => {
             ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
             ${design.showBarcode ? `<canvas id="bc-${product.id.replace(/-/g, '_')}-${i}"></canvas>` : ''}
             ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} YER</div>` : ''}
+            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} ${getCurrencySymbol()}</div>` : ''}
           </div>
         `);
       }

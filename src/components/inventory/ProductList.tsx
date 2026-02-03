@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
 import { Edit2, Trash2, Copy, Eye, MoreVertical, Package, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,7 @@ const ProductList: React.FC<ProductListProps> = ({
   itemsPerPage
 }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
   const getStatusBadge = (status: Product['status']) => {
     const config = {
@@ -227,10 +229,10 @@ const ProductList: React.FC<ProductListProps> = ({
                   <td className="p-4">
                     <div>
                       <p className="font-semibold text-foreground">
-                        {product.price.toLocaleString()} <span className="text-xs text-muted-foreground">YER</span>
+                        {formatCurrency(product.price)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'التكلفة:' : 'Cost:'} {product.cost.toLocaleString()}
+                        {language === 'ar' ? 'التكلفة:' : 'Cost:'} {formatCurrency(product.cost)}
                       </p>
                     </div>
                   </td>

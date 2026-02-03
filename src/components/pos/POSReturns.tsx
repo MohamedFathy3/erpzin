@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -94,6 +95,7 @@ const DirectReturnInvoice: React.FC<{
   currentShiftId?: string;
 }> = ({ onComplete, currentShiftId }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
   const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount, getTaxRateName, getCurrencyName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState('');
@@ -288,7 +290,7 @@ const DirectReturnInvoice: React.FC<{
                   <div className="font-medium">{product.name_ar || product.name}</div>
                   <div className="text-sm text-muted-foreground">{product.sku}</div>
                 </div>
-                <div className="font-bold text-primary">{product.price.toLocaleString()} ر.ي</div>
+                <div className="font-bold text-primary">{formatCurrency(product.price)}</div>
               </div>
             ))}
           </div>
@@ -313,7 +315,7 @@ const DirectReturnInvoice: React.FC<{
                   <div className="font-medium">{item.product_name}</div>
                   <div className="text-sm text-muted-foreground">{item.sku}</div>
                   <div className="text-primary font-semibold mt-1">
-                    {item.unit_price.toLocaleString()} × {item.quantity} = {(item.unit_price * item.quantity).toLocaleString()} ر.ي
+                    {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.unit_price * item.quantity)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

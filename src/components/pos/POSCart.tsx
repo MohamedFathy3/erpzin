@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
 import { Minus, Plus, Trash2, CreditCard, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,10 +38,11 @@ const POSCart: React.FC<POSCartProps> = ({
   heldOrdersCount
 }) => {
   const { t, language } = useLanguage();
-  const { defaultTaxRate, defaultCurrency } = useCurrencyTax();
+  const { defaultTaxRate } = useCurrencyTax();
+  const { getCurrencySymbol, formatCurrency } = useRegionalSettings();
 
   const taxRate = defaultTaxRate?.rate ?? 0;
-  const currencySymbol = defaultCurrency?.symbol ?? 'YER';
+  const currencySymbol = getCurrencySymbol();
   
   const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = (subtotal * taxRate) / 100;
@@ -106,7 +108,7 @@ const POSCart: React.FC<POSCartProps> = ({
                     )}
                     <p className="text-xs text-muted-foreground">{item.sku}</p>
                     <p className="text-sm font-semibold text-primary mt-1">
-                      {item.price.toLocaleString()} {currencySymbol}
+                      {formatCurrency(item.price)}
                     </p>
                   </div>
                   
@@ -152,15 +154,15 @@ const POSCart: React.FC<POSCartProps> = ({
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
-            <span>{subtotal.toLocaleString()} {currencySymbol}</span>
+            <span>{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>{language === 'ar' ? `الضريبة (${taxRate}%)` : `VAT (${taxRate}%)`}</span>
-            <span>{tax.toLocaleString()} {currencySymbol}</span>
+            <span>{formatCurrency(tax)}</span>
           </div>
           <div className="flex justify-between font-bold text-lg text-foreground pt-2 border-t border-border">
             <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-            <span className="text-primary">{total.toLocaleString()} {currencySymbol}</span>
+            <span className="text-primary">{formatCurrency(total)}</span>
           </div>
         </div>
 

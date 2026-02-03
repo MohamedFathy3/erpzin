@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,6 +19,7 @@ interface InvoiceDetailsProps {
 
 const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
   // Fetch invoice items
   const { data: items } = useQuery({
@@ -158,9 +160,9 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                       <div className="text-xs text-muted-foreground">{item.sku}</div>
                     </TableCell>
                     <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{item.unit_price?.toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{item.discount_amount?.toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-medium">{item.total_price?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.unit_price || 0)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.discount_amount || 0)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(item.total_price || 0)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -174,12 +176,12 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                 <span className="text-muted-foreground">
                   {language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}
                 </span>
-                <span>{invoice.subtotal?.toLocaleString()}</span>
+                <span>{formatCurrency(invoice.subtotal || 0)}</span>
               </div>
               {invoice.discount_amount > 0 && (
                 <div className="flex justify-between text-destructive">
                   <span>{language === 'ar' ? 'الخصم:' : 'Discount:'}</span>
-                  <span>-{invoice.discount_amount?.toLocaleString()}</span>
+                  <span>-{formatCurrency(invoice.discount_amount || 0)}</span>
                 </div>
               )}
               {invoice.tax_amount > 0 && (
@@ -187,17 +189,17 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                   <span className="text-muted-foreground">
                     {language === 'ar' ? 'الضريبة:' : 'Tax:'} ({invoice.tax_percent}%)
                   </span>
-                  <span>{invoice.tax_amount?.toLocaleString()}</span>
+                  <span>{formatCurrency(invoice.tax_amount || 0)}</span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold border-t pt-2">
                 <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
-                <span className="text-primary">{invoice.total_amount?.toLocaleString()}</span>
+                <span className="text-primary">{formatCurrency(invoice.total_amount || 0)}</span>
               </div>
               {invoice.remaining_amount > 0 && (
                 <div className="flex justify-between text-destructive">
                   <span>{language === 'ar' ? 'المتبقي:' : 'Remaining:'}</span>
-                  <span>{invoice.remaining_amount?.toLocaleString()}</span>
+                  <span>{formatCurrency(invoice.remaining_amount || 0)}</span>
                 </div>
               )}
             </div>
