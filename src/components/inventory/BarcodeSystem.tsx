@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { 
-  ScanBarcode, 
-  Printer, 
-  Search, 
+import {
+  ScanBarcode,
+  Printer,
+  Search,
   Package,
   X,
   Check,
@@ -57,11 +57,11 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   const handleSearch = useCallback(() => {
     if (!barcode.trim()) return;
-    
+
     const product = products.find(
       p => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase()
     );
-    
+
     if (product) {
       setFoundProduct(product);
       setError('');
@@ -98,6 +98,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       price: 'Price',
       stock: 'Stock'
     },
+
     ar: {
       title: 'قارئ الباركود',
       scanPrompt: 'امسح الباركود أو أدخله يدوياً',
@@ -122,7 +123,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             {t.title}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>{t.scanPrompt}</Label>
@@ -310,6 +311,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
       preview: 'Preview',
       print: 'Print Labels'
     },
+
     ar: {
       title: 'طباعة ملصقات الباركود',
       selectProduct: 'اختر المنتج',
@@ -335,7 +337,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
             {t.title}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4 py-4">
           {!selectedProduct && (
             <div className="space-y-2">
@@ -368,7 +370,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
             </div>
             <div className="space-y-2">
               <Label>{t.labelSize}</Label>
-              <Select value={labelSize} onValueChange={(v) => setLabelSize(v as any)}>
+              <Select value={labelSize} onValueChange={(v) => setLabelSize(v as 'small' | 'medium' | 'large')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -409,8 +411,8 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
             </div>
           )}
 
-          <Button 
-            className="w-full gradient-success" 
+          <Button
+            className="w-full gradient-success"
             onClick={handlePrint}
             disabled={!currentProduct}
           >

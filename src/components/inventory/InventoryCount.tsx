@@ -15,9 +15,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
-import { 
-  ClipboardList, 
-  Plus, 
+import {
+  ClipboardList,
+  Plus,
   Search,
   CheckCircle,
   XCircle,
@@ -229,7 +229,7 @@ const InventoryCount = () => {
   const createCountMutation = useMutation({
     mutationFn: async () => {
       const countNumber = `IC-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(counts.length + 1).padStart(4, '0')}`;
-      
+
       const { data: count, error: countError } = await supabase
         .from('inventory_counts')
         .insert({
@@ -241,7 +241,7 @@ const InventoryCount = () => {
         })
         .select()
         .single();
-      
+
       if (countError) throw countError;
 
       // Create count items for all products
@@ -254,7 +254,7 @@ const InventoryCount = () => {
       const { error: itemsError } = await supabase
         .from('inventory_count_items')
         .insert(items);
-      
+
       if (itemsError) throw itemsError;
 
       return count;
@@ -277,16 +277,16 @@ const InventoryCount = () => {
   // Save count items mutation
   const saveCountMutation = useMutation({
     mutationFn: async () => {
-      const updates = Object.entries(countItems).map(([itemId, countedQty]) => 
+      const updates = Object.entries(countItems).map(([itemId, countedQty]) =>
         supabase
           .from('inventory_count_items')
-          .update({ 
+          .update({
             counted_quantity: countedQty,
             counted_at: new Date().toISOString()
           })
           .eq('id', itemId)
       );
-      
+
       await Promise.all(updates);
     },
     onSuccess: () => {
@@ -310,13 +310,13 @@ const InventoryCount = () => {
       // Update count status
       const { error } = await supabase
         .from('inventory_counts')
-        .update({ 
+        .update({
           status: 'completed',
           completed_date: new Date().toISOString(),
           variance_items: varianceCount
         })
         .eq('id', selectedCount.id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -421,7 +421,7 @@ const InventoryCount = () => {
                       <TableRow key={count.id}>
                         <TableCell className="font-medium">{count.count_number}</TableCell>
                         <TableCell>
-                          {language === 'ar' 
+                          {language === 'ar'
                             ? count.warehouses?.name_ar || count.warehouses?.name || '-'
                             : count.warehouses?.name || '-'
                           }
@@ -475,8 +475,8 @@ const InventoryCount = () => {
             </div>
             <div>
               <Label>{t.notes}</Label>
-              <Textarea 
-                value={countNotes} 
+              <Textarea
+                value={countNotes}
                 onChange={(e) => setCountNotes(e.target.value)}
                 rows={3}
               />
@@ -486,7 +486,7 @@ const InventoryCount = () => {
             <Button variant="outline" onClick={() => setNewCountOpen(false)}>
               {t.cancel}
             </Button>
-            <Button 
+            <Button
               onClick={() => createCountMutation.mutate()}
               disabled={!selectedWarehouse || createCountMutation.isPending}
             >
@@ -504,7 +504,7 @@ const InventoryCount = () => {
               {selectedCount?.count_number} - {getStatusBadge(selectedCount?.status || '')}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Search */}
             <div className="relative">
@@ -536,8 +536,8 @@ const InventoryCount = () => {
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
-                          {language === 'ar' 
-                            ? item.products?.name_ar || item.products?.name 
+                          {language === 'ar'
+                            ? item.products?.name_ar || item.products?.name
                             : item.products?.name
                           }
                         </TableCell>
@@ -560,7 +560,7 @@ const InventoryCount = () => {
                           )}
                         </TableCell>
                         <TableCell className={
-                          variance !== null && variance !== 0 
+                          variance !== null && variance !== 0
                             ? variance > 0 ? 'text-green-500' : 'text-red-500'
                             : ''
                         }>

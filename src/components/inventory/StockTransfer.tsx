@@ -17,14 +17,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
-import { 
-  ArrowRightLeft, 
-  Plus, 
-  Search, 
-  Trash2, 
-  Send, 
-  CheckCircle, 
-  XCircle, 
+import {
+  ArrowRightLeft,
+  Plus,
+  Search,
+  Trash2,
+  Send,
+  CheckCircle,
+  XCircle,
   Clock,
   Package,
   Warehouse,
@@ -42,7 +42,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
+import api from '@/lib/api';
 interface Product {
   id: string;
   name: string;
@@ -65,7 +65,6 @@ interface WarehouseType {
   name_ar: string | null;
   code: string | null;
 }
-
 interface StockTransfer {
   id: string;
   transfer_number: string;
@@ -200,13 +199,26 @@ const StockTransfer = () => {
     }
   }[language];
 
-  // Fetch warehouses
+  // Fetch warehouses from API
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('warehouses').select('*').eq('is_active', true);
-      if (error) throw error;
-      return data as WarehouseType[];
+      try {
+        const response = await api.post('/warehouse/index');
+        console.log('Warehouses API response:   warehouse', response);
+        if (response.data.result === 'Success') {
+          return response.data.data as WarehouseType[];
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch warehouses');
+        }
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المخازن' : 'Error fetching warehouses',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
 
@@ -253,7 +265,7 @@ const StockTransfer = () => {
     mutationFn: async () => {
       // Generate transfer number
       const transferNumber = `TR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(transfers.length + 1).padStart(4, '0')}`;
-      
+
       // Create transfer
       const { data: transfer, error: transferError } = await supabase
         .from('stock_transfers')
@@ -267,7 +279,7 @@ const StockTransfer = () => {
         })
         .select()
         .single();
-      
+
       if (transferError) throw transferError;
 
       // Create transfer items
@@ -281,7 +293,7 @@ const StockTransfer = () => {
       const { error: itemsError } = await supabase
         .from('stock_transfer_items')
         .insert(items);
-      
+
       if (itemsError) throw itemsError;
 
       return transfer;
@@ -292,6 +304,7 @@ const StockTransfer = () => {
       resetForm();
       setNewTransferOpen(false);
     },
+
     onError: () => {
       toast({ title: language === 'ar' ? 'خطأ في إنشاء النقل' : 'Error creating transfer', variant: 'destructive' });
     }
@@ -300,15 +313,56 @@ const StockTransfer = () => {
   // Complete transfer mutation
   const completeTransferMutation = useMutation({
     mutationFn: async (transferId: string) => {
-      const { error } = await supabase
+      // First, get the transfer details and items
+      const { data: transfer, error: transferError } = await supabase
         .from('stock_transfers')
-        .update({ 
+        .select('*, stock_transfer_items(*)')
+        .eq('id', transferId)
+        .single();
+
+      if (transferError) throw transferError;
+
+      // Update transfer status
+      const { error: updateError } = await supabase
+        .from('stock_transfers')
+        .update({
           status: 'completed',
           completed_date: new Date().toISOString()
         })
         .eq('id', transferId);
-      
-      if (error) throw error;
+
+      if (updateError) throw updateError;
+
+      // Update warehouse stock levels
+      for (const item of transfer.stock_transfer_items) {
+        // Decrease stock from source warehouse
+        const { error: decreaseError } = await supabase
+          .from('warehouse_stock')
+          .upsert({
+            warehouse_id: transfer.from_warehouse_id,
+            product_id: item.product_id,
+            quantity: -item.quantity,
+            last_updated: new Date().toISOString()
+          }, {
+            onConflict: 'warehouse_id,product_id'
+          });
+
+        if (decreaseError) throw decreaseError;
+
+        // Increase stock in destination warehouse
+        const { error: increaseError } = await supabase
+          .from('warehouse_stock')
+          .upsert({
+            warehouse_id: transfer.to_warehouse_id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            last_updated: new Date().toISOString()
+          }, {
+            onConflict: 'warehouse_id,product_id'
+          });
+
+        if (increaseError) throw increaseError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock-transfers'] });
@@ -327,9 +381,10 @@ const StockTransfer = () => {
         .from('stock_transfers')
         .update({ status: 'cancelled' })
         .eq('id', transferId);
-      
+
       if (error) throw error;
     },
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stock-transfers'] });
       toast({ title: language === 'ar' ? 'تم إلغاء النقل' : 'Transfer cancelled' });
@@ -379,9 +434,9 @@ const StockTransfer = () => {
   };
 
   const updateItemQuantity = (productId: string, quantity: number) => {
-    setTransferItems(items => 
-      items.map(item => 
-        item.product_id === productId 
+    setTransferItems(items =>
+      items.map(item =>
+        item.product_id === productId
           ? { ...item, quantity: Math.max(1, quantity) }
           : item
       )
@@ -389,9 +444,9 @@ const StockTransfer = () => {
   };
 
   const updateItemNotes = (productId: string, notes: string) => {
-    setTransferItems(items => 
-      items.map(item => 
-        item.product_id === productId 
+    setTransferItems(items =>
+      items.map(item =>
+        item.product_id === productId
           ? { ...item, notes }
           : item
       )
@@ -405,7 +460,7 @@ const StockTransfer = () => {
   const getWarehouseName = (warehouseId: string) => {
     const warehouse = warehouses.find(w => w.id === warehouseId);
     if (!warehouse) return '-';
-    return language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name;
+    return warehouse.name;
   };
 
   const getStatusBadge = (status: string) => {
@@ -428,7 +483,7 @@ const StockTransfer = () => {
   const filteredProducts = useMemo(() => {
     if (!productSearchQuery) return products;
     const query = productSearchQuery.toLowerCase();
-    return products.filter(p => 
+    return products.filter(p =>
       p.name.toLowerCase().includes(query) ||
       (p.name_ar && p.name_ar.includes(query)) ||
       p.sku.toLowerCase().includes(query) ||
@@ -454,7 +509,7 @@ const StockTransfer = () => {
       options: warehouses.map(w => ({
         value: w.id,
         label: w.name,
-        labelAr: w.name_ar || w.name
+        labelAr: w.name
       }))
     },
     {
@@ -465,7 +520,7 @@ const StockTransfer = () => {
       options: warehouses.map(w => ({
         value: w.id,
         label: w.name,
-        labelAr: w.name_ar || w.name
+        labelAr: w.name
       }))
     },
     {
@@ -625,7 +680,7 @@ const StockTransfer = () => {
               {t.newTransfer}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-y-auto space-y-6 py-4">
             {/* Warehouse Selection */}
             <div className="grid grid-cols-2 gap-6">
@@ -640,8 +695,8 @@ const StockTransfer = () => {
                       <SelectItem key={warehouse.id} value={warehouse.id}>
                         <div className="flex items-center gap-2">
                           <Warehouse size={14} />
-                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                          {warehouse.code && <span className="text-muted-foreground">({warehouse.code})</span>}
+                          {warehouse.name}
+                          <span className="text-muted-foreground">({warehouse.code})</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -659,8 +714,8 @@ const StockTransfer = () => {
                       <SelectItem key={warehouse.id} value={warehouse.id}>
                         <div className="flex items-center gap-2">
                           <Warehouse size={14} />
-                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                          {warehouse.code && <span className="text-muted-foreground">({warehouse.code})</span>}
+                          {warehouse.name}
+                          <span className="text-muted-foreground">({warehouse.code})</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -684,8 +739,8 @@ const StockTransfer = () => {
                         className="ps-9 h-8 text-sm"
                       />
                     </div>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={addSelectedProducts}
                       disabled={selectedProducts.size === 0}
                     >
@@ -709,8 +764,8 @@ const StockTransfer = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredProducts.map((product) => (
-                          <TableRow 
-                            key={product.id} 
+                          <TableRow
+                            key={product.id}
                             className={`cursor-pointer ${transferItems.some(i => i.product_id === product.id) ? 'opacity-50' : ''}`}
                             onClick={() => !transferItems.some(i => i.product_id === product.id) && toggleProductSelection(product.id)}
                           >
@@ -756,12 +811,13 @@ const StockTransfer = () => {
                     {t.transferItems} ({transferItems.length})
                   </CardTitle>
                   {transferItems.length > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="text-destructive hover:text-destructive"
                       onClick={() => setTransferItems([])}
                     >
+
                       <Trash2 size={14} className="me-1" />
                       {t.removeAll}
                     </Button>
@@ -855,7 +911,7 @@ const StockTransfer = () => {
             </DialogClose>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button 
+                <Button
                   className="gradient-success"
                   disabled={!canCreateTransfer || createTransferMutation.isPending}
                 >
@@ -889,7 +945,7 @@ const StockTransfer = () => {
               {t.transferDetails}
             </DialogTitle>
           </DialogHeader>
-          
+
           {selectedTransfer && (
             <div className="space-y-6 py-4">
               {/* Transfer Info */}
@@ -1013,7 +1069,7 @@ const StockTransfer = () => {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                      <AlertDialogAction 
+                      <AlertDialogAction
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         onClick={() => cancelTransferMutation.mutate(selectedTransfer.id)}
                       >

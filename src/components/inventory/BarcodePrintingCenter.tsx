@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,11 +15,13 @@ import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import JsBarcode from 'jsbarcode';
-import { 
-  Printer, 
-  Plus, 
-  Minus, 
-  Trash2, 
+import api from '@/lib/api';
+
+import {
+  Printer,
+  Plus,
+  Minus,
+  Trash2,
   Search,
   Settings2,
   Eye,
@@ -55,6 +56,52 @@ interface ProductVariant {
   price_adjustment: number | null;
   size?: { id: string; name: string; name_ar: string | null; code: string } | null;
   color?: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+}
+
+interface VariantType {
+  id: string;
+  sku: string;
+  barcode: string | null;
+  stock: number;
+  price_adjustment: number | null;
+  size?: { id: string; name: string; name_ar: string | null; code: string } | null;
+  color?: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+}
+
+interface APIProduct {
+  id: number;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  imageUrl: string;
+  image: {
+    id: number;
+    name: string;
+    mimeType: string;
+    size: number;
+    authorId: number | null;
+    previewUrl: string;
+    fullUrl: string;
+    createdAt: string;
+  };
+  category: {
+    id: number;
+    name: string;
+    icon: string;
+    parent_id: number | null;
+    type: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  sku: string;
+  barcode: string;
+  stock: number;
+  reorder_level: number;
+  price: string;
+  cost: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface LabelDesign {
@@ -123,9 +170,8 @@ const printerPresets = {
 
 const BarcodePrintingCenter: React.FC = () => {
   const { language } = useLanguage();
-  const { getCurrencySymbol, formatCurrency } = useRegionalSettings();
   const isRTL = language === 'ar';
-  
+
   const [selectedProducts, setSelectedProducts] = useState<PrintProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [design, setDesign] = useState<LabelDesign>(defaultDesign);
@@ -137,13 +183,22 @@ const BarcodePrintingCenter: React.FC = () => {
   const { data: products = [] } = useQuery({
     queryKey: ['barcode-products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, barcode, price, has_variants')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/product/index');
+        console.log('Products response:', response);
+        if (response.data.result === 'Success') {
+          return response.data.data as APIProduct[];
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch products');
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
 
@@ -171,7 +226,7 @@ const BarcodePrintingCenter: React.FC = () => {
 
   // Create a map of product id to its variants
   const productVariantsMap = React.useMemo(() => {
-    const map = new Map<string, any[]>();
+    const map = new Map<string, VariantType[]>();
     productVariants.forEach(v => {
       const list = map.get(v.product_id) || [];
       list.push(v);
@@ -180,37 +235,36 @@ const BarcodePrintingCenter: React.FC = () => {
     return map;
   }, [productVariants]);
 
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.name_ar && p.name_ar.includes(searchQuery)) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.barcode && p.barcode.includes(searchQuery))
   );
 
-  const handleAddProduct = (product: typeof products[0], variant?: any) => {
-    const productId = variant ? `${product.id}-${variant.id}` : product.id;
+  const handleAddProduct = (product: APIProduct, variant?: VariantType) => {
+    const productId = variant ? `${product.id}-${variant.id}` : String(product.id);
     const existing = selectedProducts.find(p => p.id === productId);
-    
+
     if (existing) {
-      setSelectedProducts(prev => 
+      setSelectedProducts(prev =>
         prev.map(p => p.id === productId ? { ...p, quantity: p.quantity + 1 } : p)
       );
     } else {
-      const variantInfo = variant 
+      const variantInfo = variant
         ? [variant.size?.name, variant.color?.name].filter(Boolean).join(' - ')
         : undefined;
-      const variantInfoAr = variant 
-        ? [variant.size?.name_ar || variant.size?.name, variant.color?.name_ar || variant.color?.name].filter(Boolean).join(' - ')
+      const variantInfoAr = variant
+        ? [variant.size?.name, variant.color?.name].filter(Boolean).join(' - ')
         : undefined;
-      
-      const price = variant 
-        ? product.price + (variant.price_adjustment || 0)
-        : product.price;
-      
+
+      const price = variant
+        ? parseFloat(product.price) + (variant.price_adjustment || 0)
+        : parseFloat(product.price);
+
       setSelectedProducts(prev => [...prev, {
         id: productId,
         name: product.name,
-        nameAr: product.name_ar || product.name,
+        nameAr: product.name,
         sku: variant?.sku || product.sku,
         barcode: variant?.barcode || variant?.sku || product.barcode || product.sku,
         price: price,
@@ -220,12 +274,12 @@ const BarcodePrintingCenter: React.FC = () => {
         variantInfoAr
       }]);
     }
-    
-    const displayName = isRTL ? product.name_ar || product.name : product.name;
-    const variantDisplay = variant 
-      ? ` (${isRTL ? (variant.size?.name_ar || variant.size?.name || '') : (variant.size?.name || '')} ${isRTL ? (variant.color?.name_ar || variant.color?.name || '') : (variant.color?.name || '')})`
+
+    const displayName = product.name;
+    const variantDisplay = variant
+      ? ` (${variant.size?.name || ''} ${variant.color?.name || ''})`
       : '';
-    
+
     toast({
       title: isRTL ? 'تمت الإضافة' : 'Added',
       description: `${displayName}${variantDisplay}`
@@ -237,7 +291,7 @@ const BarcodePrintingCenter: React.FC = () => {
   };
 
   const handleQuantityChange = (id: string, delta: number) => {
-    setSelectedProducts(prev => 
+    setSelectedProducts(prev =>
       prev.map(p => {
         if (p.id === id) {
           const newQty = Math.max(1, p.quantity + delta);
@@ -250,7 +304,7 @@ const BarcodePrintingCenter: React.FC = () => {
 
   const handleQuantityInput = (id: string, value: string) => {
     const qty = parseInt(value) || 1;
-    setSelectedProducts(prev => 
+    setSelectedProducts(prev =>
       prev.map(p => p.id === id ? { ...p, quantity: Math.max(1, qty) } : p)
     );
   };
@@ -279,10 +333,10 @@ const BarcodePrintingCenter: React.FC = () => {
     const labels: string[] = [];
     selectedProducts.forEach(product => {
       for (let i = 0; i < product.quantity; i++) {
-        const productLabel = product.isVariant 
+        const productLabel = product.isVariant
           ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
           : (isRTL ? product.nameAr : product.name);
-        
+
         labels.push(`
           <div class="label" style="
             width: ${design.width}mm;
@@ -302,20 +356,20 @@ const BarcodePrintingCenter: React.FC = () => {
             ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
             ${design.showBarcode ? `<canvas id="bc-${product.id.replace(/-/g, '_')}-${i}"></canvas>` : ''}
             ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} ${getCurrencySymbol()}</div>` : ''}
+            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} YER</div>` : ''}
           </div>
         `);
       }
     });
 
     const labelsHtml = labels.join('');
-    
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="${isRTL ? 'rtl' : 'ltr'}">
         <head>
           <title>${isRTL ? 'طباعة الباركود' : 'Print Barcodes'}</title>
-          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -344,8 +398,8 @@ const BarcodePrintingCenter: React.FC = () => {
             ${labelsHtml}
           </div>
           <script>
-            ${selectedProducts.map((product, pIndex) => 
-              Array.from({ length: product.quantity }, (_, i) => `
+            ${selectedProducts.map((product, pIndex) =>
+      Array.from({ length: product.quantity }, (_, i) => `
                 try {
                   JsBarcode("#bc-${product.id.replace(/-/g, '_')}-${i}", "${product.barcode}", {
                     format: "CODE128",
@@ -358,8 +412,8 @@ const BarcodePrintingCenter: React.FC = () => {
                   });
                 } catch(e) { console.error(e); }
               `).join('')
-            ).join('')}
-          <\/script>
+    ).join('')}
+          </script>
         </body>
       </html>
     `);
@@ -449,8 +503,8 @@ const BarcodePrintingCenter: React.FC = () => {
             <Tag className="h-4 w-4 me-2" />
             {t.totalLabels}: <span className="font-bold ms-1">{totalLabels}</span>
           </Badge>
-          <Button 
-            onClick={handlePrint} 
+          <Button
+            onClick={handlePrint}
             disabled={selectedProducts.length === 0}
             className="gradient-success text-white"
           >
@@ -497,9 +551,9 @@ const BarcodePrintingCenter: React.FC = () => {
                   <ScrollArea className="h-[350px]">
                     <div className="divide-y divide-border">
                       {filteredProducts.map(product => {
-                        const variants = productVariantsMap.get(product.id) || [];
-                        const hasVariants = product.has_variants && variants.length > 0;
-                        
+                        const variants = productVariantsMap.get(String(product.id)) || [];
+                        const hasVariants = variants.length > 0;
+
                         return (
                           <div key={product.id} className="border-b border-border last:border-0">
                             {/* Main Product Row */}
@@ -507,7 +561,7 @@ const BarcodePrintingCenter: React.FC = () => {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium text-foreground truncate">
-                                    {isRTL ? product.name_ar || product.name : product.name}
+                                    {product.name}
                                   </p>
                                   {hasVariants && (
                                     <Badge variant="secondary" className="text-xs">
@@ -517,7 +571,7 @@ const BarcodePrintingCenter: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                   <span className="font-mono">{product.sku}</span>
-                                  <span>{product.price?.toLocaleString()} YER</span>
+                                  <span>{parseFloat(product.price).toLocaleString()} YER</span>
                                 </div>
                               </div>
                               {!hasVariants && (
@@ -531,16 +585,16 @@ const BarcodePrintingCenter: React.FC = () => {
                                 </Button>
                               )}
                             </div>
-                            
+
                             {/* Variants List */}
                             {hasVariants && (
                               <div className="ps-6 pe-3 pb-2 space-y-1">
-                                {variants.map((variant: any) => {
+                                {variants.map((variant: VariantType) => {
                                   const variantName = [
-                                    isRTL ? (variant.size?.name_ar || variant.size?.name) : variant.size?.name,
-                                    isRTL ? (variant.color?.name_ar || variant.color?.name) : variant.color?.name
+                                    variant.size?.name,
+                                    variant.color?.name
                                   ].filter(Boolean).join(' - ');
-                                  
+
                                   return (
                                     <div
                                       key={variant.id}
@@ -957,12 +1011,12 @@ const BarcodePrintingCenter: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div 
+              <div
                 ref={previewRef}
                 className="bg-white border-2 border-dashed border-border rounded-lg p-4 flex items-center justify-center min-h-[200px]"
               >
                 {selectedProducts.length > 0 ? (
-                  <div 
+                  <div
                     className="text-center"
                     style={{
                       width: `${design.width * 3}px`,
