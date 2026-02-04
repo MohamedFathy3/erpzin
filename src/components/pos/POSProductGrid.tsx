@@ -48,12 +48,10 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
         <button
           key={product.id}
           onClick={() => onAddToCart(product)}
-          disabled={product.stock === 0}
           className={cn(
             'relative flex flex-col rounded-lg overflow-hidden transition-all duration-200',
             'bg-card border border-border hover:border-primary hover:shadow-md',
             'active:scale-95 touch-manipulation',
-            product.stock === 0 && 'opacity-50 cursor-not-allowed'
           )}
         >
           {/* Product Image - Compact */}
@@ -73,16 +71,16 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
           </div>
           
           {/* Stock Badge - Smaller */}
-          {product.stock <= 5 && product.stock > 0 && (
+          {/* {product.stock <= 5 && product.stock > 0 && (
             <span className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-warning/20 text-warning">
               {product.stock}
             </span>
-          )}
-          {product.stock === 0 && (
+          )} */}
+          {/* {product.stock === 0 && (
             <span className="absolute top-1 end-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-destructive/20 text-destructive">
               {language === 'ar' ? 'نفذ' : 'Out'}
             </span>
-          )}
+          )} */}
           
           {/* Product Info - Compact */}
           <div className="p-1.5 sm:p-2 text-start">

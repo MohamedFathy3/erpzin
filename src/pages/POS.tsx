@@ -188,13 +188,13 @@ const POS: React.FC = () => {
       return;
     }
 
-    if (product.stock === 0) {
-      toast({
-        title: language === 'ar' ? 'المنتج غير متوفر' : 'Out of stock',
-        variant: 'destructive'
-      });
-      return;
-    }
+    // if (product.stock === 0) {
+    //   toast({
+    //     title: language === 'ar' ? 'المنتج غير متوفر' : 'Out of stock',
+    //     variant: 'destructive'
+    //   });
+    //   return;
+    // }
 
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id && !item.variantId);

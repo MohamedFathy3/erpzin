@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 export interface Category {
   id: string;
@@ -26,14 +28,24 @@ export const useCategories = () => {
   return useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name, name_ar, icon')
-        .order('name');
-      
-      if (error) throw error;
-      return data as Category[];
-    }
+      try {
+        const response = await api.get('/index-sub-account', {
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        toast({
+          title: 'Error fetching categories',
+          variant: 'destructive'
+        });
+        return [];
+      }
+    },
   });
 };
 
@@ -41,14 +53,24 @@ export const useProducts = () => {
   return useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, barcode, price, stock, category_id, image_url, is_active, has_variants')
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      return data as Product[];
+      try {
+        const response = await api.post('/product/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: 'Error fetching products',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
 };
@@ -57,15 +79,23 @@ export const useProductByBarcode = (barcode: string) => {
   return useQuery({
     queryKey: ['product-barcode', barcode],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('barcode', barcode)
-        .eq('is_active', true)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data as Product | null;
+      try {
+        const response = await api.post('/product/index', {
+          filters: { barcode: barcode },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        return response.data.data[0] || null;
+      } catch (error) {
+        console.error('Error fetching product by barcode:', error);
+        toast({
+          title: 'Error fetching product by barcode',
+          variant: 'destructive'
+        });
+        return null;
+      }
     },
     enabled: barcode.length > 5
   });
