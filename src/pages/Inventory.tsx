@@ -23,8 +23,55 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-
+import api from '@/lib/api';
 const ITEMS_PER_PAGE = 10;
+
+
+  export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
+  let imageUrl = '';
+  let imageId: number | undefined;
+  
+  if (apiProduct.image) {
+    if (typeof apiProduct.image === 'object') {
+      imageId = apiProduct.image.id;
+      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || '';
+    } else if (typeof apiProduct.image === 'number') {
+      imageId = apiProduct.image;
+    }
+  } else if (apiProduct.image_url) {
+    imageUrl = apiProduct.image_url;
+  } else if (apiProduct.imageUrl) {
+    imageUrl = apiProduct.imageUrl;
+  }
+
+  // تحويل active (boolean) إلى status (string)
+  const status = apiProduct.active === true ? 'active' : 'inactive';
+
+  return {
+    id: apiProduct.id?.toString(),
+    name: apiProduct.name || '',
+    nameAr: apiProduct.name_ar || apiProduct.name || '',
+    description: apiProduct.description || '',
+    descriptionAr: apiProduct.description_ar || '',
+    sku: apiProduct.sku || '',
+    barcode: apiProduct.barcode || '',
+    categoryId: apiProduct.category?.id?.toString() || apiProduct.category_id?.toString() || '',
+    price: Number(apiProduct.price) || 0,
+    cost: Number(apiProduct.cost) || 0,
+    hasVariants: apiProduct.has_variants || false,
+    variants: [],
+    selectedSizes: [],
+    selectedColors: [],
+    stock: Number(apiProduct.stock) || 0,
+    reorderPoint: Number(apiProduct.reorder_level) || 5,
+    status: status, // هنا التحويل المهم
+    imageId,
+    imageUrl,
+    branchIds: apiProduct.branch_ids || [],
+    warehouseIds: apiProduct.warehouse_ids || [],
+    valuationMethod: apiProduct.valuation_method || 'fifo'
+  };
+};
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
@@ -51,26 +98,50 @@ const Inventory: React.FC = () => {
 
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, categories(id, name, name_ar)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    }
+     queryFn: async () => {
+      try {
+        const response = await api.post('/product/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
+          variant: 'destructive'
+        });
+        return [];
+      }
+    },
   });
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories-filter'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name, name_ar')
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+   queryFn: async () => {
+      try {
+        const response = await api.post('/category/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
+          variant: 'destructive'
+        });
+        return [];
+      }
+    },
   });
 
   const products: Product[] = dbProducts.map(p => ({
@@ -172,100 +243,64 @@ const Inventory: React.FC = () => {
     setSortBy('created_desc');
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
+  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc'; 
+
+
 
   const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
-  const handleEditProduct = async (product: Product) => {
-    // Fetch existing variants for this product
-    let variants: any[] = [];
-    let selectedSizes: string[] = [];
-    let selectedColors: string[] = [];
+const handleEditProduct = async (product: Product) => {
+  try {
+    const response = await api.get(`/product/${product.id}`);
+    const dbProduct = response.data;
     
-    if (product.hasVariants) {
-      const { data: existingVariants } = await supabase
-        .from('product_variants')
-        .select(`
-          id,
-          sku,
-          barcode,
-          stock,
-          price_adjustment,
-          cost_adjustment,
-          is_active,
-          size_id,
-          color_id,
-          size:sizes(id, name, name_ar, code),
-          color:colors(id, name, name_ar, hex_code)
-        `)
-        .eq('product_id', product.id);
-      
-      if (existingVariants && existingVariants.length > 0) {
-        // Extract unique sizes and colors
-        const uniqueSizeIds = new Set<string>();
-        const uniqueColorIds = new Set<string>();
+    // استخدم الدالة الجديدة
+    const formData = transformApiProductToFormData(dbProduct);
+    
+    // إذا كان فيه متغيرات، املأها
+    if (formData.hasVariants && product.id) {
+      try {
+        const variantsResponse = await api.get(`/product-variants?product_id=${product.id}`);
+        const existingVariants = variantsResponse.data.data || [];
         
-        existingVariants.forEach(v => {
-          if (v.size_id) uniqueSizeIds.add(v.size_id);
-          if (v.color_id) uniqueColorIds.add(v.color_id);
-        });
-        
-        selectedSizes = Array.from(uniqueSizeIds);
-        selectedColors = Array.from(uniqueColorIds);
-        
-        // Group variants by size to extract size-level pricing
-        const sizeMap = new Map<string, { cost: number; price: number; barcode: string }>();
-        existingVariants.forEach(v => {
-          if (v.size_id && !sizeMap.has(v.size_id)) {
-            sizeMap.set(v.size_id, {
-              cost: product.cost + (v.cost_adjustment || 0),
-              price: product.price + (v.price_adjustment || 0),
-              barcode: v.barcode || ''
-            });
-          }
-        });
-        
-        // Convert to variant format expected by VariantMatrix
-        variants = existingVariants.map(v => ({
-          sizeId: v.size_id,
-          colorId: v.color_id,
-          sku: v.sku,
-          barcode: v.barcode || '',
-          stock: v.stock,
-          cost: product.cost + (v.cost_adjustment || 0),
-          price: product.price + (v.price_adjustment || 0),
-          isEnabled: v.is_active ?? true
-        }));
+        if (existingVariants.length > 0) {
+          const uniqueSizeIds = new Set<string>();
+          const uniqueColorIds = new Set<string>();
+          
+          existingVariants.forEach(v => {
+            if (v.size_id) uniqueSizeIds.add(v.size_id.toString());
+            if (v.color_id) uniqueColorIds.add(v.color_id.toString());
+          });
+          
+          formData.selectedSizes = Array.from(uniqueSizeIds);
+          formData.selectedColors = Array.from(uniqueColorIds);
+          
+          formData.variants = existingVariants.map(v => ({
+            sizeId: v.size_id?.toString(),
+            colorId: v.color_id?.toString(),
+            sku: v.sku || `${formData.sku}-${v.size_id || ''}-${v.color_id || ''}`,
+            barcode: v.barcode || '',
+            stock: v.stock || 0,
+            cost: v.cost || formData.cost,
+            price: v.price || formData.price,
+            isEnabled: v.is_active ?? true
+          }));
+        }
+      } catch (variantError) {
+        console.warn('Could not fetch variants:', variantError);
       }
     }
-
-    // Fetch product details including new fields
-    const dbProduct = dbProducts.find(p => p.id === product.id);
-
-    setEditProduct({
-      id: product.id, 
-      name: product.name, 
-      nameAr: product.nameAr, 
-      description: '', 
-      descriptionAr: '',
-      sku: product.sku, 
-      barcode: product.barcode || '', 
-      categoryId: product.categoryId || '', 
-      price: product.price,
-      cost: product.cost, 
-      hasVariants: product.hasVariants || false, 
-      variants,
-      selectedSizes,
-      selectedColors,
-      stock: product.stock,
-      reorderPoint: product.minStock || 5, 
-      status: product.status === 'inactive' ? 'inactive' : 'active',
-      imageUrl: product.image || '',
-      branchIds: (dbProduct?.branch_ids as string[]) || [],
-      warehouseIds: (dbProduct?.warehouse_ids as string[]) || [],
-      valuationMethod: (dbProduct?.valuation_method as 'fifo' | 'lifo' | 'weighted_average') || 'fifo'
-    });
+    
+    setEditProduct(formData);
     setShowProductForm(true);
-  };
+    
+  } catch (error) {
+    console.error('Error fetching product details:', error);
+    toast({
+      title: language === 'ar' ? 'خطأ في جلب بيانات المنتج' : 'Error fetching product details',
+      variant: 'destructive'
+    });
+  }
+};
   const handleDeleteProduct = () => { toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' }); refetch(); };
   const handleDuplicateProduct = () => { toast({ title: language === 'ar' ? 'تم النسخ' : 'Duplicated' }); };
   const handleViewProduct = (product: Product) => { handleEditProduct(product); };
@@ -289,121 +324,101 @@ const Inventory: React.FC = () => {
     setShowVariantsModal(true);
   };
 
-  // Save product with variants to database
-  const handleSaveProduct = async (formData: ProductFormData) => {
-    try {
-      let productId = formData.id;
+const handleSaveProduct = async (formData: ProductFormData) => {
+  try {
+    // Prepare product data for API
+    const productData = {
+      name: formData.name,
+      name_ar: formData.nameAr || formData.name,
+      description: formData.description || '',
+      description_ar: formData.descriptionAr || '',
+      category_id: formData.categoryId || null,
+      sku: formData.sku,
+      barcode: formData.barcode || null,
+      reorder_level: formData.reorderPoint || 5,
+      image_url: formData.imageUrl || null,
+      cost: formData.cost,
+      price: formData.price,
+      stock: formData.stock,
+      active: formData.status === 'active',
+      has_variants: formData.hasVariants,
+      // Include branch/warehouse scoping if your API supports it
+      branch_ids: formData.branchIds || [],
+      warehouse_ids: formData.warehouseIds || [],
+      valuation_method: formData.valuationMethod || 'fifo'
+    };
 
-      // Prepare product data including new fields
-      const productData = {
-        name: formData.name,
-        name_ar: formData.nameAr,
-        sku: formData.sku,
-        barcode: formData.barcode || null,
-        category_id: formData.categoryId || null,
-        price: formData.price,
-        cost: formData.cost,
-        stock: formData.stock,
-        min_stock: formData.reorderPoint,
-        is_active: formData.status === 'active',
-        has_variants: formData.hasVariants && formData.variants.filter(v => v.enabled).length > 0,
-        image_url: formData.imageUrl || null,
-        // New fields for branch/warehouse scoping and valuation
-        branch_ids: formData.branchIds || [],
-        warehouse_ids: formData.warehouseIds || [],
-        valuation_method: formData.valuationMethod || 'fifo'
-      };
+    let productId = formData.id;
 
-      if (productId) {
-        // Update existing product
-        const { error: updateError } = await supabase
-          .from('products')
-          .update(productData)
-          .eq('id', productId);
-        
-        if (updateError) throw updateError;
-      } else {
-        // Insert new product
-        const { data: newProduct, error: insertError } = await supabase
-          .from('products')
-          .insert(productData)
-          .select()
-          .single();
-        
-        if (insertError) throw insertError;
-        productId = newProduct.id;
-      }
+    if (productId) {
+      // Update existing product
+      const response = await api.put(`/product/${productId}`, productData);
+      
+      toast({ 
+        title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
+        description: language === 'ar' 
+          ? `تم تحديث المنتج "${formData.name}"`
+          : `Product "${formData.name}" updated`
+      });
+    } else {
+      // Create new product
+      const response = await api.post('/product', productData);
+      productId = response.data.id; // Adjust based on your API response structure
+      
+      toast({ 
+        title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
+        description: language === 'ar' 
+          ? `تم إضافة المنتج "${formData.name}"`
+          : `Product "${formData.name}" added`
+      });
+    }
 
-      // Save variants if product has variants
-      if (formData.hasVariants && productId) {
-        // Delete existing variants
-        await supabase
-          .from('product_variants')
-          .delete()
-          .eq('product_id', productId);
-
-        // Get enabled variants and transform them for DB
+    // Handle variants separately if product has variants
+    if (formData.hasVariants && productId && formData.variants.length > 0) {
+      // First, check if variants endpoint exists in your API
+      try {
         const enabledVariants = formData.variants.filter(v => v.enabled);
         
         if (enabledVariants.length > 0) {
-          // Track used barcodes to avoid duplicates
-          const usedBarcodes = new Set<string>();
+          // Transform variants to your API structure
+          const variantsData = enabledVariants.map(variant => ({
+            product_id: productId,
+            size_id: variant.sizeId || null,
+            color_id: variant.colorId || null,
+            sku: variant.sku,
+            barcode: variant.barcode || null,
+            stock: variant.stock || 0,
+            price: variant.price, // Use actual price instead of adjustment
+            cost: variant.cost,   // Use actual cost instead of adjustment
+            is_active: true
+          }));
+
+          // Save variants through API
+          await api.post('/product-variants', { variants: variantsData });
           
-          const variantsToInsert = enabledVariants.map(v => {
-            // Handle barcode - must be unique or null
-            let barcode: string | null = v.barcode?.trim() || null;
-            
-            // If barcode is empty or duplicate, set to null
-            if (barcode) {
-              if (usedBarcodes.has(barcode)) {
-                barcode = null; // Duplicate within batch, set to null
-              } else {
-                usedBarcodes.add(barcode);
-              }
-            }
-            
-            return {
-              product_id: productId,
-              size_id: v.sizeId || null,
-              color_id: v.colorId || null,
-              sku: v.sku,
-              barcode: barcode,
-              stock: v.stock || 0,
-              price_adjustment: v.price - formData.price, // Store as adjustment from base price
-              cost_adjustment: v.cost - formData.cost,    // Store as adjustment from base cost
-              is_active: true
-            };
-          });
-
-          const { error: variantsError } = await supabase
-            .from('product_variants')
-            .insert(variantsToInsert);
-
-          if (variantsError) throw variantsError;
+          // Also update the main product to mark it has variants
+          await api.put(`/product/${productId}`, { has_variants: true });
         }
+      } catch (variantError) {
+        console.warn('Could not save variants, continuing without them:', variantError);
       }
-
-      toast({ 
-        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
-        description: language === 'ar' 
-          ? `تم حفظ المنتج "${formData.name}" مع ${formData.variants.filter(v => v.enabled).length} متغير`
-          : `Product "${formData.name}" saved with ${formData.variants.filter(v => v.enabled).length} variants`
-      });
-      
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      queryClient.invalidateQueries({ queryKey: ['product-variants'] });
-      queryClient.invalidateQueries({ queryKey: ['product-variants-inventory'] });
-      refetch();
-    } catch (error: any) {
-      console.error('Error saving product:', error);
-      toast({ 
-        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
-        description: error.message,
-        variant: 'destructive'
-      });
     }
-  };
+
+    // Invalidate queries to refresh data
+    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+    queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
+    refetch();
+    
+  } catch (error: any) {
+    console.error('Error saving product:', error);
+    toast({ 
+      title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+      description: error.response?.data?.message || error.message,
+      variant: 'destructive'
+    });
+    throw error; // Re-throw to handle in form if needed
+  }
+};
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
     if (found) handleEditProduct(found);

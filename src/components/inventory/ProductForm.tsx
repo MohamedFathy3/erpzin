@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2, Building2, Warehouse, Calculator } from 'lucide-react';
+import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2, Building2, Warehouse, Calculator, Eye, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,16 +15,16 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
-import VariantMatrix, { VariantOption, ProductVariant } from './VariantMatrix';
+import { Card, CardContent } from '@/components/ui/card';
+import VariantMatrix, { ProductVariant } from './VariantMatrix';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
+import api from '@/lib/api';
 
 interface ProductFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (product: ProductFormData) => void | Promise<void>;
-  categories?: any[]; // Keep for backwards compatibility but we'll fetch from DB
   editProduct?: ProductFormData | null;
 }
 
@@ -46,61 +46,128 @@ export interface ProductFormData {
   stock: number;
   reorderPoint: number;
   status: 'active' | 'inactive';
-  imageUrl: string;
-  // New fields for branch/warehouse/valuation
+  imageId?: number;
+  imageUrl?: string;
   branchIds: string[];
   warehouseIds: string[];
   valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
 }
 
-// Default sizes and colors are now loaded from database via VariantMatrix
+export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
+  let imageUrl = '';
+  let imageId: number | undefined;
+  
+  if (apiProduct.image) {
+    if (typeof apiProduct.image === 'object') {
+      imageId = apiProduct.image.id;
+      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || '';
+    } else if (typeof apiProduct.image === 'number') {
+      imageId = apiProduct.image;
+    }
+  } else if (apiProduct.image_url) {
+    imageUrl = apiProduct.image_url;
+  } else if (apiProduct.imageUrl) {
+    imageUrl = apiProduct.imageUrl;
+  }
+
+  // تحويل active (boolean) إلى status (string)
+  const status = apiProduct.active === true ? 'active' : 'inactive';
+
+  return {
+    id: apiProduct.id?.toString(),
+    name: apiProduct.name || '',
+    nameAr: apiProduct.name_ar || apiProduct.name || '',
+    description: apiProduct.description || '',
+    descriptionAr: apiProduct.description_ar || '',
+    sku: apiProduct.sku || '',
+    barcode: apiProduct.barcode || '',
+    categoryId: apiProduct.category?.id?.toString() || apiProduct.category_id?.toString() || '',
+    price: Number(apiProduct.price) || 0,
+    cost: Number(apiProduct.cost) || 0,
+    hasVariants: apiProduct.has_variants || false,
+    variants: [],
+    selectedSizes: [],
+    selectedColors: [],
+    stock: Number(apiProduct.stock) || 0,
+    reorderPoint: Number(apiProduct.reorder_level) || 5,
+    status: status, // هنا التحويل المهم
+    imageId,
+    imageUrl,
+    branchIds: apiProduct.branch_ids || [],
+    warehouseIds: apiProduct.warehouse_ids || [],
+    valuationMethod: apiProduct.valuation_method || 'fifo'
+  };
+};
 
 const generateSKU = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const nums = '0123456789';
-  let sku = '';
-  for (let i = 0; i < 2; i++) sku += chars.charAt(Math.floor(Math.random() * chars.length));
-  sku += '-';
-  for (let i = 0; i < 4; i++) sku += nums.charAt(Math.floor(Math.random() * nums.length));
-  return sku;
+  const prefix = 'PROD';
+  const randomNum = Math.floor(Math.random() * 9000) + 1000;
+  return `${prefix}-${randomNum}`;
 };
 
 const generateBarcode = (): string => {
-  return Math.floor(Math.random() * 9000000000000 + 1000000000000).toString();
+  return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
 };
 
 interface DbCategory {
-  id: string;
+  id: string | number; // يمكن أن يكون string أو number
   name: string;
   name_ar: string | null;
-  parent_id: string | null;
+  parent_id: string | number | null;
+  type?: string;
 }
 
+// تصحيح دالة flattenDbCategories
 const flattenDbCategories = (categories: DbCategory[]): { id: string; name: string; nameAr: string }[] => {
-  // Build parent map
-  const parentMap: Record<string, DbCategory> = {};
-  categories.forEach(cat => { parentMap[cat.id] = cat; });
+  const result: { id: string; name: string; nameAr: string }[] = [];
   
-  return categories.map(cat => {
-    let prefix = '';
-    let current = cat;
-    const ancestors: string[] = [];
+  // Filter out categories without valid ID - تصحيح للرقم
+  const validCategories = categories.filter(cat => {
+    if (cat.id === undefined || cat.id === null) return false;
     
-    while (current.parent_id && parentMap[current.parent_id]) {
-      current = parentMap[current.parent_id];
-      ancestors.unshift(current.name);
+    // تحقق من أن الـ id ليس NaN أو فارغ
+    if (typeof cat.id === 'number') {
+      return !isNaN(cat.id) && cat.id > 0;
+    } else if (typeof cat.id === 'string') {
+      return cat.id.trim() !== '';
     }
-    
-    if (ancestors.length > 0) {
-      prefix = ancestors.join(' > ') + ' > ';
-    }
-    
-    return {
-      id: cat.id,
-      name: prefix + cat.name,
-      nameAr: prefix + (cat.name_ar || cat.name),
-    };
+    return false;
   });
+
+  const buildPath = (category: DbCategory, path: string = '', pathAr: string = ''): void => {
+    const currentName = category.name || 'Unnamed';
+    const currentNameAr = category.name_ar || currentName;
+    
+    const newPath = path ? `${currentName} > ${path}` : currentName;
+    const newPathAr = pathAr ? `${currentNameAr} > ${pathAr}` : currentNameAr;
+    
+    // تأكد أن الـ id هو string
+    result.push({
+      id: category.id.toString(),
+      name: newPath,
+      nameAr: newPathAr,
+    });
+  };
+
+  // Main categories
+  const mainCategories = validCategories.filter(cat => !cat.parent_id || cat.type === 'category');
+  mainCategories.forEach(cat => buildPath(cat));
+  
+  // Sub-categories
+  const subCategories = validCategories.filter(cat => cat.parent_id && cat.type === 'sub_category');
+  subCategories.forEach(subCat => {
+    const parent = validCategories.find(cat => {
+      // المقارنة كـ strings لضمان التوافق
+      return cat.id.toString() === subCat.parent_id?.toString();
+    });
+    if (parent) {
+      buildPath(subCat, parent.name, parent.name_ar || parent.name);
+    } else {
+      buildPath(subCat);
+    }
+  });
+  
+  return result.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const ProductForm: React.FC<ProductFormProps> = ({
@@ -114,116 +181,74 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
-  
-  // Fetch categories from database
-  const { data: dbCategories = [] } = useQuery({
+  const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]);
+  const [imageUploadMethod, setImageUploadMethod] = useState<'url' | 'upload' | 'none'>('none');
+
+  // Fetch categories
+  const { data: dbCategories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ['categories-for-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name, name_ar, parent_id')
-        .order('name');
-      if (error) throw error;
-      return data as DbCategory[];
+      try {
+        const response = await api.post('/category/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        return [];
+      }
     },
     enabled: isOpen,
   });
 
-  // Fetch branches from database
-  const { data: branches = [] } = useQuery({
+  // Fetch branches
+  const { data: branches = [], isLoading: loadingBranches } = useQuery({
     queryKey: ['branches-for-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, name_ar')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/branch/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        return [];
+      }
     },
     enabled: isOpen,
   });
 
-  // Fetch warehouses from database
-  const { data: warehouses = [] } = useQuery({
+  // Fetch warehouses
+  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
     queryKey: ['warehouses-for-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('id, name, name_ar')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/warehouse/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        return [];
+      }
     },
     enabled: isOpen,
   });
-
-  // Fetch branch-warehouse relationships
-  const { data: branchWarehouses = [] } = useQuery({
-    queryKey: ['branch-warehouses-for-form'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branch_warehouses')
-        .select('branch_id, warehouse_id');
-      if (error) throw error;
-      return data;
-    },
-    enabled: isOpen,
-  });
-
-  // Auto-select branches when warehouse is selected
-  const handleWarehouseChange = (warehouseId: string, checked: boolean) => {
-    const currentWarehouseIds = formData.warehouseIds || [];
-    let newWarehouseIds: string[];
-    
-    if (checked) {
-      newWarehouseIds = [...currentWarehouseIds, warehouseId];
-    } else {
-      newWarehouseIds = currentWarehouseIds.filter(id => id !== warehouseId);
-    }
-    
-    handleChange('warehouseIds', newWarehouseIds);
-    
-    // Auto-select related branches
-    if (checked) {
-      const relatedBranchIds = branchWarehouses
-        .filter(bw => bw.warehouse_id === warehouseId)
-        .map(bw => bw.branch_id);
-      
-      const currentBranchIds = formData.branchIds || [];
-      const newBranchIds = [...new Set([...currentBranchIds, ...relatedBranchIds])];
-      handleChange('branchIds', newBranchIds);
-    }
-  };
-
-  // Auto-select warehouses when branch is selected
-  const handleBranchChange = (branchId: string, checked: boolean) => {
-    const currentBranchIds = formData.branchIds || [];
-    let newBranchIds: string[];
-    
-    if (checked) {
-      newBranchIds = [...currentBranchIds, branchId];
-    } else {
-      newBranchIds = currentBranchIds.filter(id => id !== branchId);
-    }
-    
-    handleChange('branchIds', newBranchIds);
-    
-    // Auto-select related warehouses
-    if (checked) {
-      const relatedWarehouseIds = branchWarehouses
-        .filter(bw => bw.branch_id === branchId)
-        .map(bw => bw.warehouse_id);
-      
-      const currentWarehouseIds = formData.warehouseIds || [];
-      const newWarehouseIds = [...new Set([...currentWarehouseIds, ...relatedWarehouseIds])];
-      handleChange('warehouseIds', newWarehouseIds);
-    }
-  };
 
   const flatCategories = flattenDbCategories(dbCategories);
-  
+
   const getInitialFormData = (): ProductFormData => ({
     name: '',
     nameAr: '',
@@ -241,20 +266,31 @@ const ProductForm: React.FC<ProductFormProps> = ({
     stock: 0,
     reorderPoint: 5,
     status: 'active',
+    imageId: undefined,
     imageUrl: '',
     branchIds: [],
     warehouseIds: [],
     valuationMethod: 'fifo'
   });
 
-  const [formData, setFormData] = useState<ProductFormData>(editProduct || getInitialFormData());
+  const [formData, setFormData] = useState<ProductFormData>(getInitialFormData());
 
-  // Update form data when editProduct changes (for editing existing products)
   useEffect(() => {
-    if (isOpen && editProduct) {
-      setFormData(editProduct);
-    } else if (isOpen && !editProduct) {
-      setFormData(getInitialFormData());
+    if (isOpen) {
+      if (editProduct) {
+        setFormData(editProduct);
+        if (editProduct.imageId) {
+          setImageUploadMethod('upload');
+        } else if (editProduct.imageUrl) {
+          setImageUploadMethod('url');
+        } else {
+          setImageUploadMethod('none');
+        }
+      } else {
+        setFormData(getInitialFormData());
+        setImageUploadMethod('none');
+        setUploadedImageIds([]);
+      }
     }
   }, [isOpen, editProduct]);
 
@@ -262,43 +298,79 @@ const ProductForm: React.FC<ProductFormProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // دالة معالجة تغيير الـ Input للأرقام
+  const handleNumberChange = (field: keyof ProductFormData, value: string) => {
+    // إذا كانت القيمة فارغة، ضع 0
+    if (value === '' || value === undefined || value === null) {
+      handleChange(field, 0);
+      return;
+    }
+    
+    // تحقق من أن القيمة رقمية
+    const numValue = parseFloat(value);
+    
+    // إذا كانت NaN، ضع 0
+    if (isNaN(numValue)) {
+      handleChange(field, 0);
+    } else {
+      handleChange(field, numValue);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast.error(language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image file');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يرجى اختيار ملف صورة' : 'Please select an image file',
+        variant: 'destructive'
+      });
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast.error(language === 'ar' ? 'حجم الصورة يجب أن يكون أقل من 5 ميجابايت' : 'Image size must be less than 5MB');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'حجم الصورة يجب أن يكون أقل من 5 ميجابايت' : 'Image size must be less than 5MB',
+        variant: 'destructive'
+      });
       return;
     }
 
     setIsUploadingImage(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `products/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('company-logos')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-logos')
-        .getPublicUrl(filePath);
-
-      handleChange('imageUrl', publicUrl);
-      toast.success(language === 'ar' ? 'تم رفع الصورة بنجاح' : 'Image uploaded successfully');
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await api.post('/media', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      const imageData = response.data.data || response.data;
+      const imageId = imageData.id;
+      
+      if (imageId) {
+        setUploadedImageIds([imageId]);
+        handleChange('imageId', imageId);
+        handleChange('imageUrl', '');
+        setImageUploadMethod('upload');
+        
+        toast({
+          title: language === 'ar' ? 'تم الرفع بنجاح' : 'Upload successful',
+          description: language === 'ar' ? 'تم رفع صورة المنتج' : 'Product image uploaded',
+        });
+      }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image',
+        variant: 'destructive'
+      });
     } finally {
       setIsUploadingImage(false);
     }
@@ -307,35 +379,97 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const handleUrlSubmit = () => {
     if (imageUrlInput.trim()) {
       handleChange('imageUrl', imageUrlInput.trim());
+      handleChange('imageId', undefined);
+      setImageUploadMethod('url');
+      setUploadedImageIds([]);
       setImageUrlInput('');
       setShowUrlInput(false);
-      toast.success(language === 'ar' ? 'تم إضافة رابط الصورة' : 'Image URL added');
+      
+      toast({
+        title: language === 'ar' ? 'تم الإضافة' : 'Added',
+        description: language === 'ar' ? 'تم إضافة رابط الصورة' : 'Image URL added',
+      });
     }
   };
 
-  const removeImage = () => {
-    handleChange('imageUrl', '');
+  const handleBranchWarehouseConnection = () => {
+    toast({
+      title: language === 'ar' ? 'تحذير' : 'Warning',
+      description: language === 'ar' 
+        ? 'يرجى توصيل الفروع بالمستودعات من لوحة التحكم الرئيسية'
+        : 'Please connect branches to warehouses from the main dashboard',
+      variant: 'default'
+    });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSave(formData);
-    onClose();
+  const getCurrentImage = () => {
+    if (formData.imageUrl) {
+      return formData.imageUrl;
+    }
+    return formData.imageId ? `/api/images/${formData.imageId}` : '';
   };
+
+  const removeImage = () => {
+    handleChange('imageId', undefined);
+    handleChange('imageUrl', '');
+    setImageUploadMethod('none');
+    setUploadedImageIds([]);
+    
+    toast({
+      title: language === 'ar' ? 'تم الحذف' : 'Removed',
+      description: language === 'ar' ? 'تم إزالة الصورة' : 'Image removed',
+    });
+  };
+
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  const productData: any = {
+    name: formData.name,
+    name_ar: formData.nameAr,
+    description: formData.description,
+    description_ar: formData.descriptionAr,
+    sku: formData.sku,
+    barcode: formData.barcode,
+    category_id: formData.categoryId || null,
+    price: formData.price,
+    cost: formData.cost,
+    stock: formData.stock,
+    reorder_level: formData.reorderPoint,
+    active: formData.status === 'active', // تحويل من string إلى boolean
+    has_variants: formData.hasVariants,
+    branch_ids: formData.branchIds,
+    warehouse_ids: formData.warehouseIds,
+    valuation_method: formData.valuationMethod
+  };
+
+  if (formData.imageId) {
+    productData.image = formData.imageId;
+  } else if (formData.imageUrl) {
+    productData.image_url = formData.imageUrl;
+  }
+
+  if (formData.id) {
+    productData.id = formData.id;
+  }
+
+  try {
+    await onSave(productData);
+  } catch (error) {
+    console.error('Error saving product:', error);
+  }
+};
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      {/* Overlay */}
       <div 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
       
-      {/* Modal */}
       <div className="relative w-full max-w-4xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
           <h2 className="text-xl font-bold text-foreground">
             {editProduct 
@@ -356,14 +490,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
           <div className="space-y-3">
             <Label>{language === 'ar' ? 'صورة المنتج' : 'Product Image'}</Label>
             <div className="flex gap-4 items-start">
-              {/* Image Preview */}
               <div className="relative w-32 h-32 border-2 border-dashed border-border rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center">
-                {formData.imageUrl ? (
+                {getCurrentImage() ? (
                   <>
                     <img 
-                      src={formData.imageUrl} 
+                      src={getCurrentImage()} 
                       alt="Product" 
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                     <button
                       type="button"
@@ -372,13 +508,20 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     >
                       <X size={14} />
                     </button>
+                    <a 
+                      href={getCurrentImage()} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="absolute bottom-1 right-1 p-1 bg-primary text-primary-foreground rounded-full hover:bg-primary/90"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
                   </>
                 ) : (
                   <ImageIcon className="w-10 h-10 text-muted-foreground" />
                 )}
               </div>
               
-              {/* Upload Options */}
               <div className="flex-1 space-y-3">
                 <div className="flex gap-2">
                   <Button
@@ -393,7 +536,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     ) : (
                       <Upload className="w-4 h-4 mr-2" />
                     )}
-                    {language === 'ar' ? 'رفع من الجهاز' : 'Upload from Device'}
+                    {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
                   </Button>
                   <Button
                     type="button"
@@ -424,6 +567,24 @@ const ProductForm: React.FC<ProductFormProps> = ({
                       {language === 'ar' ? 'إضافة' : 'Add'}
                     </Button>
                   </div>
+                )}
+                
+                {imageUploadMethod === 'upload' && formData.imageId && (
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar' 
+                      ? `تم رفع الصورة (ID: ${formData.imageId})`
+                      : `Image uploaded (ID: ${formData.imageId})`
+                    }
+                  </p>
+                )}
+                
+                {imageUploadMethod === 'url' && formData.imageUrl && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {language === 'ar' 
+                      ? `رابط الصورة: ${formData.imageUrl.substring(0, 50)}...`
+                      : `Image URL: ${formData.imageUrl.substring(0, 50)}...`
+                    }
+                  </p>
                 )}
                 
                 <p className="text-xs text-muted-foreground">
@@ -487,11 +648,17 @@ const ProductForm: React.FC<ProductFormProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>{language === 'ar' ? 'التصنيف' : 'Category'}</Label>
-              <Select value={formData.categoryId} onValueChange={(val) => handleChange('categoryId', val)}>
+              <Select 
+                value={formData.categoryId || "none"} 
+                onValueChange={(val) => handleChange('categoryId', val === "none" ? "" : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={language === 'ar' ? 'اختر التصنيف' : 'Select category'} />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border border-border z-50">
+                  <SelectItem value="none">
+                    {language === 'ar' ? 'بدون تصنيف' : 'No category'}
+                  </SelectItem>
                   {flatCategories.map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {language === 'ar' ? cat.nameAr : cat.name}
@@ -507,6 +674,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   value={formData.sku}
                   onChange={(e) => handleChange('sku', e.target.value)}
                   className="font-mono"
+                  required
                 />
                 <Button
                   type="button"
@@ -538,135 +706,191 @@ const ProductForm: React.FC<ProductFormProps> = ({
             </div>
           </div>
 
-          {/* Pricing */}
+          {/* Pricing - التصحيح هنا لمنع NaN */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>{language === 'ar' ? 'سعر البيع' : 'Selling Price'}</Label>
               <Input
                 type="number"
-                value={formData.price}
-                onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
+                value={formData.price === 0 ? '' : formData.price} // منع عرض 0
+                onChange={(e) => handleNumberChange('price', e.target.value)}
                 min={0}
+                step="0.01"
+                required
+                placeholder="0.00"
               />
             </div>
             <div>
               <Label>{language === 'ar' ? 'التكلفة' : 'Cost'}</Label>
               <Input
                 type="number"
-                value={formData.cost}
-                onChange={(e) => handleChange('cost', parseFloat(e.target.value) || 0)}
+                value={formData.cost === 0 ? '' : formData.cost} // منع عرض 0
+                onChange={(e) => handleNumberChange('cost', e.target.value)}
                 min={0}
+                step="0.01"
+                placeholder="0.00"
               />
             </div>
             <div>
               <Label>{language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Point'}</Label>
               <Input
                 type="number"
-                value={formData.reorderPoint}
-                onChange={(e) => handleChange('reorderPoint', parseInt(e.target.value) || 0)}
+                value={formData.reorderPoint === 0 ? '' : formData.reorderPoint} // منع عرض 0
+                onChange={(e) => handleNumberChange('reorderPoint', e.target.value)}
                 min={0}
+                placeholder="5"
               />
             </div>
           </div>
 
-          {/* Branch, Warehouse & Valuation Method */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg border border-border">
-            {/* Branches Selection */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Building2 size={16} className="text-primary" />
-                {language === 'ar' ? 'الفروع' : 'Branches'}
-              </Label>
-              <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-background rounded-md border">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="all-branches"
-                    checked={(formData.branchIds || []).length === 0}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        handleChange('branchIds', []);
-                      }
-                    }}
-                  />
-                  <label htmlFor="all-branches" className="text-sm cursor-pointer">
-                    {language === 'ar' ? 'جميع الفروع' : 'All Branches'}
-                  </label>
-                </div>
-                {branches.map((branch) => (
-                  <div key={branch.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`branch-${branch.id}`}
-                      checked={(formData.branchIds || []).includes(branch.id)}
-                      onCheckedChange={(checked) => handleBranchChange(branch.id, !!checked)}
-                    />
-                    <label htmlFor={`branch-${branch.id}`} className="text-sm cursor-pointer">
-                      {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Stock Input */}
+          <div>
+            <Label>{language === 'ar' ? 'المخزون الابتدائي' : 'Initial Stock'}</Label>
+            <Input
+              type="number"
+              value={formData.stock === 0 ? '' : formData.stock}
+              onChange={(e) => handleNumberChange('stock', e.target.value)}
+              min={0}
+              placeholder="0"
+              className="max-w-xs"
+            />
+          </div>
 
-            {/* Warehouses Selection - filtered by selected branches */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Warehouse size={16} className="text-primary" />
-                {language === 'ar' ? 'المخازن' : 'Warehouses'}
-              </Label>
-              <div className="space-y-2 max-h-32 overflow-y-auto p-2 bg-background rounded-md border">
-                {/* Show "All Warehouses" only when no branches selected */}
-                {(formData.branchIds || []).length === 0 && (
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="all-warehouses"
-                      checked={(formData.warehouseIds || []).length === 0}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          handleChange('warehouseIds', []);
-                        }
-                      }}
-                    />
-                    <label htmlFor="all-warehouses" className="text-sm cursor-pointer">
-                      {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
-                    </label>
-                  </div>
-                )}
-                {/* Filter warehouses based on selected branches */}
-                {(() => {
-                  const selectedBranchIds = formData.branchIds || [];
-                  const filteredWarehouses = selectedBranchIds.length === 0
-                    ? warehouses
-                    : warehouses.filter(wh => 
-                        branchWarehouses.some(bw => 
-                          selectedBranchIds.includes(bw.branch_id) && bw.warehouse_id === wh.id
-                        )
-                      );
-                  
-                  return filteredWarehouses.length > 0 ? (
-                    filteredWarehouses.map((warehouse) => (
-                      <div key={warehouse.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`warehouse-${warehouse.id}`}
-                          checked={(formData.warehouseIds || []).includes(warehouse.id)}
-                          onCheckedChange={(checked) => handleWarehouseChange(warehouse.id, !!checked)}
-                        />
-                        <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer">
-                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                        </label>
+          {/* باقي الكود بدون تغيير */}
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-lg font-semibold">
+                  {language === 'ar' ? 'الفروع والمستودعات' : 'Branches & Warehouses'}
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBranchWarehouseConnection}
+                >
+                  {language === 'ar' ? 'إدارة التوصيلات' : 'Manage Connections'}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Branches */}
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Building2 size={16} className="text-primary" />
+                    {language === 'ar' ? 'الفروع' : 'Branches'}
+                  </Label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
+                    {loadingBranches ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">
-                      {language === 'ar' ? 'لا توجد مخازن مرتبطة بالفروع المختارة' : 'No warehouses linked to selected branches'}
-                    </p>
-                  );
-                })()}
-              </div>
-            </div>
+                    ) : branches.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        {language === 'ar' ? 'لا توجد فروع' : 'No branches available'}
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 pb-2 border-b">
+                          <Checkbox
+                            id="select-all-branches"
+                            checked={formData.branchIds.length === branches.length}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                handleChange('branchIds', branches.map(b => b.id.toString()));
+                              } else {
+                                handleChange('branchIds', []);
+                              }
+                            }}
+                          />
+                          <label htmlFor="select-all-branches" className="text-sm font-medium cursor-pointer">
+                            {language === 'ar' ? 'اختيار الكل' : 'Select All'}
+                          </label>
+                        </div>
+                        {branches.map((branch) => (
+                          <div key={branch.id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`branch-${branch.id}`}
+                              checked={formData.branchIds.includes(branch.id.toString())}
+                              onCheckedChange={(checked) => {
+                                const newBranchIds = checked
+                                  ? [...formData.branchIds, branch.id.toString()]
+                                  : formData.branchIds.filter(id => id !== branch.id.toString());
+                                handleChange('branchIds', newBranchIds);
+                              }}
+                            />
+                            <label htmlFor={`branch-${branch.id}`} className="text-sm cursor-pointer flex-1">
+                              {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                            </label>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
 
-            {/* Valuation Method */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+                {/* Warehouses */}
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Warehouse size={16} className="text-primary" />
+                    {language === 'ar' ? 'المستودعات' : 'Warehouses'}
+                  </Label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
+                    {loadingWarehouses ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </div>
+                    ) : warehouses.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        {language === 'ar' ? 'لا توجد مستودعات' : 'No warehouses available'}
+                      </p>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 pb-2 border-b">
+                          <Checkbox
+                            id="select-all-warehouses"
+                            checked={formData.warehouseIds.length === warehouses.length}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                handleChange('warehouseIds', warehouses.map(w => w.id.toString()));
+                              } else {
+                                handleChange('warehouseIds', []);
+                              }
+                            }}
+                          />
+                          <label htmlFor="select-all-warehouses" className="text-sm font-medium cursor-pointer">
+                            {language === 'ar' ? 'اختيار الكل' : 'Select All'}
+                          </label>
+                        </div>
+                        {warehouses.map((warehouse) => (
+                          <div key={warehouse.id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`warehouse-${warehouse.id}`}
+                              checked={formData.warehouseIds.includes(warehouse.id.toString())}
+                              onCheckedChange={(checked) => {
+                                const newWarehouseIds = checked
+                                  ? [...formData.warehouseIds, warehouse.id.toString()]
+                                  : formData.warehouseIds.filter(id => id !== warehouse.id.toString());
+                                handleChange('warehouseIds', newWarehouseIds);
+                              }}
+                            />
+                            <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer flex-1">
+                              {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                            </label>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Valuation Method */}
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Label className="flex items-center gap-2 text-lg font-semibold">
                 <Calculator size={16} className="text-primary" />
                 {language === 'ar' ? 'طريقة تقييم المخزون' : 'Inventory Valuation Method'}
               </Label>
@@ -689,13 +913,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                {formData.valuationMethod === 'fifo' && (language === 'ar' ? 'أقدم المخزون يُباع أولاً' : 'Oldest inventory sold first')}
-                {formData.valuationMethod === 'lifo' && (language === 'ar' ? 'أحدث المخزون يُباع أولاً' : 'Newest inventory sold first')}
-                {formData.valuationMethod === 'weighted_average' && (language === 'ar' ? 'متوسط تكلفة جميع الوحدات' : 'Average cost of all units')}
+              <p className="text-sm text-muted-foreground">
+                {formData.valuationMethod === 'fifo' && (language === 'ar' 
+                  ? 'أقدم المخزون يُباع أولاً - مناسب للبضائع سريعة التلف'
+                  : 'Oldest inventory sold first - Suitable for perishable goods')}
+                {formData.valuationMethod === 'lifo' && (language === 'ar' 
+                  ? 'أحدث المخزون يُباع أولاً - مناسب للبضائع غير قابلة للتلف'
+                  : 'Newest inventory sold first - Suitable for non-perishable goods')}
+                {formData.valuationMethod === 'weighted_average' && (language === 'ar' 
+                  ? 'متوسط تكلفة جميع الوحدات - يوفر استقرار في التكاليف'
+                  : 'Average cost of all units - Provides cost stability')}
               </p>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Variants Toggle */}
           <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
@@ -750,10 +980,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-4 border-t border-border bg-muted/30">
-          <Button variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
-          <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
+          <Button type="submit" onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
             {editProduct 
               ? (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
               : (language === 'ar' ? 'إضافة المنتج' : 'Add Product')
