@@ -20,20 +20,16 @@ import {
   Search, 
   Receipt, 
   RotateCcw, 
-  Calendar, 
   DollarSign, 
   User, 
   Building2, 
   Filter,
   Eye,
   Printer,
-  Download,
-  ShoppingCart,
-  TrendingUp,
-  TrendingDown,
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import api from '@/lib/api';
 
 interface POSTransactionsListProps {
   onClose?: () => void;
@@ -79,10 +75,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     noData: language === 'ar' ? 'لا توجد بيانات' : 'No data found',
     totalSales: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
     totalReturns: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns',
-    transactionCount: language === 'ar' ? 'عدد العمليات' : 'Transaction Count',
     viewDetails: language === 'ar' ? 'عرض التفاصيل' : 'View Details',
     print: language === 'ar' ? 'طباعة' : 'Print',
-    export: language === 'ar' ? 'تصدير' : 'Export',
     completed: language === 'ar' ? 'مكتمل' : 'Completed',
     pending: language === 'ar' ? 'معلق' : 'Pending',
     cancelled: language === 'ar' ? 'ملغي' : 'Cancelled',
@@ -96,106 +90,85 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     tax: language === 'ar' ? 'الضريبة' : 'Tax',
     discount: language === 'ar' ? 'الخصم' : 'Discount',
     netTotal: language === 'ar' ? 'الإجمالي الصافي' : 'Net Total',
-    cashier: language === 'ar' ? 'الكاشير' : 'Cashier',
   };
 
-  // Fetch cashiers from pos_shifts for filter
+  // Fetch cashiers - تم التصحيح هنا
   const { data: cashiers = [] } = useQuery({
     queryKey: ['cashiers-pos-list'],
     queryFn: async () => {
+      // إما استخدام API الخاص بك للحصول على الكاشيرز
+      // أو استخدام supabase مباشرة كما كان في الكود الأصلي
       const { data, error } = await supabase
-        .from('pos_shifts')
-        .select('cashier_id')
-        .not('cashier_id', 'is', null);
-      if (error) throw error;
-      
-      // Get unique cashier IDs
-      const uniqueCashierIds = [...new Set(data?.map(s => s.cashier_id).filter(Boolean))];
-      
-      if (uniqueCashierIds.length === 0) return [];
-      
-      // Fetch profiles for these cashiers
-      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name, full_name_ar')
-        .in('id', uniqueCashierIds);
+        .eq('role', 'cashier')
+        .order('full_name');
       
-      return profiles || [];
-    }
-  });
-
-  // Fetch POS sales
-  const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ['pos-sales', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
-    queryFn: async () => {
-      // First, get shift IDs for selected user if filtering by user
-      let userShiftIds: string[] = [];
-      if (selectedUser !== 'all') {
-        const { data: shifts } = await supabase
-          .from('pos_shifts')
-          .select('id')
-          .eq('cashier_id', selectedUser);
-        userShiftIds = shifts?.map(s => s.id) || [];
-      }
-
-      let query = supabase
-        .from('sales')
-        .select(`
-          id, invoice_number, sale_date, status, payment_method,
-          tax_amount, discount_amount, total_amount, branch,
-          customer_id, created_at, notes,
-          customers(name, name_ar, phone),
-          sale_items(id, quantity, unit_price, total_price, product_id, products(name, name_ar, sku))
-        `)
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      const { data, error } = await query;
-
       if (error) throw error;
-      
-      // Apply client-side filters
-      let filtered = data || [];
-      
-      // Date and time filtering
-      if (dateFrom) {
-        const fromDateTime = timeFrom ? `${dateFrom}T${timeFrom}` : `${dateFrom}T00:00:00`;
-        filtered = filtered.filter(s => s.sale_date >= fromDateTime || s.created_at >= fromDateTime);
-      }
-      if (dateTo) {
-        const toDateTime = timeTo ? `${dateTo}T${timeTo}` : `${dateTo}T23:59:59`;
-        filtered = filtered.filter(s => s.sale_date <= toDateTime || s.created_at <= toDateTime);
-      }
-      
-      if (selectedBranch !== 'all') filtered = filtered.filter(s => s.branch === selectedBranch);
-      
-      return filtered;
+      return data || [];
     }
   });
 
-  // Fetch POS returns
+  // Fetch POS sales - تم التصحيح هنا
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['pos-sales', dateFrom, dateTo],
+    queryFn: async () => {
+      try {
+        // استخدام الـ API الخاص بك
+        const response = await api.post('/invoices/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 100,
+          paginate: false,
+        });
+
+        let data = response.data.data || [];
+        
+        // Apply client-side filters
+        if (dateFrom) {
+          data = data.filter((s: any) => s.sale_date >= dateFrom);
+        }
+        if (dateTo) {
+          data = data.filter((s: any) => s.sale_date <= dateTo);
+        }
+        
+        return data;
+      } catch (error) {
+        console.error('Error fetching POS sales:', error);
+        return [];
+      }
+    }
+  });
+
+  // Fetch POS returns - تم التصحيح هنا
   const { data: returns = [], isLoading: returnsLoading } = useQuery({
     queryKey: ['pos-returns', dateFrom, dateTo],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('pos_returns')
-        .select(`
-          id, return_number, return_date, status, reason, refund_method,
-          subtotal, tax_amount, total_amount, customer_id, created_at,
-          customers(name, name_ar, phone),
-          pos_return_items(id, quantity, unit_price, total_price, product_name, product_id, products(name, name_ar, sku))
-        `)
-        .order('created_at', { ascending: false })
-        .limit(500);
+      try {
+        const response = await api.post('/return-invoices/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 100,
+          paginate: false,
+        });
 
-      if (error) throw error;
-      
-      // Apply client-side filters
-      let filtered = data || [];
-      if (dateFrom) filtered = filtered.filter(r => r.return_date >= dateFrom);
-      if (dateTo) filtered = filtered.filter(r => r.return_date <= dateTo);
-      
-      return filtered;
+        let data = response.data.data || [];  
+        
+        // Apply client-side filters
+        if (dateFrom) {
+          data = data.filter((r: any) => r.return_date >= dateFrom);
+        }
+        if (dateTo) {
+          data = data.filter((r: any) => r.return_date <= dateTo);
+        }
+        
+        return data;
+      } catch (error) {
+        console.error('Error fetching POS returns:', error);
+        return [];
+      }
     }
   });
 
@@ -213,34 +186,34 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     }
   });
 
-  // Filter sales
-  const filteredSales = sales.filter(sale => {
+  // Filter sales - تم التصحيح هنا
+  const filteredSales = sales.filter((sale: any) => {
     const matchesSearch = searchTerm === '' ||
       sale.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.customers?.name_ar?.includes(searchTerm);
+      sale.customer_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesPayment = selectedPaymentMethod === 'all' || sale.payment_method === selectedPaymentMethod;
     const matchesStatus = selectedStatus === 'all' || sale.status === selectedStatus;
+    const matchesBranch = selectedBranch === 'all' || sale.branch_id === selectedBranch;
+    const matchesUser = selectedUser === 'all' || sale.cashier_id === selectedUser;
 
-    return matchesSearch && matchesPayment && matchesStatus;
+    return matchesSearch && matchesPayment && matchesStatus && matchesBranch && matchesUser;
   });
 
-  // Filter returns
-  const filteredReturns = returns.filter(ret => {
+  // Filter returns - تم التصحيح هنا
+  const filteredReturns = returns.filter((ret: any) => {
     const matchesSearch = searchTerm === '' ||
       ret.return_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ret.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ret.customers?.name_ar?.includes(searchTerm);
+      ret.customer_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = selectedStatus === 'all' || ret.status === selectedStatus;
 
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate stats
-  const totalSalesAmount = filteredSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-  const totalReturnsAmount = filteredReturns.reduce((sum, r) => sum + (r.total_amount || 0), 0);
+  // Calculate stats - تم التصحيح هنا
+  const totalSalesAmount = filteredSales.reduce((sum: number, s: any) => sum + (parseFloat(s.total_amount) || 0), 0);
+  const totalReturnsAmount = filteredReturns.reduce((sum: number, r: any) => sum + (parseFloat(r.total_amount) || 0), 0);
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; label: string }> = {
@@ -249,6 +222,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       cancelled: { color: 'bg-red-500/10 text-red-600 border-red-200', label: t.cancelled },
     };
     const { color, label } = config[status] || config.pending;
+    return <Badge variant="outline" className={cn(color)}>{label}</Badge>;
+  };
+
+  const getPaymentMethodBadge = (method: string) => {
+    const config: Record<string, { color: string; label: string }> = {
+      cash: { color: 'bg-green-500/10 text-green-600 border-green-200', label: t.cash },
+      card: { color: 'bg-blue-500/10 text-blue-600 border-blue-200', label: t.card },
+    };
+    const { color, label } = config[method] || config.cash;
     return <Badge variant="outline" className={cn(color)}>{label}</Badge>;
   };
 
@@ -285,7 +267,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-emerald-500/20">
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
+                <DollarSign className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
                 <p className="text-xl font-bold">{totalSalesAmount.toLocaleString()}</p>
@@ -298,7 +280,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-red-500/20">
-                <TrendingDown className="h-5 w-5 text-red-600" />
+                <DollarSign className="h-5 w-5 text-red-600" />
               </div>
               <div>
                 <p className="text-xl font-bold">{totalReturnsAmount.toLocaleString()}</p>
@@ -311,7 +293,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-500/20">
-                <ShoppingCart className="h-5 w-5 text-blue-600" />
+                <User className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-xl font-bold">{filteredSales.length}</p>
@@ -399,7 +381,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allBranches}</SelectItem>
-                  {branches.map(b => (
+                  {branches.map((b: any) => (
                     <SelectItem key={b.id} value={b.id}>
                       {language === 'ar' ? b.name_ar || b.name : b.name}
                     </SelectItem>
@@ -466,7 +448,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'sales' | 'returns')}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="sales" className="gap-2">
-            <ShoppingCart size={16} />
+            <Receipt size={16} />
             {t.sales} ({filteredSales.length})
           </TabsTrigger>
           <TabsTrigger value="returns" className="gap-2">
@@ -486,7 +468,6 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       <TableHead>{t.invoiceNumber}</TableHead>
                       <TableHead>{t.date}</TableHead>
                       <TableHead>{t.customer}</TableHead>
-                      <TableHead>{t.branch}</TableHead>
                       <TableHead>{t.paymentMethod}</TableHead>
                       <TableHead>{t.total}</TableHead>
                       <TableHead>{t.status}</TableHead>
@@ -496,7 +477,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                   <TableBody>
                     {salesLoading ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">
+                        <TableCell colSpan={7} className="text-center py-8">
                           <div className="flex items-center justify-center gap-2">
                             <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" />
                           </div>
@@ -504,29 +485,24 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       </TableRow>
                     ) : filteredSales.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           {t.noData}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredSales.map((sale) => (
+                      filteredSales.map((sale: any) => (
                         <TableRow key={sale.id} className="hover:bg-muted/30">
                           <TableCell className="font-mono text-sm">{sale.invoice_number}</TableCell>
                           <TableCell className="text-sm">
-                            {format(new Date(sale.sale_date), 'yyyy-MM-dd HH:mm', { locale: language === 'ar' ? ar : undefined })}
+                            {sale.created_at ? format(new Date(sale.created_at), 'yyyy-MM-dd HH:mm', { locale: language === 'ar' ? ar : undefined }) : '-'}
                           </TableCell>
                           <TableCell>
-                            {sale.customers ? (language === 'ar' ? sale.customers.name_ar || sale.customers.name : sale.customers.name) : '-'}
+                            {sale.customer.name || '-'}
                           </TableCell>
                           <TableCell>
-                            {sale.branch || '-'}
+                            {(sale.payments.method || 'cash')}
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {sale.payment_method === 'cash' ? t.cash : t.card}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-semibold">{sale.total_amount?.toLocaleString()}</TableCell>
+                          <TableCell className="font-semibold">{parseFloat(sale.amounts.total || 0).toLocaleString()}</TableCell>
                           <TableCell>{getStatusBadge(sale.status || 'completed')}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-center gap-1">
@@ -581,21 +557,19 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredReturns.map((ret) => (
+                      filteredReturns.map((ret: any) => (
                         <TableRow key={ret.id} className="hover:bg-muted/30">
                           <TableCell className="font-mono text-sm">{ret.return_number}</TableCell>
                           <TableCell className="text-sm">
-                            {format(new Date(ret.return_date), 'yyyy-MM-dd HH:mm', { locale: language === 'ar' ? ar : undefined })}
+                            {ret.return_date ? format(new Date(ret.return_date), 'yyyy-MM-dd HH:mm', { locale: language === 'ar' ? ar : undefined }) : '-'}
                           </TableCell>
                           <TableCell>
-                            {ret.customers ? (language === 'ar' ? ret.customers.name_ar || ret.customers.name : ret.customers.name) : '-'}
+                            {ret.customer_name || '-'}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">
-                              {ret.refund_method === 'cash' ? t.cash : t.card}
-                            </Badge>
+                            {getPaymentMethodBadge(ret.refund_method || 'cash')}
                           </TableCell>
-                          <TableCell className="font-semibold text-red-600">-{ret.total_amount?.toLocaleString()}</TableCell>
+                          <TableCell className="font-semibold text-red-600">-{parseFloat(ret.total_amount || 0).toLocaleString()}</TableCell>
                           <TableCell>{getStatusBadge(ret.status || 'completed')}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-center gap-1">
@@ -630,8 +604,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           {selectedSale && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">{t.date}:</span> {format(new Date(selectedSale.sale_date), 'yyyy-MM-dd HH:mm')}</div>
-                <div><span className="text-muted-foreground">{t.customer}:</span> {selectedSale.customers?.name || '-'}</div>
+                <div><span className="text-muted-foreground">{t.date}:</span> {selectedSale.sale_date ? format(new Date(selectedSale.sale_date), 'yyyy-MM-dd HH:mm') : '-'}</div>
+                <div><span className="text-muted-foreground">{t.customer}:</span> {selectedSale.customer_name || '-'}</div>
                 <div><span className="text-muted-foreground">{t.paymentMethod}:</span> {selectedSale.payment_method}</div>
                 <div><span className="text-muted-foreground">{t.status}:</span> {selectedSale.status}</div>
               </div>
@@ -646,12 +620,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedSale.sale_items?.map((item: any) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}</TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell>{item.unit_price?.toLocaleString()}</TableCell>
-                        <TableCell>{item.total_price?.toLocaleString()}</TableCell>
+                    {selectedSale.items?.map((item: any, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.product_name || '-'}</TableCell>
+                        <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                        <TableCell>{parseFloat(item.unit_price || 0).toLocaleString()}</TableCell>
+                        <TableCell>{parseFloat(item.total_price || 0).toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -659,10 +633,13 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               </div>
               <div className="flex justify-end">
                 <div className="w-64 space-y-2 text-sm">
-                  <div className="flex justify-between"><span>{t.subtotal}:</span><span>{selectedSale.subtotal?.toLocaleString()}</span></div>
-                  {selectedSale.tax_amount > 0 && <div className="flex justify-between"><span>{t.tax}:</span><span>{selectedSale.tax_amount?.toLocaleString()}</span></div>}
-                  {selectedSale.discount_amount > 0 && <div className="flex justify-between text-red-600"><span>{t.discount}:</span><span>-{selectedSale.discount_amount?.toLocaleString()}</span></div>}
-                  <div className="flex justify-between font-bold text-lg border-t pt-2"><span>{t.netTotal}:</span><span>{selectedSale.total_amount?.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>{t.subtotal}:</span><span>{parseFloat(selectedSale.subtotal || 0).toLocaleString()}</span></div>
+                  {parseFloat(selectedSale.tax_amount || 0) > 0 && <div className="flex justify-between"><span>{t.tax}:</span><span>{parseFloat(selectedSale.tax_amount || 0).toLocaleString()}</span></div>}
+                  {parseFloat(selectedSale.discount_amount || 0) > 0 && <div className="flex justify-between text-red-600"><span>{t.discount}:</span><span>-{parseFloat(selectedSale.discount_amount || 0).toLocaleString()}</span></div>}
+                  <div className="flex justify-between font-bold text-lg border-t pt-2">
+                    <span>{t.netTotal}:</span>
+                    <span>{parseFloat(selectedSale.total_amount || 0).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -682,8 +659,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           {selectedReturn && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">{t.date}:</span> {format(new Date(selectedReturn.return_date), 'yyyy-MM-dd HH:mm')}</div>
-                <div><span className="text-muted-foreground">{t.customer}:</span> {selectedReturn.customers?.name || '-'}</div>
+                <div><span className="text-muted-foreground">{t.date}:</span> {selectedReturn.return_date ? format(new Date(selectedReturn.return_date), 'yyyy-MM-dd HH:mm') : '-'}</div>
+                <div><span className="text-muted-foreground">{t.customer}:</span> {selectedReturn.customer_name || '-'}</div>
                 <div><span className="text-muted-foreground">{language === 'ar' ? 'سبب الإرجاع' : 'Reason'}:</span> {selectedReturn.reason || '-'}</div>
                 <div><span className="text-muted-foreground">{t.status}:</span> {selectedReturn.status}</div>
               </div>
@@ -698,12 +675,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedReturn.pos_return_items?.map((item: any) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{language === 'ar' ? item.products?.name_ar || item.product_name : item.product_name}</TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell>{item.unit_price?.toLocaleString()}</TableCell>
-                        <TableCell className="text-red-600">-{item.total_price?.toLocaleString()}</TableCell>
+                    {selectedReturn.items?.map((item: any, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell>{item.product_name || '-'}</TableCell>
+                        <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                        <TableCell>{parseFloat(item.unit_price || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-red-600">-{parseFloat(item.total_price || 0).toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -711,7 +688,10 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               </div>
               <div className="flex justify-end">
                 <div className="w-64 space-y-2 text-sm">
-                  <div className="flex justify-between font-bold text-lg text-red-600"><span>{t.netTotal}:</span><span>-{selectedReturn.total_amount?.toLocaleString()}</span></div>
+                  <div className="flex justify-between font-bold text-lg text-red-600">
+                    <span>{t.netTotal}:</span>
+                    <span>-{parseFloat(selectedReturn.total_amount || 0).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             </div>

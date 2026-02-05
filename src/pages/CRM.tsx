@@ -25,6 +25,7 @@ import {
   Settings,
   Percent
 } from 'lucide-react';
+import api from '@/lib/api';
 
 interface LoyaltySettings {
   pointsPerCurrency: number;
@@ -67,11 +68,23 @@ const CRM = () => {
   // Fetch customers
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    }
+     queryFn: async () => {
+         try {
+           const response = await api.post('/customer/index', {
+             filters: {},
+             orderBy: 'id',
+             orderByDirection: 'asc',
+             perPage: 100,
+             paginate: false
+           });
+           
+           return response.data.data || [];
+         } catch (error) {
+           console.error('Error fetching customer:', error);
+           toast.error(language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching customer');
+           return [];
+         }
+       },
   });
 
   const translations = {

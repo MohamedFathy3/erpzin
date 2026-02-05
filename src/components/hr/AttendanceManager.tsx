@@ -32,6 +32,7 @@ import {
   UserX,
   Timer
 } from 'lucide-react';
+import api from '@/lib/api';
 
 interface AttendanceRow {
   employee_code: string;
@@ -185,17 +186,14 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
   // Add attendance mutation
   const addAttendanceMutation = useMutation({
     mutationFn: async (data: typeof newAttendance) => {
-      const { error } = await supabase
-        .from('attendance')
-        .insert({
-          employee_id: data.employee_id,
-          date: data.date,
-          check_in: data.check_in || null,
+      await api.post('/attendance/', {
+        employee_id: data.employee_id,
+        date: data.date,
+        check_in: data.check_in || null,
           check_out: data.check_out || null,
           status: data.status,
           notes: data.notes || null
         });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
@@ -399,7 +397,7 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
                     <SelectContent>
                       {employees.filter(e => e.is_active).map(emp => (
                         <SelectItem key={emp.id} value={emp.id}>
-                          {emp.employee_code} - {language === 'ar' ? emp.name_ar || emp.name : emp.name}
+                          {emp.employee_code} - {language === 'ar' ? emp.name || emp.name : emp.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -509,13 +507,11 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t.employeeCode}</TableHead>
                     <TableHead>{t.employee}</TableHead>
                     <TableHead>{t.date}</TableHead>
                     <TableHead>{t.checkIn}</TableHead>
                     <TableHead>{t.checkOut}</TableHead>
                     <TableHead>{t.status}</TableHead>
-                    <TableHead>{t.notes}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -528,18 +524,16 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
                   ) : (
                     filteredAttendance.map((record) => (
                       <TableRow key={record.id}>
-                        <TableCell className="font-mono">{record.employees?.employee_code}</TableCell>
-                        <TableCell>
-                          {language === 'ar'
-                            ? record.employees?.name_ar || record.employees?.name
-                            : record.employees?.name}
-                        </TableCell>
-                        <TableCell>{formatDate(record.date)}</TableCell>
-                        <TableCell>{record.check_in || '-'}</TableCell>
-                        <TableCell>{record.check_out || '-'}</TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        <TableCell className="max-w-[150px] truncate">{record.notes || '-'}</TableCell>
-                      </TableRow>
+    <TableCell>
+      {language === 'ar'
+        ? record.name_ar || record.employee?.name_ar || record.employees?.name_ar || record.name || record.employee?.name
+        : record.name || record.employee?.name || record.employees?.name}
+    </TableCell>
+    <TableCell>{formatDate(record.date)}</TableCell>
+    <TableCell>{record.check_in || '-'}</TableCell>
+    <TableCell>{record.check_out || '-'}</TableCell>
+    <TableCell>{getStatusBadge(record.status)}</TableCell>
+  </TableRow>
                     ))
                   )}
                 </TableBody>

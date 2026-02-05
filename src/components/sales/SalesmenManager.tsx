@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Edit2, Trash2, Users } from "lucide-react";
+import api from "@/lib/api";
 
 interface SalesmanForm {
   id?: string;
@@ -45,78 +46,97 @@ const SalesmenManager = () => {
   // Fetch salesmen
   const { data: salesmen, isLoading } = useQuery({
     queryKey: ['salesmen'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('salesmen')
-        .select(`
-          *,
-          branch:branches(id, name, name_ar),
-          employee:employees(id, name, name_ar)
-        `)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+     queryFn: async () => {
+      try {
+        const response = await api.post('/sales-representative/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching salesmen:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب مندوبي المبيعات' : 'Error fetching salesmen');
+        return [];
+      }
+    },
   });
 
   // Fetch branches
   const { data: branches } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, name_ar')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/branch/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب الفروع' : 'Error fetching branches');
+        return [];
+      }
+    },
   });
 
   // Fetch employees
   const { data: employees } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, name, name_ar')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/employee/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching employee:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب الموظفين' : 'Error fetching employees');
+        return [];
+      }
+    },
   });
 
   // Create/Update salesman
   const saveMutation = useMutation({
     mutationFn: async (data: SalesmanForm) => {
       if (data.id) {
-        const { error } = await supabase
-          .from('salesmen')
-          .update({
-            name: data.name,
-            name_ar: data.name_ar || null,
-            phone: data.phone || null,
-            email: data.email || null,
-            commission_rate: data.commission_rate,
-            branch_id: data.branch_id || null,
-            employee_id: data.employee_id || null,
-            is_active: data.is_active
-          })
-          .eq('id', data.id);
-        if (error) throw error;
+        const response = await api.patch(`/sales-representative/${data.id}`, {
+          // id: data.id,
+          name: data.name,
+          name_ar: data.name_ar || null,
+          phone: data.phone || null,
+          email: data.email || null,
+          commission_rate: data.commission_rate,
+          branch_id: data.branch_id || null,
+          employee_id: data.employee_id || null,
+          is_active: data.is_active
+        });
+        return response.data;
       } else {
-        const { error } = await supabase
-          .from('salesmen')
-          .insert({
-            name: data.name,
-            name_ar: data.name_ar || null,
-            phone: data.phone || null,
-            email: data.email || null,
-            commission_rate: data.commission_rate,
-            branch_id: data.branch_id || null,
-            employee_id: data.employee_id || null,
-            is_active: data.is_active
-          });
-        if (error) throw error;
+        const response = await api.post('/sales-representative', {
+          name: data.name,
+          name_ar: data.name_ar || null,
+          phone: data.phone || null,
+          email: data.email || null,
+          commission_rate: data.commission_rate,
+          branch_id: data.branch_id || null,
+          employee_id: data.employee_id || null,
+          is_active: data.is_active
+        });
+        return response.data;
       }
     },
     onSuccess: () => {
@@ -130,22 +150,23 @@ const SalesmenManager = () => {
   });
 
   // Delete salesman
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('salesmen')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success(language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['salesmen'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
-    }
-  });
+// Delete salesman - CORRECTED
+const deleteMutation = useMutation({
+  mutationFn: async (id: string) => { 
+    await api.delete('/sales-representative/delete', {
+      data: {
+        items: [id] 
+      }
+    });
+  },
+  onSuccess: () => {
+    toast.success(language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
+    queryClient.invalidateQueries({ queryKey: ['salesmen'] });
+  },
+  onError: (error: any) => {
+    toast.error(error.response?.data?.message || error.message);
+  }
+});
 
   const handleOpenForm = (salesman?: any) => {
     if (salesman) {
@@ -212,7 +233,7 @@ const SalesmenManager = () => {
                   <TableHead>{language === 'ar' ? 'الهاتف' : 'Phone'}</TableHead>
                   <TableHead>{language === 'ar' ? 'نسبة العمولة' : 'Commission %'}</TableHead>
                   <TableHead>{language === 'ar' ? 'الفرع' : 'Branch'}</TableHead>
-                  <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                  {/* <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead> */}
                   <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -242,18 +263,14 @@ const SalesmenManager = () => {
                       </TableCell>
                       <TableCell>{salesman.phone || '-'}</TableCell>
                       <TableCell>{salesman.commission_rate}%</TableCell>
-                      <TableCell>
-                        {salesman.branch 
-                          ? (language === 'ar' ? salesman.branch.name_ar || salesman.branch.name : salesman.branch.name)
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
+                     <TableCell>{salesman.branch_name || '-'}</TableCell>
+                      {/* <TableCell>
                         <Badge variant={salesman.is_active ? 'default' : 'secondary'}>
                           {salesman.is_active 
                             ? (language === 'ar' ? 'نشط' : 'Active')
                             : (language === 'ar' ? 'غير نشط' : 'Inactive')}
                         </Badge>
-                      </TableCell>
+                      </TableCell> */}
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button
