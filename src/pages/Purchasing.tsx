@@ -187,6 +187,8 @@ const Purchasing = () => {
   const [activeTab, setActiveTab] = useState('invoices');
   const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
   const [supplierFilters, setSupplierFilters] = useState<FilterValues>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showAllInvoices, setShowAllInvoices] = useState(false);
 
   // Modals
   const [showSupplierForm, setShowSupplierForm] = useState(false);
@@ -196,16 +198,44 @@ const Purchasing = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
 
-  const { data: rawInvoicesList = [] } = useQuery<Invoice[]>({
-    queryKey: ['rawInvoicesList'],
+  const { data: invoicesResponse, isLoading: invoicesLoading } = useQuery<InvoicesIndexResponse>({
+    queryKey: ['invoices', currentPage, invoiceFilters, showAllInvoices],
     queryFn: async () => {
       try {
-        const response = await api.post<InvoicesIndexResponse>('/invoices/index', {});
+        // Build request body for filtering and pagination
+        const requestBody: Partial<InvoiceFilters & { page: number; per_page?: number }> = {};
 
-        console.log('Invoices API response:', response.data);
-        console.log('status    :', response.data.status);
+        if (!showAllInvoices) {
+          requestBody.page = currentPage;
+          requestBody.per_page = 10; // Default page size
+        } else {
+          // When showing all, request a large number of items
+          requestBody.per_page = 10000; // Large number to get all items
+        }
+
+        if (invoiceFilters.search) {
+          requestBody.search = invoiceFilters.search;
+        }
+        if (invoiceFilters.payment_status && invoiceFilters.payment_status !== 'all') {
+          requestBody.payment_status = invoiceFilters.payment_status;
+        }
+        if (invoiceFilters.date_from) {
+          requestBody.date_from = invoiceFilters.date_from.split('T')[0];
+        }
+        if (invoiceFilters.date_to) {
+          requestBody.date_to = invoiceFilters.date_to.split('T')[0];
+        }
+        if (invoiceFilters.amount_min) {
+          requestBody.amount_min = invoiceFilters.amount_min;
+        }
+        if (invoiceFilters.amount_max) {
+          requestBody.amount_max = invoiceFilters.amount_max;
+        }
+
+        const response = await api.post<InvoicesIndexResponse>('/invoices/index', requestBody);
+
         if (response.data.result === 'Success') {
-          return response.data.data;
+          return response.data;
         }
 
         throw new Error(response.data.message || 'Failed to fetch invoices');
@@ -220,10 +250,13 @@ const Purchasing = () => {
           variant: 'destructive',
         });
 
-        return [];
+        throw error;
       }
     },
   });
+
+  const rawInvoicesList = invoicesResponse?.data || [];
+  const paginationMeta = invoicesResponse?.meta;
 
   // Apply client-side filtering
   const invoicesList: InvoiceTableRow[] = rawInvoicesList
@@ -419,6 +452,7 @@ const Purchasing = () => {
     queryClient.invalidateQueries({ queryKey: ['purchase_invoices'] });
     queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
     queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
+    queryClient.invalidateQueries({ queryKey: ['invoices'] });
   };
 
   const totalReturns = purchaseReturns.reduce((sum, ret) => sum + Number(ret.total_amount || 0), 0);
@@ -427,7 +461,7 @@ const Purchasing = () => {
   const totalPurchaseValue = invoicesList.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
 
   const stats = [
-    { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: invoicesList.length, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
+    { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: paginationMeta?.total || 0, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
     { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalPurchaseValue.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
     { label: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns', value: purchaseReturns.length, icon: <RotateCcw className="text-warning" size={24} />, color: 'bg-warning/10' },
     { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
@@ -510,6 +544,7 @@ const Purchasing = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16">#</TableHead>
                       <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                       <TableHead>{language === 'ar' ? 'المورد' : 'Supplier'}</TableHead>
                       <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
@@ -521,13 +556,14 @@ const Purchasing = () => {
                   <TableBody>
                     {invoicesList.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      invoicesList.map((inv: InvoiceTableRow) => (
+                      invoicesList.map((inv: InvoiceTableRow, index: number) => (
                         <TableRow key={inv.id}>
+                          <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
                           <TableCell className="font-mono">{inv.invoice_number}</TableCell>
                           <TableCell>{inv.supplier}</TableCell>
                           <TableCell>{Number(inv.total_amount).toLocaleString()} YER</TableCell>
@@ -549,6 +585,91 @@ const Purchasing = () => {
                     )}
                   </TableBody>
                 </Table>
+
+                {/* Pagination */}
+                {(paginationMeta && paginationMeta.last_page > 1) || showAllInvoices ? (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex items-center gap-4">
+                      <div className="text-sm text-muted-foreground">
+                        {showAllInvoices ? (
+                          language === 'ar'
+                            ? `عرض جميع الفواتير (${paginationMeta?.total || 0})`
+                            : `Showing all invoices (${paginationMeta?.total || 0})`
+                        ) : (
+                          language === 'ar'
+                            ? `عرض ${paginationMeta?.from} إلى ${paginationMeta?.to} من ${paginationMeta?.total} فاتورة`
+                            : `Showing ${paginationMeta?.from} to ${paginationMeta?.to} of ${paginationMeta?.total} invoices`
+                        )}
+                      </div>
+                      {!showAllInvoices && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowAllInvoices(true);
+                            setCurrentPage(1);
+                          }}
+                          disabled={invoicesLoading}
+                        >
+                          {language === 'ar' ? 'عرض الكل' : 'Show All'}
+                        </Button>
+                      )}
+                      {showAllInvoices && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowAllInvoices(false);
+                            setCurrentPage(1);
+                          }}
+                          disabled={invoicesLoading}
+                        >
+                          {language === 'ar' ? 'عرض بالصفحات' : 'Paginate'}
+                        </Button>
+                      )}
+                    </div>
+                    {!showAllInvoices && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1 || invoicesLoading}
+                        >
+                          {language === 'ar' ? 'السابق' : 'Previous'}
+                        </Button>
+
+                        {/* Page numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, paginationMeta?.last_page || 1) }, (_, i) => {
+                            const pageNum = Math.max(1, Math.min((paginationMeta?.last_page || 1) - 4, currentPage - 2)) + i;
+                            if (pageNum > (paginationMeta?.last_page || 1)) return null;
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                disabled={invoicesLoading}
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(paginationMeta?.last_page || 1, prev + 1))}
+                          disabled={currentPage === (paginationMeta?.last_page || 1) || invoicesLoading}
+                        >
+                          {language === 'ar' ? 'التالي' : 'Next'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
