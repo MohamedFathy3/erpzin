@@ -16,10 +16,170 @@ import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
 import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { cn, formatDate } from '@/lib/utils';
-import { 
-  Plus, FileText, Building2, Phone, 
+import api from '@/lib/api';
+import { toast } from '@/components/ui/use-toast';
+
+import {
+  Plus, FileText, Building2, Phone,
   Wallet, Receipt, ShoppingCart, RotateCcw
 } from 'lucide-react';
+
+// Interfaces for API response
+interface Customer {
+  id: number;
+  name: string;
+}
+
+interface Amounts {
+  total: string;
+  paid: string;
+  remaining: string;
+}
+
+interface Item {
+  product_id: number;
+  product_name: string;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  price: string;
+  total: string;
+}
+
+interface Payment {
+  method: string;
+  amount: string;
+}
+
+interface Invoice {
+  id: number;
+  invoice_number: string | null;
+  status: string;
+  customer: Customer;
+  amounts: Amounts;
+  items: Item[];
+  payments: Payment[];
+  created_at: string;
+}
+
+interface Links {
+  first: string;
+  last: string;
+  prev: string | null;
+  next: string | null;
+}
+
+interface Meta {
+  current_page: number;
+  from: number;
+  last_page: number;
+  path: string;
+  per_page: number;
+  to: number;
+  total: number;
+}
+
+interface InvoicesIndexResponse {
+  data: Invoice[];
+  links: Links;
+  meta: Meta;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface InvoiceTableRow {
+  id: number;
+  invoice_number: string | null;
+  supplier: string;
+  total_amount: number;
+  paid_amount: number;
+  payment_status: string;
+  invoice_date: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  name_ar: string;
+  phone: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+  address: string;
+  contact_person: string;
+  credit_limit: number;
+  email: string;
+  is_active: boolean;
+  payment_terms: number;
+  tax_number: string;
+};
+
+interface PurchaseInvoice {
+  id: string;
+  invoice_number: string | null;
+  total_amount: number;
+  paid_amount: number;
+  payment_status: string;
+  invoice_date: string;
+  suppliers?: {
+    name: string;
+    name_ar?: string;
+  };
+}
+
+interface InvoiceFilters {
+  search?: string;
+  payment_status?: string;
+  date_from?: string;
+  date_to?: string;
+  amount_min?: string;
+  amount_max?: string;
+}
+
+type PaymentStatus = 'paid' | 'partial' | 'unpaid' | 'overpaid';
+
+const paymentStatusLabel = (status: PaymentStatus) => {
+  switch (status) {
+    case 'paid':
+      return 'مدفوع';
+    case 'partial':
+      return 'مدفوع جزئيًا';
+    case 'unpaid':
+      return 'غير مدفوع';
+    case 'overpaid':
+      return 'مدفوع بزيادة';
+  }
+};
+
+const getPaymentStatus = (remaining: number): PaymentStatus => {
+  if (remaining === 0) {
+    return 'paid';
+  }
+
+  if (remaining > 0) {
+    return 'partial'; // لسه في فلوس
+  }
+
+  return 'overpaid'; // remaining < 0
+};
+
+// Mapping function
+const mapInvoiceToTableRow = (invoice: Invoice): InvoiceTableRow => {
+  const remaining = parseFloat(invoice.amounts.remaining);
+  const payment_status = getPaymentStatus(remaining);
+
+  return {
+    id: invoice.id,
+    invoice_number: invoice.invoice_number,
+    supplier: invoice.customer.name,
+    total_amount: parseFloat(invoice.amounts.total),
+    paid_amount: parseFloat(invoice.amounts.paid),
+    payment_status,
+    invoice_date: invoice.created_at,
+  };
+};
+
 
 const Purchasing = () => {
   const { language } = useLanguage();
@@ -27,13 +187,135 @@ const Purchasing = () => {
   const [activeTab, setActiveTab] = useState('invoices');
   const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
   const [supplierFilters, setSupplierFilters] = useState<FilterValues>({});
-  
+
   // Modals
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [showSupplierDetails, setShowSupplierDetails] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+
+
+  const { data: rawInvoicesList = [] } = useQuery<Invoice[]>({
+    queryKey: ['rawInvoicesList'],
+    queryFn: async () => {
+      try {
+        const response = await api.post<InvoicesIndexResponse>('/invoices/index', {});
+
+        console.log('Invoices API response:', response.data);
+        console.log('status    :', response.data.status);
+        if (response.data.result === 'Success') {
+          return response.data.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch invoices');
+      } catch (error) {
+        console.error('Error fetching invoices:', error);
+
+        toast({
+          title:
+            language === 'ar'
+              ? 'خطأ في جلب الفواتير'
+              : 'Error fetching invoices',
+          variant: 'destructive',
+        });
+
+        return [];
+      }
+    },
+  });
+
+  // Apply client-side filtering
+  const invoicesList: InvoiceTableRow[] = rawInvoicesList
+    .filter((invoice) => {
+      // Search filter - search through all invoice data
+      if (invoiceFilters.search) {
+        const searchTerm = invoiceFilters.search.toLowerCase();
+        const searchableText = [
+          invoice.invoice_number?.toString() || '',
+          invoice.customer.name,
+          invoice.status,
+          invoice.amounts.total,
+          invoice.amounts.paid,
+          invoice.amounts.remaining,
+          ...invoice.items.flatMap(item => [
+            item.product_name,
+            item.color || '',
+            item.size || '',
+            item.quantity.toString(),
+            item.price,
+            item.total
+          ]),
+          ...invoice.payments.flatMap(payment => [
+            payment.method,
+            payment.amount
+          ]),
+          invoice.created_at
+        ].join(' ').toLowerCase();
+
+        if (!searchableText.includes(searchTerm)) {
+          return false;
+        }
+      }
+
+      // Payment status filter
+      if (invoiceFilters.payment_status && invoiceFilters.payment_status !== 'all') {
+        const remaining = parseFloat(invoice.amounts.remaining);
+        let currentStatus: PaymentStatus = 'unpaid';
+        if (remaining === 0) {
+          currentStatus = 'paid';
+        } else if (remaining > 0) {
+          currentStatus = 'partial';
+        } else {
+          currentStatus = 'overpaid';
+        }
+
+        if (currentStatus !== invoiceFilters.payment_status) {
+          return false;
+        }
+      }
+
+      // Date range filter
+      if (invoiceFilters.date_from || invoiceFilters.date_to) {
+        const invoiceDate = new Date(invoice.created_at.split(' ')[0]);
+
+        if (invoiceFilters.date_from) {
+          const fromDate = new Date(invoiceFilters.date_from.split('T')[0]);
+          if (invoiceDate < fromDate) {
+            return false;
+          }
+        }
+
+        if (invoiceFilters.date_to) {
+          const toDate = new Date(invoiceFilters.date_to.split('T')[0]);
+          if (invoiceDate > toDate) {
+            return false;
+          }
+        }
+      }
+
+      // Amount range filter
+      if (invoiceFilters.amount_min || invoiceFilters.amount_max) {
+        const totalAmount = parseFloat(invoice.amounts.total);
+
+        if (invoiceFilters.amount_min) {
+          const minAmount = parseFloat(invoiceFilters.amount_min);
+          if (totalAmount < minAmount) {
+            return false;
+          }
+        }
+
+        if (invoiceFilters.amount_max) {
+          const maxAmount = parseFloat(invoiceFilters.amount_max);
+          if (totalAmount > maxAmount) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    })
+    .map(mapInvoiceToTableRow);
 
   // Fetch suppliers
   const { data: suppliers = [] } = useQuery({
@@ -48,11 +330,14 @@ const Purchasing = () => {
   // Invoice filter fields
   const invoiceFilterFields: FilterField[] = [
     { key: 'search', label: 'Invoice/Supplier', labelAr: 'الفاتورة/المورد', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
-    { key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
-      { value: 'paid', label: 'Paid', labelAr: 'مدفوعة' },
-      { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
-      { value: 'unpaid', label: 'Unpaid', labelAr: 'غير مدفوعة' },
-    ]},
+    {
+      key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
+        { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
+        { value: 'partial', label: 'Partial', labelAr: 'مدفوع جزئيًا' },
+        { value: 'unpaid', label: 'Unpaid', labelAr: 'غير مدفوع' },
+        { value: 'overpaid', label: 'Overpaid', labelAr: 'مدفوع بزيادة' },
+      ]
+    },
     { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
     { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
   ];
@@ -64,14 +349,14 @@ const Purchasing = () => {
   ];
 
   // Fetch purchase invoices
-  const { data: invoices = [] } = useQuery({
+  const { data: invoices = [] } = useQuery<PurchaseInvoice[]>({
     queryKey: ['purchase_invoices', invoiceFilters],
     queryFn: async () => {
       let query = supabase
         .from('purchase_invoices')
         .select('*, suppliers(name, name_ar)')
         .order('created_at', { ascending: false });
-      
+
       if (invoiceFilters.search) {
         query = query.or(`invoice_number.ilike.%${invoiceFilters.search}%`);
       }
@@ -90,7 +375,7 @@ const Purchasing = () => {
       if (invoiceFilters.amount_max) {
         query = query.lte('total_amount', Number(invoiceFilters.amount_max));
       }
-      
+
       const { data, error } = await query.limit(100);
       if (error) throw error;
       return data;
@@ -214,6 +499,8 @@ const Purchasing = () => {
                 />
               </CardHeader>
               <CardContent>
+                {/* invoices List  */}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -226,22 +513,28 @@ const Purchasing = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {invoices.length === 0 ? (
+                    {invoicesList.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                           {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      invoices.map((inv: any) => (
+                      invoicesList.map((inv: InvoiceTableRow) => (
                         <TableRow key={inv.id}>
                           <TableCell className="font-mono">{inv.invoice_number}</TableCell>
-                          <TableCell>{language === 'ar' ? inv.suppliers?.name_ar || inv.suppliers?.name : inv.suppliers?.name}</TableCell>
+                          <TableCell>{inv.supplier}</TableCell>
                           <TableCell>{Number(inv.total_amount).toLocaleString()} YER</TableCell>
                           <TableCell>{Number(inv.paid_amount).toLocaleString()} YER</TableCell>
                           <TableCell>
-                            <Badge variant={inv.payment_status === 'paid' ? 'default' : inv.payment_status === 'partial' ? 'secondary' : 'destructive'}>
-                              {inv.payment_status === 'paid' ? (language === 'ar' ? 'مدفوعة' : 'Paid') : inv.payment_status === 'partial' ? (language === 'ar' ? 'جزئي' : 'Partial') : (language === 'ar' ? 'غير مدفوعة' : 'Unpaid')}
+                            <Badge variant={
+                              inv.payment_status === 'paid' ? 'default' :
+                                inv.payment_status === 'partial' ? 'secondary' :
+                                  inv.payment_status === 'overpaid' ? 'outline' : 'destructive'
+                            }>
+                              {language === 'ar' ? paymentStatusLabel(inv.payment_status as PaymentStatus) :
+                                inv.payment_status.charAt(0).toUpperCase() + inv.payment_status.slice(1)
+                              }
                             </Badge>
                           </TableCell>
                           <TableCell>{formatDate(inv.invoice_date)}</TableCell>
@@ -276,7 +569,7 @@ const Purchasing = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {suppliers.filter((s: any) => {
+                  {suppliers.filter((s: Supplier) => {
                     if (supplierFilters.search) {
                       const search = supplierFilters.search.toLowerCase();
                       if (!s.name?.toLowerCase().includes(search) && !s.name_ar?.includes(search) && !s.phone?.includes(search)) return false;
@@ -284,7 +577,7 @@ const Purchasing = () => {
                     if (supplierFilters.balance_min && Number(s.balance || 0) < Number(supplierFilters.balance_min)) return false;
                     if (supplierFilters.balance_max && Number(s.balance || 0) > Number(supplierFilters.balance_max)) return false;
                     return true;
-                  }).map((supplier: any) => (
+                  }).map((supplier: Supplier) => (
                     <Card key={supplier.id} className="border hover:shadow-md transition-shadow cursor-pointer" onClick={() => { setSelectedSupplier(supplier); setShowSupplierDetails(true); }}>
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">

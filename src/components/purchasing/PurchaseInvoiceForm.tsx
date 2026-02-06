@@ -16,8 +16,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { 
-  FileText, Trash2, Package, Building2, 
+import {
+  FileText, Trash2, Package, Building2,
   Warehouse, CreditCard, Calendar, Loader2, Layers
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -60,7 +60,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
   const [loading, setLoading] = useState(false);
   const [variantProduct, setVariantProduct] = useState<any>(null);
-  
+
   const [formData, setFormData] = useState({
     supplier_id: '',
     branch_id: '',
@@ -155,6 +155,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   });
 
+
+
   const handleProductClick = (product: any) => {
     if (product.has_variants) {
       setVariantProduct(product);
@@ -165,7 +167,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
   const addProduct = (product: any) => {
     const existingIndex = items.findIndex(item => item.product_id === product.id && !item.product_variant_id);
-    
+
     if (existingIndex >= 0) {
       const newItems = [...items];
       newItems[existingIndex].quantity += 1;
@@ -199,7 +201,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     color_name?: string;
   }) => {
     const existingIndex = items.findIndex(item => item.product_variant_id === variant.variant_id);
-    
+
     if (existingIndex >= 0) {
       const newItems = [...items];
       newItems[existingIndex].quantity += 1;
@@ -344,7 +346,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
             .select('stock')
             .eq('id', item.product_variant_id)
             .single();
-          
+
           if (variant) {
             await supabase
               .from('product_variants')
@@ -419,7 +421,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? `تم إنشاء فاتورة الشراء رقم ${invoiceNumber}`
           : `Purchase invoice ${invoiceNumber} created`
       });
@@ -467,8 +469,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   <Building2 size={12} />
                   {language === 'ar' ? 'المورد' : 'Supplier'} *
                 </Label>
-                <Select 
-                  value={formData.supplier_id} 
+                <Select
+                  value={formData.supplier_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, supplier_id: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">
@@ -487,8 +489,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               {/* Branch */}
               <div className="space-y-1">
                 <Label className="text-xs">{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
-                <Select 
-                  value={formData.branch_id} 
+                <Select
+                  value={formData.branch_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, branch_id: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">
@@ -510,8 +512,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   <Warehouse size={12} />
                   {language === 'ar' ? 'المستودع' : 'Warehouse'} *
                 </Label>
-                <Select 
-                  value={formData.warehouse_id} 
+                <Select
+                  value={formData.warehouse_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, warehouse_id: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">
@@ -533,8 +535,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   <CreditCard size={12} />
                   {language === 'ar' ? 'الدفع' : 'Payment'}
                 </Label>
-                <Select 
-                  value={formData.payment_method} 
+                <Select
+                  value={formData.payment_method}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">
@@ -585,8 +587,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               {/* Currency */}
               <div className="space-y-1">
                 <Label className="text-xs">{language === 'ar' ? 'العملة' : 'Currency'}</Label>
-                <Select 
-                  value={formData.currency_id} 
+                <Select
+                  value={formData.currency_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">
@@ -605,8 +607,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               {/* Tax Rate */}
               <div className="space-y-1">
                 <Label className="text-xs">{language === 'ar' ? 'الضريبة' : 'Tax'}</Label>
-                <Select 
-                  value={formData.tax_rate_id} 
+                <Select
+                  value={formData.tax_rate_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, tax_rate_id: v }))}
                 >
                   <SelectTrigger className="h-8 text-sm">

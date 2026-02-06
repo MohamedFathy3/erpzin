@@ -12,12 +12,137 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import PurchaseReturnForm from "./PurchaseReturnForm";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
+import api from "@/lib/api";
+import { toast } from "@/components/ui/use-toast";
+
+// Interfaces for API response
+interface Product {
+  id: number;
+  name: string;
+}
+
+interface ReturnItem {
+  id: number;
+  product: Product;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  price: number;
+  total: number;
+  created_at: string;
+}
+
+interface Customer {
+  id: number;
+  name: string;
+}
+
+interface Amounts {
+  total: string;
+  paid: string;
+  remaining: string;
+}
+
+interface InvoiceItem {
+  product_id: number;
+  product_name: string;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  price: string;
+  total: string;
+}
+
+interface Payment {
+  method: string;
+  amount: string;
+}
+
+interface Invoice {
+  id: number;
+  invoice_number: string | null;
+  status: string;
+  customer: Customer;
+  amounts: Amounts;
+  items: InvoiceItem[];
+  payments: Payment[];
+  created_at: string;
+}
+
+interface ReturnInvoice {
+  id: number;
+  return_number: string;
+  invoice_id: number;
+  total_amount: number;
+  refunded_amount: number;
+  refund_method: string;
+  reason: string;
+  created_at: string;
+  items: ReturnItem[];
+  invoice: Invoice;
+}
+
+interface Links {
+  first: string;
+  last: string;
+  prev: string | null;
+  next: string | null;
+}
+
+interface Meta {
+  current_page: number;
+  from: number;
+  last_page: number;
+  path: string;
+  per_page: number;
+  to: number;
+  total: number;
+}
+
+interface ReturnInvoicesIndexResponse {
+  data: ReturnInvoice[];
+  links: Links;
+  meta: Meta;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface SupplierOption {
+  id: string;
+  name: string;
+  name_ar: string;
+}
+
+interface BranchOption {
+  id: string;
+  name: string;
+  name_ar: string;
+}
+
+interface WarehouseOption {
+  id: string;
+  name: string;
+  name_ar: string;
+}
+
+interface ReturnFilters {
+  search?: string;
+  supplier_id?: string;
+  branch_id?: string;
+  warehouse_id?: string;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  amount_min?: string;
+  amount_max?: string;
+}
 
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
   const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [showForm, setShowForm] = useState(false);
-  const [selectedReturn, setSelectedReturn] = useState<any>(null);
+  const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
   // Fetch branches for filter
@@ -49,73 +174,75 @@ const PurchaseReturnsList = () => {
 
   const filterFields: FilterField[] = [
     { key: 'search', label: 'Return/Invoice', labelAr: 'المرتجع/الفاتورة', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
-    { key: 'supplier_id', label: 'Supplier', labelAr: 'المورد', type: 'select', options: suppliers.map((s: any) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
-    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: any) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
-    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: any) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
-    { key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
-      { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
-      { value: 'pending', label: 'Pending', labelAr: 'معلق' },
-      { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
-    ]},
+    { key: 'supplier_id', label: 'Supplier', labelAr: 'المورد', type: 'select', options: suppliers.map((s: SupplierOption) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
+    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: BranchOption) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
+    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: WarehouseOption) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
+    {
+      key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
+        { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
+        { value: 'pending', label: 'Pending', labelAr: 'معلق' },
+        { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
+      ]
+    },
     { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
     { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
   ];
 
   // Fetch purchase returns with filters
-  const { data: returns = [], isLoading, refetch } = useQuery({
+  const { data: returnsResponse, isLoading, refetch } = useQuery<ReturnInvoicesIndexResponse>({
     queryKey: ['purchase-returns', filterValues],
     queryFn: async () => {
-      let query = supabase
-        .from('purchase_returns')
-        .select(`
-          *,
-          supplier:suppliers(id, name, name_ar),
-          branch:branches(id, name, name_ar),
-          warehouse:warehouses(id, name, name_ar),
-          items:purchase_return_items(
-            id,
-            product_name,
-            quantity,
-            unit_cost,
-            total_cost,
-            reason
-          )
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (filterValues.search) {
-        query = query.or(`return_number.ilike.%${filterValues.search}%,original_invoice_number.ilike.%${filterValues.search}%`);
+      try {
+        // Build request body for filtering
+        const requestBody: Partial<ReturnFilters> = {};
+
+        if (filterValues.search) {
+          requestBody.search = filterValues.search;
+        }
+        if (filterValues.supplier_id && filterValues.supplier_id !== 'all') {
+          requestBody.supplier_id = filterValues.supplier_id;
+        }
+        if (filterValues.branch_id && filterValues.branch_id !== 'all') {
+          requestBody.branch_id = filterValues.branch_id;
+        }
+        if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
+          requestBody.warehouse_id = filterValues.warehouse_id;
+        }
+        if (filterValues.status && filterValues.status !== 'all') {
+          requestBody.status = filterValues.status;
+        }
+        if (filterValues.date_from) {
+          requestBody.date_from = filterValues.date_from.split('T')[0];
+        }
+        if (filterValues.date_to) {
+          requestBody.date_to = filterValues.date_to.split('T')[0];
+        }
+        if (filterValues.amount_min) {
+          requestBody.amount_min = filterValues.amount_min;
+        }
+        if (filterValues.amount_max) {
+          requestBody.amount_max = filterValues.amount_max;
+        }
+
+        const response = await api.post<ReturnInvoicesIndexResponse>('/return-invoices/index', requestBody);
+
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch returns');
+      } catch (error) {
+        console.error('Error fetching returns:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المرتجعات' : 'Error fetching returns',
+          variant: 'destructive',
+        });
+        throw error;
       }
-      if (filterValues.supplier_id && filterValues.supplier_id !== 'all') {
-        query = query.eq('supplier_id', filterValues.supplier_id);
-      }
-      if (filterValues.branch_id && filterValues.branch_id !== 'all') {
-        query = query.eq('branch_id', filterValues.branch_id);
-      }
-      if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
-        query = query.eq('warehouse_id', filterValues.warehouse_id);
-      }
-      if (filterValues.status && filterValues.status !== 'all') {
-        query = query.eq('status', filterValues.status);
-      }
-      if (filterValues.date_from) {
-        query = query.gte('return_date', filterValues.date_from.split('T')[0]);
-      }
-      if (filterValues.date_to) {
-        query = query.lte('return_date', filterValues.date_to.split('T')[0]);
-      }
-      if (filterValues.amount_min) {
-        query = query.gte('total_amount', Number(filterValues.amount_min));
-      }
-      if (filterValues.amount_max) {
-        query = query.lte('total_amount', Number(filterValues.amount_max));
-      }
-      
-      const { data, error } = await query.limit(100);
-      if (error) throw error;
-      return data;
     }
   });
+
+  const returns = returnsResponse?.data || [];
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -175,7 +302,8 @@ const PurchaseReturnsList = () => {
                 <TableHead>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</TableHead>
                 <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
                 <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                <TableHead></TableHead>
+                <TableHead>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -195,18 +323,18 @@ const PurchaseReturnsList = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                returns.map((ret: any) => (
+                returns.map((ret: ReturnInvoice) => (
                   <TableRow key={ret.id}>
                     <TableCell className="font-mono font-medium">{ret.return_number}</TableCell>
-                    <TableCell className="font-mono">{ret.original_invoice_number}</TableCell>
+                    <TableCell className="font-mono">{ret.invoice.invoice_number}</TableCell>
                     <TableCell>
-                      {language === 'ar' ? ret.supplier?.name_ar || ret.supplier?.name : ret.supplier?.name}
+                      {language === 'ar' ? ret.invoice.customer.name : ret.invoice.customer.name}
                     </TableCell>
                     <TableCell className="font-medium">{Number(ret.total_amount).toLocaleString()} YER</TableCell>
                     <TableCell>{getRefundMethodLabel(ret.refund_method)}</TableCell>
-                    <TableCell>{getStatusBadge(ret.status)}</TableCell>
+                    <TableCell>{getStatusBadge('completed')}</TableCell>
                     <TableCell>
-                      {format(new Date(ret.return_date), 'yyyy/MM/dd', { locale: language === 'ar' ? ar : undefined })}
+                      {format(new Date(ret.created_at), 'yyyy/MM/dd', { locale: language === 'ar' ? ar : undefined })}
                     </TableCell>
                     <TableCell>
                       <Button
@@ -250,7 +378,7 @@ const PurchaseReturnsList = () => {
                 <Card>
                   <CardContent className="pt-4">
                     <div className="text-sm text-muted-foreground">{language === 'ar' ? 'فاتورة الشراء' : 'Purchase Invoice'}</div>
-                    <div className="font-mono font-medium">{selectedReturn.original_invoice_number}</div>
+                    <div className="font-mono font-medium">{selectedReturn.invoice.invoice_number}</div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -260,7 +388,7 @@ const PurchaseReturnsList = () => {
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </div>
                     <div className="font-medium">
-                      {language === 'ar' ? selectedReturn.supplier?.name_ar || selectedReturn.supplier?.name : selectedReturn.supplier?.name}
+                      {language === 'ar' ? selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name}
                     </div>
                   </CardContent>
                 </Card>
@@ -273,7 +401,7 @@ const PurchaseReturnsList = () => {
                 <Card>
                   <CardContent className="pt-4">
                     <div className="text-sm text-muted-foreground">{language === 'ar' ? 'الحالة' : 'Status'}</div>
-                    <div>{getStatusBadge(selectedReturn.status)}</div>
+                    <div>{getStatusBadge('completed')}</div>
                   </CardContent>
                 </Card>
               </div>
@@ -297,12 +425,12 @@ const PurchaseReturnsList = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedReturn.items?.map((item: any) => (
+                      {selectedReturn.items?.map((item: ReturnItem) => (
                         <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.product_name}</TableCell>
+                          <TableCell className="font-medium">{item.product.name}</TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{Number(item.unit_cost).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-medium">{Number(item.total_cost).toLocaleString()} YER</TableCell>
+                          <TableCell className="text-right">{Number(item.price).toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-medium">{Number(item.total).toLocaleString()} YER</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -311,37 +439,17 @@ const PurchaseReturnsList = () => {
               </Card>
 
               {/* Summary */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2 text-sm">
-                  {selectedReturn.reason && (
-                    <div>
-                      <span className="text-muted-foreground">{language === 'ar' ? 'السبب:' : 'Reason:'}</span>
-                      <span className="ml-2">{selectedReturn.reason}</span>
-                    </div>
-                  )}
-                  {selectedReturn.notes && (
-                    <div>
-                      <span className="text-muted-foreground">{language === 'ar' ? 'ملاحظات:' : 'Notes:'}</span>
-                      <span className="ml-2">{selectedReturn.notes}</span>
-                    </div>
-                  )}
+              <div className="space-y-2 text-sm">
+                {selectedReturn.reason && (
+                  <div>
+                    <span className="text-muted-foreground">{language === 'ar' ? 'السبب:' : 'Reason:'}</span>
+                    <span className="ml-2">{selectedReturn.reason}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold pt-2 border-t">
+                  <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
+                  <span className="text-primary">{Number(selectedReturn.total_amount).toLocaleString()} YER</span>
                 </div>
-                <Card className="bg-muted/50">
-                  <CardContent className="pt-4 text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span>{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
-                      <span>{Number(selectedReturn.subtotal).toLocaleString()} YER</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'ar' ? 'الضريبة:' : 'Tax:'}</span>
-                      <span>{Number(selectedReturn.tax_amount).toLocaleString()} YER</span>
-                    </div>
-                    <div className="flex justify-between font-bold pt-2 border-t">
-                      <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
-                      <span className="text-primary">{Number(selectedReturn.total_amount).toLocaleString()} YER</span>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </div>
           )}

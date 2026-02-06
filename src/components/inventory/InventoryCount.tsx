@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
+import api from '@/lib/api';
 import {
   ClipboardList,
   Plus,
@@ -23,8 +24,37 @@ import {
   XCircle,
   Clock,
   Eye,
-  Save
+  Save,
+  Warehouse
 } from 'lucide-react';
+
+interface WarehouseType {
+  id: string;
+  name: string;
+  code: string;
+  phone: string;
+  address: string;
+  manager: string;
+  active: boolean;
+  main_branch: boolean;
+  note: string;
+  branch_id: {
+    id: number;
+    name: string;
+    code: string;
+    phone: string;
+    address: string;
+    manager: string;
+    active: boolean;
+    main_branch: boolean;
+    image: string;
+    created_at: string;
+    updated_at: string;
+  };
+  image: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const InventoryCount = () => {
   const { language } = useLanguage();
@@ -32,7 +62,7 @@ const InventoryCount = () => {
 
   const [newCountOpen, setNewCountOpen] = useState(false);
   const [viewCountOpen, setViewCountOpen] = useState(false);
-  const [selectedCount, setSelectedCount] = useState<any>(null);
+  const [selectedCount, setSelectedCount] = useState<{ id: string; count_number: string; status: string; warehouse_id: string } | null>(null);
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [countNotes, setCountNotes] = useState('');
   const [countItems, setCountItems] = useState<Record<string, number>>({});
@@ -106,13 +136,25 @@ const InventoryCount = () => {
     }
   }[language];
 
-  // Fetch warehouses
+  // Fetch warehouses from API
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('warehouses').select('*').eq('is_active', true);
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/warehouse/index');
+        if (response.data.result === 'Success') {
+          return response.data.data as WarehouseType[];
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch warehouses');
+        }
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المخازن' : 'Error fetching warehouses',
+          variant: 'destructive'
+        });
+        return [];
+      }
     }
   });
 
@@ -157,7 +199,7 @@ const InventoryCount = () => {
       options: warehouses.map(w => ({
         value: w.id,
         label: w.name,
-        labelAr: w.name_ar || w.name
+        labelAr: w.name
       }))
     },
     {
@@ -345,6 +387,12 @@ const InventoryCount = () => {
     );
   };
 
+  const getWarehouseName = (warehouseId: string) => {
+    const warehouse = warehouses.find(w => w.id === warehouseId);
+    if (!warehouse) return '-';
+    return warehouse.name;
+  };
+
   const filteredCountItems = useMemo(() => {
     if (!searchQuery) return countItemsData;
     const query = searchQuery.toLowerCase();
@@ -355,7 +403,7 @@ const InventoryCount = () => {
     );
   }, [countItemsData, searchQuery]);
 
-  const handleViewCount = (count: any) => {
+  const handleViewCount = (count: { id: string; count_number: string; status: string; warehouse_id: string }) => {
     setSelectedCount(count);
     setViewCountOpen(true);
     setCountItems({});
@@ -421,10 +469,7 @@ const InventoryCount = () => {
                       <TableRow key={count.id}>
                         <TableCell className="font-medium">{count.count_number}</TableCell>
                         <TableCell>
-                          {language === 'ar'
-                            ? count.warehouses?.name_ar || count.warehouses?.name || '-'
-                            : count.warehouses?.name || '-'
-                          }
+                          {getWarehouseName(count.warehouse_id)}
                         </TableCell>
                         <TableCell>
                           {formatDate(count.count_date)}
@@ -467,11 +512,16 @@ const InventoryCount = () => {
                 <SelectContent>
                   {warehouses.map(w => (
                     <SelectItem key={w.id} value={w.id}>
-                      {language === 'ar' ? w.name_ar || w.name : w.name}
+                      <div className="flex items-center gap-2">
+                        <Warehouse size={14} />
+                        {w.name}
+                        <span className="text-muted-foreground">({w.code})</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
             </div>
             <div>
               <Label>{t.notes}</Label>
@@ -536,10 +586,7 @@ const InventoryCount = () => {
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
-                          {language === 'ar'
-                            ? item.products?.name_ar || item.products?.name
-                            : item.products?.name
-                          }
+                          {item.products?.name}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{item.products?.sku}</TableCell>
                         <TableCell>{item.system_quantity}</TableCell>
@@ -574,6 +621,8 @@ const InventoryCount = () => {
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
           </div>
+
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewCountOpen(false)}>

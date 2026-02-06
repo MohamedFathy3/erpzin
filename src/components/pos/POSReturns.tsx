@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
@@ -17,9 +18,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { 
-  Search, 
-  RotateCcw, 
+import {
+  Search,
+  RotateCcw,
   Package,
   Receipt,
   AlertCircle,
@@ -81,12 +82,38 @@ interface POSReturnsProps {
 
 interface DirectReturnItem {
   id: string;
-  product_id: string;
+  product_id: number;
   product_name: string;
   sku: string;
   quantity: number;
   unit_price: number;
   reason: string;
+  product: {
+    id: number;
+    name: string;
+    name_ar?: string | null;
+    description?: string | null;
+    image_url?: string | null;
+    imageUrl?: string;
+    category?: {
+      id: number;
+      name: string;
+      icon?: string;
+      parent_id?: number | null;
+      type?: string;
+      createdAt?: string;
+      updatedAt?: string;
+    };
+    sku: string;
+    barcode?: string;
+    stock?: number;
+    reorder_level?: number;
+    price: string;
+    cost?: string | null;
+    active?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  };
 }
 
 // Direct Return Invoice Component (POS-style)
@@ -115,31 +142,26 @@ const DirectReturnInvoice: React.FC<{
     }
   }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
-  // Search products
+  // Search products using API route
   const { data: products } = useQuery({
     queryKey: ['products-for-return'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, price')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
+      const response = await api.post('/invoices/search', {});
+      return response.data.data || [];
     }
   });
 
-  const filteredProducts = products?.filter(p => 
+  const filteredProducts = products?.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.name_ar && p.name_ar.includes(searchQuery))
   ).slice(0, 8) || [];
 
-  const addItem = (product: { id: string; name: string; name_ar: string | null; sku: string; price: number }) => {
+  const addItem = (product: DirectReturnItem['product']) => {
     const existing = items.find(i => i.product_id === product.id);
     if (existing) {
-      setItems(items.map(i => 
-        i.product_id === product.id 
+      setItems(items.map(i =>
+        i.product_id === product.id
           ? { ...i, quantity: i.quantity + 1 }
           : i
       ));
@@ -150,8 +172,9 @@ const DirectReturnInvoice: React.FC<{
         product_name: product.name_ar || product.name,
         sku: product.sku,
         quantity: 1,
-        unit_price: product.price,
-        reason: ''
+        unit_price: parseFloat(product.price),
+        reason: '',
+        product: product
       }]);
     }
     setSearchQuery('');
@@ -177,90 +200,96 @@ const DirectReturnInvoice: React.FC<{
   const taxAmount = (subtotal * taxPercent) / 100;
   const total = subtotal + taxAmount;
 
-  // Process direct return
+  // Process direct return using API and store in database
   const processReturnMutation = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('يجب تسجيل الدخول');
       if (items.length === 0) throw new Error('لم يتم إضافة أي صنف');
 
-      const { data: returnNumber } = await supabase.rpc('generate_return_number');
+      // Prepare payload for /api/invoice-return/store in the required format
+      // Remove invoice_number since API generates its own ID
+      const payload = {
+        reason: returnReason,
+        items: items.map(item => ({
+          product_id: item.product_id,
+          color: null, // Not available in direct returns
+          size: null,  // Not available in direct returns
+          quantity: item.quantity,
+          price: item.unit_price
+        })),
+        payments: [{
+          method: refundMethod,
+          amount: total
+        }]
+      };
 
+      // Call the API endpoint first
+      const apiResponse = await api.post('/invoice-return/store', payload);
+
+      // Get the invoice ID from API response (this is the unique identifier)
+      const invoiceId = apiResponse.data?.data?.id;
+
+      if (!invoiceId) {
+        throw new Error('فشل في الحصول على معرف الفاتورة من الـ API');
+      }
+
+      // Check if invoice ID already exists in returns
+      // const { data: existingReturn } = await supabase
+      //   .from('pos_returns')
+      //   .select('id')
+      //   .eq('api_invoice_id', invoiceId.toString())
+      //   .single();
+
+      // if (existingReturn) {
+      //   throw new Error('هذه الفاتورة موجودة بالفعل في المرتجعات');
+      // }
+
+      // Store the return invoice in Supabase for future retrieval using API invoice ID
       const { data: returnRecord, error: returnError } = await supabase
         .from('pos_returns')
         .insert({
-          return_number: returnNumber,
-          return_type: 'direct',
-          subtotal,
-          tax_amount: taxAmount,
-          total_amount: total,
-          refund_method: refundMethod,
+          api_invoice_id: invoiceId.toString(), // Use API invoice ID as unique identifier
+          return_number: invoiceId.toString(), // Also store as return number for compatibility
+          original_sale_id: null, // Direct return, no original sale
           reason: returnReason,
-          processed_by: user.id,
-          shift_id: currentShiftId || null
+          refund_method: refundMethod,
+          total_amount: total,
+          shift_id: currentShiftId || null,
+          processed_by: null // Will be set by auth context if needed
         })
         .select()
         .single();
 
-      if (returnError) throw returnError;
+      if (returnError) {
+        console.warn('Error storing return in database:', returnError);
+        // Don't throw error here, API call was successful
+      } else {
+        // Store return items in database
+        const { error: itemsError } = await supabase
+          .from('pos_return_items')
+          .insert(items.map(item => ({
+            return_id: returnRecord.id,
+            product_id: item.product_id.toString(),
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total_price: item.unit_price * item.quantity,
+            reason: item.reason || returnReason
+          })));
 
-      const returnItemsData = items.map(item => ({
-        return_id: returnRecord.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.unit_price * item.quantity,
-        reason: item.reason || returnReason
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('pos_return_items')
-        .insert(returnItemsData);
-
-      if (itemsError) throw itemsError;
-
-      // Update stock
-      for (const item of items) {
-        const { data: currentProduct } = await supabase
-          .from('products')
-          .select('stock')
-          .eq('id', item.product_id)
-          .single();
-
-        if (currentProduct) {
-          await supabase
-            .from('products')
-            .update({ stock: currentProduct.stock + item.quantity })
-            .eq('id', item.product_id);
+        if (itemsError) {
+          console.warn('Error storing return items in database:', itemsError);
         }
       }
 
-      // Update shift returns total
-      if (currentShiftId) {
-        const { data: currentShift } = await supabase
-          .from('pos_shifts')
-          .select('total_returns')
-          .eq('id', currentShiftId)
-          .single();
-
-        if (currentShift) {
-          await supabase
-            .from('pos_shifts')
-            .update({ total_returns: (currentShift.total_returns || 0) + total })
-            .eq('id', currentShiftId);
-        }
-      }
-
-      return total;
+      return apiResponse.data;
     },
-    onSuccess: (totalAmount) => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['active-shift'] });
       toast.success('تم إنشاء فاتورة المرتجع بنجاح');
-      onComplete(totalAmount);
+      onComplete(total);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error('خطأ: ' + error.message);
     }
   });
@@ -276,21 +305,52 @@ const DirectReturnInvoice: React.FC<{
           onChange={(e) => setSearchQuery(e.target.value)}
           className="h-12 ps-12 text-base rounded-xl"
         />
-        
+
         {/* Search Results Dropdown */}
         {searchQuery && filteredProducts.length > 0 && (
-          <div className="absolute top-full start-0 end-0 mt-1 bg-background border rounded-xl shadow-lg z-50 max-h-64 overflow-auto">
+          <div className="absolute top-full start-0 end-0 mt-1 bg-background border rounded-xl shadow-lg z-50 max-h-96 overflow-auto">
             {filteredProducts.map(product => (
               <div
                 key={product.id}
                 onClick={() => addItem(product)}
-                className="p-3 hover:bg-muted cursor-pointer flex items-center justify-between border-b last:border-b-0"
+                className="p-4 hover:bg-muted cursor-pointer border-b last:border-b-0"
               >
-                <div>
-                  <div className="font-medium">{product.name_ar || product.name}</div>
-                  <div className="text-sm text-muted-foreground">{product.sku}</div>
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-base">{product.name_ar || product.name}</div>
+                    <div className="text-sm text-muted-foreground">{product.sku} • {product.barcode}</div>
+                    {product.category && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        📁 {product.category.name}
+                      </div>
+                    )}
+                    {product.description && (
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {product.description}
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground mt-1">
+                      المخزون: {product.stock} • إعادة الطلب: {product.reorder_level}
+                    </div>
+                  </div>
+                  <div className="text-left flex-shrink-0">
+                    <div className="font-bold text-lg text-primary">{formatCurrency(product.price)}</div>
+                    {product.cost && (
+                      <div className="text-xs text-muted-foreground">التكلفة: {formatCurrency(product.cost)}</div>
+                    )}
+                  </div>
                 </div>
-                <div className="font-bold text-primary">{formatCurrency(product.price)}</div>
               </div>
             ))}
           </div>
@@ -310,15 +370,39 @@ const DirectReturnInvoice: React.FC<{
         ) : (
           <div className="p-3 space-y-2">
             {items.map(item => (
-              <div key={item.id} className="p-4 rounded-xl bg-muted/30 border flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="font-medium">{item.product_name}</div>
-                  <div className="text-sm text-muted-foreground">{item.sku}</div>
-                  <div className="text-primary font-semibold mt-1">
+              <div key={item.id} className="p-4 rounded-xl bg-muted/30 border flex items-start gap-4">
+                <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
+                  {item.product.imageUrl ? (
+                    <img
+                      src={item.product.imageUrl}
+                      alt={item.product_name}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <Package className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-lg">{item.product_name}</div>
+                  <div className="text-sm text-muted-foreground">{item.sku} • {item.product.barcode}</div>
+                  {item.product.category && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      📁 {item.product.category.name}
+                    </div>
+                  )}
+                  {item.product.description && (
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {item.product.description}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    المخزون: {item.product.stock} • إعادة الطلب: {item.product.reorder_level}
+                  </div>
+                  <div className="text-primary font-semibold mt-2">
                     {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.unit_price * item.quantity)}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <Button size="icon" variant="outline" onClick={() => updateQuantity(item.id, -1)} className="h-8 w-8">
                     <Minus className="h-4 w-4" />
                   </Button>
@@ -340,7 +424,7 @@ const DirectReturnInvoice: React.FC<{
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm mb-2 block">سبب الإرجاع</Label>
-          <Input 
+          <Input
             placeholder="سبب الإرجاع (اختياري)"
             value={returnReason}
             onChange={(e) => setReturnReason(e.target.value)}
@@ -389,11 +473,11 @@ const DirectReturnInvoice: React.FC<{
   );
 };
 
-const POSReturns: React.FC<POSReturnsProps> = ({ 
-  isOpen, 
-  onClose, 
+const POSReturns: React.FC<POSReturnsProps> = ({
+  isOpen,
+  onClose,
   currentShiftId,
-  onReturnComplete 
+  onReturnComplete
 }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
@@ -403,7 +487,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
   const [returnReason, setReturnReason] = useState('');
   const [refundMethod, setRefundMethod] = useState('cash');
-  const [step, setStep] = useState<'invoice' | 'search' | 'select' | 'confirm'>('invoice');
+  const [step, setStep] = useState<'invoice' | 'search' | 'select' | 'confirm' | 'invoice-search'>('invoice');
   const [directReturnMode, setDirectReturnMode] = useState(true);
   const [allowDirectReturn, setAllowDirectReturn] = useState(true); // This can be controlled by settings
   const [taxRateId, setTaxRateId] = useState('');
@@ -450,14 +534,14 @@ const POSReturns: React.FC<POSReturnsProps> = ({
   const processReturnMutation = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('يجب تسجيل الدخول');
-      if (!selectedSale) throw new Error('لم يتم تحديد فاتورة');
+      //  if (!user) throw new Error('يجب تسجيل الدخول');
+      //if (!selectedSale) throw new Error('لم يتم تحديد فاتورة');
 
       const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
       if (selectedItems.length === 0) throw new Error('لم يتم تحديد أي صنف للإرجاع');
 
       // Calculate totals
-      const subtotal = selectedItems.reduce((sum, item) => 
+      const subtotal = selectedItems.reduce((sum, item) =>
         sum + (item.unit_price * item.return_quantity), 0
       );
       const selectedTaxRate = taxRates.find(t => t.id === taxRateId);
@@ -491,20 +575,18 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       if (returnError) throw returnError;
 
       // Create return items
-      const returnItemsData = selectedItems.map(item => ({
-        return_id: returnRecord.id,
-        original_sale_item_id: item.id,
-        product_id: item.product_id,
-        product_name: item.product?.name || 'غير معروف',
-        quantity: item.return_quantity,
-        unit_price: item.unit_price,
-        total_price: item.unit_price * item.return_quantity,
-        reason: item.return_reason || returnReason
-      }));
-
       const { error: itemsError } = await supabase
         .from('pos_return_items')
-        .insert(returnItemsData);
+        .insert(selectedItems.map(item => ({
+          return_id: returnRecord.id,
+          original_sale_item_id: item.id,
+          product_id: item.product_id,
+          product_name: item.product?.name || 'غير معروف',
+          quantity: item.return_quantity,
+          unit_price: item.unit_price,
+          total_price: item.unit_price * item.return_quantity,
+          reason: item.return_reason || returnReason
+        })));
 
       if (itemsError) throw itemsError;
 
@@ -535,8 +617,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
         if (currentShift) {
           await supabase
             .from('pos_shifts')
-            .update({ 
-              total_returns: (currentShift.total_returns || 0) + totalAmount 
+            .update({
+              total_returns: (currentShift.total_returns || 0) + totalAmount
             })
             .eq('id', currentShiftId);
         }
@@ -551,7 +633,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       onReturnComplete?.(totalAmount);
       handleClose();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error('خطأ في معالجة المرتجع: ' + error.message);
     }
   });
@@ -574,13 +656,13 @@ const POSReturns: React.FC<POSReturnsProps> = ({
   };
 
   const toggleItemSelection = (itemId: string) => {
-    setReturnItems(prev => prev.map(item => 
+    setReturnItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, selected: !item.selected } : item
     ));
   };
 
   const updateReturnQuantity = (itemId: string, quantity: number) => {
-    setReturnItems(prev => prev.map(item => 
+    setReturnItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, return_quantity: Math.min(Math.max(1, quantity), item.quantity) } : item
     ));
   };
@@ -630,17 +712,28 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           </div>
           <div className="flex items-center gap-2">
             {step === 'invoice' && allowDirectReturn && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStep('search')}
-                className="text-white/80 hover:text-white hover:bg-white/10"
-              >
-                <FileSearch className="h-4 w-4 me-1" />
-                <span className="text-xs">البحث بفاتورة</span>
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStep('invoice-search')}
+                  className="text-white/80 hover:text-white hover:bg-white/10"
+                >
+                  <FileSearch className="h-4 w-4 me-1" />
+                  <span className="text-xs">البحث بفاتورة</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStep('search')}
+                  className="text-white/80 hover:text-white hover:bg-white/10"
+                >
+                  <RotateCcw className="h-4 w-4 me-1" />
+                  <span className="text-xs">مرتجع مباشر</span>
+                </Button>
+              </>
             )}
-            {step === 'search' && (
+            {(step === 'search' || step === 'invoice-search') && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -648,12 +741,12 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 className="text-white/80 hover:text-white hover:bg-white/10"
               >
                 <RotateCcw className="h-4 w-4 me-1" />
-                <span className="text-xs">مرتجع مباشر</span>
+                <span className="text-xs">العودة للرئيسية</span>
               </Button>
             )}
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleClose}
               className="text-white/80 hover:text-white hover:bg-white/10"
             >
@@ -664,7 +757,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
         <div className="flex-1 overflow-hidden p-6">
           {step === 'invoice' && (
-            <DirectReturnInvoice 
+            <DirectReturnInvoice
               onComplete={(amount) => {
                 onReturnComplete?.(amount);
                 handleClose();
@@ -687,8 +780,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                     className="h-14 ps-12 text-lg rounded-xl"
                   />
                 </div>
-                <Button 
-                  onClick={handleSearch} 
+                <Button
+                  onClick={handleSearch}
                   disabled={isSearching}
                   className="h-14 px-8 rounded-xl text-base"
                 >
@@ -709,11 +802,12 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 ) : searchResults && searchResults.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {searchResults.map((sale) => (
-                      <Card 
-                        key={sale.id} 
+                      <Card
+                        key={sale.id}
                         className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
                         onClick={() => handleSelectSale(sale)}
                       >
+
                         <CardContent className="p-5">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-4">
@@ -771,6 +865,107 @@ const POSReturns: React.FC<POSReturnsProps> = ({
             </div>
           )}
 
+          {step === 'invoice-search' && (
+            <div className="space-y-6 h-full flex flex-col">
+              {/* Invoice Search Input - POS Style */}
+              <div className="flex gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                  <Input
+                    placeholder="أدخل رقم الفاتورة للبحث..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="h-14 ps-12 text-lg rounded-xl"
+                  />
+                </div>
+                <Button
+                  onClick={handleSearch}
+                  disabled={isSearching}
+                  className="h-14 px-8 rounded-xl text-base"
+                >
+                  <Search className="h-5 w-5 me-2" />
+                  بحث
+                </Button>
+              </div>
+
+              {/* Invoice Search Results */}
+              <ScrollArea className="flex-1">
+                {isSearching ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-lg">جاري البحث عن الفاتورة...</p>
+                    </div>
+                  </div>
+                ) : searchResults && searchResults.length > 0 ? (
+                  <div className="space-y-4">
+                    {searchResults.map((sale) => (
+                      <Card
+                        key={sale.id}
+                        className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
+                        onClick={() => {
+                          setSelectedSale(sale);
+                          setStep('select');
+                        }}
+                      >
+                        <CardContent className="p-6">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                                <Receipt className="h-8 w-8 text-primary" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-xl">{sale.invoice_number}</div>
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {format(new Date(sale.sale_date), 'yyyy/MM/dd HH:mm', { locale: ar })}
+                                </div>
+                                {sale.customer && (
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    👤 {sale.customer.name_ar || sale.customer.name}
+                                  </div>
+                                )}
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  📦 {sale.sale_items.length} صنف • 💳 {sale.payment_method}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-left">
+                              <div className="font-bold text-2xl text-primary">
+                                {sale.total_amount.toLocaleString()} ر.ي
+                              </div>
+                              <Badge variant="secondary" className="mt-2">{sale.status}</Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : searchQuery && !isSearching ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertCircle className="h-10 w-10 opacity-50" />
+                      </div>
+                      <p className="text-lg font-medium">لم يتم العثور على الفاتورة</p>
+                      <p className="text-sm mt-1">تأكد من رقم الفاتورة وحاول مرة أخرى</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center text-muted-foreground">
+                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Search className="h-10 w-10 opacity-50" />
+                      </div>
+                      <p className="text-lg font-medium">البحث عن فاتورة</p>
+                      <p className="text-sm mt-1">أدخل رقم الفاتورة للبحث عنها وإنشاء مرتجع</p>
+                    </div>
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+          )}
+
           {step === 'select' && selectedSale && (
             <div className="space-y-4 h-full flex flex-col">
               {/* Invoice Info - Enhanced */}
@@ -786,7 +981,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                     </div>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setStep('search')} className="rounded-lg">
+                <Button variant="outline" size="sm" onClick={() => setStep('invoice-search')} className="rounded-lg">
                   <X className="h-4 w-4 me-1" />
                   تغيير الفاتورة
                 </Button>
@@ -808,14 +1003,13 @@ const POSReturns: React.FC<POSReturnsProps> = ({
               <ScrollArea className="flex-1 border rounded-xl">
                 <div className="p-3 space-y-2">
                   {returnItems.map((item) => (
-                    <div 
-                      key={item.id} 
+                    <div
+                      key={item.id}
                       onClick={() => toggleItemSelection(item.id)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        item.selected 
-                          ? 'border-primary bg-primary/5 shadow-sm' 
-                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
-                      }`}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${item.selected
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                        }`}
                     >
                       <div className="flex items-center gap-4">
                         <Checkbox
@@ -908,14 +1102,14 @@ const POSReturns: React.FC<POSReturnsProps> = ({
               </div>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleClose}
                 className="h-12 px-6 rounded-xl"
               >
                 إلغاء
               </Button>
-              <Button 
+              <Button
                 onClick={() => processReturnMutation.mutate()}
                 disabled={selectedItemsCount === 0 || processReturnMutation.isPending}
                 className="h-12 px-8 rounded-xl text-base font-bold"

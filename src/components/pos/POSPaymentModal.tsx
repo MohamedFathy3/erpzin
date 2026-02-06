@@ -92,7 +92,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   // Map database payment methods to component format - only cash, card, wallet
   const paymentMethods: PaymentMethod[] = React.useMemo(() => {
     const methods: PaymentMethod[] = [];
-    
+
     // Find cash method
     const cashMethod = dbPaymentMethods.find(m => m.code === 'cash' || m.type === 'cash');
     if (cashMethod) {
@@ -180,7 +180,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   const canComplete = () => {
     const cash = parseFloat(cashAmount) || 0;
-    
+
     if (paymentMethod === 'cash') return cash >= total;
     if (paymentMethod === 'split') {
       const totalPaid = Object.values(splitAmounts).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
@@ -190,10 +190,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handleComplete = async () => {
+    // Check if customer is selected
+    if (!customer?.id) {
+      toast.error(language === 'ar' ? 'يجب اختيار عميل قبل إتمام الدفع' : 'Customer must be selected before completing payment');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       let payments: { method: string; amount: number }[] = [];
-      
+
       if (paymentMethod === 'split') {
         Object.entries(splitAmounts).forEach(([method, amount]) => {
           const numAmount = parseFloat(amount) || 0;
@@ -207,66 +213,43 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         payments = [{ method: paymentMethod, amount: total }];
       }
 
-      // Generate invoice number
-      const invoiceNumber = `POS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      
-      // Get primary payment method for the sale record
-      const primaryPaymentMethod = payments.length > 0 ? payments[0].method : 'cash';
+      // Filter out payments with zero amounts
+      payments = payments.filter(payment => payment.amount > 0);
 
-      // Save sale to database
-      const { data: sale, error: saleError } = await supabase
-        .from('sales')
-        .insert({
-          invoice_number: invoiceNumber,
-          sale_date: new Date().toISOString(),
-          customer_id: customer?.id || null,
-          tax_amount: tax,
-          discount_amount: 0,
-          total_amount: total,
-          payment_method: primaryPaymentMethod,
-          status: 'completed',
-          branch: branchId || null,
-          notes: deliveryPerson ? `Delivery: ${deliveryPerson.name}` : null
-        })
-        .select('id')
-        .single();
-
-      if (saleError) throw saleError;
-
-      // Save sale items
-      if (cartItems.length > 0 && sale) {
-        const saleItems = cartItems.map(item => ({
-          sale_id: sale.id,
-          product_id: item.id,
+      // Prepare invoice data according to the required format
+      const invoiceData = {
+        customer_id: parseInt(customer.id),
+        items: cartItems.map(item => ({
+          product_id: parseInt(item.id),
           quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity,
-          discount: 0
-        }));
+          price: item.price,
+          color: item.colorName || null,
+          size: item.sizeName || null
+        })),
+        payments: payments
+      };
 
-        const { error: itemsError } = await supabase
-          .from('sale_items')
-          .insert(saleItems);
+      // Send invoice to API
+      const response = await fetch('/api/invoice/store', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(invoiceData)
+      });
 
-        if (itemsError) throw itemsError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create invoice');
       }
 
-      // Update customer loyalty points if customer exists
-      if (customer?.id) {
-        const pointsToAdd = Math.floor(total / 1000);
-        await supabase
-          .from('customers')
-          .update({ 
-            loyalty_points: (customer.loyalty_points || 0) + pointsToAdd,
-            total_purchases: supabase.rpc ? total : total // Simple increment
-          })
-          .eq('id', customer.id);
-      }
-      
+      const result = await response.json();
+
       toast.success(language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully');
       onComplete(payments);
     } catch (error) {
-      console.error('Error saving sale:', error);
+      console.error('Error saving invoice:', error);
       toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
     } finally {
       setIsProcessing(false);
@@ -280,9 +263,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     onSelectCash: () => setPaymentMethod('cash'),
     onSelectCard: () => setPaymentMethod('card'),
     onSelectKuraimi: () => setPaymentMethod('wallet'),
-    onSelectFloosak: () => {},
-    onSelectJawal: () => {},
-    onSelectBank: () => {},
+    onSelectFloosak: () => { },
+    onSelectJawal: () => { },
+    onSelectBank: () => { },
     onSelectSplit: () => setPaymentMethod('split'),
     onQuickAmount1: () => handleQuickAmount(quickAmounts[0]),
     onQuickAmount2: () => handleQuickAmount(quickAmounts[1]),
@@ -425,10 +408,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSplitAmounts({ 
-                cash: Math.floor(total / 2).toString(), 
-                card: (total - Math.floor(total / 2)).toString(), 
-                wallet: '' 
+              onClick={() => setSplitAmounts({
+                cash: Math.floor(total / 2).toString(),
+                card: (total - Math.floor(total / 2)).toString(),
+                wallet: ''
               })}
             >
               {language === 'ar' ? 'نصفين' : '50/50'}
@@ -449,7 +432,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           {language === 'ar' ? method?.labelAr : method?.label}
         </p>
         <p className="text-muted-foreground">
-          {language === 'ar' 
+          {language === 'ar'
             ? `جاهز لاستلام الدفع عبر ${method?.labelAr}`
             : `Ready to receive ${method?.label} payment`
           }
@@ -464,11 +447,11 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Overlay */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="relative w-full max-w-2xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
