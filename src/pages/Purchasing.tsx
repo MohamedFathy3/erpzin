@@ -396,17 +396,23 @@ const Purchasing = () => {
   });
 
   // Fetch purchase returns
-  const { data: purchaseReturns = [] } = useQuery({
+  const { data: purchaseReturnsResponse } = useQuery({
     queryKey: ['purchase-returns'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('purchase_returns')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post('/return-invoices/index', {});
+        if (response.data.result === 'Success') {
+          return response.data.data;
+        }
+        throw new Error(response.data.message || 'Failed to fetch returns');
+      } catch (error) {
+        console.error('Error fetching returns:', error);
+        return [];
+      }
     }
   });
+
+  const purchaseReturns = purchaseReturnsResponse || [];
 
   const refetchAll = () => {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
@@ -418,14 +424,14 @@ const Purchasing = () => {
   const totalReturns = purchaseReturns.reduce((sum, ret) => sum + Number(ret.total_amount || 0), 0);
 
   const totalBalance = suppliers.reduce((sum, s) => sum + Number(s.balance || 0), 0);
-  const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+  const totalPurchaseValue = invoicesList.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
 
   const stats = [
-    { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: invoices.length, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
-    { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalInvoices.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
+    { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: invoicesList.length, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
+    { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalPurchaseValue.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
+    { label: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns', value: purchaseReturns.length, icon: <RotateCcw className="text-warning" size={24} />, color: 'bg-warning/10' },
     { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
     { label: language === 'ar' ? 'المستحق للموردين' : 'Payables', value: `${totalBalance.toLocaleString()} YER`, icon: <Wallet className="text-destructive" size={24} />, color: 'bg-destructive/10' },
-    { label: language === 'ar' ? 'المرتجعات' : 'Returns', value: `${totalReturns.toLocaleString()} YER`, icon: <RotateCcw className="text-warning" size={24} />, color: 'bg-warning/10' },
   ];
 
   return (
