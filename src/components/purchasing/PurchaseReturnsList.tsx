@@ -378,7 +378,7 @@ const PurchaseReturnsList = () => {
                 <Card>
                   <CardContent className="pt-4">
                     <div className="text-sm text-muted-foreground">{language === 'ar' ? 'فاتورة الشراء' : 'Purchase Invoice'}</div>
-                    <div className="font-mono font-medium">{selectedReturn.invoice.invoice_number}</div>
+                     <div className="font-mono font-medium">{selectedReturn.invoice.invoice_number}</div>
                   </CardContent>
                 </Card>
                 <Card>
