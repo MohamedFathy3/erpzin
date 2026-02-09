@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
@@ -219,68 +219,88 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
 
   /* Category icon colors with glow */
-  .category-icon-blue { 
+  .category-icon-blue {
     @apply text-blue-500 bg-blue-500/10 transition-all duration-300;
   }
+
   .category-icon-blue:hover {
     box-shadow: 0 0 15px hsl(217 91% 60% / 0.4);
   }
-  .category-icon-green { 
+
+  .category-icon-green {
     @apply text-emerald-500 bg-emerald-500/10 transition-all duration-300;
   }
+
   .category-icon-green:hover {
     box-shadow: 0 0 15px hsl(142 71% 45% / 0.4);
   }
-  .category-icon-purple { 
+
+  .category-icon-purple {
     @apply text-purple-500 bg-purple-500/10 transition-all duration-300;
   }
+
   .category-icon-purple:hover {
     box-shadow: 0 0 15px hsl(271 81% 56% / 0.4);
   }
-  .category-icon-orange { 
+
+  .category-icon-orange {
     @apply text-orange-500 bg-orange-500/10 transition-all duration-300;
   }
+
   .category-icon-orange:hover {
     box-shadow: 0 0 15px hsl(25 95% 53% / 0.4);
   }
-  .category-icon-pink { 
+
+  .category-icon-pink {
     @apply text-pink-500 bg-pink-500/10 transition-all duration-300;
   }
+
   .category-icon-pink:hover {
     box-shadow: 0 0 15px hsl(330 81% 60% / 0.4);
   }
-  .category-icon-cyan { 
+
+  .category-icon-cyan {
     @apply text-cyan-500 bg-cyan-500/10 transition-all duration-300;
   }
+
   .category-icon-cyan:hover {
     box-shadow: 0 0 15px hsl(187 92% 43% / 0.4);
   }
-  .category-icon-yellow { 
+
+  .category-icon-yellow {
     @apply text-yellow-500 bg-yellow-500/10 transition-all duration-300;
   }
+
   .category-icon-yellow:hover {
     box-shadow: 0 0 15px hsl(48 96% 53% / 0.4);
   }
-  .category-icon-red { 
+
+  .category-icon-red {
     @apply text-red-500 bg-red-500/10 transition-all duration-300;
   }
+
   .category-icon-red:hover {
     box-shadow: 0 0 15px hsl(0 84% 60% / 0.4);
   }
-  .category-icon-indigo { 
+
+  .category-icon-indigo {
     @apply text-indigo-500 bg-indigo-500/10 transition-all duration-300;
   }
+
   .category-icon-indigo:hover {
     box-shadow: 0 0 15px hsl(239 84% 67% / 0.4);
   }
-  .category-icon-teal { 
+
+  .category-icon-teal {
     @apply text-teal-500 bg-teal-500/10 transition-all duration-300;
   }
+
   .category-icon-teal:hover {
     box-shadow: 0 0 15px hsl(172 66% 50% / 0.4);
   }
@@ -301,15 +321,16 @@
 
   /* Panel transitions */
   .panel-transition {
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
-                opacity 0.3s ease,
-                transform 0.3s ease;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s ease,
+      transform 0.3s ease;
   }
 
   /* Hover effects with glow */
   .hover-lift {
     @apply transition-all duration-300;
   }
+
   .hover-lift:hover {
     @apply -translate-y-0.5;
     box-shadow: 0 10px 25px -5px hsl(var(--primary) / 0.15);
@@ -318,6 +339,7 @@
   .hover-glow {
     @apply transition-all duration-300;
   }
+
   .hover-glow:hover {
     box-shadow: 0 0 25px hsl(var(--primary) / 0.25);
   }
@@ -382,12 +404,10 @@
 
   /* Shimmer effect */
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted) / 0.3) 0%,
-      hsl(var(--muted) / 0.5) 50%,
-      hsl(var(--muted) / 0.3) 100%
-    );
+    background: linear-gradient(90deg,
+        hsl(var(--muted) / 0.3) 0%,
+        hsl(var(--muted) / 0.5) 50%,
+        hsl(var(--muted) / 0.3) 100%);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
   }
@@ -396,14 +416,17 @@
   .btn-glow {
     @apply relative overflow-hidden transition-all duration-300;
   }
+
   .btn-glow::before {
     content: '';
     @apply absolute inset-0 opacity-0 transition-opacity duration-300;
     background: radial-gradient(circle at center, hsl(var(--primary-foreground) / 0.2) 0%, transparent 70%);
   }
+
   .btn-glow:hover::before {
     @apply opacity-100;
   }
+
   .btn-glow:hover {
     box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
   }
@@ -412,11 +435,13 @@
   .card-glow {
     @apply relative;
   }
+
   .card-glow::before {
     content: '';
     @apply absolute -inset-px rounded-xl opacity-0 transition-opacity duration-500;
     background: linear-gradient(135deg, hsl(var(--primary) / 0.3), hsl(var(--accent) / 0.3));
   }
+
   .card-glow:hover::before {
     @apply opacity-100;
   }
@@ -425,6 +450,7 @@
   .pulse-ring {
     @apply relative;
   }
+
   .pulse-ring::after {
     content: '';
     @apply absolute inset-0 rounded-full animate-ping;
@@ -493,24 +519,51 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes slideIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   @keyframes gradient-shift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
+    0% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+
+    100% {
+      background-position: 0% 50%;
+    }
   }
 
   .animate-pulse-slow {
@@ -518,9 +571,23 @@
   }
 
   /* Staggered animations */
-  .stagger-1 { animation-delay: 0.1s; }
-  .stagger-2 { animation-delay: 0.2s; }
-  .stagger-3 { animation-delay: 0.3s; }
-  .stagger-4 { animation-delay: 0.4s; }
-  .stagger-5 { animation-delay: 0.5s; }
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+
+  .stagger-5 {
+    animation-delay: 0.5s;
+  }
 }
