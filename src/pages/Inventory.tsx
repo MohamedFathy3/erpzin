@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
 import CategoryManager from '@/components/inventory/CategoryManager';
-import ProductList, { Product } from '@/components/inventory/ProductList';
+import ProductList, { Product, transformApiProduct } from '@/components/inventory/ProductList'; // استورد الدالة
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
 import ProductVariantsModal from '@/components/inventory/ProductVariantsModal';
 import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/BarcodeSystem';
@@ -10,7 +10,6 @@ import BarcodePrintingCenter from '@/components/inventory/BarcodePrintingCenter'
 import StockTransfer from '@/components/inventory/StockTransfer';
 import LowStockAlerts from '@/components/inventory/LowStockAlerts';
 import InventoryCount from '@/components/inventory/InventoryCount';
-// Reports, Movements, Import moved to other sections
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
 import { Button } from '@/components/ui/button';
@@ -24,12 +23,14 @@ import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import api from '@/lib/api';
+
 const ITEMS_PER_PAGE = 10;
 
-
-  export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
+export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
   let imageUrl = '';
   let imageId: number | undefined;
+  
+  console.log('🔧 Transforming to form data:', apiProduct);
   
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
@@ -64,7 +65,7 @@ const ITEMS_PER_PAGE = 10;
     selectedColors: [],
     stock: Number(apiProduct.stock) || 0,
     reorderPoint: Number(apiProduct.reorder_level) || 5,
-    status: status, // هنا التحويل المهم
+    status: status,
     imageId,
     imageUrl,
     branchIds: apiProduct.branch_ids || [],
@@ -98,7 +99,7 @@ const Inventory: React.FC = () => {
 
   const { data: dbProducts = [], refetch } = useQuery({
     queryKey: ['inventory-products'],
-     queryFn: async () => {
+    queryFn: async () => {
       try {
         const response = await api.post('/product/index', {
           filters: {},
@@ -108,11 +109,15 @@ const Inventory: React.FC = () => {
           paginate: false
         });
         
-        return response.data.data || [];
+        const products = response.data.data || [];
+        console.log('📦 Raw API products:', products);
+        console.log('First product details:', products[0]);
+        
+        return products;
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        console.error('Error fetching products:', error);
         toast({
-          title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
+          title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
           variant: 'destructive'
         });
         return [];
@@ -122,7 +127,7 @@ const Inventory: React.FC = () => {
 
   const { data: categories = [] } = useQuery({
     queryKey: ['categories-filter'],
-   queryFn: async () => {
+    queryFn: async () => {
       try {
         const response = await api.post('/category/index', {
           filters: {},
@@ -144,24 +149,14 @@ const Inventory: React.FC = () => {
     },
   });
 
-  const products: Product[] = dbProducts.map(p => ({
-    id: p.id,
-    name: p.name,
-    nameAr: p.name_ar || p.name,
-    sku: p.sku,
-    barcode: p.barcode,
-    category: p.categories?.name || 'Uncategorized',
-    categoryAr: p.categories?.name_ar || 'غير مصنف',
-    categoryId: p.category_id || '',
-    price: Number(p.price),
-    cost: Number(p.cost || 0),
-    stock: p.stock,
-    minStock: p.min_stock || 5,
-    variants: 0,
-    image: p.image_url,
-    status: !p.is_active ? 'inactive' : p.stock === 0 ? 'out_of_stock' : p.stock <= (p.min_stock || 5) ? 'low_stock' : 'active',
-    hasVariants: p.has_variants || false
-  }));
+  // استخدم الدالة transformApiProduct من ProductList
+  const products: Product[] = dbProducts.map(product => {
+    const transformed = transformApiProduct(product);
+    console.log('🔄 Transformed product:', transformed);
+    return transformed;
+  });
+
+  console.log('🎯 Final products array:', products);
 
   const filteredProducts = useMemo(() => {
     let filtered = products.filter(product => {
@@ -182,7 +177,7 @@ const Inventory: React.FC = () => {
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
 
       // Category filter
-      const matchesCategory = categoryFilter === 'all' || (product as any).categoryId === categoryFilter;
+      const matchesCategory = categoryFilter === 'all' || product.categoryId === categoryFilter;
 
       return matchesSearch && matchesStatus && matchesStock && matchesCategory;
     });
@@ -243,71 +238,93 @@ const Inventory: React.FC = () => {
     setSortBy('created_desc');
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc'; 
+  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || searchQuery !== '' || sortBy !== 'created_desc';
 
+  const handleAddProduct = () => { 
+    setEditProduct(null); 
+    setShowProductForm(true); 
+  };
 
-
-  const handleAddProduct = () => { setEditProduct(null); setShowProductForm(true); };
-const handleEditProduct = async (product: Product) => {
-  try {
-    const response = await api.get(`/product/${product.id}`);
-    const dbProduct = response.data;
-    
-    // استخدم الدالة الجديدة
-    const formData = transformApiProductToFormData(dbProduct);
-    
-    // إذا كان فيه متغيرات، املأها
-    if (formData.hasVariants && product.id) {
-      try {
-        const variantsResponse = await api.get(`/product-variants?product_id=${product.id}`);
-        const existingVariants = variantsResponse.data.data || [];
-        
-        if (existingVariants.length > 0) {
-          const uniqueSizeIds = new Set<string>();
-          const uniqueColorIds = new Set<string>();
+  const handleEditProduct = async (product: Product) => {
+    try {
+      const response = await api.get(`/product/${product.id}`);
+      const dbProduct = response.data;
+      
+      // استخدم الدالة الجديدة
+      const formData = transformApiProductToFormData(dbProduct);
+      
+      // إذا كان فيه متغيرات، املأها
+      if (formData.hasVariants && product.id) {
+        try {
+          const variantsResponse = await api.get(`/product-variants?product_id=${product.id}`);
+          const existingVariants = variantsResponse.data.data || [];
           
-          existingVariants.forEach(v => {
-            if (v.size_id) uniqueSizeIds.add(v.size_id.toString());
-            if (v.color_id) uniqueColorIds.add(v.color_id.toString());
-          });
-          
-          formData.selectedSizes = Array.from(uniqueSizeIds);
-          formData.selectedColors = Array.from(uniqueColorIds);
-          
-          formData.variants = existingVariants.map(v => ({
-            sizeId: v.size_id?.toString(),
-            colorId: v.color_id?.toString(),
-            sku: v.sku || `${formData.sku}-${v.size_id || ''}-${v.color_id || ''}`,
-            barcode: v.barcode || '',
-            stock: v.stock || 0,
-            cost: v.cost || formData.cost,
-            price: v.price || formData.price,
-            isEnabled: v.is_active ?? true
-          }));
+          if (existingVariants.length > 0) {
+            const uniqueSizeIds = new Set<string>();
+            const uniqueColorIds = new Set<string>();
+            
+            existingVariants.forEach(v => {
+              if (v.size_id) uniqueSizeIds.add(v.size_id.toString());
+              if (v.color_id) uniqueColorIds.add(v.color_id.toString());
+            });
+            
+            formData.selectedSizes = Array.from(uniqueSizeIds);
+            formData.selectedColors = Array.from(uniqueColorIds);
+            
+            formData.variants = existingVariants.map(v => ({
+              sizeId: v.size_id?.toString(),
+              colorId: v.color_id?.toString(),
+              sku: v.sku || `${formData.sku}-${v.size_id || ''}-${v.color_id || ''}`,
+              barcode: v.barcode || '',
+              stock: v.stock || 0,
+              cost: v.cost || formData.cost,
+              price: v.price || formData.price,
+              enabled: v.is_active ?? true
+            }));
+          }
+        } catch (variantError) {
+          console.warn('Could not fetch variants:', variantError);
         }
-      } catch (variantError) {
-        console.warn('Could not fetch variants:', variantError);
       }
+      
+      setEditProduct(formData);
+      setShowProductForm(true);
+      
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في جلب بيانات المنتج' : 'Error fetching product details',
+        variant: 'destructive'
+      });
     }
-    
-    setEditProduct(formData);
-    setShowProductForm(true);
-    
-  } catch (error) {
-    console.error('Error fetching product details:', error);
-    toast({
-      title: language === 'ar' ? 'خطأ في جلب بيانات المنتج' : 'Error fetching product details',
-      variant: 'destructive'
-    });
-  }
-};
-  const handleDeleteProduct = () => { toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' }); refetch(); };
-  const handleDuplicateProduct = () => { toast({ title: language === 'ar' ? 'تم النسخ' : 'Duplicated' }); };
-  const handleViewProduct = (product: Product) => { handleEditProduct(product); };
+  };
+
+  const handleDeleteProduct = () => { 
+    toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' }); 
+    refetch(); 
+  };
+
+  const handleDuplicateProduct = () => { 
+    toast({ title: language === 'ar' ? 'تم النسخ' : 'Duplicated' }); 
+  };
+
+  const handleViewProduct = (product: Product) => { 
+    handleEditProduct(product); 
+  };
+
   const handlePrintBarcode = (product: Product) => {
-    setSelectedProductForPrint({ id: product.id, name: product.name, name_ar: product.nameAr, sku: product.sku, barcode: product.barcode, price: product.price, stock: product.stock });
+    setSelectedProductForPrint({ 
+      id: product.id, 
+      name: product.name, 
+      name_ar: product.nameAr, 
+      sku: product.sku, 
+      barcode: product.barcode, 
+      price: product.price, 
+      stock: product.stock 
+    });
     setShowBarcodePrinter(true);
   };
+
   const handleViewVariants = (product: Product) => {
     const dbProduct = dbProducts.find(p => p.id === product.id);
     setSelectedProductForVariants({
@@ -324,107 +341,110 @@ const handleEditProduct = async (product: Product) => {
     setShowVariantsModal(true);
   };
 
-const handleSaveProduct = async (formData: ProductFormData) => {
-  try {
-    // Prepare product data for API
-    const productData = {
-      name: formData.name,
-      name_ar: formData.nameAr || formData.name,
-      description: formData.description || '',
-      description_ar: formData.descriptionAr || '',
-      category_id: formData.categoryId || null,
-      sku: formData.sku,
-      barcode: formData.barcode || null,
-      reorder_level: formData.reorderPoint || 5,
-      image_url: formData.imageUrl || null,
-      cost: formData.cost,
-      price: formData.price,
-      stock: formData.stock,
-      active: formData.status === 'active',
-      has_variants: formData.hasVariants,
-      // Include branch/warehouse scoping if your API supports it
-      branch_ids: formData.branchIds || [],
-      warehouse_ids: formData.warehouseIds || [],
-      valuation_method: formData.valuationMethod || 'fifo'
-    };
+  const handleSaveProduct = async (formData: ProductFormData) => {
+    try {
+      // Prepare product data for API
+      const productData = {
+        name: formData.name,
+        name_ar: formData.nameAr || formData.name,
+        description: formData.description || '',
+        description_ar: formData.descriptionAr || '',
+        category_id: formData.categoryId || null,
+        sku: formData.sku,
+        barcode: formData.barcode || null,
+        reorder_level: formData.reorderPoint || 5,
+        image_url: formData.imageUrl || null,
+        cost: formData.cost,
+        price: formData.price,
+        stock: formData.stock,
+        active: formData.status === 'active',
+        has_variants: formData.hasVariants,
+        branch_ids: formData.branchIds || [],
+        warehouse_ids: formData.warehouseIds || [],
+        valuation_method: formData.valuationMethod || 'fifo'
+      };
 
-    let productId = formData.id;
+      let productId = formData.id;
 
-    if (productId) {
-      // Update existing product
-      const response = await api.put(`/product/${productId}`, productData);
-      
-      toast({ 
-        title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
-        description: language === 'ar' 
-          ? `تم تحديث المنتج "${formData.name}"`
-          : `Product "${formData.name}" updated`
-      });
-    } else {
-      // Create new product
-      const response = await api.post('/product', productData);
-      productId = response.data.id; // Adjust based on your API response structure
-      
-      toast({ 
-        title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
-        description: language === 'ar' 
-          ? `تم إضافة المنتج "${formData.name}"`
-          : `Product "${formData.name}" added`
-      });
-    }
-
-    // Handle variants separately if product has variants
-    if (formData.hasVariants && productId && formData.variants.length > 0) {
-      // First, check if variants endpoint exists in your API
-      try {
-        const enabledVariants = formData.variants.filter(v => v.enabled);
+      if (productId) {
+        // Update existing product
+        const response = await api.put(`/product/${productId}`, productData);
         
-        if (enabledVariants.length > 0) {
-          // Transform variants to your API structure
-          const variantsData = enabledVariants.map(variant => ({
-            product_id: productId,
-            size_id: variant.sizeId || null,
-            color_id: variant.colorId || null,
-            sku: variant.sku,
-            barcode: variant.barcode || null,
-            stock: variant.stock || 0,
-            price: variant.price, // Use actual price instead of adjustment
-            cost: variant.cost,   // Use actual cost instead of adjustment
-            is_active: true
-          }));
-
-          // Save variants through API
-          await api.post('/product-variants', { variants: variantsData });
-          
-          // Also update the main product to mark it has variants
-          await api.put(`/product/${productId}`, { has_variants: true });
-        }
-      } catch (variantError) {
-        console.warn('Could not save variants, continuing without them:', variantError);
+        toast({ 
+          title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
+          description: language === 'ar' 
+            ? `تم تحديث المنتج "${formData.name}"`
+            : `Product "${formData.name}" updated`
+        });
+      } else {
+        // Create new product
+        const response = await api.post('/product', productData);
+        productId = response.data.id;
+        
+        toast({ 
+          title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
+          description: language === 'ar' 
+            ? `تم إضافة المنتج "${formData.name}"`
+            : `Product "${formData.name}" added`
+        });
       }
-    }
 
-    // Invalidate queries to refresh data
-    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-    queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
-    refetch();
-    
-  } catch (error: any) {
-    console.error('Error saving product:', error);
-    toast({ 
-      title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
-      description: error.response?.data?.message || error.message,
-      variant: 'destructive'
-    });
-    throw error; // Re-throw to handle in form if needed
-  }
-};
+      // Handle variants separately if product has variants
+      if (formData.hasVariants && productId && formData.variants.length > 0) {
+        try {
+          const enabledVariants = formData.variants.filter(v => v.enabled);
+          
+          if (enabledVariants.length > 0) {
+            const variantsData = enabledVariants.map(variant => ({
+              product_id: productId,
+              size_id: variant.sizeId || null,
+              color_id: variant.colorId || null,
+              sku: variant.sku,
+              barcode: variant.barcode || null,
+              stock: variant.stock || 0,
+              price: variant.price,
+              cost: variant.cost,
+              is_active: true
+            }));
+
+            await api.post('/product-variants', { variants: variantsData });
+            await api.put(`/product/${productId}`, { has_variants: true });
+          }
+        } catch (variantError) {
+          console.warn('Could not save variants, continuing without them:', variantError);
+        }
+      }
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
+      refetch();
+      
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      toast({ 
+        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+        description: error.response?.data?.message || error.message,
+        variant: 'destructive'
+      });
+      throw error;
+    }
+  };
+
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
     if (found) handleEditProduct(found);
   };
 
-  const barcodeProducts = dbProducts.map(p => ({ id: p.id, name: p.name, name_ar: p.name_ar, sku: p.sku, barcode: p.barcode, price: Number(p.price), stock: p.stock }));
+  const barcodeProducts = dbProducts.map(p => ({ 
+    id: p.id, 
+    name: p.name, 
+    name_ar: p.name_ar, 
+    sku: p.sku, 
+    barcode: p.barcode, 
+    price: Number(p.price), 
+    stock: p.stock 
+  }));
 
   return (
     <MainLayout activeItem="inventory">
@@ -497,7 +517,10 @@ const handleSaveProduct = async (formData: ProductFormData) => {
           <TabsContent value="products" className="flex-1 flex flex-col mt-2">
             {/* Actions Bar */}
             <div className="flex items-center gap-2 flex-wrap mb-4">
-              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add Product'}</Button>
+              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90">
+                <Plus size={16} className="me-2" />
+                {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
+              </Button>
             </div>
 
             {/* Filters Card */}
@@ -575,29 +598,7 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                   <div className="flex items-center gap-2 flex-wrap">
                     <SortAsc size={16} className="text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">{language === 'ar' ? 'ترتيب حسب:' : 'Sort by:'}</span>
-                    <div className="flex gap-1 flex-wrap">
-                      {[
-                        { value: 'created_desc', labelAr: 'الأحدث', labelEn: 'Newest' },
-                        { value: 'name_asc', labelAr: 'الاسم (أ-ي)', labelEn: 'Name (A-Z)' },
-                        { value: 'name_desc', labelAr: 'الاسم (ي-أ)', labelEn: 'Name (Z-A)' },
-                        { value: 'barcode_asc', labelAr: 'الباركود ↑', labelEn: 'Barcode ↑' },
-                        { value: 'barcode_desc', labelAr: 'الباركود ↓', labelEn: 'Barcode ↓' },
-                        { value: 'stock_asc', labelAr: 'المخزون (الأقل)', labelEn: 'Stock (Low)' },
-                        { value: 'stock_desc', labelAr: 'المخزون (الأكثر)', labelEn: 'Stock (High)' },
-                        { value: 'price_asc', labelAr: 'السعر ↑', labelEn: 'Price ↑' },
-                        { value: 'price_desc', labelAr: 'السعر ↓', labelEn: 'Price ↓' },
-                      ].map(option => (
-                        <Button
-                          key={option.value}
-                          variant={sortBy === option.value ? 'default' : 'outline'}
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setSortBy(option.value)}
-                        >
-                          {language === 'ar' ? option.labelAr : option.labelEn}
-                        </Button>
-                      ))}
-                    </div>
+                    {/* يمكن إضافة أزرار التصنيف هنا */}
                   </div>
                 </div>
               </CardContent>
@@ -658,9 +659,25 @@ const handleSaveProduct = async (formData: ProductFormData) => {
         </Tabs>
       </div>
 
-      <ProductForm isOpen={showProductForm} onClose={() => setShowProductForm(false)} onSave={handleSaveProduct} categories={[]} editProduct={editProduct} />
-      <BarcodeScanner isOpen={showBarcodeScanner} onClose={() => setShowBarcodeScanner(false)} onProductFound={handleBarcodeProductFound} products={barcodeProducts} />
-      <BarcodeLabelPrinter isOpen={showBarcodePrinter} onClose={() => { setShowBarcodePrinter(false); setSelectedProductForPrint(null); }} products={barcodeProducts} selectedProduct={selectedProductForPrint} />
+      <ProductForm 
+        isOpen={showProductForm} 
+        onClose={() => setShowProductForm(false)} 
+        onSave={handleSaveProduct} 
+        categories={categories} 
+        editProduct={editProduct} 
+      />
+      <BarcodeScanner 
+        isOpen={showBarcodeScanner} 
+        onClose={() => setShowBarcodeScanner(false)} 
+        onProductFound={handleBarcodeProductFound} 
+        products={barcodeProducts} 
+      />
+      <BarcodeLabelPrinter 
+        isOpen={showBarcodePrinter} 
+        onClose={() => { setShowBarcodePrinter(false); setSelectedProductForPrint(null); }} 
+        products={barcodeProducts} 
+        selectedProduct={selectedProductForPrint} 
+      />
       <ProductVariantsModal 
         isOpen={showVariantsModal} 
         onClose={() => { setShowVariantsModal(false); setSelectedProductForVariants(null); }} 

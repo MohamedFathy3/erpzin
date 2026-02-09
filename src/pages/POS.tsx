@@ -26,6 +26,7 @@ import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
+import api from '@/lib/api';
 
 interface CartItem {
   id: string;
@@ -108,6 +109,8 @@ const POS: React.FC = () => {
     nameAr: prod.name_ar || prod.name,
     price: Number(prod.price),
     sku: prod.sku,
+      imageUrl: prod.image?.fullUrl || undefined,
+  image_url: prod.image_url,
     barcode: prod.barcode || '',
     stock: prod.stock,
     category: prod.category_id || '',
@@ -127,12 +130,9 @@ const POS: React.FC = () => {
         const scannedBarcode = barcodeBuffer;
         barcodeBuffer = '';
         
-        const { data: product, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('barcode', scannedBarcode)
-          .eq('is_active', true)
-          .maybeSingle();
+        const { data: product, } = await api.post('/products/index', {
+          barcode: scannedBarcode
+        });
 
         if (product) {
           addToCart({
