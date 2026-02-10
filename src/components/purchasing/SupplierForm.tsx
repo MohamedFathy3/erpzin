@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import api from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -16,11 +17,27 @@ import { Building2, User, Phone, Mail, MapPin, CreditCard, FileText } from 'luci
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
+interface Supplier {
+  id: number | string;
+  name: string;
+  name_ar?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  tax_number?: string;
+  credit_limit?: number;
+  payment_terms?: number;
+  is_active?: boolean;
+  active?: number;
+  note?: string;
+}
+
 interface SupplierFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
-  editSupplier?: any;
+  editSupplier?: Supplier;
 }
 
 const SupplierForm: React.FC<SupplierFormProps> = ({
@@ -85,30 +102,41 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     }
 
     setLoading(true);
+
     try {
+      const body = {
+        name: formData.name,
+        contact_person: formData.contact_person,
+        phone: formData.phone,
+        address: formData.address,
+        tax_number: formData.tax_number,
+        //note: formData.note || '', 
+        credit_limit: formData.credit_limit,
+        payment_terms: formData.payment_terms,
+        active: formData.is_active ? 1 : 0
+      };
+
       if (editSupplier) {
-        const { error } = await supabase
-          .from('suppliers')
-          .update(formData)
-          .eq('id', editSupplier.id);
-        if (error) throw error;
+        // Update existing supplier
+        await api.put(`/suppliers/${editSupplier.id}`, body);
       } else {
-        const { error } = await supabase
-          .from('suppliers')
-          .insert(formData);
-        if (error) throw error;
+        // Create new supplier
+        await api.post('/suppliers', body);
       }
 
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
         description: language === 'ar' ? 'تم حفظ بيانات المورد بنجاح' : 'Supplier saved successfully'
       });
+
       onSave();
       onClose();
-    } catch (error: any) {
+
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.message,
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
@@ -122,7 +150,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="text-primary" size={22} />
-            {editSupplier 
+            {editSupplier
               ? (language === 'ar' ? 'تعديل المورد' : 'Edit Supplier')
               : (language === 'ar' ? 'إضافة مورد جديد' : 'Add New Supplier')
             }
@@ -143,7 +171,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
                 placeholder={language === 'ar' ? 'اسم المورد' : 'Supplier name'}
               />
             </div>
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <Building2 size={14} />
                 {language === 'ar' ? 'اسم المورد (عربي)' : 'Supplier Name (Arabic)'}
@@ -154,7 +182,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
                 placeholder={language === 'ar' ? 'اسم المورد بالعربي' : 'Arabic name'}
                 dir="rtl"
               />
-            </div>
+            </div> */}
           </div>
 
           {/* Contact Info */}
@@ -268,7 +296,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading 
+            {loading
               ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
               : (language === 'ar' ? 'حفظ' : 'Save')
             }

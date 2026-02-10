@@ -99,20 +99,22 @@ interface InvoiceTableRow {
 }
 
 interface Supplier {
-  id: string;
+  id: number | string;
   name: string;
-  name_ar: string;
+  name_ar?: string;
   phone: string;
-  balance: number;
+  balance?: number;
   created_at: string;
   updated_at: string;
   address: string;
   contact_person: string;
   credit_limit: number;
-  email: string;
-  is_active: boolean;
+  email?: string;
+  is_active?: boolean;
+  active?: number;
   payment_terms: number;
   tax_number: string;
+  note?: string;
 };
 
 interface PurchaseInvoice {
@@ -351,14 +353,34 @@ const Purchasing = () => {
     .map(mapInvoiceToTableRow);
 
   // Fetch suppliers
-  const { data: suppliers = [] } = useQuery({
-    queryKey: ['suppliers'],
+
+
+
+  const { data: suppliers = [], isLoading: suppliersLoading } = useQuery<Supplier[]>({
+    queryKey: ['suppliers', supplierFilters],
     queryFn: async () => {
-      const { data, error } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      try {
+        // إرسال الفلاتر كـ body أو query params حسب تصميم API
+        const response = await api.post('/suppliers/index', {
+          search: supplierFilters.search || '',
+          balance_min: supplierFilters.balance_min || '',
+          balance_max: supplierFilters.balance_max || ''
+        });
+
+        if (response.data.result !== 'Success') {
+          throw new Error(response.data.message || 'Failed to fetch suppliers');
+        }
+
+        return response.data.data;
+      } catch (error: unknown) {
+        console.error('Error fetching suppliers:', error);
+        throw error;
+      }
     }
   });
+
+
+
 
   // Invoice filter fields
   const invoiceFilterFields: FilterField[] = [
