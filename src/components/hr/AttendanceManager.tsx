@@ -186,7 +186,7 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
   // Add attendance mutation
   const addAttendanceMutation = useMutation({
     mutationFn: async (data: typeof newAttendance) => {
-      await api.post('/attendance/', {
+      await api.post('/attendance', {
         employee_id: data.employee_id,
         date: data.date,
         check_in: data.check_in || null,
@@ -395,7 +395,7 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
                       <SelectValue placeholder={t.selectEmployee} />
                     </SelectTrigger>
                     <SelectContent>
-                      {employees.filter(e => e.is_active).map(emp => (
+                      {employees.map(emp => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.employee_code} - {language === 'ar' ? emp.name || emp.name : emp.name}
                         </SelectItem>
