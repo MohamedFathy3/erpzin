@@ -135,7 +135,7 @@ const CurrencyTaxManager = () => {
     mutationFn: async (id: string) => {
       console.log("iddddd", id);
       await api.delete('/currency/delete', {
-        data: { id }
+        data: { items: [id] }
       });
     },
     onSuccess: () => {
@@ -201,8 +201,8 @@ const CurrencyTaxManager = () => {
 
   const deleteTaxMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete('tax/delete ', {
-        data: { id }
+      await api.delete('/tax/delete', {
+        data: { items: [id] }
       });
     },
     onSuccess: () => {
