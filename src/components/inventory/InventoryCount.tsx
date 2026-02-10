@@ -16,6 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils';
 import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import api from '@/lib/api';
+import { AxiosError } from 'axios';
 import {
   ClipboardList,
   Plus,
@@ -68,6 +69,12 @@ const InventoryCount = () => {
   const [countItems, setCountItems] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filterValues, setFilterValues] = useState<FilterValues>({});
+
+  const [countedProducts, setCountedProducts] = useState<
+    { product_id: number; counted_stock: number }[]
+  >([]);
+
+
 
   const t = {
     en: {
@@ -267,54 +274,52 @@ const InventoryCount = () => {
     enabled: !!selectedCount?.id
   });
 
-  // Create count mutation
-  const createCountMutation = useMutation({
+
+
+  const inventoryStoreMutation = useMutation({
     mutationFn: async () => {
-      const countNumber = `IC-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(counts.length + 1).padStart(4, '0')}`;
+      if (!selectedWarehouse) {
+        throw new Error('Warehouse is required');
+      }
 
-      const { data: count, error: countError } = await supabase
-        .from('inventory_counts')
-        .insert({
-          count_number: countNumber,
-          warehouse_id: selectedWarehouse,
-          notes: countNotes || null,
-          status: 'in_progress',
-          total_items: products.length
-        })
-        .select()
-        .single();
+      const body = {
+        warehouse_id: Number(selectedWarehouse),
+        note: countNotes,
+        products: countedProducts
+      };
 
-      if (countError) throw countError;
+      const response = await api.post(
+        '/warehouses/inventory-store',
+        body
+      );
 
-      // Create count items for all products
-      const items = products.map(p => ({
-        count_id: count.id,
-        product_id: p.id,
-        system_quantity: p.stock
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('inventory_count_items')
-        .insert(items);
-
-      if (itemsError) throw itemsError;
-
-      return count;
+      return response.data;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['inventory-counts'] });
-      toast({ title: t.countCreated });
+
+    onSuccess: () => {
+      toast({
+        title: language === 'ar'
+          ? 'تم حفظ الجرد بنجاح'
+          : 'Inventory stored successfully'
+      });
+
       setNewCountOpen(false);
       setSelectedWarehouse('');
       setCountNotes('');
-      // Open the count for editing
-      setSelectedCount(data);
-      setViewCountOpen(true);
+      setCountedProducts([]);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في إنشاء الجرد' : 'Error creating count', variant: 'destructive' });
+
+    onError: (error: AxiosError) => {
+      toast({
+        title: language === 'ar'
+          ? 'فشل حفظ الجرد'
+          : 'Inventory store failed',
+        description: (error?.response?.data as { message?: string })?.message,
+        variant: 'destructive'
+      });
     }
   });
+
 
   // Save count items mutation
   const saveCountMutation = useMutation({
@@ -392,6 +397,10 @@ const InventoryCount = () => {
     if (!warehouse) return '-';
     return warehouse.name;
   };
+
+
+
+
 
   const filteredCountItems = useMemo(() => {
     if (!searchQuery) return countItemsData;
@@ -537,8 +546,8 @@ const InventoryCount = () => {
               {t.cancel}
             </Button>
             <Button
-              onClick={() => createCountMutation.mutate()}
-              disabled={!selectedWarehouse || createCountMutation.isPending}
+              onClick={() => inventoryStoreMutation.mutate()}
+              disabled={!selectedWarehouse || inventoryStoreMutation.isPending}
             >
               {t.createCount}
             </Button>

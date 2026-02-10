@@ -30,6 +30,9 @@ export interface Product {
   image?: string;
   status: 'active' | 'inactive' | 'low_stock' | 'out_of_stock';
   hasVariants?: boolean;
+  image_url?: string | null;
+  description?: string; // أضفنا وصف المنتج
+  active?: boolean; // أضفنا حقل active
 }
 
 interface ProductListProps {
@@ -49,50 +52,94 @@ interface ProductListProps {
 
 // Fixed mapProductStatus function with proper type checking
 const mapProductStatus = (product: any): Product['status'] => {
-  if (!product.active) return 'inactive';
-  if (product.stock === 0 || product.stock === '0') return 'out_of_stock';
+  console.log('🔍 Checking product status:', {
+    id: product.id,
+    name: product.name,
+    active: product.active,
+    stock: product.stock,
+    reorder_level: product.reorder_level
+  });
+
+  if (!product.active) {
+    console.log('↪️ Status: inactive (active is false)');
+    return 'inactive';
+  }
   
   const stock = Number(product.stock);
+  if (stock === 0 || product.stock === '0') {
+    console.log('↪️ Status: out_of_stock (stock is 0)');
+    return 'out_of_stock';
+  }
+  
   const reorderLevel = Number(product.reorder_level) || 5;
   
-  if (stock <= reorderLevel) return 'low_stock';
+  if (stock <= reorderLevel) {
+    console.log('↪️ Status: low_stock (stock <= reorder level)');
+    return 'low_stock';
+  }
+  
+  console.log('↪️ Status: active');
   return 'active';
 };
 
 // Helper function to transform API response to Product interface
 export const transformApiProduct = (apiProduct: any): Product => {
+  console.log('🔄 Transforming API product:', {
+    id: apiProduct.id,
+    name: apiProduct.name,
+    imageUrl: apiProduct.imageUrl,
+    image_url: apiProduct.image_url,
+    image: apiProduct.image,
+    category: apiProduct.category,
+    active: apiProduct.active
+  });
+
   // Ensure cost is a number (handle null/undefined)
   const cost = apiProduct.cost !== null && apiProduct.cost !== undefined 
     ? Number(apiProduct.cost) 
     : 0;
 
-  // Handle image URL - prioritize image_url, then image.fullUrl, then imageUrl
-  let imageUrl = apiProduct.image_url || '';
-  if (!imageUrl && apiProduct.image && apiProduct.image.fullUrl) {
-    imageUrl = apiProduct.image.fullUrl;
-  } else if (!imageUrl && apiProduct.imageUrl) {
-    imageUrl = apiProduct.imageUrl;
+  // Handle image URL - use the correct field name
+  let imageUrl = '';
+  
+  // جرب كل الاحتمالات بالترتيب
+  if (apiProduct.imageUrl && typeof apiProduct.imageUrl === 'string') {
+    imageUrl = apiProduct.imageUrl; // مع حرف U كبير
+  } else if (apiProduct.image_url && typeof apiProduct.image_url === 'string') {
+    imageUrl = apiProduct.image_url; // مع حرف u صغير
+  } else if (apiProduct.image?.fullUrl && typeof apiProduct.image.fullUrl === 'string') {
+    imageUrl = apiProduct.image.fullUrl; // من object الصورة
   }
 
-  return {
+  // احصل على اسم التصنيف
+  const categoryName = apiProduct.category?.name || 'Uncategorized';
+  const categoryAr = apiProduct.category?.name_ar || categoryName || 'غير مصنف';
+
+  const transformedProduct = {
     id: apiProduct.id.toString(),
     name: apiProduct.name || '',
     nameAr: apiProduct.name_ar || apiProduct.name || '',
+    description: apiProduct.description || '', // أضفنا الوصف
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || undefined,
-    category: apiProduct.category?.name || 'Uncategorized',
-    categoryAr: apiProduct.category?.name_ar || apiProduct.category?.name || 'غير مصنف',
+    category: categoryName,
+    categoryAr: categoryAr,
     categoryId: apiProduct.category?.id?.toString() || apiProduct.category_id?.toString(),
     price: Number(apiProduct.price) || 0,
     cost: cost,
-    stock: Number(apiProduct.stock) || 0,
     imageUrl: imageUrl || undefined,
+    image_url: apiProduct.image_url,
+    stock: Number(apiProduct.stock) || 0,
     minStock: Number(apiProduct.reorder_level) || 5,
-    variants: 0, // You'll need to fetch variants count separately if needed
+    variants: 0,
     image: imageUrl || undefined,
     status: mapProductStatus(apiProduct),
-    hasVariants: apiProduct.has_variants || false
+    hasVariants: apiProduct.has_variants || false,
+    active: apiProduct.active || false // أضفنا حقل active
   };
+
+  console.log('✅ Transformed product:', transformedProduct);
+  return transformedProduct;
 };
 
 const ProductList: React.FC<ProductListProps> = ({
@@ -111,6 +158,8 @@ const ProductList: React.FC<ProductListProps> = ({
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
+
+  console.log('📊 ProductList received products:', products);
 
   const getStatusBadge = (status: Product['status']) => {
     const config = {
@@ -256,6 +305,17 @@ const ProductList: React.FC<ProductListProps> = ({
               const stock = Number(product.stock);
               const minStock = Number(product.minStock) || 5;
               
+              console.log('🎯 Rendering product:', {
+                id: product.id,
+                name: product.name,
+                status: product.status,
+                category: product.category,
+                imageUrl: product.imageUrl,
+                image: product.image,
+                stock: stock,
+                minStock: minStock
+              });
+
               return (
                 <tr 
                   key={product.id}
@@ -267,19 +327,24 @@ const ProductList: React.FC<ProductListProps> = ({
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {product.imageUrl ? (
+                        {/* استخدم product.imageUrl بدلاً من product.image_url */}
+                        {product.imageUrl || product.image ? (
                           <img 
-                            src={product.imageUrl} 
+                            src={product.imageUrl || product.image} 
                             alt={product.name} 
                             className="w-full h-full object-cover"
+                            onLoad={() => console.log('✅ Image loaded:', product.imageUrl || product.image)}
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = '';
-                              (e.target as HTMLImageElement).className = 'hidden';
-                              (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
+                              console.log('❌ Image error:', product.imageUrl || product.image);
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const fallback = (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon');
+                              if (fallback) {
+                                fallback.classList.remove('hidden');
+                              }
                             }}
                           />
                         ) : null}
-                        <div className={cn("fallback-icon text-2xl", product.imageUrl ? "hidden" : "block")}>
+                        <div className={cn("fallback-icon text-2xl", (product.imageUrl || product.image) ? "hidden" : "block")}>
                           {product.category?.toLowerCase().includes('shirt') ? '👕' : 
                            product.category?.toLowerCase().includes('shoes') ? '👟' :
                            product.category?.toLowerCase().includes('electronic') ? '📱' : '📦'}
@@ -290,10 +355,15 @@ const ProductList: React.FC<ProductListProps> = ({
                           {language === 'ar' ? product.nameAr : product.name}
                         </p>
                         {product.description && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {language === 'ar' ? product.description : product.description}
+                          <p className="text-xs text-muted-foreground truncate mt-0.5" title={product.description}>
+                            {product.description}
                           </p>
                         )}
+                        {/* Debug info - يمكن إخفاؤها */}
+                        <div className="hidden">
+                          <p className="text-[8px] text-gray-400">Image URL: {product.imageUrl || 'N/A'}</p>
+                          <p className="text-[8px] text-gray-400">Status: {product.status}</p>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -313,6 +383,16 @@ const ProductList: React.FC<ProductListProps> = ({
                     <div className="truncate max-w-[120px]" title={language === 'ar' ? product.categoryAr : product.category}>
                       {language === 'ar' ? product.categoryAr : product.category}
                     </div>
+                    {product.active !== undefined && (
+                      <div className="mt-1">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${product.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {product.active 
+                            ? (language === 'ar' ? 'فعال' : 'Active')
+                            : (language === 'ar' ? 'غير فعال' : 'Inactive')
+                          }
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="p-4">
                     <div>
@@ -378,6 +458,9 @@ const ProductList: React.FC<ProductListProps> = ({
                     >
                       {statusConfig.label}
                     </Badge>
+                    <div className="mt-1 text-[10px] text-gray-500">
+                      Stock: {stock} | Min: {minStock}
+                    </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-1">
