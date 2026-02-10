@@ -139,6 +139,8 @@ const CurrencyTaxManager = () => {
       });
     },
     onSuccess: () => {
+
+
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
       toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' });
     },
