@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, Percent, Plus, Edit, Trash2, Save, Star } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toNamespacedPath } from "path";
 
 interface Currency {
   id: string;
@@ -40,7 +42,7 @@ interface TaxRate {
 const CurrencyTaxManager = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  
+
   // Currency state
   const [currencyDialogOpen, setCurrencyDialogOpen] = useState(false);
   const [editingCurrency, setEditingCurrency] = useState<Currency | null>(null);
@@ -68,12 +70,8 @@ const CurrencyTaxManager = () => {
   const { data: currencies = [], isLoading: currenciesLoading } = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('currencies')
-        .select('*')
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data as Currency[];
+      const response = await api.post('/currency/index');
+      return Array.isArray(response.data) ? response.data : Array.isArray(response.data.data) ? response.data.data : [];
     }
   });
 
@@ -81,36 +79,26 @@ const CurrencyTaxManager = () => {
   const { data: taxRates = [], isLoading: taxLoading } = useQuery({
     queryKey: ['tax-rates'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tax_rates')
-        .select('*')
-        .order('rate', { ascending: true });
-      if (error) throw error;
-      return data as TaxRate[];
+      const response = await api.post('/tax/index');
+      return Array.isArray(response.data) ? response.data : Array.isArray(response.data.data) ? response.data.data : [];
     }
   });
 
   // Currency mutations
   const saveCurrencyMutation = useMutation({
     mutationFn: async (data: typeof currencyForm & { id?: string }) => {
+      const payload = {
+        code: data.code,
+        name: data.name,
+        symbol: data.symbol,
+        exchange_rate: data.exchange_rate,
+        active: 1,
+        default: 0
+      };
       if (data.id) {
-        const { error } = await supabase
-          .from('currencies')
-          .update({
-            code: data.code,
-            name: data.name,
-            name_ar: data.name_ar,
-            symbol: data.symbol,
-            country_code: data.country_code || null,
-            exchange_rate: data.exchange_rate,
-            decimal_places: data.decimal_places,
-            sort_order: data.sort_order
-          })
-          .eq('id', data.id);
-        if (error) throw error;
+        await api.put('/currency/' + data.id, payload);
       } else {
-        const { error } = await supabase.from('currencies').insert(data);
-        if (error) throw error;
+        await api.post('/currency', payload);
       }
     },
     onSuccess: () => {
@@ -125,8 +113,7 @@ const CurrencyTaxManager = () => {
 
   const toggleCurrencyActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from('currencies').update({ is_active }).eq('id', id);
-      if (error) throw error;
+      await api.put('/currency/' + id, { active: is_active ? 1 : 0 });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['currencies'] })
   });
@@ -147,8 +134,7 @@ const CurrencyTaxManager = () => {
 
   const deleteCurrencyMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('currencies').delete().eq('id', id);
-      if (error) throw error;
+      await api.delete('/currency/delete' + id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
@@ -156,18 +142,21 @@ const CurrencyTaxManager = () => {
     }
   });
 
+
   // Tax mutations
   const saveTaxMutation = useMutation({
     mutationFn: async (data: typeof taxForm & { id?: string }) => {
+      const payload = {
+        name: data.name,
+        name_ar: data.name_ar,
+        rate: data.rate,
+        active: 1,
+        main_branch: 0
+      };
       if (data.id) {
-        const { error } = await supabase
-          .from('tax_rates')
-          .update({ name: data.name, name_ar: data.name_ar, rate: data.rate })
-          .eq('id', data.id);
-        if (error) throw error;
+        await api.put('/tax/' + data.id, payload);
       } else {
-        const { error } = await supabase.from('tax_rates').insert(data);
-        if (error) throw error;
+        await api.post('/tax', payload);
       }
     },
     onSuccess: () => {
@@ -182,17 +171,14 @@ const CurrencyTaxManager = () => {
 
   const toggleTaxActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from('tax_rates').update({ is_active }).eq('id', id);
-      if (error) throw error;
+      await api.put('/tax/' + id, { active: is_active ? 1 : 0 });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tax-rates'] })
   });
 
   const setDefaultTaxMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('tax_rates').update({ is_default: false }).neq('id', '');
-      const { error } = await supabase.from('tax_rates').update({ is_default: true }).eq('id', id);
-      if (error) throw error;
+      await api.put('/tax/' + id, { main_branch: 1 });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
@@ -202,8 +188,7 @@ const CurrencyTaxManager = () => {
 
   const deleteTaxMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('tax_rates').delete().eq('id', id);
-      if (error) throw error;
+      await api.delete('branch/delete' + id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
