@@ -27,28 +27,85 @@ import api from '@/lib/api';
 const ITEMS_PER_PAGE = 10;
 
 export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
+  console.log('🔧 [TRANSFORM] Input to transform function:', apiProduct);
+  
   let imageUrl = '';
   let imageId: number | undefined;
   
-  console.log('🔧 Transforming to form data:', apiProduct);
-  
+  // معالجة الصورة
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
       imageId = apiProduct.image.id;
-      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || '';
+      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || apiProduct.image.url || '';
     } else if (typeof apiProduct.image === 'number') {
       imageId = apiProduct.image;
     }
   } else if (apiProduct.image_url) {
     imageUrl = apiProduct.image_url;
-  } else if (apiProduct.imageUrl) {
-    imageUrl = apiProduct.imageUrl;
+  }
+  
+  // تحويل active (boolean) إلى status (string)
+  const status = apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
+  
+  // تأكد من أن category_id معالج بشكل صحيح
+  const categoryId = apiProduct.category?.id?.toString() || 
+                     apiProduct.category_id?.toString() || 
+                     '';
+
+  // معالجة المتغيرات من الـ units
+  const variants: ProductVariant[] = [];
+  const selectedSizes: string[] = [];
+  const selectedColors: string[] = [];
+
+  if (apiProduct.units && Array.isArray(apiProduct.units)) {
+    console.log('🔧 [TRANSFORM] Processing units:', apiProduct.units.length);
+    
+    apiProduct.units.forEach((unit: any, index: number) => {
+      if (unit.unit_id) {
+        selectedSizes.push(unit.unit_id.toString());
+      }
+      
+      // إذا كان هناك ألوان في الـ unit
+      if (unit.colors && Array.isArray(unit.colors)) {
+        unit.colors.forEach((color: any) => {
+          if (color.color_id) {
+            selectedColors.push(color.color_id.toString());
+          }
+          
+          const variant: ProductVariant = {
+            id: `${unit.unit_id || index}-${color.color_id || index}`,
+            colorId: color.color_id?.toString() || '',
+            unitId: unit.unit_id?.toString() || '', // استخدام unitId هنا
+            sku: unit.sku || `${apiProduct.sku}-${unit.unit_id || index}-${color.color_id || index}`,
+            barcode: unit.barcode || '',
+            customBarcode: false,
+            stock: color.stock || unit.stock || apiProduct.stock || 0,
+            cost: unit.cost_price || apiProduct.cost || 0,
+            price: unit.sell_price || apiProduct.price || 0,
+            enabled: true
+          };
+          variants.push(variant);
+        });
+      } else {
+        // إذا لم يكن هناك ألوان، ننشئ variant واحد فقط
+        const variant: ProductVariant = {
+          id: `${unit.unit_id || index}`,
+          colorId: '',
+          unitId: unit.unit_id?.toString() || '', // استخدام unitId هنا
+          sku: unit.sku || `${apiProduct.sku}-${unit.unit_id || index}`,
+          barcode: unit.barcode || '',
+          customBarcode: false,
+          stock: unit.stock || apiProduct.stock || 0,
+          cost: unit.cost_price || apiProduct.cost || 0,
+          price: unit.sell_price || apiProduct.price || 0,
+          enabled: true
+        };
+        variants.push(variant);
+      }
+    });
   }
 
-  // تحويل active (boolean) إلى status (string)
-  const status = apiProduct.active === true ? 'active' : 'inactive';
-
-  return {
+  const result = {
     id: apiProduct.id?.toString(),
     name: apiProduct.name || '',
     nameAr: apiProduct.name_ar || apiProduct.name || '',
@@ -56,23 +113,73 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     descriptionAr: apiProduct.description_ar || '',
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || '',
-    categoryId: apiProduct.category?.id?.toString() || apiProduct.category_id?.toString() || '',
+    categoryId: categoryId,
     price: Number(apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
-    variants: [],
-    selectedSizes: [],
-    selectedColors: [],
+    variants: variants,
+    selectedSizes: selectedSizes,
+    selectedColors: selectedColors,
     stock: Number(apiProduct.stock) || 0,
     reorderPoint: Number(apiProduct.reorder_level) || 5,
     status: status,
     imageId,
     imageUrl,
-    branchIds: apiProduct.branch_ids || [],
-    warehouseIds: apiProduct.warehouse_ids || [],
+    branchIds: Array.isArray(apiProduct.branch_ids) 
+      ? apiProduct.branch_ids.map((id: any) => id.toString())
+      : [],
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids) 
+      ? apiProduct.warehouse_ids.map((id: any) => id.toString())
+      : [],
     valuationMethod: apiProduct.valuation_method || 'fifo'
   };
+  
+  console.log('✅ Transformed form data:', {
+    ...result,
+    variantsCount: result.variants.length,
+    selectedSizes: result.selectedSizes,
+    selectedColors: result.selectedColors
+  });
+  
+  return result;
 };
+
+// إعداد اعتراض الطلبات للتصحيح
+api.interceptors.request.use(
+  (config) => {
+    console.log('📤 API Request:', {
+      url: config.url,
+      method: config.method,
+      data: config.data,
+      params: config.params
+    });
+    return config;
+  },
+  (error) => {
+    console.error('📤 Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+api.interceptors.response.use(
+  (response) => {
+    console.log('📥 API Response:', {
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    });
+    return response;
+  },
+  (error) => {
+    console.error('📥 Response Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    });
+    return Promise.reject(error);
+  }
+);
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
@@ -110,12 +217,9 @@ const Inventory: React.FC = () => {
         });
         
         const products = response.data.data || [];
-        console.log('📦 Raw API products:', products);
-        console.log('First product details:', products[0]);
         
         return products;
       } catch (error) {
-        console.error('Error fetching products:', error);
         toast({
           title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
           variant: 'destructive'
@@ -139,7 +243,6 @@ const Inventory: React.FC = () => {
         
         return response.data.data || [];
       } catch (error) {
-        console.error('Error fetching categories:', error);
         toast({
           title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
           variant: 'destructive'
@@ -149,14 +252,71 @@ const Inventory: React.FC = () => {
     },
   });
 
+  const { data: branches = [], isLoading: loadingBranches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/branch/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        return [];
+      }
+    },
+  });
+
+  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/warehouse/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        return [];
+      }
+    },
+  });
+
+  const { isLoading: loadingCategories } = useQuery({
+    queryKey: ['categories-filter'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/category/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        return [];
+      }
+    },
+  });
+
+  const dbCategories = categories;
+
   // استخدم الدالة transformApiProduct من ProductList
   const products: Product[] = dbProducts.map(product => {
     const transformed = transformApiProduct(product);
-    console.log('🔄 Transformed product:', transformed);
     return transformed;
   });
 
-  console.log('🎯 Final products array:', products);
 
   const filteredProducts = useMemo(() => {
     let filtered = products.filter(product => {
@@ -245,60 +405,38 @@ const Inventory: React.FC = () => {
     setShowProductForm(true); 
   };
 
-  const handleEditProduct = async (product: Product) => {
-    try {
-      const response = await api.get(`/product/${product.id}`);
-      const dbProduct = response.data;
-      
-      // استخدم الدالة الجديدة
-      const formData = transformApiProductToFormData(dbProduct);
-      
-      // إذا كان فيه متغيرات، املأها
-      if (formData.hasVariants && product.id) {
-        try {
-          const variantsResponse = await api.get(`/product-variants?product_id=${product.id}`);
-          const existingVariants = variantsResponse.data.data || [];
-          
-          if (existingVariants.length > 0) {
-            const uniqueSizeIds = new Set<string>();
-            const uniqueColorIds = new Set<string>();
-            
-            existingVariants.forEach(v => {
-              if (v.size_id) uniqueSizeIds.add(v.size_id.toString());
-              if (v.color_id) uniqueColorIds.add(v.color_id.toString());
-            });
-            
-            formData.selectedSizes = Array.from(uniqueSizeIds);
-            formData.selectedColors = Array.from(uniqueColorIds);
-            
-            formData.variants = existingVariants.map(v => ({
-              sizeId: v.size_id?.toString(),
-              colorId: v.color_id?.toString(),
-              sku: v.sku || `${formData.sku}-${v.size_id || ''}-${v.color_id || ''}`,
-              barcode: v.barcode || '',
-              stock: v.stock || 0,
-              cost: v.cost || formData.cost,
-              price: v.price || formData.price,
-              enabled: v.is_active ?? true
-            }));
-          }
-        } catch (variantError) {
-          console.warn('Could not fetch variants:', variantError);
-        }
-      }
-      
-      setEditProduct(formData);
-      setShowProductForm(true);
-      
-    } catch (error) {
-      console.error('Error fetching product details:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في جلب بيانات المنتج' : 'Error fetching product details',
-        variant: 'destructive'
-      });
-    }
-  };
+const handleEditProduct = async (product: Product) => {
+  try {
+  
 
+    // فتح النموذج أولاً
+    setShowProductForm(true);
+    
+    // جلب البيانات التفصيلية في الخلفية
+    const response = await api.get(`/product/${product.id}`);
+    
+    const dbProduct = response.data.data;
+    
+    if (!dbProduct) {
+      return;
+    }
+    
+    const formData = transformApiProductToFormData(dbProduct);
+    
+    // تحديث البيانات في النموذج
+    setEditProduct(formData);
+    
+    
+  } catch (error) {
+    toast({
+      title: language === 'ar' ? 'تحذير' : 'Warning',
+      description: language === 'ar' 
+        ? 'تم فتح النموذج ولكن بعض البيانات قد لا تكون محدثة'
+        : 'Form opened but some data may not be current',
+      variant: 'default'
+    });
+  }
+};
   const handleDeleteProduct = () => { 
     toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' }); 
     refetch(); 
@@ -341,95 +479,152 @@ const Inventory: React.FC = () => {
     setShowVariantsModal(true);
   };
 
-  const handleSaveProduct = async (formData: ProductFormData) => {
-    try {
-      // Prepare product data for API
-      const productData = {
-        name: formData.name,
-        name_ar: formData.nameAr || formData.name,
-        description: formData.description || '',
-        description_ar: formData.descriptionAr || '',
-        category_id: formData.categoryId || null,
-        sku: formData.sku,
-        barcode: formData.barcode || null,
-        reorder_level: formData.reorderPoint || 5,
-        image_url: formData.imageUrl || null,
-        cost: formData.cost,
-        price: formData.price,
-        stock: formData.stock,
-        active: formData.status === 'active',
-        has_variants: formData.hasVariants,
-        branch_ids: formData.branchIds || [],
-        warehouse_ids: formData.warehouseIds || [],
-        valuation_method: formData.valuationMethod || 'fifo'
-      };
+const handleSaveProduct = async (formData: ProductFormData) => {
+  try {
+  
 
-      let productId = formData.id;
+    // Prepare product data for API
+    const productData: any = {
+      name: formData.name,
+      description: formData.description || '',
+      category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
+      sku: formData.sku,
+      barcode: formData.barcode || null,
+      reorder_level: formData.reorderPoint || 5,
+      cost: formData.cost || 0,
+      price: formData.price || 0,
+      stock: formData.stock || 0,
+      active: formData.status === 'active',
+      has_variants: formData.hasVariants || false,
+      branch_ids: formData.branchIds && formData.branchIds.length > 0 
+        ? formData.branchIds.map(id => parseInt(id)) 
+        : [],
+      warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0 
+        ? formData.warehouseIds.map(id => parseInt(id)) 
+        : [],
+      valuation_method: formData.valuationMethod || 'fifo',
+      // Always include units array, even if empty
+      units: [] // إضافة array فارغ دائمًا
+    };
 
-      if (productId) {
-        // Update existing product
-        const response = await api.put(`/product/${productId}`, productData);
-        
-        toast({ 
-          title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
-          description: language === 'ar' 
-            ? `تم تحديث المنتج "${formData.name}"`
-            : `Product "${formData.name}" updated`
-        });
-      } else {
-        // Create new product
-        const response = await api.post('/product', productData);
-        productId = response.data.id;
-        
-        toast({ 
-          title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
-          description: language === 'ar' 
-            ? `تم إضافة المنتج "${formData.name}"`
-            : `Product "${formData.name}" added`
-        });
-      }
-
-      // Handle variants separately if product has variants
-      if (formData.hasVariants && productId && formData.variants.length > 0) {
-        try {
-          const enabledVariants = formData.variants.filter(v => v.enabled);
-          
-          if (enabledVariants.length > 0) {
-            const variantsData = enabledVariants.map(variant => ({
-              product_id: productId,
-              size_id: variant.sizeId || null,
-              color_id: variant.colorId || null,
-              sku: variant.sku,
-              barcode: variant.barcode || null,
-              stock: variant.stock || 0,
-              price: variant.price,
-              cost: variant.cost,
-              is_active: true
-            }));
-
-            await api.post('/product-variants', { variants: variantsData });
-            await api.put(`/product/${productId}`, { has_variants: true });
-          }
-        } catch (variantError) {
-          console.warn('Could not save variants, continuing without them:', variantError);
-        }
-      }
-
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
-      refetch();
-      
-    } catch (error: any) {
-      console.error('Error saving product:', error);
-      toast({ 
-        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
-        description: error.response?.data?.message || error.message,
-        variant: 'destructive'
-      });
-      throw error;
+    // إضافة الاسم العربي والوصف العربي
+    if (formData.nameAr && formData.nameAr.trim() !== '') {
+      productData.name_ar = formData.nameAr;
     }
-  };
+    if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
+      productData.description_ar = formData.descriptionAr;
+    }
+
+    // معالجة الصورة - تأكد من الحقل الصحيح
+    if (formData.imageId && formData.imageId > 0) {
+      productData.image = formData.imageId;
+    } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
+      productData.image_url = formData.imageUrl;
+    }
+
+    // Handle variants if product has variants
+    if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
+      try {
+        const enabledVariants = formData.variants.filter(v => v.enabled);
+        
+        if (enabledVariants.length > 0) {
+          
+          // بناء units بشكل صحيح - استخدم unitId بدلاً من sizeId
+          const units: any[] = [];
+          
+          enabledVariants.forEach(variant => {
+            // التصحيح هنا: استخدم variant.unitId بدلاً من variant.sizeId
+            const unitData: any = {
+              unit_id: variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null,
+              cost_price: variant.cost || formData.cost || 0,
+              sell_price: variant.price || formData.price || 0,
+              barcode: variant.barcode || `${formData.sku}-${variant.unitId || ''}-${variant.colorId || ''}`
+            };
+            
+            // إذا كان هناك ألوان، ضعهم في colors array
+            if (variant.colorId && variant.colorId !== '') {
+              unitData.colors = [{
+                color_id: parseInt(variant.colorId),
+                stock: variant.stock || formData.stock || 0
+              }];
+            }
+            
+            units.push(unitData);
+          });
+          
+          
+          // إضافة الـ units إلى البيانات
+          productData.units = units;
+        } else {
+          // إذا المنتج عنده variants لكنهم مش مفعلين
+          productData.units = [];
+        }
+      } catch (variantError) {
+        // نستمر بدون units إذا حصل خطأ
+        productData.units = [];
+      }
+    } else {
+      // المنتج بدون variants
+      productData.units = [];
+    }
+
+    let productId = formData.id;
+    let response;
+
+ 
+
+    if (productId) {
+      // Update existing product
+      console.log('🔄 Updating existing product ID:', productId);
+      response = await api.put(`/product/${productId}`, productData);
+      console.log('✅ Update response:', response.data);
+      
+      toast({ 
+        title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
+        description: language === 'ar' 
+          ? `تم تحديث المنتج "${formData.name}"`
+          : `Product "${formData.name}" updated`
+      });
+    } else {
+      // Create new product
+      response = await api.post('/product', productData);
+      productId = response.data.id;
+      
+      toast({ 
+        title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
+        description: language === 'ar' 
+          ? `تم إضافة المنتج "${formData.name}"`
+          : `Product "${formData.name}" added`
+      });
+    }
+
+    // تحديث البيانات
+    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+    refetch();
+    
+    // إغلاق النموذج
+    setShowProductForm(false);
+    
+  } catch (error: any) {
+    
+    let errorMessage = 'Unknown error';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.errors) {
+      errorMessage = Object.values(error.response.data.errors).flat().join(', ');
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    
+    toast({ 
+      title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+      description: errorMessage,
+      variant: 'destructive'
+    });
+    throw error;
+  }
+};
 
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
@@ -659,13 +854,18 @@ const Inventory: React.FC = () => {
         </Tabs>
       </div>
 
-      <ProductForm 
-        isOpen={showProductForm} 
-        onClose={() => setShowProductForm(false)} 
-        onSave={handleSaveProduct} 
-        categories={categories} 
-        editProduct={editProduct} 
-      />
+    <ProductForm 
+  isOpen={showProductForm} 
+  onClose={() => setShowProductForm(false)} 
+  onSave={handleSaveProduct} 
+  editProduct={editProduct} 
+  branches={branches}
+  warehouses={warehouses}
+  categories={dbCategories} // استخدم dbCategories بدلاً من categories فقط
+  isLoadingBranches={loadingBranches}
+  isLoadingWarehouses={loadingWarehouses}
+  isLoadingCategories={loadingCategories}
+/>
       <BarcodeScanner 
         isOpen={showBarcodeScanner} 
         onClose={() => setShowBarcodeScanner(false)} 

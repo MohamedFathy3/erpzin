@@ -1,4 +1,3 @@
-// components/inventory/VariantMatrix.tsx
 import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
@@ -20,7 +19,7 @@ export interface VariantOption {
 export interface ProductVariant {
   id: string;
   colorId: string;
-  unitId: string; // غيرت من sizeId إلى unitId
+  unitId: string; // تم التغيير من sizeId إلى unitId
   sku: string;
   barcode: string;
   customBarcode: boolean;
@@ -29,7 +28,6 @@ export interface ProductVariant {
   price: number;
   enabled: boolean;
 }
-
 interface UnitPricing {
   unitId: string;
   cost: number;
@@ -107,7 +105,6 @@ const useColors = () => {
           hexCode: color.hex_code || undefined
         }));
       } catch (error) {
-        console.error('Error fetching colors:', error);
         return [];
       }
     }
@@ -149,8 +146,8 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   const activeSizes = sizes.filter(s => selectedSizes.includes(s.id));
   const activeColors = colors.filter(c => selectedColors.includes(c.id));
 
-  const getVariant = (colorId: string, sizeId: string): ProductVariant | undefined => {
-    return variants.find(v => v.colorId === colorId && v.unitId === sizeId);
+  const getVariant = (colorId: string, unitId: string): ProductVariant | undefined => {
+    return variants.find(v => v.colorId === colorId && v.unitId === unitId);
   };
 
   // Get or create unit pricing
@@ -214,7 +211,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
       const newVariant: ProductVariant = {
         id: `${colorId}-${activeUnitId}`,
         colorId,
-        unitId: activeUnitId,
+        unitId: activeUnitId, // استخدام unitId هنا
         sku: generateSKU(baseSku, color?.value || '', unit?.value || ''),
         barcode: pricing.barcode,
         customBarcode: false,
@@ -227,7 +224,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
       onVariantChange([...variants, newVariant]);
     } else if (!existing.enabled) {
       onVariantChange(variants.map(v => 
-        v.colorId === colorId && v.sizeId === activeSizeId
+        v.colorId === colorId && v.unitId === activeUnitId
           ? { ...v, enabled: true, cost: pricing.cost, price: pricing.price }
           : v
       ));
@@ -258,7 +255,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
           newVariants.push({
             id: `${color.id}-${unitId}`,
             colorId: color.id,
-            unitId,
+            unitId, // استخدام unitId هنا
             sku: generateSKU(baseSku, color.value, unit?.value || ''),
             barcode: pricing.barcode,
             customBarcode: false,

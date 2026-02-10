@@ -17,15 +17,20 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import VariantMatrix, { ProductVariant } from './VariantMatrix';
-import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import api from '@/lib/api';
+import FileUploader from '@/components/FileUploader';
 
 interface ProductFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (product: ProductFormData) => void | Promise<void>;
   editProduct?: ProductFormData | null;
+  branches?: any[];
+  warehouses?: any[];
+  categories?: any[];
+  isLoadingBranches?: boolean;
+  isLoadingWarehouses?: boolean;
+  isLoadingCategories?: boolean;
 }
 
 export interface ProductFormData {
@@ -54,26 +59,31 @@ export interface ProductFormData {
 }
 
 export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
+  
   let imageUrl = '';
   let imageId: number | undefined;
   
+  // معالجة الصورة
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
       imageId = apiProduct.image.id;
-      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || '';
+      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || apiProduct.image.url || '';
     } else if (typeof apiProduct.image === 'number') {
       imageId = apiProduct.image;
     }
   } else if (apiProduct.image_url) {
     imageUrl = apiProduct.image_url;
-  } else if (apiProduct.imageUrl) {
-    imageUrl = apiProduct.imageUrl;
   }
-
+  
   // تحويل active (boolean) إلى status (string)
-  const status = apiProduct.active === true ? 'active' : 'inactive';
+  const status = apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
+  
+  // تأكد من أن category_id معالج بشكل صحيح
+  const categoryId = apiProduct.category?.id?.toString() || 
+                     apiProduct.category_id?.toString() || 
+                     '';
 
-  return {
+  const result = {
     id: apiProduct.id?.toString(),
     name: apiProduct.name || '',
     nameAr: apiProduct.name_ar || apiProduct.name || '',
@@ -81,22 +91,28 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     descriptionAr: apiProduct.description_ar || '',
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || '',
-    categoryId: apiProduct.category?.id?.toString() || apiProduct.category_id?.toString() || '',
+    categoryId: categoryId,
     price: Number(apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
-    variants: [],
+    variants: apiProduct.variants || apiProduct.units || [],
     selectedSizes: [],
     selectedColors: [],
     stock: Number(apiProduct.stock) || 0,
     reorderPoint: Number(apiProduct.reorder_level) || 5,
-    status: status, // هنا التحويل المهم
+    status: status,
     imageId,
     imageUrl,
-    branchIds: apiProduct.branch_ids || [],
-    warehouseIds: apiProduct.warehouse_ids || [],
+    branchIds: Array.isArray(apiProduct.branch_ids) 
+      ? apiProduct.branch_ids.map((id: any) => id.toString())
+      : [],
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids) 
+      ? apiProduct.warehouse_ids.map((id: any) => id.toString())
+      : [],
     valuationMethod: apiProduct.valuation_method || 'fifo'
   };
+  
+  return result;
 };
 
 const generateSKU = (): string => {
@@ -110,22 +126,20 @@ const generateBarcode = (): string => {
 };
 
 interface DbCategory {
-  id: string | number; // يمكن أن يكون string أو number
+  id: string | number;
   name: string;
   name_ar: string | null;
   parent_id: string | number | null;
   type?: string;
 }
 
-// تصحيح دالة flattenDbCategories
 const flattenDbCategories = (categories: DbCategory[]): { id: string; name: string; nameAr: string }[] => {
   const result: { id: string; name: string; nameAr: string }[] = [];
   
-  // Filter out categories without valid ID - تصحيح للرقم
+  // Filter out categories without valid ID
   const validCategories = categories.filter(cat => {
     if (cat.id === undefined || cat.id === null) return false;
     
-    // تحقق من أن الـ id ليس NaN أو فارغ
     if (typeof cat.id === 'number') {
       return !isNaN(cat.id) && cat.id > 0;
     } else if (typeof cat.id === 'string') {
@@ -141,7 +155,6 @@ const flattenDbCategories = (categories: DbCategory[]): { id: string; name: stri
     const newPath = path ? `${currentName} > ${path}` : currentName;
     const newPathAr = pathAr ? `${currentNameAr} > ${pathAr}` : currentNameAr;
     
-    // تأكد أن الـ id هو string
     result.push({
       id: category.id.toString(),
       name: newPath,
@@ -157,7 +170,6 @@ const flattenDbCategories = (categories: DbCategory[]): { id: string; name: stri
   const subCategories = validCategories.filter(cat => cat.parent_id && cat.type === 'sub_category');
   subCategories.forEach(subCat => {
     const parent = validCategories.find(cat => {
-      // المقارنة كـ strings لضمان التوافق
       return cat.id.toString() === subCat.parent_id?.toString();
     });
     if (parent) {
@@ -174,122 +186,71 @@ const ProductForm: React.FC<ProductFormProps> = ({
   isOpen,
   onClose,
   onSave,
-  editProduct
+  editProduct,
+  branches = [],
+  warehouses = [],
+  categories = [],
+  isLoadingBranches = false,
+  isLoadingWarehouses = false,
+  isLoadingCategories = false
 }) => {
   const { language } = useLanguage();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageUrlInput, setImageUrlInput] = useState('');
-  const [showUrlInput, setShowUrlInput] = useState(false);
   const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]);
-  const [imageUploadMethod, setImageUploadMethod] = useState<'url' | 'upload' | 'none'>('none');
+  
+  // تأكد أن categories مصفوفة وليست undefined
+  const flatCategories = flattenDbCategories(categories || []);
 
-  // Fetch categories
-  const { data: dbCategories = [], isLoading: loadingCategories } = useQuery({
-    queryKey: ['categories-for-form'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/category/index', {
-          filters: {},
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-        return response.data.data || [];
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        return [];
-      }
-    },
-    enabled: isOpen,
-  });
-
-  // Fetch branches
-  const { data: branches = [], isLoading: loadingBranches } = useQuery({
-    queryKey: ['branches-for-form'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/branch/index', {
-          filters: {},
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-        return response.data.data || [];
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-        return [];
-      }
-    },
-    enabled: isOpen,
-  });
-
-  // Fetch warehouses
-  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
-    queryKey: ['warehouses-for-form'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/warehouse/index', {
-          filters: {},
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-        return response.data.data || [];
-      } catch (error) {
-        console.error('Error fetching warehouses:', error);
-        return [];
-      }
-    },
-    enabled: isOpen,
-  });
-
-  const flatCategories = flattenDbCategories(dbCategories);
-
-  const getInitialFormData = (): ProductFormData => ({
-    name: '',
-    nameAr: '',
-    description: '',
-    descriptionAr: '',
-    sku: generateSKU(),
-    barcode: generateBarcode(),
-    categoryId: '',
-    price: 0,
-    cost: 0,
-    hasVariants: false,
-    variants: [],
-    selectedSizes: [],
-    selectedColors: [],
-    stock: 0,
-    reorderPoint: 5,
-    status: 'active',
-    imageId: undefined,
-    imageUrl: '',
-    branchIds: [],
-    warehouseIds: [],
-    valuationMethod: 'fifo'
-  });
+  const getInitialFormData = (): ProductFormData => {
+    const data = {
+      name: '',
+      nameAr: '',
+      description: '',
+      descriptionAr: '',
+      sku: generateSKU(),
+      barcode: generateBarcode(),
+      categoryId: '',
+      price: 0,
+      cost: 0,
+      hasVariants: false,
+      variants: [],
+      selectedSizes: [],
+      selectedColors: [],
+      stock: 0,
+      reorderPoint: 5,
+      status: 'active' as const,
+      imageId: undefined,
+      imageUrl: '',
+      branchIds: [],
+      warehouseIds: [],
+      valuationMethod: 'fifo' as const
+    };
+    
+    return data;
+  };
 
   const [formData, setFormData] = useState<ProductFormData>(getInitialFormData());
 
+
   useEffect(() => {
+    
     if (isOpen) {
       if (editProduct) {
-        setFormData(editProduct);
-        if (editProduct.imageId) {
-          setImageUploadMethod('upload');
-        } else if (editProduct.imageUrl) {
-          setImageUploadMethod('url');
-        } else {
-          setImageUploadMethod('none');
-        }
+     
+        
+        // تأكد أن الأرقام تتحول بشكل صحيح
+        const processedEditData = {
+          ...editProduct,
+          price: Number(editProduct.price) || 0,
+          cost: Number(editProduct.cost) || 0,
+          stock: Number(editProduct.stock) || 0,
+          reorderPoint: Number(editProduct.reorderPoint) || 5
+        };
+        
+        setFormData(processedEditData);
+        
       } else {
-        setFormData(getInitialFormData());
-        setImageUploadMethod('none');
-        setUploadedImageIds([]);
+        const initialData = getInitialFormData();
+        setFormData(initialData);
       }
     }
   }, [isOpen, editProduct]);
@@ -298,18 +259,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // دالة معالجة تغيير الـ Input للأرقام
   const handleNumberChange = (field: keyof ProductFormData, value: string) => {
-    // إذا كانت القيمة فارغة، ضع 0
+    if (field === 'categoryId') {
+      handleChange(field, value);
+      return;
+    }
+    
     if (value === '' || value === undefined || value === null) {
       handleChange(field, 0);
       return;
     }
     
-    // تحقق من أن القيمة رقمية
     const numValue = parseFloat(value);
     
-    // إذا كانت NaN، ضع 0
     if (isNaN(numValue)) {
       handleChange(field, 0);
     } else {
@@ -317,79 +279,29 @@ const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى اختيار ملف صورة' : 'Please select an image file',
-        variant: 'destructive'
-      });
-      return;
+  const handleImageUploadSuccess = (ids: number[]) => {
+    setUploadedImageIds(ids);
+    if (ids.length > 0) {
+      handleChange('imageId', ids[0]);
+      handleChange('imageUrl', '');
     }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'حجم الصورة يجب أن يكون أقل من 5 ميجابايت' : 'Image size must be less than 5MB',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    setIsUploadingImage(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await api.post('/media', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      const imageData = response.data.data || response.data;
-      const imageId = imageData.id;
-      
-      if (imageId) {
-        setUploadedImageIds([imageId]);
-        handleChange('imageId', imageId);
-        handleChange('imageUrl', '');
-        setImageUploadMethod('upload');
-        
-        toast({
-          title: language === 'ar' ? 'تم الرفع بنجاح' : 'Upload successful',
-          description: language === 'ar' ? 'تم رفع صورة المنتج' : 'Product image uploaded',
-        });
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل رفع الصورة' : 'Failed to upload image',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsUploadingImage(false);
-    }
+    
+    toast({
+      title: language === 'ar' ? 'تم الرفع بنجاح' : 'Upload successful',
+      description: language === 'ar' 
+        ? `تم رفع ${ids.length} صورة` 
+        : `${ids.length} image(s) uploaded`,
+    });
   };
 
-  const handleUrlSubmit = () => {
-    if (imageUrlInput.trim()) {
-      handleChange('imageUrl', imageUrlInput.trim());
-      handleChange('imageId', undefined);
-      setImageUploadMethod('url');
-      setUploadedImageIds([]);
-      setImageUrlInput('');
-      setShowUrlInput(false);
-      
-      toast({
-        title: language === 'ar' ? 'تم الإضافة' : 'Added',
-        description: language === 'ar' ? 'تم إضافة رابط الصورة' : 'Image URL added',
-      });
-    }
+  const handleImageUploadError = (error: Error) => {
+    toast({
+      title: language === 'ar' ? 'خطأ' : 'Error',
+      description: language === 'ar' 
+        ? 'فشل رفع الصورة' 
+        : 'Failed to upload image',
+      variant: 'destructive'
+    });
   };
 
   const handleBranchWarehouseConnection = () => {
@@ -412,7 +324,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const removeImage = () => {
     handleChange('imageId', undefined);
     handleChange('imageUrl', '');
-    setImageUploadMethod('none');
     setUploadedImageIds([]);
     
     toast({
@@ -421,44 +332,47 @@ const ProductForm: React.FC<ProductFormProps> = ({
     });
   };
 
- const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  const productData: any = {
-    name: formData.name,
-    name_ar: formData.nameAr,
-    description: formData.description,
-    description_ar: formData.descriptionAr,
-    sku: formData.sku,
-    barcode: formData.barcode,
-    category_id: formData.categoryId || null,
-    price: formData.price,
-    cost: formData.cost,
-    stock: formData.stock,
-    reorder_level: formData.reorderPoint,
-    active: formData.status === 'active', // تحويل من string إلى boolean
-    has_variants: formData.hasVariants,
-    branch_ids: formData.branchIds,
-    warehouse_ids: formData.warehouseIds,
-    valuation_method: formData.valuationMethod
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+   
+    
+    if (!formData.name.trim()) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' 
+          ? 'اسم المنتج مطلوب' 
+          : 'Product name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (!formData.sku.trim()) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' 
+          ? 'SKU مطلوب' 
+          : 'SKU is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    const productFormData: ProductFormData = {
+      ...formData,
+      price: Number(formData.price) || 0,
+      cost: Number(formData.cost) || 0,
+      stock: Number(formData.stock) || 0,
+      reorderPoint: Number(formData.reorderPoint) || 5,
+    };
+
+    try {
+      await onSave(productFormData);
+    } catch (error) {
+      console.error('Error in form submission:', error);
+    }
   };
-
-  if (formData.imageId) {
-    productData.image = formData.imageId;
-  } else if (formData.imageUrl) {
-    productData.image_url = formData.imageUrl;
-  }
-
-  if (formData.id) {
-    productData.id = formData.id;
-  }
-
-  try {
-    await onSave(productData);
-  } catch (error) {
-    console.error('Error saving product:', error);
-  }
-};
 
   if (!isOpen) return null;
 
@@ -489,112 +403,101 @@ const ProductForm: React.FC<ProductFormProps> = ({
           {/* Product Image */}
           <div className="space-y-3">
             <Label>{language === 'ar' ? 'صورة المنتج' : 'Product Image'}</Label>
-            <div className="flex gap-4 items-start">
-              <div className="relative w-32 h-32 border-2 border-dashed border-border rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center">
-                {getCurrentImage() ? (
-                  <>
-                    <img 
-                      src={getCurrentImage()} 
-                      alt="Product" 
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
-                    >
-                      <X size={14} />
-                    </button>
-                    <a 
-                      href={getCurrentImage()} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="absolute bottom-1 right-1 p-1 bg-primary text-primary-foreground rounded-full hover:bg-primary/90"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  </>
-                ) : (
-                  <ImageIcon className="w-10 h-10 text-muted-foreground" />
-                )}
-              </div>
-              
-              <div className="flex-1 space-y-3">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploadingImage}
-                    className="flex-1"
-                  >
-                    {isUploadingImage ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Upload className="w-4 h-4 mr-2" />
-                    )}
-                    {language === 'ar' ? 'رفع صورة' : 'Upload Image'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowUrlInput(!showUrlInput)}
-                  >
-                    <Link className="w-4 h-4" />
-                  </Button>
+            
+            {(formData.imageUrl || formData.imageId) && (
+              <div className="mb-4">
+                <Label className="mb-2 block">
+                  {language === 'ar' ? 'الصورة الحالية' : 'Current Image'}
+                </Label>
+                <div className="relative w-32 h-32 border-2 border-border rounded-lg overflow-hidden bg-muted/30">
+                  {getCurrentImage() ? (
+                    <>
+                      <img 
+                        src={getCurrentImage()} 
+                        alt="Product" 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).parentElement!.innerHTML = 
+                            '<div class="w-full h-full flex items-center justify-center"><ImageIcon class="w-10 h-10 text-muted-foreground" /></div>';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90"
+                      >
+                        <X size={14} />
+                      </button>
+                      <a 
+                        href={getCurrentImage()} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="absolute bottom-1 right-1 p-1 bg-primary text-primary-foreground rounded-full hover:bg-primary/90"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                
-                {showUrlInput && (
-                  <div className="flex gap-2">
-                    <Input
-                      value={imageUrlInput}
-                      onChange={(e) => setImageUrlInput(e.target.value)}
-                      placeholder={language === 'ar' ? 'أدخل رابط الصورة...' : 'Enter image URL...'}
-                      className="flex-1"
-                    />
-                    <Button type="button" onClick={handleUrlSubmit} size="sm">
-                      {language === 'ar' ? 'إضافة' : 'Add'}
-                    </Button>
-                  </div>
-                )}
-                
-                {imageUploadMethod === 'upload' && formData.imageId && (
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ar' 
-                      ? `تم رفع الصورة (ID: ${formData.imageId})`
-                      : `Image uploaded (ID: ${formData.imageId})`
+              </div>
+            )}
+            
+            <FileUploader
+              label={language === 'ar' ? 'رفع صورة جديدة' : 'Upload New Image'}
+              onUploadSuccess={handleImageUploadSuccess}
+              onUploadError={handleImageUploadError}
+              multiple={false}
+              accept="image/*"
+              maxFiles={1}
+              maxSize={5 * 1024 * 1024}
+              preview={true}
+              uniqueId="product-image-upload"
+            />
+            
+            <div className="mt-3">
+              <Label className="mb-2 block">
+                {language === 'ar' ? 'أو أدخل رابط الصورة' : 'Or Enter Image URL'}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.imageUrl || ''}
+                  onChange={(e) => {
+                    handleChange('imageUrl', e.target.value);
+                    if (e.target.value.trim()) {
+                      handleChange('imageId', undefined);
+                      setUploadedImageIds([]);
                     }
-                  </p>
-                )}
-                
-                {imageUploadMethod === 'url' && formData.imageUrl && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {language === 'ar' 
-                      ? `رابط الصورة: ${formData.imageUrl.substring(0, 50)}...`
-                      : `Image URL: ${formData.imageUrl.substring(0, 50)}...`
-                    }
-                  </p>
-                )}
-                
-                <p className="text-xs text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'الحد الأقصى: 5 ميجابايت - الصيغ: JPG, PNG, GIF, WEBP'
-                    : 'Max: 5MB - Formats: JPG, PNG, GIF, WEBP'
+                  }}
+                  placeholder={
+                    language === 'ar' 
+                      ? 'https://example.com/image.jpg' 
+                      : 'https://example.com/image.jpg'
                   }
-                </p>
+                  className="flex-1"
+                />
+                {formData.imageUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleChange('imageUrl', '')}
+                  >
+                    {language === 'ar' ? 'حذف' : 'Clear'}
+                  </Button>
+                )}
               </div>
             </div>
+            
+            <p className="text-xs text-muted-foreground">
+              {language === 'ar' 
+                ? 'الحد الأقصى: 5 ميجابايت - الصيغ: JPG, PNG, GIF, WEBP. يمكنك رفع صورة أو إدخال رابط.'
+                : 'Max: 5MB - Formats: JPG, PNG, GIF, WEBP. You can upload an image or enter a URL.'
+              }
+            </p>
           </div>
 
           {/* Basic Info */}
@@ -706,13 +609,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
             </div>
           </div>
 
-          {/* Pricing - التصحيح هنا لمنع NaN */}
+          {/* Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>{language === 'ar' ? 'سعر البيع' : 'Selling Price'}</Label>
               <Input
                 type="number"
-                value={formData.price === 0 ? '' : formData.price} // منع عرض 0
+                value={formData.price === 0 ? '' : formData.price}
                 onChange={(e) => handleNumberChange('price', e.target.value)}
                 min={0}
                 step="0.01"
@@ -724,7 +627,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <Label>{language === 'ar' ? 'التكلفة' : 'Cost'}</Label>
               <Input
                 type="number"
-                value={formData.cost === 0 ? '' : formData.cost} // منع عرض 0
+                value={formData.cost === 0 ? '' : formData.cost}
                 onChange={(e) => handleNumberChange('cost', e.target.value)}
                 min={0}
                 step="0.01"
@@ -735,7 +638,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <Label>{language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Point'}</Label>
               <Input
                 type="number"
-                value={formData.reorderPoint === 0 ? '' : formData.reorderPoint} // منع عرض 0
+                value={formData.reorderPoint === 0 ? '' : formData.reorderPoint}
                 onChange={(e) => handleNumberChange('reorderPoint', e.target.value)}
                 min={0}
                 placeholder="5"
@@ -756,7 +659,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
             />
           </div>
 
-          {/* باقي الكود بدون تغيير */}
+          {/* Branches & Warehouses */}
           <Card>
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -779,9 +682,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   <Label className="flex items-center gap-2">
                     <Building2 size={16} className="text-primary" />
                     {language === 'ar' ? 'الفروع' : 'Branches'}
+                    <span className="text-xs text-muted-foreground">
+                      ({formData.branchIds.length} {language === 'ar' ? 'محدد' : 'selected'})
+                    </span>
                   </Label>
                   <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
-                    {loadingBranches ? (
+                    {isLoadingBranches ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
@@ -834,9 +740,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   <Label className="flex items-center gap-2">
                     <Warehouse size={16} className="text-primary" />
                     {language === 'ar' ? 'المستودعات' : 'Warehouses'}
+                    <span className="text-xs text-muted-foreground">
+                      ({formData.warehouseIds.length} {language === 'ar' ? 'محدد' : 'selected'})
+                    </span>
                   </Label>
                   <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
-                    {loadingWarehouses ? (
+                    {isLoadingWarehouses ? (
                       <div className="flex items-center justify-center py-4">
                         <Loader2 className="w-4 h-4 animate-spin" />
                       </div>
@@ -950,11 +859,20 @@ const ProductForm: React.FC<ProductFormProps> = ({
               baseSku={formData.sku}
               basePrice={formData.price}
               baseCost={formData.cost}
-              onVariantChange={(variants) => handleChange('variants', variants)}
+              onVariantChange={(variants) => {
+                console.log('🎯 Variants changed:', variants);
+                handleChange('variants', variants);
+              }}
               selectedSizes={formData.selectedSizes}
               selectedColors={formData.selectedColors}
-              onSizeSelectionChange={(sizes) => handleChange('selectedSizes', sizes)}
-              onColorSelectionChange={(colors) => handleChange('selectedColors', colors)}
+              onSizeSelectionChange={(sizes) => {
+                console.log('📏 Sizes selected:', sizes);
+                handleChange('selectedSizes', sizes);
+              }}
+              onColorSelectionChange={(colors) => {
+                console.log('🎨 Colors selected:', colors);
+                handleChange('selectedColors', colors);
+              }}
             />
           )}
 
