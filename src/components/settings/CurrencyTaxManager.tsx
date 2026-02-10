@@ -133,13 +133,25 @@ const CurrencyTaxManager = () => {
 
   const deleteCurrencyMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete('/currency/delete' + id);
+      console.log("iddddd", id);
+      await api.delete('/currency/delete', {
+        data: { id }
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
       toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' });
+    },
+    onError: (error) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'خطأ في الحذف' : 'Delete failed',
+        variant: 'destructive'
+      });
     }
   });
+
+
 
 
   // Tax mutations
@@ -187,7 +199,9 @@ const CurrencyTaxManager = () => {
 
   const deleteTaxMutation = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete('branch/delete' + id);
+      await api.delete('tax/delete ', {
+        data: { id }
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
