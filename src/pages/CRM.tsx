@@ -361,6 +361,17 @@ const CRM = () => {
   // Add customer mutation
   const addCustomerMutation = useMutation({
     mutationFn: async () => {
+
+      const response = await api.post('/customer', {
+        name: newCustomer.name,
+        name_ar: newCustomer.name_ar || null,
+        phone: newCustomer.phone || null,
+        email: newCustomer.email || null,
+        address: newCustomer.address || null
+      });
+      
+      return response.data;
+
       const { data, error } = await supabase
         .from('customers')
         .insert({
@@ -544,14 +555,14 @@ const CRM = () => {
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Star size={16} className="text-warning fill-warning" />
-                                <span className="font-semibold">{customer.loyalty_points || 0}</span>
+                                <span className="font-semibold">{customer.point || 0}</span>
                                 <Badge className={`${tier.color} text-white text-xs flex items-center gap-1`}>
                                   {tier.icon}
                                   {tier.label}
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>{Number(customer.total_purchases || 0).toLocaleString()} YER</TableCell>
+                            <TableCell>{Number(customer.last_paid_amount || 0).toLocaleString()} YER</TableCell>
                             <TableCell>
                               <Button
                                 variant="outline"
@@ -656,7 +667,7 @@ const CRM = () => {
               <DialogTitle>{t.newCustomer}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label>{t.name} *</Label>
                   <Input
@@ -665,6 +676,9 @@ const CRM = () => {
                     onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
                   />
                 </div>
+
+               
+
                 <div className="space-y-2">
                   <Label>{t.nameAr}</Label>
                   <Input
