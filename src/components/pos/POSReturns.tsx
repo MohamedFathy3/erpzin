@@ -6,16 +6,15 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import {
@@ -30,11 +29,13 @@ import {
   Minus,
   Trash2,
   FileSearch,
-  Settings
+  Palette,
+  Ruler
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
+// ==================== Types ====================
 interface SaleItem {
   id: string;
   product_id: string;
@@ -42,6 +43,8 @@ interface SaleItem {
   unit_price: number;
   total_price: number;
   discount: number;
+  color?: string | null;
+  size?: string | null;
   product?: {
     id: string;
     name: string;
@@ -71,6 +74,8 @@ interface ReturnItem extends SaleItem {
   selected: boolean;
   return_quantity: number;
   return_reason: string;
+  return_color?: string | null;
+  return_size?: string | null;
 }
 
 interface POSReturnsProps {
@@ -88,6 +93,9 @@ interface DirectReturnItem {
   quantity: number;
   unit_price: number;
   reason: string;
+  color?: string | null;
+  size?: string | null;
+  quantity_sold?: number;
   product: {
     id: number;
     name: string;
@@ -101,8 +109,6 @@ interface DirectReturnItem {
       icon?: string;
       parent_id?: number | null;
       type?: string;
-      createdAt?: string;
-      updatedAt?: string;
     };
     sku: string;
     barcode?: string;
@@ -111,12 +117,25 @@ interface DirectReturnItem {
     price: string;
     cost?: string | null;
     active?: boolean;
-    created_at?: string;
-    updated_at?: string;
   };
 }
 
-// Direct Return Invoice Component (POS-style)
+interface InvoiceProduct {
+  id: number;
+  name: string;
+  name_ar?: string | null;
+  sku: string;
+  barcode?: string;
+  price: string;
+  image_url?: string | null;
+  stock?: number;
+  quantity_sold: number;
+  invoice_price: string;
+  color?: string | null;
+  size?: string | null;
+}
+
+// ==================== Direct Return Component ====================
 const DirectReturnInvoice: React.FC<{
   onComplete: (amount: number) => void;
   currentShiftId?: string;
@@ -124,80 +143,116 @@ const DirectReturnInvoice: React.FC<{
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
-  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount, getTaxRateName, getCurrencyName } = useCurrencyTax();
+  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount } = useCurrencyTax();
+  
+  // State
   const [searchQuery, setSearchQuery] = useState('');
-  const [invoice_number, setInvoiceNumber] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [items, setItems] = useState<DirectReturnItem[]>([]);
   const [returnReason, setReturnReason] = useState('');
   const [refundMethod, setRefundMethod] = useState('cash');
   const [taxRateId, setTaxRateId] = useState('');
   const [currencyId, setCurrencyId] = useState('');
   const [searchMode, setSearchMode] = useState<'product' | 'invoice'>('invoice');
+  const [showResults, setShowResults] = useState(false);
 
-  // Set defaults when data loads
+  // Set defaults
   useEffect(() => {
-    if (defaultTaxRate && !taxRateId) {
-      setTaxRateId(defaultTaxRate.id);
-    }
-    if (defaultCurrency && !currencyId) {
-      setCurrencyId(defaultCurrency.id);
-    }
+    if (defaultTaxRate && !taxRateId) setTaxRateId(defaultTaxRate.id);
+    if (defaultCurrency && !currencyId) setCurrencyId(defaultCurrency.id);
   }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
-  // Search invoice products using API route
-  const { data: products, isLoading: isSearching } = useQuery({
-    queryKey: ['invoice-products-for-return', invoice_number],
+  // ========== Search Invoice by Number ==========
+  const { data: invoiceData, isLoading: isSearchingInvoice } = useQuery({
+    queryKey: ['invoice-search', invoiceNumber],
     queryFn: async () => {
-      if (!invoice_number.trim()) return [];
+      if (!invoiceNumber.trim()) return null;
       
       try {
-        // Use POST method since we need to send body data
         const response = await api.get('/invoices/search', {
-          params: {
-            invoice_number: invoice_number
-          }
+          params: { invoice_number: invoiceNumber }
         });
-        return response.data?.data || [];
-      } catch (error) {
-        console.error('Error searching invoice:', error);
-        toast.error('خطأ في البحث عن الفاتورة');
-        return [];
+        
+        setShowResults(true);
+        return response.data;
+      } catch (error: any) {
+        setShowResults(true);
+        if (error.response?.status === 404) {
+          toast.error('الفاتورة غير موجودة');
+        } else {
+          toast.error('خطأ في البحث عن الفاتورة');
+        }
+        return null;
       }
     },
-    enabled: !!invoice_number && invoice_number.length > 0 && searchMode === 'invoice',
+    enabled: !!invoiceNumber && invoiceNumber.length > 0 && searchMode === 'invoice',
   });
 
-  // Search regular products - REMOVED SUPAVASE CALL
-  const { data: regularProducts } = useQuery({
-    queryKey: ['regular-products', searchQuery],
+  // Extract products from invoice with color and size
+  const invoiceProducts: InvoiceProduct[] = invoiceData?.data?.items?.map((item: any) => ({
+    ...item.product,
+    id: item.product.id,
+    name: item.product.name,
+    name_ar: item.product.name_ar,
+    sku: item.product.sku,
+    barcode: item.product.barcode,
+    price: item.product.price,
+    image_url: item.product.image_url,
+    stock: item.product.stock,
+    quantity_sold: item.quantity,
+    invoice_price: item.price,
+    color: item.color,
+    size: item.size,
+  })) || [];
+
+  // ========== Search Regular Products ==========
+  const { data: regularProducts, isLoading: isSearchingProducts } = useQuery({
+    queryKey: ['product-search', searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim() || searchMode !== 'product') return [];
       
       try {
-        // Use your existing API endpoint for product search
         const response = await api.get('/products/search', {
-          params: {
-            query: searchQuery
-          }
+          params: { name: searchQuery }
         });
+        setShowResults(true);
         return response.data?.data || [];
       } catch (error) {
         console.error('Error searching products:', error);
+        setShowResults(true);
         return [];
       }
     },
     enabled: searchMode === 'product' && !!searchQuery,
   });
 
-  const filteredProducts = searchMode === 'invoice' 
-    ? (products || [])
-    : (regularProducts || []);
+  // Determine which products to show
+  const filteredProducts = searchMode === 'invoice' ? invoiceProducts : (regularProducts || []);
+  const isSearching = searchMode === 'invoice' ? isSearchingInvoice : isSearchingProducts;
 
+  // ========== Item Management ==========
   const addItem = (product: any) => {
-    const existing = items.find(i => i.product_id === product.id);
+    const unitPrice = searchMode === 'invoice' 
+      ? parseFloat(product.invoice_price || product.price || '0')
+      : parseFloat(product.price || '0');
+
+    const quantitySold = searchMode === 'invoice' ? product.quantity_sold : undefined;
+
+    // Check for existing item with same product, color, and size
+    const existing = items.find(i => 
+      i.product_id === product.id && 
+      i.color === product.color &&
+      i.size === product.size
+    );
+    
     if (existing) {
+      if (quantitySold && existing.quantity + 1 > quantitySold) {
+        toast.error(`لا يمكن إرجاع أكثر من ${quantitySold} قطعة من هذا المنتج`);
+        return;
+      }
+      
       setItems(items.map(i =>
-        i.product_id === product.id
+        i.product_id === product.id && i.color === product.color && i.size === product.size
           ? { ...i, quantity: i.quantity + 1 }
           : i
       ));
@@ -208,48 +263,87 @@ const DirectReturnInvoice: React.FC<{
         product_name: product.name_ar || product.name,
         sku: product.sku || 'N/A',
         quantity: 1,
-        unit_price: parseFloat(product.price || '0'),
+        unit_price: unitPrice,
         reason: '',
-        product: product
+        color: product.color || null,
+        size: product.size || null,
+        quantity_sold: quantitySold,
+        product: {
+          ...product,
+          price: product.price?.toString() || '0',
+          image_url: product.image_url,
+          imageUrl: product.imageUrl
+        }
       }]);
     }
+    
+    // Clear search and close dropdown
     setSearchQuery('');
-    setInvoiceNumber('');
+    setShowResults(false);
+    
+    const productName = product.name_ar || product.name;
+    const variant = product.color || product.size 
+      ? ` (${product.color || ''} ${product.size || ''})`.trim()
+      : '';
+    toast.success(`تم إضافة ${productName}${variant}`);
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    setItems(items.map(i => {
-      if (i.id === id) {
-        const newQty = i.quantity + delta;
-        return newQty > 0 ? { ...i, quantity: newQty } : i;
-      }
-      return i;
-    }).filter(i => i.quantity > 0));
+    setItems(prev => {
+      const newItems = prev.map(item => {
+        if (item.id === id) {
+          const newQty = item.quantity + delta;
+          
+          if (item.quantity_sold && newQty > item.quantity_sold) {
+            toast.error(`لا يمكن إرجاع أكثر من ${item.quantity_sold} قطعة`);
+            return item;
+          }
+          
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter((item): item is DirectReturnItem => item !== null);
+      
+      return newItems;
+    });
   };
 
   const removeItem = (id: string) => {
-    setItems(items.filter(i => i.id !== id));
+    setItems(prev => prev.filter(item => item.id !== id));
   };
 
+  const updateItemColor = (id: string, color: string) => {
+    setItems(prev => prev.map(item =>
+      item.id === id ? { ...item, color } : item
+    ));
+  };
+
+  const updateItemSize = (id: string, size: string) => {
+    setItems(prev => prev.map(item =>
+      item.id === id ? { ...item, size } : item
+    ));
+  };
+
+  // ========== Calculations ==========
   const subtotal = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
   const selectedTaxRate = taxRates.find(t => t.id === taxRateId);
   const taxPercent = selectedTaxRate?.rate || 0;
   const taxAmount = (subtotal * taxPercent) / 100;
   const total = subtotal + taxAmount;
 
-  // Process direct return using API and store in database
+  // ========== Process Return ==========
   const processReturnMutation = useMutation({
     mutationFn: async () => {
       if (items.length === 0) throw new Error('لم يتم إضافة أي صنف');
 
-      // Prepare payload for /api/invoice-return/store in the required format
-      // Remove invoice_number since API generates its own ID
-      const payload = {
-        reason: returnReason,
+      // بناء الـ payload حسب الـ backend المطلوب
+      const payload: any = {
+        refund_method: refundMethod, // مهم جداً: refund_method منفصل
+        reason: returnReason || 'مرتجع بدون سبب',
         items: items.map(item => ({
           product_id: item.product_id,
-          color: null, // Not available in direct returns
-          size: null,  // Not available in direct returns
+          color: item.color || null,
+          size: item.size || null,
           quantity: item.quantity,
           price: item.unit_price
         })),
@@ -259,67 +353,51 @@ const DirectReturnInvoice: React.FC<{
         }]
       };
 
-      // Call the API endpoint first
-      const apiResponse = await api.post('/invoice-return/store', payload);
+      // فقط في حالة البحث بفاتورة وإذا فيه رقم فاتورة نبعته
+      if (searchMode === 'invoice' && invoiceNumber) {
+        payload.invoice_number = invoiceNumber;
+      }
 
-      // Get the invoice ID from API response (this is the unique identifier)
+      console.log('📤 Sending payload to API:', payload);
+
+      const apiResponse = await api.post('/invoice-return/store', payload);
       const invoiceId = apiResponse.data?.data?.id;
 
       if (!invoiceId) {
-        throw new Error('فشل في الحصول على معرف الفاتورة من الـ API');
-      }
-
-      // Store the return invoice in Supabase for future retrieval using API invoice ID
-      const { data: returnRecord, error: returnError } = await supabase
-        .from('pos_returns')
-        .insert({
-          api_invoice_id: invoiceId.toString(), // Use API invoice ID as unique identifier
-          return_number: invoiceId.toString(), // Also store as return number for compatibility
-          original_sale_id: null, // Direct return, no original sale
-          reason: returnReason,
-          refund_method: refundMethod,
-          total_amount: total,
-          shift_id: currentShiftId || null,
-          processed_by: null // Will be set by auth context if needed
-        })
-        .select()
-        .single();
-
-      if (returnError) {
-        console.warn('Error storing return in database:', returnError);
-        // Don't throw error here, API call was successful
-      } else {
-        // Store return items in database
-        const { error: itemsError } = await supabase
-          .from('pos_return_items')
-          .insert(items.map(item => ({
-            return_id: returnRecord.id,
-            product_id: item.product_id.toString(),
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.unit_price * item.quantity,
-            reason: item.reason || returnReason
-          })));
-
-        if (itemsError) {
-          console.warn('Error storing return items in database:', itemsError);
-        }
+        throw new Error('فشل في الحصول على معرف الفاتورة');
       }
 
       return apiResponse.data;
     },
-    onSuccess: (response) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['active-shift'] });
       toast.success('تم إنشاء فاتورة المرتجع بنجاح');
       onComplete(total);
+      
+      // Clear form
+      setItems([]);
+      setInvoiceNumber('');
+      setReturnReason('');
+      setRefundMethod('cash');
     },
-    onError: (error: Error) => {
-      toast.error('خطأ: ' + error.message);
+    onError: (error: any) => {
+      console.error('❌ API Error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'خطأ في إنشاء فاتورة المرتجع');
     }
   });
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowResults(false);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // ========== Render ==========
   return (
     <div className="h-full flex flex-col gap-4">
       {/* Search Mode Toggle */}
@@ -327,7 +405,13 @@ const DirectReturnInvoice: React.FC<{
         <Button
           variant={searchMode === 'invoice' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setSearchMode('invoice')}
+          onClick={() => {
+            setSearchMode('invoice');
+            setSearchQuery('');
+            setInvoiceNumber('');
+            setItems([]);
+            setShowResults(false);
+          }}
           className="rounded-lg"
         >
           <Receipt className="h-4 w-4 me-2" />
@@ -336,7 +420,13 @@ const DirectReturnInvoice: React.FC<{
         <Button
           variant={searchMode === 'product' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setSearchMode('product')}
+          onClick={() => {
+            setSearchMode('product');
+            setSearchQuery('');
+            setInvoiceNumber('');
+            setItems([]);
+            setShowResults(false);
+          }}
           className="rounded-lg"
         >
           <Package className="h-4 w-4 me-2" />
@@ -345,96 +435,204 @@ const DirectReturnInvoice: React.FC<{
       </div>
 
       {/* Search Input */}
-      <div className="relative">
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
         <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
         {searchMode === 'invoice' ? (
-          <Input
-            placeholder="أدخل رقم الفاتورة للبحث..."
-            value={invoice_number}
-            onChange={(e) => setInvoiceNumber(e.target.value)}
-            className="h-12 ps-12 text-base rounded-xl"
-          />
+          <div className="relative">
+            <Input
+              placeholder="أدخل رقم الفاتورة للبحث..."
+              value={invoiceNumber}
+              onChange={(e) => {
+                setInvoiceNumber(e.target.value);
+                setShowResults(true);
+              }}
+              onFocus={() => setShowResults(true)}
+              className="h-12 ps-12 pe-10 text-base rounded-xl"
+              autoFocus
+            />
+            {invoiceNumber && (
+              <X
+                className="absolute end-4 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4 cursor-pointer hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInvoiceNumber('');
+                  setItems([]);
+                  setShowResults(false);
+                  queryClient.setQueryData(['invoice-search', invoiceNumber], null);
+                }}
+              />
+            )}
+          </div>
         ) : (
-          <Input
-            placeholder="ابحث عن المنتج بالاسم، SKU أو الباركود..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 ps-12 text-base rounded-xl"
-          />
-        )}
-
-        {/* Search Results Dropdown */}
-        {(searchMode === 'invoice' ? invoice_number : searchQuery) && filteredProducts.length > 0 && (
-          <div className="absolute top-full start-0 end-0 mt-1 bg-background border rounded-xl shadow-lg z-50 max-h-96 overflow-auto">
-            {isSearching ? (
-              <div className="p-4 text-center">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">جاري البحث...</p>
-              </div>
-            ) : (
-              filteredProducts.map(product => (
-                <div
-                  key={product.id}
-                  onClick={() => addItem(product)}
-                  className="p-4 hover:bg-muted cursor-pointer border-b last:border-b-0"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
-                      {product.imageUrl || product.image_url ? (
-                        <img
-                          src={product.imageUrl || product.image_url}
-                          alt={product.name}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                      ) : (
-                        <Package className="h-6 w-6 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-base">{product.name_ar || product.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {product.sku || 'N/A'} • {product.barcode || 'N/A'}
-                      </div>
-                      {product.category && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          📁 {product.category.name}
-                        </div>
-                      )}
-                      {product.description && (
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {product.description}
-                        </div>
-                      )}
-                      <div className="text-xs text-muted-foreground mt-1">
-                        المخزون: {product.stock || 0} • إعادة الطلب: {product.reorder_level || 0}
-                      </div>
-                    </div>
-                    <div className="text-left flex-shrink-0">
-                      <div className="font-bold text-lg text-primary">{formatCurrency(product.price || '0')}</div>
-                      {product.cost && (
-                        <div className="text-xs text-muted-foreground">التكلفة: {formatCurrency(product.cost)}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
+          <div className="relative">
+            <Input
+              placeholder="ابحث عن المنتج بالاسم، SKU أو الباركود..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowResults(true);
+              }}
+              onFocus={() => setShowResults(true)}
+              className="h-12 ps-12 pe-10 text-base rounded-xl"
+              autoFocus
+            />
+            {searchQuery && (
+              <X
+                className="absolute end-4 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4 cursor-pointer hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearchQuery('');
+                  setShowResults(false);
+                }}
+              />
             )}
           </div>
         )}
 
-        {/* No Results */}
-        {(searchMode === 'invoice' ? invoice_number : searchQuery) && !isSearching && filteredProducts.length === 0 && (
-          <div className="absolute top-full start-0 end-0 mt-1 bg-background border rounded-xl shadow-lg z-50 p-4">
-            <div className="text-center text-muted-foreground">
-              <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>لم يتم العثور على نتائج</p>
+        {/* Search Results Dropdown - مع علامة X للقفل */}
+        {showResults && (searchMode === 'invoice' ? invoiceNumber : searchQuery) && (
+          <div className="absolute top-full start-0 end-0 mt-1 bg-background border rounded-xl shadow-lg z-50">
+            {/* Header with close button */}
+            <div className="flex items-center justify-between p-2 border-b bg-muted/30">
+              <span className="text-sm font-medium px-2">
+                {searchMode === 'invoice' ? 'نتائج البحث عن فاتورة' : 'نتائج البحث عن منتجات'}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowResults(false);
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Results */}
+            <div className="max-h-80 overflow-auto">
+              {isSearching ? (
+                <div className="p-8 text-center">
+                  <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-sm text-muted-foreground mt-3">جاري البحث...</p>
+                </div>
+              ) : filteredProducts.length > 0 ? (
+                <>
+                  {/* Invoice Header */}
+                  {searchMode === 'invoice' && invoiceData?.data && (
+                    <div className="p-4 bg-primary/5 border-b">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-bold text-lg">{invoiceData.data.invoice_number}</div>
+                          <div className="text-sm text-muted-foreground">
+                            العميل: {invoiceData.data.customer?.name || 'غير محدد'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            تاريخ: {format(new Date(invoiceData.data.created_at), 'yyyy/MM/dd HH:mm', { locale: ar })}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-primary">
+                            {formatCurrency(invoiceData.data.total_amount)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {invoiceData.data.items?.length || 0} منتج
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Products */}
+                  {filteredProducts.map((product) => (
+                    <div
+                      key={`${product.id}-${product.color || ''}-${product.size || ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addItem(product);
+                      }}
+                      className="p-4 hover:bg-muted cursor-pointer border-b last:border-b-0 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {product.image_url || product.imageUrl ? (
+                            <img
+                              src={product.image_url || product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                              }}
+                            />
+                          ) : (
+                            <Package className="h-6 w-6 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-base">
+                            {product.name_ar || product.name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {product.sku || 'N/A'}
+                          </div>
+                          
+                          {/* Color and Size */}
+                          {(product.color || product.size) && (
+                            <div className="flex items-center gap-2 mt-1 text-xs">
+                              {product.color && (
+                                <span className="bg-primary/10 text-primary px-2 py-1 rounded-md">
+                                  <Palette className="h-3 w-3 inline me-1" />
+                                  {product.color}
+                                </span>
+                              )}
+                              {product.size && (
+                                <span className="bg-primary/10 text-primary px-2 py-1 rounded-md">
+                                  <Ruler className="h-3 w-3 inline me-1" />
+                                  {product.size}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {searchMode === 'invoice' && product.quantity_sold && (
+                            <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-md inline-block mt-2">
+                              الكمية المباعة: {product.quantity_sold}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-left flex-shrink-0">
+                          <div className="font-bold text-lg text-primary">
+                            {formatCurrency(
+                              searchMode === 'invoice' 
+                                ? (product.invoice_price || product.price)
+                                : product.price
+                            )}
+                          </div>
+                          {searchMode === 'invoice' && product.price !== product.invoice_price && (
+                            <div className="text-xs text-muted-foreground line-through">
+                              {formatCurrency(product.price)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="p-8 text-center">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
+                  <p className="text-muted-foreground">لم يتم العثور على نتائج</p>
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Items List - POS Style */}
-      <ScrollArea className="flex-1 border rounded-xl">
+      {/* Items List */}
+      <ScrollArea className="flex-1 border rounded-xl bg-background">
         {items.length === 0 ? (
           <div className="flex items-center justify-center h-48 text-muted-foreground">
             <div className="text-center">
@@ -450,49 +648,91 @@ const DirectReturnInvoice: React.FC<{
         ) : (
           <div className="p-3 space-y-2">
             {items.map(item => (
-              <div key={item.id} className="p-4 rounded-xl bg-muted/30 border flex items-start gap-4">
-                <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
-                  {item.product.imageUrl || item.product.image_url ? (
-                    <img
-                      src={item.product.imageUrl || item.product.image_url}
-                      alt={item.product_name}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <Package className="h-8 w-8 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-lg">{item.product_name}</div>
-                  <div className="text-sm text-muted-foreground">{item.sku} • {item.product.barcode || 'N/A'}</div>
-                  {item.product.category && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      📁 {item.product.category.name}
-                    </div>
-                  )}
-                  {item.product.description && (
-                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {item.product.description}
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground mt-1">
-                    المخزون: {item.product.stock || 0} • إعادة الطلب: {item.product.reorder_level || 0}
+              <div key={item.id} className="p-4 rounded-xl bg-muted/30 border flex flex-col gap-3">
+                <div className="flex items-start gap-4">
+                  <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {item.product.imageUrl || item.product.image_url ? (
+                      <img
+                        src={item.product.imageUrl || item.product.image_url}
+                        alt={item.product_name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                        }}
+                      />
+                    ) : (
+                      <Package className="h-8 w-8 text-muted-foreground" />
+                    )}
                   </div>
-                  <div className="text-primary font-semibold mt-2">
-                    {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.unit_price * item.quantity)}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-lg">{item.product_name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {item.sku}
+                    </div>
+                    
+                    {/* Color and Size Display/Edit */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-1">
+                        <Palette className="h-3 w-3 text-muted-foreground" />
+                        <Input
+                          placeholder="اللون"
+                          value={item.color || ''}
+                          onChange={(e) => updateItemColor(item.id, e.target.value)}
+                          className="h-8 w-24 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Ruler className="h-3 w-3 text-muted-foreground" />
+                        <Input
+                          placeholder="المقاس"
+                          value={item.size || ''}
+                          onChange={(e) => updateItemSize(item.id, e.target.value)}
+                          className="h-8 w-24 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    
+                    {item.quantity_sold && (
+                      <div className="text-xs text-muted-foreground mt-2">
+                        الكمية المباعة: {item.quantity_sold}
+                      </div>
+                    )}
+                    <div className="text-primary font-semibold mt-2">
+                      {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.unit_price * item.quantity)}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button size="icon" variant="outline" onClick={() => updateQuantity(item.id, -1)} className="h-8 w-8">
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-8 text-center font-bold">{item.quantity}</span>
-                  <Button size="icon" variant="outline" onClick={() => updateQuantity(item.id, 1)} className="h-8 w-8">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => removeItem(item.id)} className="h-8 w-8 text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => updateQuantity(item.id, -1)} 
+                      className="h-8 w-8"
+                      disabled={item.quantity <= 1}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="w-8 text-center font-bold">{item.quantity}</span>
+                    <Button 
+                      size="icon" 
+                      variant="outline" 
+                      onClick={() => updateQuantity(item.id, 1)} 
+                      className="h-8 w-8"
+                      disabled={item.quantity_sold ? item.quantity >= item.quantity_sold : false}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={() => removeItem(item.id)} 
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -500,7 +740,7 @@ const DirectReturnInvoice: React.FC<{
         )}
       </ScrollArea>
 
-      {/* Return Reason & Refund Method */}
+      {/* Return Details */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-sm mb-2 block">سبب الإرجاع</Label>
@@ -518,21 +758,33 @@ const DirectReturnInvoice: React.FC<{
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="cash">نقداً</SelectItem>
-              <SelectItem value="card">بطاقة</SelectItem>
-              <SelectItem value="credit">رصيد للعميل</SelectItem>
+              <SelectItem value="cash">💵 نقداً</SelectItem>
+              <SelectItem value="card">💳 بطاقة</SelectItem>
+              <SelectItem value="wallet">📱 محفظة</SelectItem>
+              <SelectItem value="credit">👤 رصيد للعميل</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Footer - Totals & Action */}
+      {/* Invoice Number Display - يظهر فقط في وضع الفاتورة */}
+      {searchMode === 'invoice' && invoiceNumber && (
+        <div className="text-sm bg-primary/10 text-primary p-3 rounded-lg">
+          <span className="font-medium">📄 رقم الفاتورة الأصلية:</span> {invoiceNumber}
+        </div>
+      )}
+
+      {/* Footer */}
       <div className="p-4 bg-sidebar rounded-xl text-white">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-4 text-sm text-white/70">
-              <span>{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'} {formatAmount(subtotal, currencies.find(c => c.id === currencyId)?.code)}</span>
-              <span>{language === 'ar' ? 'الضريبة' : 'Tax'} ({taxPercent}%): {formatAmount(taxAmount, currencies.find(c => c.id === currencyId)?.code)}</span>
+              <span>
+                {language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'} {formatAmount(subtotal, currencies.find(c => c.id === currencyId)?.code)}
+              </span>
+              <span>
+                {language === 'ar' ? 'الضريبة' : 'Tax'} ({taxPercent}%): {formatAmount(taxAmount, currencies.find(c => c.id === currencyId)?.code)}
+              </span>
             </div>
             <div className="text-2xl font-bold">
               {language === 'ar' ? 'الإجمالي:' : 'Total:'} {formatAmount(total, currencies.find(c => c.id === currencyId)?.code)}
@@ -553,6 +805,7 @@ const DirectReturnInvoice: React.FC<{
   );
 };
 
+// ==================== Main POSReturns Component ====================
 const POSReturns: React.FC<POSReturnsProps> = ({
   isOpen,
   onClose,
@@ -561,23 +814,16 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount, getTaxRateName, getCurrencyName } = useCurrencyTax();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
   const [returnReason, setReturnReason] = useState('');
   const [refundMethod, setRefundMethod] = useState('cash');
-  const [step, setStep] = useState<'invoice' | 'search' | 'select' | 'confirm' | 'invoice-search'>('invoice');
-  const [allowDirectReturn, setAllowDirectReturn] = useState(true);
+  const [step, setStep] = useState<'invoice' | 'search' | 'select' | 'invoice-search'>('invoice');
 
-  // Set defaults when data loads
-  useEffect(() => {
-    // يمكن إضافة منطق إضافي هنا إذا لزم الأمر
-  }, []);
-
-  // Search for invoice
+  // ========== Search Sales ==========
   const { data: searchResults, isLoading: isSearching, refetch: searchInvoice } = useQuery({
-    queryKey: ['search-invoice', searchQuery],
+    queryKey: ['search-sale', searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim()) return [];
 
@@ -602,28 +848,55 @@ const POSReturns: React.FC<POSReturnsProps> = ({
     enabled: false,
   });
 
-  // Process return mutation
+  // ========== Process Return ==========
   const processReturnMutation = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
+      
       if (selectedItems.length === 0) throw new Error('لم يتم تحديد أي صنف للإرجاع');
+      if (!selectedSale) throw new Error('لم يتم اختيار فاتورة');
 
-      // Calculate totals
-      const subtotal = selectedItems.reduce((sum, item) =>
+      const subtotal = selectedItems.reduce((sum, item) => 
         sum + (item.unit_price * item.return_quantity), 0
       );
-      const taxPercent = 0; // Adjust as needed
-      const taxAmount = (subtotal * taxPercent) / 100;
-      const totalAmount = subtotal + taxAmount;
+      const totalAmount = subtotal;
 
-      // Generate return number
+      // Prepare API payload - مع refund_method منفصل
+      const payload = {
+        invoice_number: selectedSale.invoice_number,
+        refund_method: refundMethod, // مهم جداً: refund_method منفصل
+        reason: returnReason || 'مرتجع بدون سبب',
+        items: selectedItems.map(item => ({
+          product_id: parseInt(item.product_id),
+          color: item.return_color || item.color || null,
+          size: item.return_size || item.size || null,
+          quantity: item.return_quantity,
+          price: item.unit_price
+        })),
+        payments: [{
+          method: refundMethod,
+          amount: totalAmount
+        }]
+      };
+
+      console.log('📤 Sending return payload with refund_method:', payload.refund_method);
+
+      // Call API
+      const apiResponse = await api.post('/invoice-return/store', payload);
+      
+      if (!apiResponse.data?.data?.id) {
+        throw new Error('فشل في الحصول على معرف الفاتورة من API');
+      }
+
+      // Generate return number for Supabase
       const { data: returnNumber } = await supabase.rpc('generate_return_number');
 
-      // Create return record
+      // Create return record in Supabase
       const { data: returnRecord, error: returnError } = await supabase
         .from('pos_returns')
         .insert({
+          api_invoice_id: apiResponse.data.data.id.toString(),
           return_number: returnNumber,
           original_sale_id: selectedSale.id,
           original_invoice_number: selectedSale.invoice_number,
@@ -631,11 +904,11 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           customer_id: selectedSale.customer?.id || null,
           return_type: selectedItems.length === selectedSale.sale_items.length ? 'full' : 'partial',
           subtotal,
-          tax_amount: taxAmount,
+          tax_amount: 0,
           total_amount: totalAmount,
           refund_method: refundMethod,
           reason: returnReason,
-          processed_by: user.id
+          processed_by: user?.id
         })
         .select()
         .single();
@@ -653,12 +926,14 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           quantity: item.return_quantity,
           unit_price: item.unit_price,
           total_price: item.unit_price * item.return_quantity,
+          color: item.return_color || item.color,
+          size: item.return_size || item.size,
           reason: item.return_reason || returnReason
         })));
 
       if (itemsError) throw itemsError;
 
-      // Update product stock (increase)
+      // Update stock
       for (const item of selectedItems) {
         const { data: currentProduct } = await supabase
           .from('products')
@@ -674,7 +949,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
         }
       }
 
-      // Update shift returns total if shift exists
+      // Update shift totals
       if (currentShiftId) {
         const { data: currentShift } = await supabase
           .from('pos_shifts')
@@ -692,7 +967,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
         }
       }
 
-      return { returnRecord, totalAmount };
+      return { returnRecord, totalAmount, apiResponse: apiResponse.data };
     },
     onSuccess: ({ totalAmount }) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -701,11 +976,13 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       onReturnComplete?.(totalAmount);
       handleClose();
     },
-    onError: (error: Error) => {
-      toast.error('خطأ في معالجة المرتجع: ' + error.message);
+    onError: (error: any) => {
+      console.error('❌ Return Error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'خطأ في معالجة المرتجع');
     }
   });
 
+  // ========== Handlers ==========
   const handleSearch = () => {
     if (searchQuery.trim()) {
       searchInvoice();
@@ -718,7 +995,9 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       ...item,
       selected: false,
       return_quantity: item.quantity,
-      return_reason: ''
+      return_reason: '',
+      return_color: item.color,
+      return_size: item.size
     })));
     setStep('select');
   };
@@ -731,7 +1010,21 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
   const updateReturnQuantity = (itemId: string, quantity: number) => {
     setReturnItems(prev => prev.map(item =>
-      item.id === itemId ? { ...item, return_quantity: Math.min(Math.max(1, quantity), item.quantity) } : item
+      item.id === itemId 
+        ? { ...item, return_quantity: Math.min(Math.max(1, quantity), item.quantity) } 
+        : item
+    ));
+  };
+
+  const updateItemColor = (itemId: string, color: string) => {
+    setReturnItems(prev => prev.map(item =>
+      item.id === itemId ? { ...item, return_color: color } : item
+    ));
+  };
+
+  const updateItemSize = (itemId: string, size: string) => {
+    setReturnItems(prev => prev.map(item =>
+      item.id === itemId ? { ...item, return_size: size } : item
     ));
   };
 
@@ -759,10 +1052,11 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
   const selectedItemsCount = returnItems.filter(item => item.selected).length;
 
+  // ========== Render ==========
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-4xl h-[85vh] p-0 overflow-hidden flex flex-col bg-background">
-        {/* Header - POS Style */}
+        {/* Header */}
         <div className="bg-sidebar px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
@@ -770,15 +1064,21 @@ const POSReturns: React.FC<POSReturnsProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">
-                {step === 'invoice' ? 'فاتورة مرتجع' : 'مرتجعات المبيعات'}
+                {step === 'invoice' ? 'فاتورة مرتجع مباشرة' : 'مرتجعات المبيعات'}
               </h2>
               <p className="text-white/60 text-sm">
-                {step === 'invoice' ? 'إنشاء فاتورة مرتجع مباشرة' : 'إرجاع الأصناف واسترداد المبلغ'}
+                {step === 'invoice' 
+                  ? 'إنشاء فاتورة مرتجع بدون ربط بفاتورة بيع' 
+                  : step === 'search' 
+                    ? 'البحث عن فاتورة للإرجاع'
+                    : step === 'invoice-search'
+                      ? 'البحث عن فاتورة محددة'
+                      : 'تحديد الأصناف المرتجعة'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {step === 'invoice' && allowDirectReturn && (
+            {step === 'invoice' && (
               <>
                 <Button
                   variant="ghost"
@@ -787,7 +1087,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                   className="text-white/80 hover:text-white hover:bg-white/10"
                 >
                   <FileSearch className="h-4 w-4 me-1" />
-                  <span className="text-xs">البحث بفاتورة</span>
+                  <span className="text-xs">بحث بفاتورة</span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -795,8 +1095,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                   onClick={() => setStep('search')}
                   className="text-white/80 hover:text-white hover:bg-white/10"
                 >
-                  <RotateCcw className="h-4 w-4 me-1" />
-                  <span className="text-xs">مرتجع مباشر</span>
+                  <Search className="h-4 w-4 me-1" />
+                  <span className="text-xs">بحث عام</span>
                 </Button>
               </>
             )}
@@ -807,8 +1107,19 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 onClick={() => setStep('invoice')}
                 className="text-white/80 hover:text-white hover:bg-white/10"
               >
-                <RotateCcw className="h-4 w-4 me-1" />
-                <span className="text-xs">العودة للرئيسية</span>
+                <X className="h-4 w-4 me-1" />
+                <span className="text-xs">إلغاء</span>
+              </Button>
+            )}
+            {step === 'select' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep('invoice-search')}
+                className="text-white/80 hover:text-white hover:bg-white/10"
+              >
+                <X className="h-4 w-4 me-1" />
+                <span className="text-xs">تغيير الفاتورة</span>
               </Button>
             )}
             <Button
@@ -822,6 +1133,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           </div>
         </div>
 
+        {/* Content */}
         <div className="flex-1 overflow-hidden p-6">
           {step === 'invoice' && (
             <DirectReturnInvoice
@@ -833,18 +1145,21 @@ const POSReturns: React.FC<POSReturnsProps> = ({
             />
           )}
 
-          {step === 'search' && (
+          {(step === 'search' || step === 'invoice-search') && (
             <div className="space-y-6 h-full flex flex-col">
-              {/* Search Input - POS Style */}
+              {/* Search Input */}
               <div className="flex gap-3">
                 <div className="flex-1 relative">
                   <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input
-                    placeholder="ابحث برقم الفاتورة..."
+                    placeholder={step === 'invoice-search' 
+                      ? "أدخل رقم الفاتورة للبحث..." 
+                      : "ابحث برقم الفاتورة أو اسم العميل..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     className="h-14 ps-12 text-lg rounded-xl"
+                    autoFocus
                   />
                 </div>
                 <Button
@@ -857,13 +1172,13 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 </Button>
               </div>
 
-              {/* Search Results - Card Grid */}
+              {/* Results */}
               <ScrollArea className="flex-1">
                 {isSearching ? (
                   <div className="flex items-center justify-center h-64">
-                    <div className="text-center text-muted-foreground">
+                    <div className="text-center">
                       <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-lg">جاري البحث...</p>
+                      <p className="text-lg text-muted-foreground">جاري البحث...</p>
                     </div>
                   </div>
                 ) : searchResults && searchResults.length > 0 ? (
@@ -874,7 +1189,6 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                         className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
                         onClick={() => handleSelectSale(sale)}
                       >
-
                         <CardContent className="p-5">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-4">
@@ -900,7 +1214,11 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                               <div className="text-sm text-muted-foreground mt-1">
                                 📦 {sale.sale_items.length} صنف
                               </div>
-                              <Badge variant="secondary" className="mt-2">{sale.payment_method}</Badge>
+                              <Badge variant="secondary" className="mt-2">
+                                {sale.payment_method === 'cash' ? 'نقدي' : 
+                                 sale.payment_method === 'card' ? 'بطاقة' : 
+                                 sale.payment_method === 'wallet' ? 'محفظة' : sale.payment_method}
+                              </Badge>
                             </div>
                           </div>
                         </CardContent>
@@ -913,7 +1231,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                       <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                         <AlertCircle className="h-10 w-10 opacity-50" />
                       </div>
-                      <p className="text-lg font-medium">لم يتم العثور على فواتير</p>
+                      <p className="text-lg font-medium">لم يتم العثور على نتائج</p>
                       <p className="text-sm mt-1">تأكد من رقم الفاتورة وحاول مرة أخرى</p>
                     </div>
                   </div>
@@ -923,109 +1241,14 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                       <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                         <Search className="h-10 w-10 opacity-50" />
                       </div>
-                      <p className="text-lg font-medium">ابحث عن فاتورة</p>
-                      <p className="text-sm mt-1">أدخل رقم الفاتورة للبحث عنها</p>
-                    </div>
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          )}
-
-          {step === 'invoice-search' && (
-            <div className="space-y-6 h-full flex flex-col">
-              {/* Invoice Search Input - POS Style */}
-              <div className="flex gap-3">
-                <div className="flex-1 relative">
-                  <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-                  <Input
-                    placeholder="أدخل رقم الفاتورة للبحث..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="h-14 ps-12 text-lg rounded-xl"
-                  />
-                </div>
-                <Button
-                  onClick={handleSearch}
-                  disabled={isSearching}
-                  className="h-14 px-8 rounded-xl text-base"
-                >
-                  <Search className="h-5 w-5 me-2" />
-                  بحث
-                </Button>
-              </div>
-
-              {/* Invoice Search Results */}
-              <ScrollArea className="flex-1">
-                {isSearching ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center text-muted-foreground">
-                      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-lg">جاري البحث عن الفاتورة...</p>
-                    </div>
-                  </div>
-                ) : searchResults && searchResults.length > 0 ? (
-                  <div className="space-y-4">
-                    {searchResults.map((sale) => (
-                      <Card
-                        key={sale.id}
-                        className="cursor-pointer hover:border-primary hover:shadow-lg transition-all group"
-                        onClick={() => {
-                          setSelectedSale(sale);
-                          setStep('select');
-                        }}
-                      >
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
-                              <div className="w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                                <Receipt className="h-8 w-8 text-primary" />
-                              </div>
-                              <div>
-                                <div className="font-bold text-xl">{sale.invoice_number}</div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {format(new Date(sale.sale_date), 'yyyy/MM/dd HH:mm', { locale: ar })}
-                                </div>
-                                {sale.customer && (
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    👤 {sale.customer.name_ar || sale.customer.name}
-                                  </div>
-                                )}
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  📦 {sale.sale_items.length} صنف • 💳 {sale.payment_method}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-left">
-                              <div className="font-bold text-2xl text-primary">
-                                {sale.total_amount.toLocaleString()} ر.ي
-                              </div>
-                              <Badge variant="secondary" className="mt-2">{sale.status}</Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : searchQuery && !isSearching ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center text-muted-foreground">
-                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                        <AlertCircle className="h-10 w-10 opacity-50" />
-                      </div>
-                      <p className="text-lg font-medium">لم يتم العثور على الفاتورة</p>
-                      <p className="text-sm mt-1">تأكد من رقم الفاتورة وحاول مرة أخرى</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center text-muted-foreground">
-                      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Search className="h-10 w-10 opacity-50" />
-                      </div>
-                      <p className="text-lg font-medium">البحث عن فاتورة</p>
-                      <p className="text-sm mt-1">أدخل رقم الفاتورة للبحث عنها وإنشاء مرتجع</p>
+                      <p className="text-lg font-medium">
+                        {step === 'invoice-search' ? 'أدخل رقم الفاتورة' : 'ابحث عن فاتورة'}
+                      </p>
+                      <p className="text-sm mt-1">
+                        {step === 'invoice-search' 
+                          ? 'أدخل رقم الفاتورة للبحث عنها' 
+                          : 'أدخل رقم الفاتورة أو اسم العميل للبحث'}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1035,7 +1258,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
           {step === 'select' && selectedSale && (
             <div className="space-y-4 h-full flex flex-col">
-              {/* Invoice Info - Enhanced */}
+              {/* Invoice Info */}
               <div className="p-4 rounded-xl bg-sidebar/5 border flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -1046,6 +1269,11 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                     <div className="text-sm text-muted-foreground">
                       {format(new Date(selectedSale.sale_date), 'yyyy/MM/dd HH:mm', { locale: ar })}
                     </div>
+                    {selectedSale.customer && (
+                      <div className="text-sm text-muted-foreground mt-1">
+                        👤 {selectedSale.customer.name_ar || selectedSale.customer.name}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setStep('invoice-search')} className="rounded-lg">
@@ -1066,17 +1294,17 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 </Button>
               </div>
 
-              {/* Items Grid - POS Style */}
+              {/* Items List */}
               <ScrollArea className="flex-1 border rounded-xl">
                 <div className="p-3 space-y-2">
                   {returnItems.map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => toggleItemSelection(item.id)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${item.selected
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-transparent bg-muted/30 hover:bg-muted/50'
-                        }`}
+                      className={`p-4 rounded-xl border-2 transition-all ${
+                        item.selected
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                      }`}
                     >
                       <div className="flex items-center gap-4">
                         <Checkbox
@@ -1092,8 +1320,43 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                             {item.product?.name_ar || item.product?.name || 'غير معروف'}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {item.product?.sku} • الكمية المباعة: {item.quantity}
+                            {item.product?.sku}
                           </div>
+                          
+                          {/* Color and Size Edit */}
+                          {item.selected && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="flex items-center gap-1">
+                                <Palette className="h-3 w-3 text-muted-foreground" />
+                                <Input
+                                  placeholder="اللون"
+                                  value={item.return_color || ''}
+                                  onChange={(e) => updateItemColor(item.id, e.target.value)}
+                                  className="h-7 w-20 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Ruler className="h-3 w-3 text-muted-foreground" />
+                                <Input
+                                  placeholder="المقاس"
+                                  value={item.return_size || ''}
+                                  onChange={(e) => updateItemSize(item.id, e.target.value)}
+                                  className="h-7 w-20 text-xs"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="text-xs text-muted-foreground mt-2">
+                            الكمية المباعة: {item.quantity}
+                          </div>
+                          {item.selected && (
+                            <div className="text-xs text-primary mt-1">
+                              سعر الوحدة: {item.unit_price.toLocaleString()} ر.ي
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="text-center">
@@ -1122,7 +1385,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 </div>
               </ScrollArea>
 
-              {/* Return Details - Enhanced */}
+              {/* Return Details */}
               <div className="grid grid-cols-2 gap-4 flex-shrink-0">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">سبب الإرجاع</Label>
@@ -1143,6 +1406,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                     <SelectContent>
                       <SelectItem value="cash">💵 نقدي</SelectItem>
                       <SelectItem value="card">💳 بطاقة</SelectItem>
+                      <SelectItem value="wallet">📱 محفظة</SelectItem>
                       <SelectItem value="credit">👤 رصيد للعميل</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1152,7 +1416,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           )}
         </div>
 
-        {/* Footer - POS Style */}
+        {/* Footer for Select Step */}
         {step === 'select' && (
           <div className="bg-muted/30 border-t p-4 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-6">

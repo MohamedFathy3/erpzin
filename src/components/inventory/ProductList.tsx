@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 
+// تحديث interface Product ليشمل units
 export interface Product {
   id: string;
   name: string;
@@ -31,8 +32,23 @@ export interface Product {
   status: 'active' | 'inactive' | 'low_stock' | 'out_of_stock';
   hasVariants?: boolean;
   image_url?: string | null;
-  description?: string; // أضفنا وصف المنتج
-  active?: boolean; // أضفنا حقل active
+  description?: string;
+  active?: boolean;
+  // ✅ إضافة units من API
+  units?: Array<{
+    id: number;
+    unit_id: number;
+    unit_name: string;
+    cost_price: string;
+    sell_price: string;
+    barcode: string;
+    colors: Array<{
+      id: number;
+      color_id: number;
+      color: string;
+      stock: number;
+    }>;
+  }>;
 }
 
 interface ProductListProps {
@@ -91,7 +107,8 @@ export const transformApiProduct = (apiProduct: any): Product => {
     image_url: apiProduct.image_url,
     image: apiProduct.image,
     category: apiProduct.category,
-    active: apiProduct.active
+    active: apiProduct.active,
+    units: apiProduct.units // ✅ إضافة log للـ units
   });
 
   // Ensure cost is a number (handle null/undefined)
@@ -115,11 +132,21 @@ export const transformApiProduct = (apiProduct: any): Product => {
   const categoryName = apiProduct.category?.name || 'Uncategorized';
   const categoryAr = apiProduct.category?.name_ar || categoryName || 'غير مصنف';
 
+  // حساب عدد المتغيرات من الـ units ✅
+  let variantsCount = 0;
+  if (apiProduct.units && Array.isArray(apiProduct.units)) {
+    apiProduct.units.forEach((unit: any) => {
+      if (unit.colors && Array.isArray(unit.colors)) {
+        variantsCount += unit.colors.length;
+      }
+    });
+  }
+
   const transformedProduct = {
     id: apiProduct.id.toString(),
     name: apiProduct.name || '',
     nameAr: apiProduct.name_ar || apiProduct.name || '',
-    description: apiProduct.description || '', // أضفنا الوصف
+    description: apiProduct.description || '',
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || undefined,
     category: categoryName,
@@ -131,15 +158,31 @@ export const transformApiProduct = (apiProduct: any): Product => {
     image_url: apiProduct.image_url,
     stock: Number(apiProduct.stock) || 0,
     minStock: Number(apiProduct.reorder_level) || 5,
-    variants: 0,
+    variants: variantsCount, // ✅ عدد المتغيرات المحسوب
     image: imageUrl || undefined,
     status: mapProductStatus(apiProduct),
-    hasVariants: apiProduct.has_variants || false,
-    active: apiProduct.active || false // أضفنا حقل active
+    hasVariants: (apiProduct.units && apiProduct.units.length > 0) || false, // ✅ true إذا في units
+    active: apiProduct.active || false,
+    units: apiProduct.units || [] // ✅ تمرير units كاملة
   };
 
-  console.log('✅ Transformed product:', transformedProduct);
+  console.log('✅ Transformed product:', {
+    ...transformedProduct,
+    variants: transformedProduct.variants,
+    hasVariants: transformedProduct.hasVariants,
+    unitsCount: transformedProduct.units?.length
+  });
+  
   return transformedProduct;
+};
+
+// ✅ دالة لحساب عدد المتغيرات
+const getVariantsCount = (product: Product): number => {
+  if (!product.units || product.units.length === 0) return 0;
+  
+  return product.units.reduce((total, unit) => {
+    return total + (unit.colors?.length || 0);
+  }, 0);
 };
 
 const ProductList: React.FC<ProductListProps> = ({
@@ -304,16 +347,15 @@ const ProductList: React.FC<ProductListProps> = ({
               const statusConfig = getStatusBadge(product.status);
               const stock = Number(product.stock);
               const minStock = Number(product.minStock) || 5;
+              const variantsCount = getVariantsCount(product); // ✅ استخدام الدالة
               
               console.log('🎯 Rendering product:', {
                 id: product.id,
                 name: product.name,
                 status: product.status,
-                category: product.category,
-                imageUrl: product.imageUrl,
-                image: product.image,
-                stock: stock,
-                minStock: minStock
+                hasVariants: product.hasVariants,
+                variantsCount: variantsCount,
+                units: product.units
               });
 
               return (
@@ -327,7 +369,6 @@ const ProductList: React.FC<ProductListProps> = ({
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {/* استخدم product.imageUrl بدلاً من product.image_url */}
                         {product.imageUrl || product.image ? (
                           <img 
                             src={product.imageUrl || product.image} 
@@ -359,11 +400,6 @@ const ProductList: React.FC<ProductListProps> = ({
                             {product.description}
                           </p>
                         )}
-                        {/* Debug info - يمكن إخفاؤها */}
-                        <div className="hidden">
-                          <p className="text-[8px] text-gray-400">Image URL: {product.imageUrl || 'N/A'}</p>
-                          <p className="text-[8px] text-gray-400">Status: {product.status}</p>
-                        </div>
                       </div>
                     </div>
                   </td>
@@ -441,10 +477,13 @@ const ProductList: React.FC<ProductListProps> = ({
                             : "bg-muted text-muted-foreground border-muted"
                         )}
                       >
-                        {product.hasVariants 
-                          ? `${product.variants || 0} ${language === 'ar' ? 'متغير' : 'variants'}`
-                          : (language === 'ar' ? 'بدون متغيرات' : 'No Variants')
-                        }
+                        {product.hasVariants ? (
+                          <>
+                            {variantsCount} {language === 'ar' ? 'متغير' : 'variants'}
+                          </>
+                        ) : (
+                          language === 'ar' ? 'بدون متغيرات' : 'No Variants'
+                        )}
                       </Badge>
                     </button>
                   </td>

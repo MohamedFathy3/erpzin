@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import { format, isAfter, isBefore } from 'date-fns';
+import { format, isAfter, isBefore, parseISO } from 'date-fns';
 import { 
   Plus, 
   Edit, 
@@ -31,10 +31,23 @@ import {
   AlertCircle,
   Gift,
   Building2,
-  Warehouse
+  Warehouse,
+  Filter,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import api from '@/lib/api'; // تأكد من استيراد api من هنا
+import api from '@/lib/api';
+
+interface PromotionProduct {
+  id: number;
+  name: string;
+  name_ar?: string;
+  sku: string;
+  price: number | string;
+  image_url?: string | null;
+  image?: any;
+  active?: boolean;
+}
 
 interface Promotion {
   id: number;
@@ -42,23 +55,17 @@ interface Promotion {
   name_ar: string | null;
   description: string | null;
   discount_type: 'percentage' | 'fixed';
-  discount_value: number;
-  start_date: string;
-  end_date: string;
-  is_active: boolean;
+  discount_value: string | number;
   min_quantity: number;
-  max_uses: number | null;
-  current_uses: number;
-  branch_id: number | null;
+  min_usage: number | null; // ✅ في API اسمه min_usage مش max_uses
+  start_date: string;
+  start_time: string;
+  end_date: string;
+  end_time: string;
+  active: boolean | null; // ✅ ممكن يكون null
+  products: PromotionProduct[]; // ✅ المنتجات جوا products مش product_ids
   created_at: string;
-  product_ids?: number[]; // لإضافة معرّفات المنتجات
-  products?: Array<{
-    id: number;
-    name: string;
-    name_ar: string | null;
-    sku: string;
-    price: number;
-  }>;
+  updated_at: string;
 }
 
 interface APIProduct {
@@ -66,12 +73,13 @@ interface APIProduct {
   name: string;
   name_ar?: string;
   sku: string;
-  price: number;
-  cost_price?: number;
-  sell_price?: number;
+  price: number | string;
+  sell_price?: number | string;
+  cost_price?: number | string;
   stock?: number;
-  image_url?: string;
-  is_active?: boolean;
+  image_url?: string | null;
+  image?: any;
+  active?: boolean;
 }
 
 const PromotionsManager = () => {
@@ -82,7 +90,7 @@ const PromotionsManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'scheduled' | 'expired'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'scheduled' | 'expired' | 'inactive'>('all');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -90,17 +98,16 @@ const PromotionsManager = () => {
     description: '',
     discount_type: 'percentage' as 'percentage' | 'fixed',
     discount_value: 0,
-    start_date: '',
+    start_date: format(new Date(), 'yyyy-MM-dd'),
     start_time: '00:00',
-    end_date: '',
+    end_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
     end_time: '23:59',
-    is_active: true,
+    active: true,
     min_quantity: 1,
-    max_uses: null as number | null,
-    branch_id: '' as string,
-    warehouse_ids: [] as string[],
+    min_usage: null as number | null, // ✅ تغيير الاسم
   });
 
+  // ✅ ترجمة النصوص
   const t = {
     title: language === 'ar' ? 'إدارة العروض' : 'Promotions Manager',
     addPromotion: language === 'ar' ? 'إضافة عرض جديد' : 'Add New Promotion',
@@ -143,21 +150,49 @@ const PromotionsManager = () => {
     scheduledPromotions: language === 'ar' ? 'العروض المجدولة' : 'Scheduled',
     expiredPromotions: language === 'ar' ? 'العروض المنتهية' : 'Expired',
     product: language === 'ar' ? 'منتج' : 'product',
+    filterByStatus: language === 'ar' ? 'تصفية حسب الحالة' : 'Filter by Status',
+    clearFilters: language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters',
   };
 
-  // Fetch promotions from Laravel API
-  const { data: promotions = [], isLoading } = useQuery({
-    queryKey: ['promotions'],
+  // ✅ جلب العروض من API مع الفلاتر
+  const { data: promotions = [], isLoading, refetch } = useQuery({
+    queryKey: ['promotions', filterStatus],
     queryFn: async () => {
       try {
-        const response = await api.post('/offer/index', {
-          filters: {},
+        const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 1000,
           paginate: false
-        });
-        
+        };
+
+        // ✅ إضافة فلترة حسب الحالة
+        if (filterStatus !== 'all') {
+          if (!payload.filters) payload.filters = {};
+          
+          const now = new Date();
+          const today = format(now, 'yyyy-MM-dd');
+          const currentTime = format(now, 'HH:mm:ss');
+
+          switch (filterStatus) {
+            case 'active':
+              payload.filters.active = true;
+              break;
+            case 'inactive':
+              payload.filters.active = false;
+              break;
+            case 'scheduled':
+              payload.filters.start_date = { $gt: today };
+              break;
+            case 'expired':
+              payload.filters.end_date = { $lt: today };
+              break;
+          }
+        }
+
+        console.log('📦 Fetching promotions with payload:', payload);
+
+        const response = await api.post('/offer/index', payload);
         return response.data.data || [];
       } catch (error) {
         console.error('Error fetching promotions:', error);
@@ -170,13 +205,13 @@ const PromotionsManager = () => {
     }
   });
 
-  // Fetch products for selection - مستخدم من نفس الاستعلام في Inventory
+  // ✅ جلب المنتجات
   const { data: products = [] } = useQuery({
-    queryKey: ['products'],
+    queryKey: ['products-for-promotions'],
     queryFn: async () => {
       try {
         const response = await api.post('/product/index', {
-          filters: {},
+          filters: { active: true },
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 1000,
@@ -186,57 +221,25 @@ const PromotionsManager = () => {
         return response.data.data || [];
       } catch (error) {
         console.error('Error fetching products:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
-          variant: 'destructive'
-        });
         return [];
       }
     }
   });
 
-  // Transform API products to simple format
+  // ✅ تحويل المنتجات لصيغة بسيطة
   const simpleProducts = React.useMemo(() => {
     return products.map((p: APIProduct) => ({
       id: p.id,
       name: p.name,
       name_ar: p.name_ar || p.name,
       sku: p.sku,
-      price: p.sell_price || p.price || 0,
-      image_url: p.image_url,
-      is_active: p.is_active
-    })).filter(p => p.is_active !== false);
+      price: Number(p.sell_price || p.price || 0),
+      image_url: p.image_url || p.image?.fullUrl || null,
+      active: p.active
+    })).filter(p => p.active !== false);
   }, [products]);
 
-  // Fetch branches for selection
-  const { data: branches = [] } = useQuery({
-    queryKey: ['branches-for-promotions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('id, name, name_ar')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch warehouses for selection
-  const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses-for-promotions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('id, name, name_ar')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Create promotion mutation
+  // ✅ إنشاء عرض جديد
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData & { products: number[] }) => {
       const requestData = {
@@ -246,14 +249,16 @@ const PromotionsManager = () => {
         discount_type: data.discount_type,
         discount_value: data.discount_value,
         min_quantity: data.min_quantity,
+        min_usage: data.min_usage, // ✅ استخدام min_usage
         start_date: data.start_date,
         start_time: data.start_time,
         end_date: data.end_date,
         end_time: data.end_time,
-        is_active: data.is_active,
-        max_uses: data.max_uses,
-        product_ids: data.products, // مصفوفة من معرّفات المنتجات
+        active: data.active,
+        product_ids: data.products,
       };
+
+      console.log('📤 Creating promotion:', requestData);
 
       const response = await api.post('/offer', requestData);
       return response.data;
@@ -277,7 +282,7 @@ const PromotionsManager = () => {
     }
   });
 
-  // Update promotion mutation
+  // ✅ تحديث عرض
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData & { id: number; products: number[] }) => {
       const requestData = {
@@ -287,14 +292,16 @@ const PromotionsManager = () => {
         discount_type: data.discount_type,
         discount_value: data.discount_value,
         min_quantity: data.min_quantity,
+        min_usage: data.min_usage,
         start_date: data.start_date,
         start_time: data.start_time,
         end_date: data.end_date,
         end_time: data.end_time,
-        is_active: data.is_active,
-        max_uses: data.max_uses,
+        active: data.active,
         product_ids: data.products,
       };
+
+      console.log('📤 Updating promotion:', data.id, requestData);
 
       const response = await api.put(`/offer/${data.id}`, requestData);
       return response.data;
@@ -318,10 +325,10 @@ const PromotionsManager = () => {
     }
   });
 
-  // Delete promotion mutation
+  // ✅ حذف عرض
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await api.delete(`/offer/${id}`);
+      const response = await api.delete(`/offer/delete`, { data: { items: [id] } });
       return response.data;
     },
     onSuccess: () => {
@@ -341,6 +348,7 @@ const PromotionsManager = () => {
     }
   });
 
+  // ✅ إعادة ضبط النموذج
   const resetForm = () => {
     setFormData({
       name: '',
@@ -348,23 +356,28 @@ const PromotionsManager = () => {
       description: '',
       discount_type: 'percentage',
       discount_value: 0,
-      start_date: '',
+      start_date: format(new Date(), 'yyyy-MM-dd'),
       start_time: '00:00',
-      end_date: '',
+      end_date: format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
       end_time: '23:59',
-      is_active: true,
+      active: true,
       min_quantity: 1,
-      max_uses: null,
-      branch_id: '',
-      warehouse_ids: [],
+      min_usage: null,
     });
     setSelectedProducts([]);
     setEditingPromotion(null);
   };
 
+  // ✅ تعديل عرض - المنتجات المختارة بتظهر صح دلوقتي
   const handleEdit = (promotion: Promotion) => {
-    const startDate = new Date(promotion.start_date);
-    const endDate = new Date(promotion.end_date);
+    // ✅ استخراج معرّفات المنتجات من `promotion.products`
+    const productIds = promotion.products?.map(p => p.id) || [];
+    
+    // ✅ تجهيز التواريخ
+    const startDateTime = `${promotion.start_date} ${promotion.start_time}`;
+    const endDateTime = `${promotion.end_date} ${promotion.end_time}`;
+    const startDate = parseISO(startDateTime);
+    const endDate = parseISO(endDateTime);
     
     setEditingPromotion(promotion);
     setFormData({
@@ -372,24 +385,22 @@ const PromotionsManager = () => {
       name_ar: promotion.name_ar || '',
       description: promotion.description || '',
       discount_type: promotion.discount_type,
-      discount_value: promotion.discount_value,
-      start_date: format(startDate, 'yyyy-MM-dd'),
-      start_time: format(startDate, 'HH:mm'),
-      end_date: format(endDate, 'yyyy-MM-dd'),
-      end_time: format(endDate, 'HH:mm'),
-      is_active: promotion.is_active,
+      discount_value: Number(promotion.discount_value),
+      start_date: promotion.start_date,
+      start_time: promotion.start_time.slice(0, 5), // "00:00:00" -> "00:00"
+      end_date: promotion.end_date,
+      end_time: promotion.end_time.slice(0, 5),
+      active: promotion.active ?? false, // ✅ null -> false
       min_quantity: promotion.min_quantity,
-      max_uses: promotion.max_uses,
-      branch_id: promotion.branch_id || '',
-      warehouse_ids: [],
+      min_usage: promotion.min_usage,
     });
     
-    // Get selected products for this promotion
-    const promoProducts = promotion.product_ids || [];
-    setSelectedProducts(promoProducts);
+    // ✅ تعيين المنتجات المختارة
+    setSelectedProducts(productIds);
     setIsDialogOpen(true);
   };
 
+  // ✅ حفظ العرض
   const handleSubmit = () => {
     if (!formData.name || !formData.start_date || !formData.end_date || !formData.discount_value) {
       toast({ 
@@ -414,6 +425,7 @@ const PromotionsManager = () => {
     }
   };
 
+  // ✅ إضافة/إزالة منتج
   const toggleProduct = (productId: number) => {
     setSelectedProducts(prev => 
       prev.includes(productId) 
@@ -422,63 +434,88 @@ const PromotionsManager = () => {
     );
   };
 
+  // ✅ تحديد/إلغاء تحديد الكل
+  const toggleAllProducts = () => {
+    if (selectedProducts.length === filteredSimpleProducts.length) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(filteredSimpleProducts.map(p => p.id));
+    }
+  };
+
+  // ✅ حالة العرض
   const getPromotionStatus = (promotion: Promotion): 'active' | 'scheduled' | 'expired' | 'inactive' => {
-    if (!promotion.is_active) return 'inactive';
+    // ✅ إذا كان active = false أو null
+    if (promotion.active === false || promotion.active === null) {
+      return 'inactive';
+    }
     
     const now = new Date();
-    const start = new Date(promotion.start_date);
-    const end = new Date(promotion.end_date);
+    const start = parseISO(`${promotion.start_date} ${promotion.start_time}`);
+    const end = parseISO(`${promotion.end_date} ${promotion.end_time}`);
 
     if (isBefore(now, start)) return 'scheduled';
     if (isAfter(now, end)) return 'expired';
     return 'active';
   };
 
+  // ✅ Badge الحالة
   const getStatusBadge = (status: string) => {
     const config = {
-      active: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200', icon: CheckCircle2 },
-      scheduled: { color: 'bg-blue-500/10 text-blue-600 border-blue-200', icon: Clock },
-      expired: { color: 'bg-gray-500/10 text-gray-600 border-gray-200', icon: XCircle },
-      inactive: { color: 'bg-amber-500/10 text-amber-600 border-amber-200', icon: AlertCircle },
+      active: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200', icon: CheckCircle2, label: t.active },
+      scheduled: { color: 'bg-blue-500/10 text-blue-600 border-blue-200', icon: Clock, label: t.scheduled },
+      expired: { color: 'bg-gray-500/10 text-gray-600 border-gray-200', icon: XCircle, label: t.expired },
+      inactive: { color: 'bg-amber-500/10 text-amber-600 border-amber-200', icon: AlertCircle, label: t.inactive },
     };
-    const { color, icon: Icon } = config[status as keyof typeof config] || config.inactive;
+    const { color, icon: Icon, label } = config[status as keyof typeof config] || config.inactive;
     return (
       <Badge variant="outline" className={cn("gap-1", color)}>
         <Icon size={12} />
-        {t[status as keyof typeof t] || status}
+        {label}
       </Badge>
     );
   };
 
+  // ✅ فلترة العروض محلياً
   const filteredPromotions = promotions.filter((promo: Promotion) => {
-    const matchesSearch = promo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = searchTerm === '' ||
+      promo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (promo.name_ar && promo.name_ar.includes(searchTerm));
     
-    if (filterStatus === 'all') return matchesSearch;
-    return matchesSearch && getPromotionStatus(promo) === filterStatus;
+    return matchesSearch;
   });
 
+  // ✅ فلترة المنتجات
   const filteredSimpleProducts = simpleProducts.filter(p => 
+    productSearchTerm === '' ||
     p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
     (p.name_ar && p.name_ar.includes(productSearchTerm)) ||
     p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
   );
 
+  // ✅ الإحصائيات
   const stats = {
     total: promotions.length,
     active: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'active').length,
     scheduled: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'scheduled').length,
     expired: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'expired').length,
+    inactive: promotions.filter((p: Promotion) => getPromotionStatus(p) === 'inactive').length,
   };
 
+  // ✅ عدد المنتجات في العرض
   const getProductCount = (promotion: Promotion) => {
-    return promotion.product_ids?.length || 0;
+    return promotion.products?.length || 0;
+  };
+
+  // ✅ سعر المنتج
+  const getProductPrice = (product: PromotionProduct): number => {
+    return Number(product.sell_price || product.price || 0);
   };
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ✅ Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -531,9 +568,22 @@ const PromotionsManager = () => {
             </div>
           </CardContent>
         </Card>
+        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/20">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.inactive}</p>
+                <p className="text-xs text-muted-foreground">{t.inactive}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters & Actions */}
+      {/* ✅ Filters & Actions */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -541,7 +591,10 @@ const PromotionsManager = () => {
               <Tag className="h-5 w-5" />
               {t.title}
             </CardTitle>
-            <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => { 
+              setIsDialogOpen(open); 
+              if (!open) resetForm(); 
+            }}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus size={16} />
@@ -553,7 +606,7 @@ const PromotionsManager = () => {
                   <DialogTitle>{editingPromotion ? t.editPromotion : t.addPromotion}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
-                  {/* Basic Info */}
+                  {/* ✅ Basic Info */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.promotionName} *</Label>
@@ -582,7 +635,7 @@ const PromotionsManager = () => {
                     />
                   </div>
 
-                  {/* Discount Settings */}
+                  {/* ✅ Discount Settings */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>{t.discountType} *</Label>
@@ -636,7 +689,7 @@ const PromotionsManager = () => {
                     </div>
                   </div>
 
-                  {/* Date & Time */}
+                  {/* ✅ Date & Time */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>{t.startDate} *</Label>
@@ -672,81 +725,12 @@ const PromotionsManager = () => {
                     </div>
                   </div>
 
-                  {/* Branch & Warehouse Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-lg border border-border">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Building2 size={16} className="text-primary" />
-                        {language === 'ar' ? 'الفرع' : 'Branch'}
-                      </Label>
-                      <Select 
-                        value={formData.branch_id || 'all'} 
-                        onValueChange={(val) => setFormData({ ...formData, branch_id: val === 'all' ? '' : val })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={language === 'ar' ? 'جميع الفروع' : 'All Branches'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">
-                            {language === 'ar' ? 'جميع الفروع' : 'All Branches'}
-                          </SelectItem>
-                          {branches.map((branch) => (
-                            <SelectItem key={branch.id} value={branch.id}>
-                              {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Warehouse size={16} className="text-primary" />
-                        {language === 'ar' ? 'المخازن' : 'Warehouses'}
-                      </Label>
-                      <div className="space-y-2 max-h-28 overflow-y-auto p-2 bg-background rounded-md border">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="all-warehouses-promo"
-                            checked={formData.warehouse_ids.length === 0}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setFormData({ ...formData, warehouse_ids: [] });
-                              }
-                            }}
-                          />
-                          <label htmlFor="all-warehouses-promo" className="text-sm cursor-pointer">
-                            {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
-                          </label>
-                        </div>
-                        {warehouses.map((warehouse) => (
-                          <div key={warehouse.id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`warehouse-promo-${warehouse.id}`}
-                              checked={formData.warehouse_ids.includes(warehouse.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setFormData({ ...formData, warehouse_ids: [...formData.warehouse_ids, warehouse.id] });
-                                } else {
-                                  setFormData({ ...formData, warehouse_ids: formData.warehouse_ids.filter(id => id !== warehouse.id) });
-                                }
-                              }}
-                            />
-                            <label htmlFor={`warehouse-promo-${warehouse.id}`} className="text-sm cursor-pointer">
-                              {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Options */}
+                  {/* ✅ Options */}
                   <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2">
                       <Switch 
-                        checked={formData.is_active}
-                        onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                        checked={formData.active}
+                        onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
                       />
                       <Label>{t.isActive}</Label>
                     </div>
@@ -756,20 +740,35 @@ const PromotionsManager = () => {
                         type="number"
                         className="w-24"
                         placeholder={t.unlimited}
-                        value={formData.max_uses || ''} 
-                        onChange={(e) => setFormData({ ...formData, max_uses: e.target.value ? Number(e.target.value) : null })}
+                        value={formData.min_usage || ''} 
+                        onChange={(e) => setFormData({ ...formData, min_usage: e.target.value ? Number(e.target.value) : null })}
                         min="0"
                       />
                     </div>
                   </div>
 
-                  {/* Product Selection */}
+                  {/* ✅ Product Selection - مع أزرار تحديد الكل */}
                   <div className="space-y-3">
-                    <Label className="text-base font-semibold flex items-center gap-2">
-                      <Package size={16} />
-                      {t.selectProducts} *
-                      <Badge variant="secondary">{selectedProducts.length} {t.product}</Badge>
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold flex items-center gap-2">
+                        <Package size={16} />
+                        {t.selectProducts} *
+                        <Badge variant="secondary">{selectedProducts.length} {t.product}</Badge>
+                      </Label>
+                      {filteredSimpleProducts.length > 0 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={toggleAllProducts}
+                          className="text-xs"
+                        >
+                          {selectedProducts.length === filteredSimpleProducts.length 
+                            ? (language === 'ar' ? 'إلغاء الكل' : 'Deselect All')
+                            : (language === 'ar' ? 'تحديد الكل' : 'Select All')
+                          }
+                        </Button>
+                      )}
+                    </div>
                     <div className="relative">
                       <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input 
@@ -779,7 +778,7 @@ const PromotionsManager = () => {
                         className="ps-10"
                       />
                     </div>
-                    <ScrollArea className="h-[200px] border rounded-lg p-2">
+                    <ScrollArea className="h-[250px] border rounded-lg p-2">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {filteredSimpleProducts.map(product => (
                           <div 
@@ -795,11 +794,22 @@ const PromotionsManager = () => {
                               onCheckedChange={() => toggleProduct(product.id)}
                             />
                             {product.image_url && (
-                              <img src={product.image_url} alt="" className="w-10 h-10 object-cover rounded" />
+                              <img 
+                                src={product.image_url} 
+                                alt="" 
+                                className="w-10 h-10 object-cover rounded"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{language === 'ar' ? product.name_ar || product.name : product.name}</p>
-                              <p className="text-xs text-muted-foreground">{product.sku} - {product.price} ﷼</p>
+                              <p className="font-medium truncate">
+                                {language === 'ar' ? product.name_ar || product.name : product.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {product.sku} - {product.price.toLocaleString()} ﷼
+                              </p>
                             </div>
                           </div>
                         ))}
@@ -807,7 +817,7 @@ const PromotionsManager = () => {
                     </ScrollArea>
                   </div>
 
-                  {/* Actions */}
+                  {/* ✅ Actions */}
                   <div className="flex justify-end gap-2 pt-4 border-t">
                     <Button variant="outline" onClick={() => { setIsDialogOpen(false); resetForm(); }}>
                       {t.cancel}
@@ -824,7 +834,7 @@ const PromotionsManager = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters */}
+          {/* ✅ Filters Bar */}
           <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="relative flex-1">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -835,22 +845,37 @@ const PromotionsManager = () => {
                 className="ps-10"
               />
             </div>
-            <Select value={filterStatus} onValueChange={(val: any) => setFilterStatus(val)}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t.all}</SelectItem>
-                <SelectItem value="active">{t.active}</SelectItem>
-                <SelectItem value="scheduled">{t.scheduled}</SelectItem>
-                <SelectItem value="expired">{t.expired}</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-muted-foreground" />
+              <Select value={filterStatus} onValueChange={(val: any) => setFilterStatus(val)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder={t.filterByStatus} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t.all}</SelectItem>
+                  <SelectItem value="active">{t.active}</SelectItem>
+                  <SelectItem value="inactive">{t.inactive}</SelectItem>
+                  <SelectItem value="scheduled">{t.scheduled}</SelectItem>
+                  <SelectItem value="expired">{t.expired}</SelectItem>
+                </SelectContent>
+              </Select>
+              {filterStatus !== 'all' && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setFilterStatus('all')}
+                  className="h-9 w-9"
+                >
+                  <X size={16} />
+                </Button>
+              )}
+            </div>
           </div>
 
-          {/* Promotions Table */}
+          {/* ✅ Promotions Table */}
           {isLoading ? (
             <div className="text-center py-12">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
               <p className="text-muted-foreground">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
             </div>
           ) : filteredPromotions.length === 0 ? (
@@ -873,62 +898,93 @@ const PromotionsManager = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPromotions.map((promo: Promotion) => (
-                    <TableRow key={promo.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{language === 'ar' ? promo.name_ar || promo.name : promo.name}</p>
-                          {promo.description && (
-                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{promo.description}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="gap-1">
-                          {promo.discount_type === 'percentage' ? <Percent size={12} /> : <DollarSign size={12} />}
-                          {promo.discount_value}{promo.discount_type === 'percentage' ? '%' : ' ﷼'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p>{format(new Date(promo.start_date), 'dd/MM/yyyy HH:mm')}</p>
-                          <p className="text-muted-foreground">{format(new Date(promo.end_date), 'dd/MM/yyyy HH:mm')}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{getProductCount(promo)} {t.product}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {promo.max_uses ? `${promo.current_uses}/${promo.max_uses}` : promo.current_uses}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(getPromotionStatus(promo))}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleEdit(promo)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Edit size={16} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-destructive"
-                            onClick={() => deleteMutation.mutate(promo.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            {deleteMutation.isPending ? (
-                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                            ) : (
-                              <Trash2 size={16} />
+                  {filteredPromotions.map((promo: Promotion) => {
+                    const productCount = getProductCount(promo);
+                    const status = getPromotionStatus(promo);
+                    
+                    return (
+                      <TableRow key={promo.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">
+                              {language === 'ar' ? promo.name_ar || promo.name : promo.name}
+                            </p>
+                            {promo.description && (
+                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {promo.description}
+                              </p>
                             )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            {promo.discount_type === 'percentage' ? <Percent size={12} /> : <DollarSign size={12} />}
+                            {Number(promo.discount_value).toLocaleString()}
+                            {promo.discount_type === 'percentage' ? '%' : ' ﷼'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <p>{format(parseISO(`${promo.start_date} ${promo.start_time}`), 'dd/MM/yyyy HH:mm')}</p>
+                            <p className="text-muted-foreground">
+                              {format(parseISO(`${promo.end_date} ${promo.end_time}`), 'dd/MM/yyyy HH:mm')}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {productCount} {productCount === 1 ? t.product : t.products}
+                          </Badge>
+                          {productCount > 0 && (
+                            <div className="mt-1 space-y-1">
+                              {promo.products?.slice(0, 2).map((p, idx) => (
+                                <div key={p.id} className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                                  • {language === 'ar' ? p.name_ar || p.name : p.name}
+                                </div>
+                              ))}
+                              {productCount > 2 && (
+                                <div className="text-[10px] text-muted-foreground">
+                                  +{productCount - 2} {t.products}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {promo.min_usage 
+                            ? `${promo.current_uses || 0}/${promo.min_usage}`
+                            : promo.current_uses || 0
+                          }
+                        </TableCell>
+                        <TableCell>{getStatusBadge(status)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleEdit(promo)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-destructive"
+                              onClick={() => deleteMutation.mutate(promo.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              {deleteMutation.isPending ? (
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                              ) : (
+                                <Trash2 size={16} />
+                              )}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

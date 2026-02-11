@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { useCategories, useProducts, Product } from '@/hooks/usePOSData';
-import { supabase } from '@/integrations/supabase/client';
+import { useCategories, useProducts, useProductByBarcode, Product, getProductImageUrl, getProductColors, getProductSizes, getAvailableVariants } from '@/hooks/usePOSData';
 import { useNavigate } from 'react-router-dom';
 import POSProductGrid from '@/components/pos/POSProductGrid';
 import POSCart from '@/components/pos/POSCart';
@@ -26,7 +25,6 @@ import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
-import api from '@/lib/api';
 
 interface CartItem {
   id: string;
@@ -38,6 +36,9 @@ interface CartItem {
   sku: string;
   sizeName?: string;
   colorName?: string;
+  unitId?: number;
+  colorId?: number;
+  stock?: number;
 }
 
 interface HeldOrder {
@@ -78,18 +79,31 @@ const POS: React.FC = () => {
   const [showVariantSelector, setShowVariantSelector] = useState(false);
   const [showCustomerSelector, setShowCustomerSelector] = useState(false);
   const [showDeliverySelector, setShowDeliverySelector] = useState(false);
-  const [selectedProductForVariant, setSelectedProductForVariant] = useState<any>(null);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
-  
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
+  
+  // جلب الفئات
   const { data: categories, isLoading: categoriesLoading } = useCategories();
-  const { data: products, isLoading: productsLoading } = useProducts();
+  
+  // جلب المنتجات مع فلترة حسب الفئة المختارة 🎯
+  const { data: products, isLoading: productsLoading } = useProducts(selectedCategory);
+
+  // البحث بالباركود - من الـ API بتاعك
+  const { data: barcodeProduct } = useProductByBarcode(searchQuery);
+
+  // إضافة المنتج عند المسح بالباركود
+  useEffect(() => {
+    if (barcodeProduct) {
+      addToCart(barcodeProduct);
+      setSearchQuery('');
+    }
+  }, [barcodeProduct]);
 
   // Transform categories for the component
   const transformedCategories = [
@@ -102,100 +116,43 @@ const POS: React.FC = () => {
     })) || [])
   ];
 
-  // Transform products for the component
-  const transformedProducts = products?.map(prod => ({
-    id: prod.id,
+  // ✅ Transform products for the component - مع كل البيانات المهمة
+  const transformedProducts = products?.map((prod: Product) => ({
+    id: prod.id.toString(),
     name: prod.name,
     nameAr: prod.name_ar || prod.name,
-    price: Number(prod.price),
+    price: prod.price,
     sku: prod.sku,
-      imageUrl: prod.image?.fullUrl || undefined,
-  image_url: prod.image_url,
     barcode: prod.barcode || '',
-    stock: prod.stock,
-    category: prod.category_id || '',
-    image: prod.image_url || undefined,
-    hasVariants: prod.has_variants || false
+    stock: prod.stock || 0,
+    category: prod.category_id?.toString() || '',
+    category_id: prod.category_id,
+    image_url: prod.image_url,
+    imageUrl: prod.imageUrl,
+    image: prod.image,
+    // ✅ مهم: hasVariants من units
+    hasVariants: (prod.units && prod.units.length > 0) || false,
+    // ✅ تمرير units كاملة للـ POSProductGrid
+    units: prod.units || [],
+    // ✅ تمرير category كاملة
+    category_obj: prod.category
   })) || [];
 
-  // Listen for barcode scanner input (rapid keystrokes)
+  // Reset search when category changes
   useEffect(() => {
-    let barcodeBuffer = '';
-    let lastKeyTime = 0;
+    setSearchQuery('');
+  }, [selectedCategory]);
 
-    const handleKeyPress = async (e: KeyboardEvent) => {
-      const currentTime = Date.now();
-      
-      if (e.key === 'Enter' && barcodeBuffer.length > 5) {
-        const scannedBarcode = barcodeBuffer;
-        barcodeBuffer = '';
-        
-        const { data: product, } = await api.post('/products/index', {
-          barcode: scannedBarcode
-        });
-
-        if (product) {
-          addToCart({
-            id: product.id,
-            name: product.name,
-            nameAr: product.name_ar || product.name,
-            price: Number(product.price),
-            sku: product.sku,
-            stock: product.stock,
-            hasVariants: product.has_variants || false
-          });
-        } else {
-          toast({
-            title: language === 'ar' ? 'منتج غير موجود' : 'Product not found',
-            description: scannedBarcode,
-            variant: 'destructive'
-          });
-        }
-        return;
-      }
-
-      if (currentTime - lastKeyTime < 50 || barcodeBuffer === '') {
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-          barcodeBuffer += e.key;
-        }
-      } else {
-        barcodeBuffer = e.key.length === 1 ? e.key : '';
-      }
-      
-      lastKeyTime = currentTime;
-
-      setTimeout(() => {
-        if (Date.now() - lastKeyTime > 200) {
-          barcodeBuffer = '';
-        }
-      }, 200);
-    };
-
-    window.addEventListener('keypress', handleKeyPress);
-    return () => window.removeEventListener('keypress', handleKeyPress);
-  }, [language]);
-
-  const addToCart = (product: { id: string; name: string; nameAr: string; price: number; sku: string; stock: number; hasVariants?: boolean }) => {
-    if (product.hasVariants) {
-      setSelectedProductForVariant({
-        id: product.id,
-        name: product.name,
-        nameAr: product.nameAr,
-        price: product.price,
-        sku: product.sku
-      });
+  const addToCart = (product: Product) => {
+    // ✅ التحقق من وجود variants
+    if (product.units && product.units.length > 0) {
+      // المنتج عنده variants - نفتح الـ selector
+      setSelectedProductForVariant(product);
       setShowVariantSelector(true);
       return;
     }
 
-    // if (product.stock === 0) {
-    //   toast({
-    //     title: language === 'ar' ? 'المنتج غير متوفر' : 'Out of stock',
-    //     variant: 'destructive'
-    //   });
-    //   return;
-    // }
-
+    // منتج عادي - نضيفه مباشرة
     setCartItems(prev => {
       const existing = prev.find(item => item.id === product.id && !item.variantId);
       if (existing) {
@@ -208,7 +165,7 @@ const POS: React.FC = () => {
       return [...prev, {
         id: product.id,
         name: product.name,
-        nameAr: product.nameAr,
+        nameAr: product.name_ar || product.name,
         price: product.price,
         quantity: 1,
         sku: product.sku
@@ -216,37 +173,49 @@ const POS: React.FC = () => {
     });
   };
 
+  // ✅ إضافة variant إلى السلة
   const addVariantToCart = (variant: {
-    id: string;
-    variantId: string;
-    name: string;
-    nameAr: string;
+    productId: string;
+    unitId: number;
+    colorId: number;
+    size: string;
+    color: string;
     price: number;
     sku: string;
-    sizeName?: string;
-    colorName?: string;
+    stock: number;
   }) => {
+    if (!selectedProductForVariant) return;
+
+    const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
+    
     setCartItems(prev => {
-      const existing = prev.find(item => item.variantId === variant.variantId);
+      const existing = prev.find(item => item.variantId === variantId);
       if (existing) {
         return prev.map(item =>
-          item.variantId === variant.variantId
+          item.variantId === variantId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
       return [...prev, {
-        id: variant.id,
-        variantId: variant.variantId,
-        name: variant.name,
-        nameAr: variant.nameAr,
+        id: selectedProductForVariant.id,
+        variantId: variantId,
+        name: selectedProductForVariant.name,
+        nameAr: selectedProductForVariant.name_ar || selectedProductForVariant.name,
         price: variant.price,
         quantity: 1,
         sku: variant.sku,
-        sizeName: variant.sizeName,
-        colorName: variant.colorName
+        sizeName: variant.size,
+        colorName: variant.color,
+        unitId: variant.unitId,
+        colorId: variant.colorId,
+        stock: variant.stock
       }];
     });
+
+    // قفل الـ selector بعد الإضافة
+    setShowVariantSelector(false);
+    setSelectedProductForVariant(null);
   };
 
   const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
@@ -336,7 +305,8 @@ const POS: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // ✅ إزالة Supabase من الـ logout
+    localStorage.removeItem('sb-auth');
     navigate('/auth');
   };
 
@@ -507,7 +477,6 @@ const POS: React.FC = () => {
               <span className="text-xs font-medium">{language === 'ar' ? 'مرتجع' : 'Returns'}</span>
             </Button>
 
-
             {/* Shift */}
             <Button 
               variant="ghost" 
@@ -598,6 +567,8 @@ const POS: React.FC = () => {
               />
               <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
             </div>
+            
+            {/* POSCategories مع فلتر حسب الفئة 🎯 */}
             <POSCategories
               categories={transformedCategories}
               selectedCategory={selectedCategory}
@@ -675,6 +646,7 @@ const POS: React.FC = () => {
         onDeleteOrder={deleteHeldOrder}
       />
 
+      {/* ✅ POSVariantSelector معدل لاستقبال Product كامل */}
       {selectedProductForVariant && (
         <POSVariantSelector
           isOpen={showVariantSelector}

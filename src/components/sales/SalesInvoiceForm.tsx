@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyTax } from "@/hooks/useCurrencyTax";
 import { Button } from "@/components/ui/button";
@@ -12,20 +11,97 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Printer, Crown, Star } from "lucide-react";
+import { Plus, Trash2, Save, Printer, Crown, Star, Barcode, Search } from "lucide-react";
 import { format } from "date-fns";
 import QuickProductSearch from "@/components/shared/QuickProductSearch";
+import api from "@/lib/api";
+
+// ========== أنواع البيانات ==========
+
+interface Customer {
+  id: number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  point?: number;
+  last_paid_amount?: number;
+}
+
+interface SalesRepresentative {
+  id: number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  email?: string;
+  commission_rate?: number;
+  is_active?: boolean;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  name_ar?: string;
+  code?: string;
+  phone?: string;
+  address?: string;
+  is_active?: boolean;
+}
+
+interface Warehouse {
+  id: number;
+  name: string;
+  name_ar?: string;
+  code?: string;
+  phone?: string;
+  address?: string;
+  is_active?: boolean;
+}
+
+interface Currency {
+  id: number;
+  name: string;
+  code: string;
+  symbol: string;
+  exchange_rate: number;
+  is_default?: boolean;
+}
+
+interface Tax {
+  id: number;
+  name: string;
+  name_ar?: string;
+  rate: number;
+  is_default?: boolean;
+}
+
+interface Product {
+  id: number;
+  name: string;
+  name_ar?: string;
+  sku: string;
+  barcode?: string;
+  price: number;
+  sell_price?: number;
+  cost?: number;
+  stock: number;
+  reorder_level?: number;
+  active?: boolean;
+  image_url?: string | null;
+  image?: any;
+  units?: any[];
+}
 
 interface InvoiceItem {
   id: string;
-  product_id: string | null;
-  product_variant_id: string | null;
+  product_id: number | null;
   product_name: string;
   sku: string;
   quantity: number;
   unit_price: number;
-  discount_amount: number;
   discount_percent: number;
+  discount_amount: number;
   tax_amount: number;
   total_price: number;
 }
@@ -40,125 +116,201 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
+  
+  // ========== State ==========
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [formData, setFormData] = useState({
     customer_id: "",
-    salesman_id: "",
+    sales_representative_id: "",
     branch_id: "",
     warehouse_id: "",
     due_date: "",
-    payment_method: "cash",
+    payment_method: "cash" as 'cash' | 'card' | 'wallet' | 'credit',
     discount_percent: 0,
-    tax_rate_id: "",
+    tax_id: "",
     currency_id: "",
     notes: ""
   });
+  const [invoiceNumber, setInvoiceNumber] = useState<string>("");
 
-  // Set defaults when data loads
+  // ========== Set Defaults ==========
   useEffect(() => {
-    if (defaultTaxRate && !formData.tax_rate_id) {
-      setFormData(prev => ({ ...prev, tax_rate_id: defaultTaxRate.id }));
+    if (defaultTaxRate && !formData.tax_id) {
+      setFormData(prev => ({ ...prev, tax_id: defaultTaxRate.id }));
     }
     if (defaultCurrency && !formData.currency_id) {
       setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
     }
-  }, [defaultTaxRate, defaultCurrency, formData.tax_rate_id, formData.currency_id]);
+  }, [defaultTaxRate, defaultCurrency, formData.tax_id, formData.currency_id]);
 
-  // Fetch customers
-  const { data: customers } = useQuery({
-    queryKey: ['customers'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data;
+  // ========== Generate Invoice Number ==========
+  useEffect(() => {
+    if (isOpen) {
+      const date = new Date();
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const random = Math.floor(Math.random() * 9000 + 1000);
+      setInvoiceNumber(`INV-${year}${month}${day}-${random}`);
     }
+  }, [isOpen]);
+
+  // ========== Queries ==========
+
+  // ✅ جلب العملاء - POST /customer/index
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers-form'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/customer/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب العملاء' : 'Error fetching customers');
+        return [];
+      }
+    },
+    enabled: isOpen
   });
 
-  // Fetch salesmen
-  const { data: salesmen } = useQuery({
-    queryKey: ['salesmen'],
+  // ✅ جلب المندوبين - POST /sales-representative/index
+  const { data: salesmen = [] } = useQuery({
+    queryKey: ['salesmen-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('salesmen')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/sales-representative/index', {
+          filters: { is_active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching sales representatives:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب المندوبين' : 'Error fetching sales representatives');
+        return [];
+      }
+    },
+    enabled: isOpen
   });
 
-  // Fetch branches
-  const { data: branches } = useQuery({
-    queryKey: ['branches'],
+  // ✅ جلب الفروع - POST /branch/index
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/branch/index', {
+          filters: { active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب الفروع' : 'Error fetching branches');
+        return [];
+      }
+    },
+    enabled: isOpen
   });
 
-  // Fetch warehouses
-  const { data: warehouses } = useQuery({
-    queryKey: ['warehouses'],
+  // ✅ جلب المخازن - POST /warehouse/index
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/warehouse/index', {
+          filters: { active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب المخازن' : 'Error fetching warehouses');
+        return [];
+      }
+    },
+    enabled: isOpen
   });
 
-  // Fetch payment methods
-  const { data: paymentMethods = [] } = useQuery({
-    queryKey: ['payment-methods-active'],
+  // ✅ جلب المنتجات للبحث السريع - POST /product/index
+  const { data: products = [] } = useQuery({
+    queryKey: ['products-form'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payment_methods')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data;
-    }
+      try {
+        const response = await api.post('/product/index', {
+          filters: { active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        return [];
+      }
+    },
+    enabled: isOpen
   });
 
-  // Generate invoice number
-  const { data: invoiceNumber } = useQuery({
-    queryKey: ['new-invoice-number'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('generate_sales_invoice_number');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Calculate totals
+  // ========== Calculations ==========
   const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
     const discountAmount = (subtotal * formData.discount_percent) / 100;
     const afterDiscount = subtotal - discountAmount;
-    const selectedTaxRate = taxRates.find(t => t.id === formData.tax_rate_id);
-    const taxPercent = selectedTaxRate?.rate || 0;
+    
+    const selectedTax = taxRates.find(t => t.id === formData.tax_id);
+    const taxPercent = selectedTax?.rate || 0;
     const taxAmount = (afterDiscount * taxPercent) / 100;
     const totalAmount = afterDiscount + taxAmount;
     
-    return { subtotal, discountAmount, taxAmount, totalAmount, taxPercent };
+    return { 
+      subtotal, 
+      discountAmount, 
+      taxAmount, 
+      totalAmount, 
+      taxPercent 
+    };
   };
 
   const totals = calculateTotals();
 
-  // Add product to items
+  // ========== Handlers ==========
+
+  // ✅ إضافة منتج
   const addProduct = (product: any) => {
     const existingIndex = items.findIndex(item => item.product_id === product.id);
     
@@ -171,31 +323,34 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       const newItem: InvoiceItem = {
         id: crypto.randomUUID(),
         product_id: product.id,
-        product_variant_id: null,
-        product_name: product.name,
+        product_name: product.name_ar || product.name,
         sku: product.sku,
         quantity: 1,
-        unit_price: product.price,
-        discount_amount: 0,
+        unit_price: Number(product.sell_price || product.price || 0),
         discount_percent: 0,
+        discount_amount: 0,
         tax_amount: 0,
-        total_price: product.price
+        total_price: Number(product.sell_price || product.price || 0)
       };
       setItems([...items, newItem]);
     }
+
+    toast.success(language === 'ar' ? 'تم إضافة المنتج' : 'Product added');
   };
 
-  // Update item
+  // ✅ تحديث كمية المنتج
   const updateItem = (id: string, field: string, value: number) => {
     const updated = items.map(item => {
       if (item.id === id) {
         const newItem = { ...item, [field]: value };
+        
         if (field === 'quantity' || field === 'unit_price' || field === 'discount_percent') {
           const baseTotal = newItem.quantity * newItem.unit_price;
           const discount = (baseTotal * newItem.discount_percent) / 100;
           newItem.discount_amount = discount;
           newItem.total_price = baseTotal - discount;
         }
+        
         return newItem;
       }
       return item;
@@ -203,14 +358,33 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     setItems(updated);
   };
 
-  // Remove item
+  // ✅ حذف منتج
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
+    toast.success(language === 'ar' ? 'تم حذف المنتج' : 'Product removed');
   };
 
-  // Create invoice mutation
+  // ✅ إعادة تعيين النموذج
+  const resetForm = () => {
+    setItems([]);
+    setFormData({
+      customer_id: "",
+      sales_representative_id: "",
+      branch_id: "",
+      warehouse_id: "",
+      due_date: "",
+      payment_method: "cash",
+      discount_percent: 0,
+      tax_id: defaultTaxRate?.id || "",
+      currency_id: defaultCurrency?.id || "",
+      notes: ""
+    });
+  };
+
+  // ✅ إنشاء فاتورة جديدة - POST /sales-invoice/store
   const createInvoiceMutation = useMutation({
     mutationFn: async () => {
+      // التحقق من البيانات المطلوبة
       if (!formData.customer_id) {
         throw new Error(language === 'ar' ? 'يجب اختيار العميل' : 'Customer is required');
       }
@@ -218,158 +392,73 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
       }
 
-      const paymentStatus = formData.payment_method === 'credit' ? 'pending' : 'paid';
-      const paidAmount = formData.payment_method === 'credit' ? 0 : totals.totalAmount;
+      // تجهيز payload
+      const payload = {
+        customer_id: Number(formData.customer_id),
+        sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
+        branch_id: formData.branch_id ? Number(formData.branch_id) : null,
+        warehouse_id: formData.warehouse_id ? Number(formData.warehouse_id) : null,
+        currency_id: formData.currency_id ? Number(formData.currency_id) : null,
+        tax_id: formData.tax_id ? Number(formData.tax_id) : null,
+        payment_method: formData.payment_method,
+        due_date: formData.due_date || null,
+        note: formData.notes || null,
+        items: items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.unit_price
+        }))
+      };
 
-      // Create invoice
-      const { data: invoice, error: invoiceError } = await supabase
-        .from('sales_invoices')
-        .insert({
-          invoice_number: invoiceNumber,
-          invoice_type: 'standard',
-          customer_id: formData.customer_id,
-          salesman_id: formData.salesman_id || null,
-          branch_id: formData.branch_id || null,
-          warehouse_id: formData.warehouse_id || null,
-          due_date: formData.due_date || null,
-          subtotal: totals.subtotal,
-          discount_amount: totals.discountAmount,
-          discount_percent: formData.discount_percent,
-          tax_amount: totals.taxAmount,
-          tax_percent: totals.taxPercent,
-          total_amount: totals.totalAmount,
-          paid_amount: paidAmount,
-          remaining_amount: totals.totalAmount - paidAmount,
-          payment_status: paymentStatus,
-          payment_method: formData.payment_method,
-          notes: formData.notes
-        })
-        .select()
-        .single();
+      console.log('📤 Creating sales invoice:', payload);
 
-      if (invoiceError) throw invoiceError;
-
-      // Create invoice items
-      const invoiceItems = items.map(item => ({
-        invoice_id: invoice.id,
-        product_id: item.product_id,
-        product_variant_id: item.product_variant_id,
-        product_name: item.product_name,
-        sku: item.sku,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_amount: item.discount_amount,
-        discount_percent: item.discount_percent,
-        tax_amount: item.tax_amount,
-        total_price: item.total_price
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('sales_invoice_items')
-        .insert(invoiceItems);
-
-      if (itemsError) throw itemsError;
-
-      // Update product stock and create inventory movements
-      for (const item of items) {
-        if (item.product_id) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single();
-          
-          if (product) {
-            const previousStock = product.stock;
-            const newStock = Math.max(0, previousStock - item.quantity);
-            
-            // Update product stock
-            await supabase
-              .from('products')
-              .update({ stock: newStock })
-              .eq('id', item.product_id);
-
-            // Create inventory movement record
-            await supabase
-              .from('inventory_movements')
-              .insert({
-                product_id: item.product_id,
-                warehouse_id: formData.warehouse_id || null,
-                movement_type: 'sale',
-                quantity: -item.quantity,
-                previous_stock: previousStock,
-                new_stock: newStock,
-                reference_type: 'sales_invoice',
-                reference_id: invoice.id,
-                notes: `فاتورة مبيعات رقم ${invoiceNumber}`
-              });
-          }
-        }
-      }
-
-      // Update customer total purchases and add loyalty points
-      if (formData.customer_id) {
-        const customer = customers?.find(c => c.id === formData.customer_id);
-        if (customer) {
-          // Calculate loyalty points: 1 point per 1000 YER
-          const earnedPoints = Math.floor(totals.totalAmount / 1000);
-          
-          await supabase
-            .from('customers')
-            .update({ 
-              total_purchases: (customer.total_purchases || 0) + totals.totalAmount,
-              loyalty_points: (customer.loyalty_points || 0) + earnedPoints
-            })
-            .eq('id', formData.customer_id);
-        }
-      }
-
-      return invoice;
+      const response = await api.post('/sales-invoice/store', payload);
+      return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success(language === 'ar' ? 'تم إنشاء الفاتورة بنجاح' : 'Invoice created successfully');
+      
+      // تحديث البيانات
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['new-invoice-number'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['products-search'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['products-form'] });
+      
+      // إغلاق النموذج وإعادة تعيينه
       onClose();
       resetForm();
     },
     onError: (error: any) => {
-      toast.error(error.message);
+      console.error('❌ Error creating invoice:', error);
+      toast.error(
+        language === 'ar' 
+          ? error.response?.data?.message || 'حدث خطأ في إنشاء الفاتورة'
+          : error.response?.data?.message || 'Error creating invoice'
+      );
     }
   });
 
-  const resetForm = () => {
-    setItems([]);
-    setFormData({
-      customer_id: "",
-      salesman_id: "",
-      branch_id: "",
-      warehouse_id: "",
-      due_date: "",
-      payment_method: "cash",
-      discount_percent: 0,
-      tax_rate_id: defaultTaxRate?.id || "",
-      currency_id: defaultCurrency?.id || "",
-      notes: ""
-    });
-  };
-
+  // ========== Render ==========
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        resetForm();
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {language === 'ar' ? 'فاتورة مبيعات جديدة' : 'New Sales Invoice'}
-            {invoiceNumber && ` - ${invoiceNumber}`}
+          <DialogTitle className="flex items-center gap-2">
+            <span>{language === 'ar' ? 'فاتورة مبيعات جديدة' : 'New Sales Invoice'}</span>
+            {invoiceNumber && (
+              <span className="text-sm font-mono bg-muted px-3 py-1 rounded-full">
+                {invoiceNumber}
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Form */}
+          {/* ========== Main Form ========== */}
           <div className="lg:col-span-2 space-y-4">
             {/* Customer & Basic Info */}
             <Card>
@@ -379,8 +468,12 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
+                {/* العميل */}
                 <div className="col-span-2 md:col-span-1">
-                  <Label>{language === 'ar' ? 'العميل *' : 'Customer *'}</Label>
+                  <Label className="flex items-center gap-1">
+                    {language === 'ar' ? 'العميل' : 'Customer'} 
+                    <span className="text-destructive">*</span>
+                  </Label>
                   <Select
                     value={formData.customer_id}
                     onValueChange={(value) => setFormData({ ...formData, customer_id: value })}
@@ -389,14 +482,16 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       <SelectValue placeholder={language === 'ar' ? 'اختر العميل' : 'Select customer'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {customers?.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
+                      {customers.map((customer: Customer) => (
+                        <SelectItem key={customer.id} value={customer.id.toString()}>
                           <div className="flex items-center gap-2">
-                            <span>{language === 'ar' ? customer.name_ar || customer.name : customer.name}</span>
-                            {(customer.loyalty_points || 0) > 0 && (
+                            <span>
+                              {language === 'ar' ? customer.name_ar || customer.name : customer.name}
+                            </span>
+                            {(customer.point || 0) > 0 && (
                               <span className="flex items-center gap-1 text-warning text-xs">
                                 <Star size={10} className="fill-warning" />
-                                {customer.loyalty_points}
+                                {customer.point}
                               </span>
                             )}
                           </div>
@@ -404,37 +499,44 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       ))}
                     </SelectContent>
                   </Select>
-                  {/* Show selected customer loyalty points */}
+                  
+                  {/* عرض نقاط الولاء للعميل المحدد */}
                   {formData.customer_id && (() => {
-                    const customer = customers?.find(c => c.id === formData.customer_id);
+                    const customer = customers.find((c: Customer) => c.id === Number(formData.customer_id));
                     if (!customer) return null;
+                    
+                    const earnedPoints = Math.floor(totals.totalAmount / 1000);
+                    
                     return (
                       <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-warning/10 border border-warning/20">
                         <Crown size={16} className="text-warning" />
                         <span className="text-sm font-medium">
                           {language === 'ar' ? 'نقاط الولاء:' : 'Loyalty Points:'}
                         </span>
-                        <span className="text-warning font-bold">{customer.loyalty_points || 0}</span>
-                        <span className="text-xs text-muted-foreground">
-                          (+{Math.floor(totals.totalAmount / 1000)} {language === 'ar' ? 'نقطة جديدة' : 'new pts'})
-                        </span>
+                        <span className="text-warning font-bold">{customer.point || 0}</span>
+                        {earnedPoints > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            (+{earnedPoints} {language === 'ar' ? 'نقطة جديدة' : 'new pts'})
+                          </span>
+                        )}
                       </div>
                     );
                   })()}
                 </div>
 
+                {/* المندوب */}
                 <div className="col-span-2 md:col-span-1">
                   <Label>{language === 'ar' ? 'المندوب' : 'Salesman'}</Label>
                   <Select
-                    value={formData.salesman_id}
-                    onValueChange={(value) => setFormData({ ...formData, salesman_id: value })}
+                    value={formData.sales_representative_id}
+                    onValueChange={(value) => setFormData({ ...formData, sales_representative_id: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={language === 'ar' ? 'اختر المندوب' : 'Select salesman'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {salesmen?.map((salesman) => (
-                        <SelectItem key={salesman.id} value={salesman.id}>
+                      {salesmen.map((salesman: SalesRepresentative) => (
+                        <SelectItem key={salesman.id} value={salesman.id.toString()}>
                           {language === 'ar' ? salesman.name_ar || salesman.name : salesman.name}
                         </SelectItem>
                       ))}
@@ -442,6 +544,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   </Select>
                 </div>
 
+                {/* الفرع */}
                 <div>
                   <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
                   <Select
@@ -452,8 +555,8 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {branches?.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
+                      {branches.map((branch: Branch) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
                           {language === 'ar' ? branch.name_ar || branch.name : branch.name}
                         </SelectItem>
                       ))}
@@ -461,6 +564,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   </Select>
                 </div>
 
+                {/* المخزن */}
                 <div>
                   <Label>{language === 'ar' ? 'المخزن' : 'Warehouse'}</Label>
                   <Select
@@ -471,8 +575,8 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       <SelectValue placeholder={language === 'ar' ? 'اختر المخزن' : 'Select warehouse'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {warehouses?.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouses.map((warehouse: Warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
                           {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
                         </SelectItem>
                       ))}
@@ -480,33 +584,26 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   </Select>
                 </div>
 
+                {/* طريقة الدفع */}
                 <div>
                   <Label>{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</Label>
                   <Select
                     value={formData.payment_method}
-                    onValueChange={(value) => setFormData({ ...formData, payment_method: value })}
+                    onValueChange={(value: any) => setFormData({ ...formData, payment_method: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {paymentMethods.length > 0 ? (
-                        paymentMethods.map((method) => (
-                          <SelectItem key={method.code} value={method.code}>
-                            {language === 'ar' ? method.name_ar : method.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                          <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                          <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
-                        </>
-                      )}
+                      <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                      <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                      <SelectItem value="wallet">{language === 'ar' ? 'محفظة' : 'Wallet'}</SelectItem>
+                      <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
+                {/* تاريخ الاستحقاق */}
                 <div>
                   <Label>{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
                   <Input
@@ -529,7 +626,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                 {/* Quick Product Search */}
                 <QuickProductSearch
                   onSelectProduct={addProduct}
-                  priceField="price"
+                  priceField="sell_price"
                   placeholder={language === 'ar' ? 'بحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
                   autoFocus
                   showStock
@@ -540,11 +637,11 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="w-24">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                        <TableHead className="w-28">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
-                        <TableHead className="w-24">{language === 'ar' ? 'خصم %' : 'Disc %'}</TableHead>
-                        <TableHead className="w-28">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                        <TableHead className="min-w-[200px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                        <TableHead className="w-24 text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                        <TableHead className="w-28 text-right">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                        <TableHead className="w-24 text-center">{language === 'ar' ? 'خصم %' : 'Disc %'}</TableHead>
+                        <TableHead className="w-28 text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -552,7 +649,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       {items.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            {language === 'ar' ? 'لا توجد أصناف' : 'No items added'}
+                            <div className="flex flex-col items-center gap-2">
+                              <Barcode size={24} className="opacity-30" />
+                              <span>{language === 'ar' ? 'لا توجد أصناف' : 'No items added'}</span>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -568,16 +668,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                                 min="1"
                                 value={item.quantity}
                                 onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                                className="w-20"
+                                className="w-20 text-center"
                               />
                             </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
                                 min="0"
+                                step="0.01"
                                 value={item.unit_price}
                                 onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                                className="w-24"
+                                className="w-24 text-right"
                               />
                             </TableCell>
                             <TableCell>
@@ -587,19 +688,20 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                                 max="100"
                                 value={item.discount_percent}
                                 onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                                className="w-20"
+                                className="w-20 text-center"
                               />
                             </TableCell>
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium text-right">
                               {item.total_price.toLocaleString()}
                             </TableCell>
                             <TableCell>
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
                                 onClick={() => removeItem(item.id)}
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -619,12 +721,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
+                  placeholder={language === 'ar' ? 'أضف ملاحظات للفاتورة...' : 'Add invoice notes...'}
                 />
               </CardContent>
             </Card>
           </div>
 
-          {/* Summary */}
+          {/* ========== Summary ========== */}
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
@@ -655,70 +758,97 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   </Select>
                 </div>
 
-                <div className="flex justify-between">
+                {/* Subtotal */}
+                <div className="flex justify-between items-center py-2">
                   <span className="text-muted-foreground">
                     {language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}
                   </span>
-                  <span>{formatAmount(totals.subtotal, currencies.find(c => c.id === formData.currency_id)?.code)}</span>
+                  <span className="font-medium">
+                    {formatAmount(totals.subtotal, currencies.find(c => c.id === formData.currency_id)?.code)}
+                  </span>
                 </div>
 
+                {/* Discount */}
                 <div className="flex items-center gap-2">
                   <Label className="w-24">
                     {language === 'ar' ? 'خصم %' : 'Discount %'}
                   </Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.discount_percent}
-                    onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })}
-                    className="w-20"
-                  />
-                  <span className="text-destructive">-{totals.discountAmount.toLocaleString()}</span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.discount_percent}
+                      onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })}
+                      className="w-20"
+                    />
+                    <span className="text-destructive flex-1 text-right">
+                      -{formatAmount(totals.discountAmount, currencies.find(c => c.id === formData.currency_id)?.code)}
+                    </span>
+                  </div>
                 </div>
 
+                {/* Tax */}
                 <div className="flex items-center gap-2">
                   <Label className="w-24">
                     {language === 'ar' ? 'الضريبة' : 'Tax'}
                   </Label>
-                  <Select
-                    value={formData.tax_rate_id}
-                    onValueChange={(value) => setFormData({ ...formData, tax_rate_id: value })}
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder={language === 'ar' ? 'اختر الضريبة' : 'Select tax'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taxRates.map((rate) => (
-                        <SelectItem key={rate.id} value={rate.id}>
-                          {getTaxRateName(rate)} ({rate.rate}%)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-primary">+{totals.taxAmount.toLocaleString()}</span>
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="flex justify-between text-xl font-bold">
-                    <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                    <span className="text-primary">{totals.totalAmount.toLocaleString()}</span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <Select
+                      value={formData.tax_id}
+                      onValueChange={(value) => setFormData({ ...formData, tax_id: value })}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder={language === 'ar' ? 'اختر الضريبة' : 'Select tax'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taxRates.map((rate) => (
+                          <SelectItem key={rate.id} value={rate.id}>
+                            {getTaxRateName(rate)} ({rate.rate}%)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-primary flex-1 text-right">
+                      +{formatAmount(totals.taxAmount, currencies.find(c => c.id === formData.currency_id)?.code)}
+                    </span>
                   </div>
                 </div>
 
+                {/* Total */}
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">
+                      {language === 'ar' ? 'الإجمالي' : 'Total'}
+                    </span>
+                    <span className="text-2xl font-bold text-primary">
+                      {formatAmount(totals.totalAmount, currencies.find(c => c.id === formData.currency_id)?.code)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
                 <div className="flex flex-col gap-2 pt-4">
                   <Button
                     onClick={() => createInvoiceMutation.mutate()}
                     disabled={createInvoiceMutation.isPending || items.length === 0}
-                    className="w-full"
+                    className="w-full gap-2"
+                    size="lg"
                   >
-                    <Save className="h-4 w-4 mr-2" />
-                    {createInvoiceMutation.isPending 
-                      ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
-                      : (language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice')}
+                    {createInvoiceMutation.isPending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        {language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}
+                      </>
+                    )}
                   </Button>
-                  <Button variant="outline" className="w-full">
-                    <Printer className="h-4 w-4 mr-2" />
+                  <Button variant="outline" className="w-full gap-2">
+                    <Printer className="h-4 w-4" />
                     {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
                   </Button>
                 </div>

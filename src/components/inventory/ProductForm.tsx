@@ -459,38 +459,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
               uniqueId="product-image-upload"
             />
             
-            <div className="mt-3">
-              <Label className="mb-2 block">
-                {language === 'ar' ? 'أو أدخل رابط الصورة' : 'Or Enter Image URL'}
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={formData.imageUrl || ''}
-                  onChange={(e) => {
-                    handleChange('imageUrl', e.target.value);
-                    if (e.target.value.trim()) {
-                      handleChange('imageId', undefined);
-                      setUploadedImageIds([]);
-                    }
-                  }}
-                  placeholder={
-                    language === 'ar' 
-                      ? 'https://example.com/image.jpg' 
-                      : 'https://example.com/image.jpg'
-                  }
-                  className="flex-1"
-                />
-                {formData.imageUrl && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleChange('imageUrl', '')}
-                  >
-                    {language === 'ar' ? 'حذف' : 'Clear'}
-                  </Button>
-                )}
-              </div>
-            </div>
+            
             
             <p className="text-xs text-muted-foreground">
               {language === 'ar' 
@@ -512,16 +481,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   required
                 />
               </div>
-              <div>
-                <Label>{language === 'ar' ? 'اسم المنتج (عربي)' : 'Product Name (Arabic)'}</Label>
-                <Input
-                  value={formData.nameAr}
-                  onChange={(e) => handleChange('nameAr', e.target.value)}
-                  placeholder="جينز أولاد كلاسيك"
-                  dir="rtl"
-                  required
-                />
-              </div>
+           
             </div>
             
             <div className="space-y-4">
@@ -534,16 +494,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   rows={2}
                 />
               </div>
-              <div>
-                <Label>{language === 'ar' ? 'الوصف (عربي)' : 'Description (Arabic)'}</Label>
-                <Textarea
-                  value={formData.descriptionAr}
-                  onChange={(e) => handleChange('descriptionAr', e.target.value)}
-                  placeholder="وصف المنتج..."
-                  dir="rtl"
-                  rows={2}
-                />
-              </div>
+           
             </div>
           </div>
 
@@ -646,195 +597,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
             </div>
           </div>
 
-          {/* Stock Input */}
-          <div>
-            <Label>{language === 'ar' ? 'المخزون الابتدائي' : 'Initial Stock'}</Label>
-            <Input
-              type="number"
-              value={formData.stock === 0 ? '' : formData.stock}
-              onChange={(e) => handleNumberChange('stock', e.target.value)}
-              min={0}
-              placeholder="0"
-              className="max-w-xs"
-            />
-          </div>
+         
 
           {/* Branches & Warehouses */}
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-lg font-semibold">
-                  {language === 'ar' ? 'الفروع والمستودعات' : 'Branches & Warehouses'}
-                </Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBranchWarehouseConnection}
-                >
-                  {language === 'ar' ? 'إدارة التوصيلات' : 'Manage Connections'}
-                </Button>
-              </div>
+        
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Branches */}
-                <div className="space-y-3">
-                  <Label className="flex items-center gap-2">
-                    <Building2 size={16} className="text-primary" />
-                    {language === 'ar' ? 'الفروع' : 'Branches'}
-                    <span className="text-xs text-muted-foreground">
-                      ({formData.branchIds.length} {language === 'ar' ? 'محدد' : 'selected'})
-                    </span>
-                  </Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
-                    {isLoadingBranches ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      </div>
-                    ) : branches.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        {language === 'ar' ? 'لا توجد فروع' : 'No branches available'}
-                      </p>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2 pb-2 border-b">
-                          <Checkbox
-                            id="select-all-branches"
-                            checked={formData.branchIds.length === branches.length}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                handleChange('branchIds', branches.map(b => b.id.toString()));
-                              } else {
-                                handleChange('branchIds', []);
-                              }
-                            }}
-                          />
-                          <label htmlFor="select-all-branches" className="text-sm font-medium cursor-pointer">
-                            {language === 'ar' ? 'اختيار الكل' : 'Select All'}
-                          </label>
-                        </div>
-                        {branches.map((branch) => (
-                          <div key={branch.id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`branch-${branch.id}`}
-                              checked={formData.branchIds.includes(branch.id.toString())}
-                              onCheckedChange={(checked) => {
-                                const newBranchIds = checked
-                                  ? [...formData.branchIds, branch.id.toString()]
-                                  : formData.branchIds.filter(id => id !== branch.id.toString());
-                                handleChange('branchIds', newBranchIds);
-                              }}
-                            />
-                            <label htmlFor={`branch-${branch.id}`} className="text-sm cursor-pointer flex-1">
-                              {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                            </label>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Warehouses */}
-                <div className="space-y-3">
-                  <Label className="flex items-center gap-2">
-                    <Warehouse size={16} className="text-primary" />
-                    {language === 'ar' ? 'المستودعات' : 'Warehouses'}
-                    <span className="text-xs text-muted-foreground">
-                      ({formData.warehouseIds.length} {language === 'ar' ? 'محدد' : 'selected'})
-                    </span>
-                  </Label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-muted/30 rounded-lg border">
-                    {isLoadingWarehouses ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      </div>
-                    ) : warehouses.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        {language === 'ar' ? 'لا توجد مستودعات' : 'No warehouses available'}
-                      </p>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2 pb-2 border-b">
-                          <Checkbox
-                            id="select-all-warehouses"
-                            checked={formData.warehouseIds.length === warehouses.length}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                handleChange('warehouseIds', warehouses.map(w => w.id.toString()));
-                              } else {
-                                handleChange('warehouseIds', []);
-                              }
-                            }}
-                          />
-                          <label htmlFor="select-all-warehouses" className="text-sm font-medium cursor-pointer">
-                            {language === 'ar' ? 'اختيار الكل' : 'Select All'}
-                          </label>
-                        </div>
-                        {warehouses.map((warehouse) => (
-                          <div key={warehouse.id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`warehouse-${warehouse.id}`}
-                              checked={formData.warehouseIds.includes(warehouse.id.toString())}
-                              onCheckedChange={(checked) => {
-                                const newWarehouseIds = checked
-                                  ? [...formData.warehouseIds, warehouse.id.toString()]
-                                  : formData.warehouseIds.filter(id => id !== warehouse.id.toString());
-                                handleChange('warehouseIds', newWarehouseIds);
-                              }}
-                            />
-                            <label htmlFor={`warehouse-${warehouse.id}`} className="text-sm cursor-pointer flex-1">
-                              {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                            </label>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Valuation Method */}
-          <Card>
-            <CardContent className="p-4 space-y-3">
-              <Label className="flex items-center gap-2 text-lg font-semibold">
-                <Calculator size={16} className="text-primary" />
-                {language === 'ar' ? 'طريقة تقييم المخزون' : 'Inventory Valuation Method'}
-              </Label>
-              <Select 
-                value={formData.valuationMethod} 
-                onValueChange={(val: 'fifo' | 'lifo' | 'weighted_average') => handleChange('valuationMethod', val)}
-              >
-                <SelectTrigger className="bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border border-border z-50">
-                  <SelectItem value="fifo">
-                    {language === 'ar' ? 'الوارد أولاً صادر أولاً (FIFO)' : 'First In, First Out (FIFO)'}
-                  </SelectItem>
-                  <SelectItem value="lifo">
-                    {language === 'ar' ? 'الوارد أخيراً صادر أولاً (LIFO)' : 'Last In, First Out (LIFO)'}
-                  </SelectItem>
-                  <SelectItem value="weighted_average">
-                    {language === 'ar' ? 'المتوسط المرجح' : 'Weighted Average'}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground">
-                {formData.valuationMethod === 'fifo' && (language === 'ar' 
-                  ? 'أقدم المخزون يُباع أولاً - مناسب للبضائع سريعة التلف'
-                  : 'Oldest inventory sold first - Suitable for perishable goods')}
-                {formData.valuationMethod === 'lifo' && (language === 'ar' 
-                  ? 'أحدث المخزون يُباع أولاً - مناسب للبضائع غير قابلة للتلف'
-                  : 'Newest inventory sold first - Suitable for non-perishable goods')}
-                {formData.valuationMethod === 'weighted_average' && (language === 'ar' 
-                  ? 'متوسط تكلفة جميع الوحدات - يوفر استقرار في التكاليف'
-                  : 'Average cost of all units - Provides cost stability')}
-              </p>
-            </CardContent>
-          </Card>
+        
 
           {/* Variants Toggle */}
           <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">

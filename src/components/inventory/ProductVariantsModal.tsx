@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -17,16 +17,20 @@ import {
 } from '@/components/ui/dialog';
 import StockMatrixGrid from './StockMatrixGrid';
 
+// تحديث الـ interface ليتوافق مع API
 interface ProductVariant {
-  id: string;
-  sku: string;
-  barcode: string | null;
-  stock: number;
-  price_adjustment: number | null;
-  cost_adjustment: number | null;
-  is_active: boolean | null;
-  size: { id: string; name: string; name_ar: string | null; code: string } | null;
-  color: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+  id: number;
+  unit_id: number;
+  unit_name: string;
+  cost_price: string;
+  sell_price: string;
+  barcode: string;
+  colors: Array<{
+    id: number;
+    color_id: number;
+    color: string;
+    stock: number;
+  }>;
 }
 
 interface ProductVariantsModalProps {
@@ -41,7 +45,10 @@ interface ProductVariantsModalProps {
     sku: string;
     stock: number;
     image?: string;
+    imageUrl?: string;
+    image_url?: string;
     minStock?: number;
+    units?: ProductVariant[]; // ✅ إضافة units من API
   } | null;
   onEditProduct?: () => void;
 }
@@ -55,39 +62,79 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
 
-  const { data: variants = [], isLoading } = useQuery({
+  // ✅ جلب المتغيرات من API بتاعك
+  const { data: productDetails, isLoading } = useQuery({
     queryKey: ['product-variants-inventory', product?.id],
     queryFn: async () => {
-      if (!product?.id) return [];
-      const { data, error } = await supabase
-        .from('product_variants')
-        .select(`
-          id,
-          sku,
-          barcode,
-          stock,
-          price_adjustment,
-          cost_adjustment,
-          is_active,
-          size:sizes(id, name, name_ar, code),
-          color:colors(id, name, name_ar, hex_code)
-        `)
-        .eq('product_id', product.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data as ProductVariant[];
+      if (!product?.id) return null;
+      
+      try {
+        const response = await api.get(`/product/${product.id}`);
+        return response.data.data;
+      } catch (error) {
+        console.error('Error fetching product details:', error);
+        return null;
+      }
     },
     enabled: isOpen && !!product?.id
   });
 
+  // ✅ استخراج المتغيرات من الـ units
+  const variants: ProductVariant[] = productDetails?.units || product?.units || [];
+
+  // ✅ تحويل الـ variants للشكل المطلوب لـ StockMatrixGrid
+  const transformedVariants = variants.map(unit => {
+    // لو فيه ألوان، نعمل variant لكل لون
+    if (unit.colors && unit.colors.length > 0) {
+      return unit.colors.map(color => ({
+        id: `${unit.unit_id}-${color.color_id}`,
+        sku: `${product?.sku || ''}-${unit.unit_id}-${color.color_id}`,
+        barcode: unit.barcode || null,
+        stock: color.stock || 0,
+        price_adjustment: parseFloat(unit.sell_price || '0') - (product?.price || 0),
+        cost_adjustment: parseFloat(unit.cost_price || '0') - (product?.cost || 0),
+        is_active: true,
+        size: {
+          id: unit.unit_id.toString(),
+          name: unit.unit_name,
+          name_ar: unit.unit_name,
+          code: unit.unit_name
+        },
+        color: {
+          id: color.color_id.toString(),
+          name: color.color,
+          name_ar: color.color,
+          hex_code: getColorHex(color.color)
+        }
+      }));
+    }
+    
+    // لو مفيش ألوان، نعمل variant واحد للوحدة
+    return [{
+      id: unit.unit_id.toString(),
+      sku: `${product?.sku || ''}-${unit.unit_id}`,
+      barcode: unit.barcode || null,
+      stock: product?.stock || 0,
+      price_adjustment: parseFloat(unit.sell_price || '0') - (product?.price || 0),
+      cost_adjustment: parseFloat(unit.cost_price || '0') - (product?.cost || 0),
+      is_active: true,
+      size: {
+        id: unit.unit_id.toString(),
+        name: unit.unit_name,
+        name_ar: unit.unit_name,
+        code: unit.unit_name
+      },
+      color: null
+    }];
+  }).flat(); // flatten array
+
   // Stock calculations
-  const variantsStock = variants.reduce((sum, v) => sum + v.stock, 0);
+  const variantsStock = transformedVariants.reduce((sum, v) => sum + (v.stock || 0), 0);
   const baseStock = product?.stock || 0;
   const totalStock = baseStock + variantsStock;
-  const activeVariants = variants.filter(v => v.is_active);
-  const lowStockVariants = variants.filter(v => v.stock > 0 && v.stock <= 10);
-  const outOfStockVariants = variants.filter(v => v.stock === 0);
+  const activeVariants = transformedVariants.filter(v => v.is_active);
+  const lowStockVariants = transformedVariants.filter(v => v.stock > 0 && v.stock <= 10);
+  const outOfStockVariants = transformedVariants.filter(v => v.stock === 0);
 
   // Calculate stock percentage for progress bar
   const minStock = product?.minStock || 10;
@@ -104,6 +151,31 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
 
   if (!product) return null;
 
+  // دالة للحصول على هيكس كود اللون
+  function getColorHex(colorName: string): string {
+    const colorMap: Record<string, string> = {
+      'أسود': '#000000',
+      'أبيض': '#FFFFFF',
+      'أحمر': '#FF0000',
+      'أخضر': '#00FF00',
+      'أزرق': '#0000FF',
+      'أصفر': '#FFFF00',
+      'بنفسجي': '#800080',
+      'وردي': '#FFC0CB',
+      'رمادي': '#808080',
+      'بني': '#8B4513',
+      'برتقالي': '#FFA500',
+      'name': '#666666',
+      'dsa': '#4CAF50', // لون افتراضي لـ dsa
+    };
+    return colorMap[colorName] || '#CCCCCC';
+  }
+
+  // جلب رابط الصورة من مصادر متعددة
+  const getProductImage = () => {
+    return product.image || product.imageUrl || product.image_url || null;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
@@ -112,8 +184,16 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
           <div className="flex items-start gap-4">
             {/* Product Image */}
             <div className="w-20 h-20 bg-muted rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 border border-border shadow-sm">
-              {product.image ? (
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+              {getProductImage() ? (
+                <img 
+                  src={getProductImage()!} 
+                  alt={product.name} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                  }}
+                />
               ) : (
                 <Package size={32} className="text-muted-foreground" />
               )}
@@ -225,7 +305,7 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
 
               <TabsContent value="stock" className="flex-1 m-0">
                 <StockMatrixGrid 
-                  variants={variants} 
+                  variants={transformedVariants} 
                   basePrice={product.price} 
                   baseCost={product.cost}
                   mode="stock"
@@ -234,7 +314,7 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
 
               <TabsContent value="price" className="flex-1 m-0">
                 <StockMatrixGrid 
-                  variants={variants} 
+                  variants={transformedVariants} 
                   basePrice={product.price} 
                   baseCost={product.cost}
                   mode="price"
@@ -243,7 +323,7 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
 
               <TabsContent value="barcode" className="flex-1 m-0">
                 <StockMatrixGrid 
-                  variants={variants} 
+                  variants={transformedVariants} 
                   basePrice={product.price} 
                   baseCost={product.cost}
                   mode="barcode"
@@ -256,14 +336,14 @@ const ProductVariantsModal: React.FC<ProductVariantsModalProps> = ({
         {/* Footer */}
         <div className="border-t border-border p-4 flex items-center justify-between bg-muted/20">
           <div className="text-sm text-muted-foreground">
-            {variants.length > 0 && (
+            {transformedVariants.length > 0 && (
               language === 'ar' 
-                ? `${variants.length} متغير • ${totalStock} وحدة إجمالي`
-                : `${variants.length} variants • ${totalStock} total units`
+                ? `${transformedVariants.length} متغير • ${totalStock} وحدة إجمالي`
+                : `${transformedVariants.length} variants • ${totalStock} total units`
             )}
           </div>
           <div className="flex gap-2">
-            {onEditProduct && variants.length > 0 && (
+            {onEditProduct && transformedVariants.length > 0 && (
               <Button variant="outline" onClick={onEditProduct}>
                 <Edit2 size={16} className="me-2" />
                 {language === 'ar' ? 'تعديل' : 'Edit'}
