@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,15 +17,18 @@ import {
   AlertTriangle,
   CheckCircle2,
   Printer,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
+// ========== أنواع البيانات ==========
 interface POSShift {
   id: string;
   shift_number: string;
   cashier_id: string;
+  cashier_name?: string;
   opened_at: string;
   closed_at: string | null;
   opening_amount: number;
@@ -40,7 +42,7 @@ interface POSShift {
   transactions_count: number;
   variance: number | null;
   variance_notes: string | null;
-  status: string;
+  status: 'open' | 'closed';
   notes: string | null;
 }
 
@@ -49,210 +51,444 @@ interface POSShiftManagementProps {
   onShiftChange: (shift: POSShift | null) => void;
 }
 
+// ========== Local Storage Keys ==========
+const STORAGE_KEYS = {
+  ACTIVE_SHIFT: 'pos_active_shift',
+  SHIFT_HISTORY: 'pos_shift_history',
+  LAST_CLEANUP: 'pos_last_cleanup'
+};
+
+// ========== Local Storage Service ==========
+class LocalStorageService {
+  // ✅ حفظ الوردية النشطة
+  static saveActiveShift(shift: POSShift | null) {
+    if (shift) {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_SHIFT, JSON.stringify(shift));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_SHIFT);
+    }
+  }
+
+  // ✅ جلب الوردية النشطة
+  static getActiveShift(): POSShift | null {
+    const shift = localStorage.getItem(STORAGE_KEYS.ACTIVE_SHIFT);
+    return shift ? JSON.parse(shift) : null;
+  }
+
+  // ✅ حفظ سجل الورديات
+  static saveShiftToHistory(shift: POSShift) {
+    const history = this.getShiftHistory();
+    const existingIndex = history.findIndex(s => s.id === shift.id);
+    
+    if (existingIndex >= 0) {
+      history[existingIndex] = shift;
+    } else {
+      history.push(shift);
+    }
+    
+    localStorage.setItem(STORAGE_KEYS.SHIFT_HISTORY, JSON.stringify(history));
+  }
+
+  // ✅ جلب سجل الورديات
+  static getShiftHistory(): POSShift[] {
+    const history = localStorage.getItem(STORAGE_KEYS.SHIFT_HISTORY);
+    return history ? JSON.parse(history) : [];
+  }
+
+  // ✅ حذف الورديات الأقدم من 24 ساعة
+  static cleanupOldShifts() {
+    const lastCleanup = localStorage.getItem(STORAGE_KEYS.LAST_CLEANUP);
+    const now = Date.now();
+    
+    // نعمل cleanup مرة كل 24 ساعة بس
+    if (lastCleanup && now - parseInt(lastCleanup) < 24 * 60 * 60 * 1000) {
+      return;
+    }
+
+    const history = this.getShiftHistory();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    
+    // نشيل الورديات اللي اتعملت من أكتر من 24 ساعة
+    const filteredHistory = history.filter(shift => {
+      const shiftDate = new Date(shift.opened_at).getTime();
+      return shiftDate > oneDayAgo;
+    });
+    
+    localStorage.setItem(STORAGE_KEYS.SHIFT_HISTORY, JSON.stringify(filteredHistory));
+    localStorage.setItem(STORAGE_KEYS.LAST_CLEANUP, now.toString());
+  }
+
+  // ✅ توليد رقم وردية جديد
+  static generateShiftNumber(): string {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const random = Math.floor(Math.random() * 9000 + 1000);
+    
+    return `SH-${year}${month}${day}-${random}`;
+  }
+
+  // ✅ توليد ID جديد
+  static generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+  }
+}
+
 const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, onShiftChange }) => {
-  const queryClient = useQueryClient();
+  const { language } = useLanguage();
+  
+  // ========== State ==========
   const [openShiftModal, setOpenShiftModal] = useState(false);
   const [closeShiftModal, setCloseShiftModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [closingAmount, setClosingAmount] = useState('');
   const [varianceNotes, setVarianceNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [cashierName, setCashierName] = useState('');
 
-  // Fetch company settings for print header
-  const { data: companySettings } = useQuery({
-    queryKey: ['company-settings'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('company_settings').select('*').single();
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch current open shift
-  const { data: activeShift, isLoading } = useQuery({
-    queryKey: ['active-shift'],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from('pos_shifts')
-        .select('*')
-        .eq('cashier_id', user.id)
-        .eq('status', 'open')
-        .maybeSingle();
-
-      if (error) throw error;
-      return data as POSShift | null;
+  // ========== Translations ==========
+  const t = {
+    en: {
+      currentShift: 'Current Shift',
+      noActiveShift: 'No Active Shift',
+      openShift: 'Open New Shift',
+      closeShift: 'Close Shift',
+      shiftNumber: 'Shift #',
+      openTime: 'Open Time',
+      openingBalance: 'Opening Balance',
+      transactions: 'Transactions',
+      cash: 'Cash',
+      card: 'Card',
+      returns: 'Returns',
+      expectedAmount: 'Expected Amount',
+      actualAmount: 'Actual Amount',
+      variance: 'Variance',
+      surplus: 'Surplus',
+      shortage: 'Shortage',
+      exact: 'Exact',
+      notes: 'Notes',
+      varianceNotes: 'Variance Notes',
+      print: 'Print',
+      cancel: 'Cancel',
+      save: 'Save',
+      openShiftSuccess: 'Shift opened successfully',
+      closeShiftSuccess: 'Shift closed successfully',
+      enterOpeningAmount: 'Enter opening balance',
+      enterClosingAmount: 'Enter closing balance',
+      loading: 'Loading...'
     },
-  });
+    ar: {
+      currentShift: 'الوردية الحالية',
+      noActiveShift: 'لا توجد وردية مفتوحة',
+      openShift: 'فتح وردية جديدة',
+      closeShift: 'إغلاق الوردية',
+      shiftNumber: 'رقم الوردية',
+      openTime: 'وقت الفتح',
+      openingBalance: 'رصيد الافتتاح',
+      transactions: 'المعاملات',
+      cash: 'نقدي',
+      card: 'بطاقة',
+      returns: 'مرتجعات',
+      expectedAmount: 'المتوقع',
+      actualAmount: 'الفعلي',
+      variance: 'الفرق',
+      surplus: 'زيادة',
+      shortage: 'عجز',
+      exact: 'مطابق',
+      notes: 'ملاحظات',
+      varianceNotes: 'ملاحظات الفرق',
+      print: 'طباعة',
+      cancel: 'إلغاء',
+      save: 'حفظ',
+      openShiftSuccess: 'تم فتح الوردية بنجاح',
+      closeShiftSuccess: 'تم إغلاق الوردية بنجاح',
+      enterOpeningAmount: 'أدخل رصيد الافتتاح',
+      enterClosingAmount: 'أدخل الرصيد الفعلي',
+      loading: 'جاري التحميل...'
+    }
+  }[language === 'ar' ? 'ar' : 'en'];
 
-  // Open shift mutation
-  const openShiftMutation = useMutation({
-    mutationFn: async (amount: number) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('يجب تسجيل الدخول');
+  // ========== Load Active Shift on Mount ==========
+  useEffect(() => {
+    // تنظيف الورديات القديمة
+    LocalStorageService.cleanupOldShifts();
+    
+    // جلب الوردية النشطة
+    const activeShift = LocalStorageService.getActiveShift();
+    
+    // لو الوردية النشطة قديمة (أكتر من 24 ساعة)، نقفلها
+    if (activeShift) {
+      const shiftDate = new Date(activeShift.opened_at).getTime();
+      const now = Date.now();
+      
+      if (now - shiftDate > 24 * 60 * 60 * 1000) {
+        // نقفل الوردية تلقائياً
+        const closedShift = {
+          ...activeShift,
+          closed_at: new Date().toISOString(),
+          status: 'closed' as const
+        };
+        
+        LocalStorageService.saveShiftToHistory(closedShift);
+        LocalStorageService.saveActiveShift(null);
+        onShiftChange(null);
+        
+        toast.warning(t.shiftNumber + ' ' + activeShift.shift_number + ' ' + 
+          (language === 'ar' ? 'تم إغلاقها تلقائياً بعد 24 ساعة' : 'automatically closed after 24 hours'));
+      } else {
+        onShiftChange(activeShift);
+      }
+    }
+    
+    // جلب اسم الكاشير من localStorage
+    const savedName = localStorage.getItem('pos_cashier_name');
+    if (savedName) {
+      setCashierName(savedName);
+    } else {
+      const name = prompt(language === 'ar' ? 'أدخل اسم الكاشير' : 'Enter cashier name');
+      if (name) {
+        setCashierName(name);
+        localStorage.setItem('pos_cashier_name', name);
+      }
+    }
+    
+    setIsLoading(false);
+  }, []);
 
-      // Generate shift number
-      const { data: shiftNumber } = await supabase.rpc('generate_shift_number');
+  // ========== Open Shift ==========
+  const openShiftMutation = {
+    isPending: false,
+    mutate: (amount: number) => {
+      try {
+        if (!cashierName) {
+          toast.error(language === 'ar' ? 'الرجاء إدخال اسم الكاشير' : 'Please enter cashier name');
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from('pos_shifts')
-        .insert({
-          shift_number: shiftNumber,
-          cashier_id: user.id,
+        const now = new Date().toISOString();
+        const newShift: POSShift = {
+          id: LocalStorageService.generateId(),
+          shift_number: LocalStorageService.generateShiftNumber(),
+          cashier_id: 'local-' + Date.now(),
+          cashier_name: cashierName,
+          opened_at: now,
+          closed_at: null,
           opening_amount: amount,
-          status: 'open'
-        })
-        .select()
-        .single();
+          closing_amount: null,
+          expected_amount: null,
+          cash_sales: 0,
+          card_sales: 0,
+          other_sales: 0,
+          total_sales: 0,
+          total_returns: 0,
+          transactions_count: 0,
+          variance: null,
+          variance_notes: null,
+          status: 'open',
+          notes: null
+        };
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['active-shift'] });
-      onShiftChange(data as POSShift);
-      setOpenShiftModal(false);
-      setOpeningAmount('');
-      toast.success('تم فتح الوردية بنجاح');
-    },
-    onError: (error: any) => {
-      toast.error('خطأ في فتح الوردية: ' + error.message);
+        LocalStorageService.saveActiveShift(newShift);
+        LocalStorageService.saveShiftToHistory(newShift);
+        
+        onShiftChange(newShift);
+        setOpenShiftModal(false);
+        setOpeningAmount('');
+        
+        toast.success(t.openShiftSuccess);
+      } catch (error: any) {
+        toast.error(error.message);
+      }
     }
-  });
+  };
 
-  // Close shift mutation
-  const closeShiftMutation = useMutation({
-    mutationFn: async ({ amount, notes }: { amount: number; notes: string }) => {
-      if (!activeShift) throw new Error('لا توجد وردية مفتوحة');
+  // ========== Close Shift ==========
+  const closeShiftMutation = {
+    isPending: false,
+    mutate: ({ amount, notes }: { amount: number; notes: string }) => {
+      try {
+        if (!currentShift) {
+          throw new Error(language === 'ar' ? 'لا توجد وردية مفتوحة' : 'No open shift');
+        }
 
-      // Calculate expected amount
-      const expectedAmount = activeShift.opening_amount + activeShift.cash_sales - activeShift.total_returns;
-      const variance = amount - expectedAmount;
+        const expectedAmount = currentShift.opening_amount + currentShift.cash_sales - currentShift.total_returns;
+        const variance = amount - expectedAmount;
 
-      const { data, error } = await supabase
-        .from('pos_shifts')
-        .update({
+        const closedShift: POSShift = {
+          ...currentShift,
           closed_at: new Date().toISOString(),
           closing_amount: amount,
           expected_amount: expectedAmount,
           variance: variance,
           variance_notes: notes || null,
-          status: 'closed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', activeShift.id)
-        .select()
-        .single();
+          status: 'closed'
+        };
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['active-shift'] });
-      onShiftChange(null);
-      setCloseShiftModal(false);
-      setClosingAmount('');
-      setVarianceNotes('');
-      toast.success('تم إغلاق الوردية بنجاح');
-    },
-    onError: (error: any) => {
-      toast.error('خطأ في إغلاق الوردية: ' + error.message);
+        LocalStorageService.saveActiveShift(null);
+        LocalStorageService.saveShiftToHistory(closedShift);
+        
+        onShiftChange(null);
+        setCloseShiftModal(false);
+        setClosingAmount('');
+        setVarianceNotes('');
+        
+        toast.success(t.closeShiftSuccess);
+      } catch (error: any) {
+        toast.error(error.message);
+      }
     }
-  });
+  };
 
-  React.useEffect(() => {
-    if (activeShift) {
-      onShiftChange(activeShift);
-    }
-  }, [activeShift, onShiftChange]);
-
+  // ========== Handlers ==========
   const handleOpenShift = () => {
     const amount = parseFloat(openingAmount) || 0;
+    if (amount <= 0) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
+      return;
+    }
     openShiftMutation.mutate(amount);
   };
 
   const handleCloseShift = () => {
     const amount = parseFloat(closingAmount) || 0;
+    if (amount <= 0) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
+      return;
+    }
     closeShiftMutation.mutate({ amount, notes: varianceNotes });
   };
 
-  const expectedAmount = activeShift 
-    ? activeShift.opening_amount + activeShift.cash_sales - activeShift.total_returns 
+  const expectedAmount = currentShift 
+    ? currentShift.opening_amount + currentShift.cash_sales - currentShift.total_returns 
     : 0;
 
-  const currentVariance = activeShift && closingAmount 
+  const currentVariance = currentShift && closingAmount 
     ? parseFloat(closingAmount) - expectedAmount 
     : 0;
 
   const printZReport = () => {
-    if (!activeShift) return;
+    if (!currentShift) return;
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const varianceText = currentVariance === 0 ? t.exact : currentVariance > 0 ? t.surplus : t.shortage;
+    const varianceClass = currentVariance === 0 ? '' : currentVariance > 0 ? 'variance-positive' : 'variance-negative';
+    const varianceIcon = currentVariance === 0 ? '✓' : currentVariance > 0 ? '↑' : '↓';
 
     const content = `
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <meta charset="utf-8">
-        <title>تقرير Z - ${activeShift.shift_number}</title>
+        <title>${t.closeShift} - ${currentShift.shift_number}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
-          .company-header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-          .company-logo { max-height: 50px; margin-bottom: 8px; }
-          .company-name { font-size: 20px; font-weight: bold; margin: 0; }
-          .company-info { font-size: 11px; color: #666; margin: 3px 0; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; }
-          .row { display: flex; justify-content: space-between; margin: 5px 0; }
-          .total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #000; padding-top: 10px; }
-          .variance-positive { color: green; }
-          .variance-negative { color: red; }
+          body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; background: #fff; }
+          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #000; }
+          .shop-name { font-size: 24px; font-weight: bold; margin: 0; }
+          .shift-info { text-align: center; margin-bottom: 30px; }
+          .section { margin: 25px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+          .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+          .row { display: flex; justify-content: space-between; margin: 8px 0; }
+          .total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #000; padding-top: 15px; margin-top: 15px; }
+          .variance-positive { color: #2563eb; }
+          .variance-negative { color: #dc2626; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px dashed #ccc; text-align: center; color: #666; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; }
+          .badge-open { background: #16a34a20; color: #16a34a; }
+          .badge-closed { background: #6b728020; color: #6b7280; }
+          .amount { font-family: monospace; font-size: 1.1em; }
         </style>
       </head>
       <body>
-        <div class="company-header">
-          ${companySettings?.logo_url ? `<img src="${companySettings.logo_url}" class="company-logo" alt="Logo" />` : ''}
-          <h1 class="company-name">${companySettings?.name_ar || companySettings?.name || ''}</h1>
-          <p class="company-info">${companySettings?.address || ''}</p>
-          <p class="company-info">${companySettings?.phone || ''}</p>
-          ${companySettings?.tax_number ? `<p class="company-info">الرقم الضريبي: ${companySettings.tax_number}</p>` : ''}
-        </div>
         <div class="header">
-          <h2>تقرير إغلاق الوردية (Z-Report)</h2>
-          <p>رقم الوردية: ${activeShift.shift_number}</p>
-          <p>تاريخ الفتح: ${format(new Date(activeShift.opened_at), 'yyyy/MM/dd HH:mm', { locale: ar })}</p>
-          <p>تاريخ الإغلاق: ${format(new Date(), 'yyyy/MM/dd HH:mm', { locale: ar })}</p>
+          <h1 class="shop-name">${localStorage.getItem('pos_shop_name') || t.currentShift}</h1>
+          <p>${currentShift.shift_number}</p>
+          <span class="badge badge-closed">${t.closeShift}</span>
         </div>
         
-        <div class="section">
-          <h3>ملخص المبيعات</h3>
-          <div class="row"><span>عدد المعاملات:</span><span>${activeShift.transactions_count}</span></div>
-          <div class="row"><span>مبيعات نقدية:</span><span>${activeShift.cash_sales.toLocaleString()} ر.ي</span></div>
-          <div class="row"><span>مبيعات بطاقة:</span><span>${activeShift.card_sales.toLocaleString()} ر.ي</span></div>
-          <div class="row"><span>مبيعات أخرى:</span><span>${activeShift.other_sales.toLocaleString()} ر.ي</span></div>
-          <div class="row total"><span>إجمالي المبيعات:</span><span>${activeShift.total_sales.toLocaleString()} ر.ي</span></div>
-        </div>
-        
-        <div class="section">
-          <h3>حركة الصندوق</h3>
-          <div class="row"><span>رصيد الافتتاح:</span><span>${activeShift.opening_amount.toLocaleString()} ر.ي</span></div>
-          <div class="row"><span>المبيعات النقدية:</span><span>+ ${activeShift.cash_sales.toLocaleString()} ر.ي</span></div>
-          <div class="row"><span>المرتجعات:</span><span>- ${activeShift.total_returns.toLocaleString()} ر.ي</span></div>
-          <div class="row total"><span>المتوقع في الصندوق:</span><span>${expectedAmount.toLocaleString()} ر.ي</span></div>
-        </div>
-        
-        ${closingAmount ? `
-        <div class="section">
-          <h3>التسوية</h3>
-          <div class="row"><span>المبلغ الفعلي:</span><span>${parseFloat(closingAmount).toLocaleString()} ر.ي</span></div>
-          <div class="row ${currentVariance >= 0 ? 'variance-positive' : 'variance-negative'}">
-            <span>${currentVariance >= 0 ? 'زيادة:' : 'عجز:'}</span>
-            <span>${Math.abs(currentVariance).toLocaleString()} ر.ي</span>
+        <div class="shift-info">
+          <div class="row">
+            <span>${t.cashier}:</span>
+            <span class="font-bold">${currentShift.cashier_name || cashierName}</span>
+          </div>
+          <div class="row">
+            <span>${t.openTime}:</span>
+            <span>${format(new Date(currentShift.opened_at), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</span>
+          </div>
+          <div class="row">
+            <span>${t.closeTime || 'وقت الإغلاق'}:</span>
+            <span>${format(new Date(), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</span>
           </div>
         </div>
-        ` : ''}
+        
+        <div class="section">
+          <div class="section-title">📊 ${t.salesSummary || 'ملخص المبيعات'}</div>
+          <div class="row">
+            <span>${t.transactions}:</span>
+            <span class="amount">${currentShift.transactions_count}</span>
+          </div>
+          <div class="row">
+            <span>💰 ${t.cash}:</span>
+            <span class="amount">${currentShift.cash_sales.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row">
+            <span>💳 ${t.card}:</span>
+            <span class="amount">${currentShift.card_sales.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row">
+            <span>↩️ ${t.returns}:</span>
+            <span class="amount">${currentShift.total_returns.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row total">
+            <span>${t.total}:</span>
+            <span class="amount">${currentShift.total_sales.toLocaleString()} ر.ي</span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">💰 ${t.cashSummary || 'ملخص النقدية'}</div>
+          <div class="row">
+            <span>${t.openingBalance}:</span>
+            <span class="amount">${currentShift.opening_amount.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row">
+            <span>+ ${t.cashSales || 'مبيعات نقدية'}:</span>
+            <span class="amount">+ ${currentShift.cash_sales.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row">
+            <span>- ${t.returns}:</span>
+            <span class="amount">- ${currentShift.total_returns.toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row total">
+            <span>${t.expectedAmount}:</span>
+            <span class="amount">${expectedAmount.toLocaleString()} ر.ي</span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">⚖️ ${t.variance}</div>
+          <div class="row">
+            <span>${t.actualAmount}:</span>
+            <span class="amount">${parseFloat(closingAmount || '0').toLocaleString()} ر.ي</span>
+          </div>
+          <div class="row ${varianceClass}">
+            <span>${varianceIcon} ${varianceText}:</span>
+            <span class="amount">${Math.abs(currentVariance).toLocaleString()} ر.ي</span>
+          </div>
+          ${varianceNotes ? `
+          <div class="row">
+            <span>${t.notes}:</span>
+            <span>${varianceNotes}</span>
+          </div>
+          ` : ''}
+        </div>
+        
+        <div class="footer">
+          <p>${t.thankYou || 'شكراً لتعاملكم معنا'}</p>
+          <p style="font-size: 12px; margin-top: 10px;">${format(new Date(), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</p>
+        </div>
       </body>
       </html>
     `;
@@ -262,90 +498,125 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
     printWindow.print();
   };
 
+  const getVarianceBadge = () => {
+    if (!currentShift || !currentShift.variance) return null;
+    
+    if (currentShift.variance === 0) {
+      return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">✓ {t.exact}</Badge>;
+    } else if (currentShift.variance > 0) {
+      return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">↑ {t.surplus} {currentShift.variance.toLocaleString()} ر.ي</Badge>;
+    } else {
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">↓ {t.shortage} {Math.abs(currentShift.variance).toLocaleString()} ر.ي</Badge>;
+    }
+  };
+
   if (isLoading) {
-    return <div className="p-4 text-center">جاري التحميل...</div>;
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">{t.loading}</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
     <>
       {/* Current Shift Status */}
-      {activeShift ? (
-        <Card className="border-primary/20 bg-primary/5">
+      {currentShift ? (
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" />
-                الوردية الحالية
+                {t.currentShift}
               </CardTitle>
-              <Badge variant="default" className="bg-green-600">مفتوحة</Badge>
+              <Badge variant="default" className="bg-green-600">
+                <CheckCircle2 className="h-3 w-3 ml-1" />
+                {t.openShift}
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">رقم الوردية:</span>
-                <span className="font-medium mr-2">{activeShift.shift_number}</span>
+              <div className="space-y-1">
+                <span className="text-muted-foreground">{t.shiftNumber}:</span>
+                <div className="font-medium font-mono">{currentShift.shift_number}</div>
               </div>
-              <div>
-                <span className="text-muted-foreground">وقت الفتح:</span>
-                <span className="font-medium mr-2">
-                  {format(new Date(activeShift.opened_at), 'HH:mm', { locale: ar })}
-                </span>
+              <div className="space-y-1">
+                <span className="text-muted-foreground">{t.cashier || 'الكاشير'}:</span>
+                <div className="font-medium">{currentShift.cashier_name || cashierName}</div>
               </div>
-              <div>
-                <span className="text-muted-foreground">رصيد الافتتاح:</span>
-                <span className="font-medium mr-2">{activeShift.opening_amount.toLocaleString()} ر.ي</span>
+              <div className="space-y-1">
+                <span className="text-muted-foreground">{t.openTime}:</span>
+                <div className="font-medium">
+                  {format(new Date(currentShift.opened_at), 'HH:mm:ss', { locale: ar })}
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">المعاملات:</span>
-                <span className="font-medium mr-2">{activeShift.transactions_count}</span>
+              <div className="space-y-1">
+                <span className="text-muted-foreground">{t.openingBalance}:</span>
+                <div className="font-medium">{currentShift.opening_amount.toLocaleString()} ر.ي</div>
               </div>
             </div>
             
             <Separator />
             
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 rounded bg-green-100 dark:bg-green-900/30">
-                <div className="text-xs text-muted-foreground">نقدي</div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-3 rounded-lg bg-green-100/50 dark:bg-green-900/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t.cash}</div>
                 <div className="font-bold text-green-700 dark:text-green-400">
-                  {activeShift.cash_sales.toLocaleString()}
+                  {currentShift.cash_sales.toLocaleString()}
                 </div>
               </div>
-              <div className="p-2 rounded bg-blue-100 dark:bg-blue-900/30">
-                <div className="text-xs text-muted-foreground">بطاقة</div>
+              <div className="p-3 rounded-lg bg-blue-100/50 dark:bg-blue-900/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t.card}</div>
                 <div className="font-bold text-blue-700 dark:text-blue-400">
-                  {activeShift.card_sales.toLocaleString()}
+                  {currentShift.card_sales.toLocaleString()}
                 </div>
               </div>
-              <div className="p-2 rounded bg-red-100 dark:bg-red-900/30">
-                <div className="text-xs text-muted-foreground">مرتجعات</div>
+              <div className="p-3 rounded-lg bg-red-100/50 dark:bg-red-900/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t.returns}</div>
                 <div className="font-bold text-red-700 dark:text-red-400">
-                  {activeShift.total_returns.toLocaleString()}
+                  {currentShift.total_returns.toLocaleString()}
                 </div>
               </div>
             </div>
 
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <span className="text-sm font-medium">{t.expectedAmount}:</span>
+              <span className="text-lg font-bold">{expectedAmount.toLocaleString()} ر.ي</span>
+            </div>
+
+            {currentShift.variance !== null && getVarianceBadge()}
+
             <Button 
-              className="w-full" 
+              className="w-full gap-2" 
               variant="destructive"
               onClick={() => setCloseShiftModal(true)}
             >
-              <X className="h-4 w-4 ml-2" />
-              إغلاق الوردية
+              <X className="h-4 w-4" />
+              {t.closeShift}
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+        <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20">
           <CardContent className="p-6 text-center">
-            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-orange-500" />
-            <h3 className="font-bold text-lg mb-2">لا توجد وردية مفتوحة</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              يجب فتح وردية جديدة لبدء البيع
+            <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+            </div>
+            <h3 className="font-bold text-lg mb-2">{t.noActiveShift}</h3>
+            <p className="text-muted-foreground text-sm mb-6">
+              {language === 'ar' ? 'يجب فتح وردية جديدة لبدء البيع' : 'Open a new shift to start selling'}
             </p>
-            <Button onClick={() => setOpenShiftModal(true)} className="w-full">
-              <DollarSign className="h-4 w-4 ml-2" />
-              فتح وردية جديدة
+            <Button 
+              onClick={() => setOpenShiftModal(true)} 
+              className="w-full gap-2"
+              size="lg"
+            >
+              <DollarSign className="h-4 w-4" />
+              {t.openShift}
             </Button>
           </CardContent>
         </Card>
@@ -355,96 +626,123 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       <Dialog open={openShiftModal} onOpenChange={setOpenShiftModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-xl">
               <DollarSign className="h-5 w-5" />
-              فتح وردية جديدة
+              {t.openShift}
             </DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="opening-amount">المبلغ الموجود في الصندوق</Label>
-              <Input
-                id="opening-amount"
-                type="number"
-                placeholder="0"
-                value={openingAmount}
-                onChange={(e) => setOpeningAmount(e.target.value)}
-                className="text-left"
-                dir="ltr"
-              />
+              <Label htmlFor="opening-amount" className="text-base">
+                {t.openingBalance} <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  id="opening-amount"
+                  type="number"
+                  placeholder="0"
+                  value={openingAmount}
+                  onChange={(e) => setOpeningAmount(e.target.value)}
+                  className="text-left text-lg pl-16"
+                  dir="ltr"
+                  autoFocus
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  ر.ي
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground">
-                أدخل المبلغ النقدي الموجود في درج الكاشير عند بداية الوردية
+                {t.enterOpeningAmount}
               </p>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpenShiftModal(false)}>
-              إلغاء
+              {t.cancel}
             </Button>
             <Button onClick={handleOpenShift} disabled={openShiftMutation.isPending}>
-              {openShiftMutation.isPending ? 'جاري الفتح...' : 'فتح الوردية'}
+              {openShiftMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                  {t.loading}
+                </>
+              ) : (
+                t.openShift
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Close Shift Modal (Z-Report) */}
+      {/* Close Shift Modal */}
       <Dialog open={closeShiftModal} onOpenChange={setCloseShiftModal}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-xl">
               <CheckCircle2 className="h-5 w-5" />
-              إغلاق الوردية - تقرير Z
+              {t.closeShift}
             </DialogTitle>
           </DialogHeader>
           
-          {activeShift && (
+          {currentShift && (
             <div className="space-y-4 py-4">
               {/* Shift Summary */}
-              <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                <div className="flex justify-between">
-                  <span>رصيد الافتتاح:</span>
-                  <span className="font-medium">{activeShift.opening_amount.toLocaleString()} ر.ي</span>
+              <div className="p-4 rounded-lg bg-muted/30 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">{t.shiftNumber}:</span>
+                  <span className="font-mono font-medium">{currentShift.shift_number}</span>
                 </div>
-                <div className="flex justify-between text-green-600">
-                  <span>المبيعات النقدية:</span>
-                  <span className="font-medium">+ {activeShift.cash_sales.toLocaleString()} ر.ي</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">{t.openingBalance}:</span>
+                  <span className="font-medium">{currentShift.opening_amount.toLocaleString()} ر.ي</span>
                 </div>
-                <div className="flex justify-between text-red-600">
-                  <span>المرتجعات:</span>
-                  <span className="font-medium">- {activeShift.total_returns.toLocaleString()} ر.ي</span>
+                <div className="flex justify-between items-center text-green-600">
+                  <span>+ {t.cash}:</span>
+                  <span className="font-medium">+ {currentShift.cash_sales.toLocaleString()} ر.ي</span>
+                </div>
+                <div className="flex justify-between items-center text-red-600">
+                  <span>- {t.returns}:</span>
+                  <span className="font-medium">- {currentShift.total_returns.toLocaleString()} ر.ي</span>
                 </div>
                 <Separator />
-                <div className="flex justify-between font-bold text-lg">
-                  <span>المتوقع في الصندوق:</span>
-                  <span>{expectedAmount.toLocaleString()} ر.ي</span>
+                <div className="flex justify-between items-center font-bold text-lg">
+                  <span>{t.expectedAmount}:</span>
+                  <span className="text-primary">{expectedAmount.toLocaleString()} ر.ي</span>
                 </div>
               </div>
 
               {/* Closing Amount Input */}
               <div className="space-y-2">
-                <Label htmlFor="closing-amount">المبلغ الفعلي في الصندوق</Label>
-                <Input
-                  id="closing-amount"
-                  type="number"
-                  placeholder="0"
-                  value={closingAmount}
-                  onChange={(e) => setClosingAmount(e.target.value)}
-                  className="text-left text-lg"
-                  dir="ltr"
-                />
+                <Label htmlFor="closing-amount" className="text-base">
+                  {t.actualAmount} <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="closing-amount"
+                    type="number"
+                    placeholder="0"
+                    value={closingAmount}
+                    onChange={(e) => setClosingAmount(e.target.value)}
+                    className="text-left text-lg pl-16"
+                    dir="ltr"
+                    autoFocus
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    ر.ي
+                  </span>
+                </div>
               </div>
 
               {/* Variance Display */}
               {closingAmount && (
                 <div className={`p-4 rounded-lg flex items-center justify-between ${
                   currentVariance === 0 
-                    ? 'bg-green-100 dark:bg-green-900/30' 
+                    ? 'bg-green-100/50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
                     : currentVariance > 0 
-                      ? 'bg-blue-100 dark:bg-blue-900/30'
-                      : 'bg-red-100 dark:bg-red-900/30'
+                      ? 'bg-blue-100/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                      : 'bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 }`}>
                   <div className="flex items-center gap-2">
                     {currentVariance === 0 ? (
@@ -455,7 +753,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
                       <TrendingDown className="h-5 w-5 text-red-600" />
                     )}
                     <span className="font-medium">
-                      {currentVariance === 0 ? 'مطابق' : currentVariance > 0 ? 'زيادة' : 'عجز'}
+                      {currentVariance === 0 ? t.exact : currentVariance > 0 ? t.surplus : t.shortage}
                     </span>
                   </div>
                   <span className="font-bold text-lg">
@@ -467,10 +765,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
               {/* Variance Notes */}
               {closingAmount && currentVariance !== 0 && (
                 <div className="space-y-2">
-                  <Label htmlFor="variance-notes">ملاحظات الفرق</Label>
+                  <Label htmlFor="variance-notes">{t.varianceNotes}</Label>
                   <Textarea
                     id="variance-notes"
-                    placeholder="اشرح سبب الفرق..."
+                    placeholder={t.notes}
                     value={varianceNotes}
                     onChange={(e) => setVarianceNotes(e.target.value)}
                     rows={2}
@@ -481,19 +779,32 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
           )}
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={printZReport} disabled={!closingAmount}>
-              <Printer className="h-4 w-4 ml-2" />
-              طباعة التقرير
+            <Button 
+              variant="outline" 
+              onClick={printZReport} 
+              disabled={!closingAmount}
+              className="gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              {t.print}
             </Button>
             <Button variant="outline" onClick={() => setCloseShiftModal(false)}>
-              إلغاء
+              {t.cancel}
             </Button>
             <Button 
               onClick={handleCloseShift} 
               disabled={closeShiftMutation.isPending || !closingAmount}
               variant="destructive"
+              className="gap-2"
             >
-              {closeShiftMutation.isPending ? 'جاري الإغلاق...' : 'إغلاق الوردية'}
+              {closeShiftMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  {t.loading}
+                </>
+              ) : (
+                t.closeShift
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
