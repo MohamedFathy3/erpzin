@@ -28,7 +28,7 @@ const PurchaseOrderList: React.FC = () => {
     expected_delivery: string | null;
     total_amount: string;
     notes: string;
-    status: string;
+    status: 'pending' | 'approved' | 'sent' | 'received' | 'cancelled';
     supplier_id: string;
     expected_date: string;
     items: {
@@ -56,8 +56,6 @@ const PurchaseOrderList: React.FC = () => {
     queryFn: async () => {
       const response = await api.post('/purchases-orders/index');
 
-      console.log("Full Response:", response.data);
-
       return response.data.data ?? [];
     }
   });
@@ -84,36 +82,19 @@ const PurchaseOrderList: React.FC = () => {
 
   // Filter orders
   const filteredOrders = orders.filter((order: PurchaseOrder) => {
-    console.log('🔍 Filtering order:', {
-      order_number: order.order_number,
-      status: order.status,
-      supplier: order.supplier?.name,
-      searchTerm,
-      statusFilter
-    });
-
     const matchesSearch = searchTerm === '' ||
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
-    const passesFilter = matchesSearch && matchesStatus;
-    console.log('✅ Filter result:', {
-      matchesSearch,
-      matchesStatus,
-      passesFilter,
-      order_number: order.order_number
-    });
-
-    return passesFilter;
+    return matchesSearch && matchesStatus;
   });
 
 
 
 
-  const getStatusBadge = (status: string): JSX.Element => {
-    console.log('getStatusBadge called with status:', status, 'language:', language);
+  const getStatusBadge = (status: 'pending' | 'approved' | 'sent' | 'received' | 'cancelled'): JSX.Element => {
     const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; icon: React.ReactNode }> = {
       pending: { variant: 'secondary', label: language === 'ar' ? 'معلق' : 'Pending', icon: <Clock size={14} /> },
       approved: { variant: 'default', label: language === 'ar' ? 'معتمد' : 'Approved', icon: <CheckCircle size={14} /> },
@@ -122,7 +103,6 @@ const PurchaseOrderList: React.FC = () => {
       cancelled: { variant: 'destructive', label: language === 'ar' ? 'ملغي' : 'Cancelled', icon: <XCircle size={14} /> }
     };
     const { variant, label, icon } = config[status] || config.pending;
-    console.log('getStatusBadge returning:', { variant, label, status });
     return (
       <Badge variant={variant} className="gap-1">
         {icon} {label}
