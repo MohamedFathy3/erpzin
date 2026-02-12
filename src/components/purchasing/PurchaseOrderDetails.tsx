@@ -9,11 +9,47 @@ import { Separator } from '@/components/ui/separator';
 import { Edit2, FileDown, Printer, Building2, Calendar, Truck, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
+
+interface PurchaseOrder {
+  id: string;
+  order_number: string;
+  supplier: {
+    id: number;
+    name: string;
+  };
+  expected_delivery: string | null;
+  total_amount: string;
+  notes: string;
+  status: string;
+  supplier_id: string;
+  items: {
+    product_id: number;
+    product_name: string;
+    quantity: number;
+    unit_cost: string;
+    total: string;
+  }[];
+  created_at: string;
+  order_date?: string;
+}
+
+interface PurchaseOrderItem {
+  id: number;
+  quantity: number;
+  unit_cost: string;
+  total_cost: string;
+  products?: {
+    name: string;
+    name_ar: string;
+    sku: string;
+  };
+}
 
 interface PurchaseOrderDetailsProps {
   isOpen: boolean;
   onClose: () => void;
-  order: any;
+  order: PurchaseOrder;
   onEdit: () => void;
 }
 
@@ -21,10 +57,32 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
   const { language } = useLanguage();
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Fetch purchase order details
+  const { data: orderDetails = order } = useQuery({
+    queryKey: ['purchase_order_details', order?.id],
+    queryFn: async () => {
+      if (!order?.id) return order;
+      const response = await api.get(`/purchases-orders/${order.id}`);
+      console.log("Full Response:", response.data);
+      return response.data.data ?? order;
+    },
+    enabled: !!order?.id
+  });
+
+  // Use fetched orderDetails for rendering, fallback to order
+  const displayOrder = orderDetails || order;
+
   // Fetch order items
   const { data: items = [] } = useQuery({
-    queryKey: ['purchase_order_items', order?.id],
+    queryKey: ['purchase_order_items', order?.id, orderDetails?.id],
     queryFn: async () => {
+      if (orderDetails?.items) {
+        return orderDetails.items.map(item => ({
+          ...item,
+          products: { name: item.product_name, name_ar: item.product_name, sku: '' },
+          total_cost: item.total
+        }));
+      }
       if (!order?.id) return [];
       const { data, error } = await supabase
         .from('purchase_order_items')
@@ -59,7 +117,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
     return config[status] || config.pending;
   };
 
-  const statusConfig = getStatusConfig(order.status);
+  const statusConfig = getStatusConfig(displayOrder.status);
 
   const handlePrint = () => {
     const content = printRef.current;
@@ -72,7 +130,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
       <!DOCTYPE html>
       <html dir="${language === 'ar' ? 'rtl' : 'ltr'}">
       <head>
-        <title>${order.order_number}</title>
+        <title>${displayOrder.order_number}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           .header { text-align: center; margin-bottom: 30px; }
@@ -99,22 +157,22 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
           <div>
             <div class="info-block">
               <div class="label">${language === 'ar' ? 'رقم الأمر' : 'Order #'}</div>
-              <div><strong>${order.order_number}</strong></div>
+              <div><strong>${displayOrder.order_number}</strong></div>
             </div>
             <div class="info-block">
               <div class="label">${language === 'ar' ? 'التاريخ' : 'Date'}</div>
-              <div>${new Date(order.order_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</div>
+              <div>${new Date(displayOrder.created_at).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</div>
             </div>
           </div>
           <div>
             <div class="info-block">
               <div class="label">${language === 'ar' ? 'المورد' : 'Supplier'}</div>
-              <div><strong>${language === 'ar' ? order.suppliers?.name_ar || order.suppliers?.name : order.suppliers?.name}</strong></div>
+              <div><strong>${displayOrder.supplier?.name}</strong></div>
             </div>
-            ${order.expected_date ? `
+            ${displayOrder.expected_delivery ? `
             <div class="info-block">
               <div class="label">${language === 'ar' ? 'التسليم المتوقع' : 'Expected Delivery'}</div>
-              <div>${new Date(order.expected_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</div>
+              <div>${new Date(displayOrder.expected_delivery).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</div>
             </div>
             ` : ''}
           </div>
@@ -124,30 +182,28 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
             <tr>
               <th>#</th>
               <th>${language === 'ar' ? 'المنتج' : 'Product'}</th>
-              <th>${language === 'ar' ? 'SKU' : 'SKU'}</th>
               <th>${language === 'ar' ? 'الكمية' : 'Qty'}</th>
               <th>${language === 'ar' ? 'سعر الوحدة' : 'Unit Cost'}</th>
               <th>${language === 'ar' ? 'الإجمالي' : 'Total'}</th>
             </tr>
           </thead>
           <tbody>
-            ${items.map((item: any, index: number) => `
+            ${items.map((item: PurchaseOrderItem, index: number) => `
               <tr>
                 <td>${index + 1}</td>
                 <td>${language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}</td>
-                <td>${item.products?.sku || ''}</td>
                 <td>${item.quantity}</td>
                 <td>${Number(item.unit_cost).toLocaleString()} YER</td>
                 <td>${Number(item.total_cost).toLocaleString()} YER</td>
               </tr>
             `).join('')}
             <tr class="total-row">
-              <td colspan="5" style="text-align: ${language === 'ar' ? 'left' : 'right'};">${language === 'ar' ? 'الإجمالي' : 'Total'}</td>
-              <td>${Number(order.total_amount).toLocaleString()} YER</td>
+              <td colspan="4" style="text-align: ${language === 'ar' ? 'left' : 'right'};">${language === 'ar' ? 'الإجمالي' : 'Total'}</td>
+              <td>${Number(displayOrder.total_amount).toLocaleString()} YER</td>
             </tr>
           </tbody>
         </table>
-        ${order.notes ? `<div><strong>${language === 'ar' ? 'ملاحظات:' : 'Notes:'}</strong> ${order.notes}</div>` : ''}
+        ${displayOrder.notes ? `<div><strong>${language === 'ar' ? 'ملاحظات:' : 'Notes:'}</strong> ${displayOrder.notes}</div>` : ''}
         <div class="footer">
           <p>${language === 'ar' ? 'شكراً لتعاملكم معنا' : 'Thank you for your business'}</p>
         </div>
@@ -182,7 +238,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                   <Building2 size={16} />
                   <span className="text-xs">{language === 'ar' ? 'المورد' : 'Supplier'}</span>
                 </div>
-                <p className="font-semibold">{language === 'ar' ? order.suppliers?.name_ar || order.suppliers?.name : order.suppliers?.name}</p>
+                <p className="font-semibold">{order.supplier?.name}</p>
               </CardContent>
             </Card>
             <Card>
@@ -191,7 +247,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                   <Calendar size={16} />
                   <span className="text-xs">{language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}</span>
                 </div>
-                <p className="font-semibold">{new Date(order.order_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</p>
+                <p className="font-semibold">{new Date(displayOrder.created_at).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')}</p>
               </CardContent>
             </Card>
             <Card>
@@ -201,8 +257,8 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                   <span className="text-xs">{language === 'ar' ? 'التسليم المتوقع' : 'Expected'}</span>
                 </div>
                 <p className="font-semibold">
-                  {order.expected_date 
-                    ? new Date(order.expected_date).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')
+                  {displayOrder.expected_delivery
+                    ? new Date(displayOrder.expected_delivery).toLocaleDateString(language === 'ar' ? 'ar-YE' : 'en-US')
                     : '-'
                   }
                 </p>
@@ -211,7 +267,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
             <Card className="bg-primary/5">
               <CardContent className="p-4">
                 <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الإجمالي' : 'Total'}</div>
-                <p className="text-xl font-bold text-primary">{Number(order.total_amount).toLocaleString()} YER</p>
+                <p className="text-xl font-bold text-primary">{Number(displayOrder.total_amount).toLocaleString()} YER</p>
               </CardContent>
             </Card>
           </div>
@@ -224,31 +280,29 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                   <TableRow>
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'SKU' : 'SKU'}</TableHead>
                     <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
                     <TableHead>{language === 'ar' ? 'سعر الوحدة' : 'Unit Cost'}</TableHead>
                     <TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((item: any, index: number) => (
+                  {items.map((item: PurchaseOrderItem, index: number) => (
                     <TableRow key={item.id}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell className="font-medium">
                         {language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}
                       </TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{item.products?.sku}</TableCell>
                       <TableCell className="text-center">{item.quantity}</TableCell>
                       <TableCell>{Number(item.unit_cost).toLocaleString()} YER</TableCell>
                       <TableCell className="font-medium">{Number(item.total_cost).toLocaleString()} YER</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="bg-muted/50">
-                    <TableCell colSpan={5} className="text-end font-bold">
+                    <TableCell colSpan={4} className="text-end font-bold">
                       {language === 'ar' ? 'الإجمالي' : 'Total'}
                     </TableCell>
                     <TableCell className="font-bold text-primary">
-                      {Number(order.total_amount).toLocaleString()} YER
+                      {Number(displayOrder.total_amount).toLocaleString()} YER
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -257,10 +311,10 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
           </Card>
 
           {/* Notes */}
-          {order.notes && (
+          {displayOrder.notes && (
             <div>
               <h4 className="font-medium mb-2">{language === 'ar' ? 'ملاحظات' : 'Notes'}</h4>
-              <p className="text-muted-foreground bg-muted/50 p-3 rounded-lg">{order.notes}</p>
+              <p className="text-muted-foreground bg-muted/50 p-3 rounded-lg">{displayOrder.notes}</p>
             </div>
           )}
         </div>

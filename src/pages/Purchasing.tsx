@@ -441,13 +441,15 @@ const Purchasing = () => {
   const { data: purchaseOrders = [] } = useQuery({
     queryKey: ['purchase_orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select('*, suppliers(name, name_ar)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    }
+      const response = await api.post('/purchases-orders/index');
+
+      console.log("Full Response:", response.data);
+
+      return response.data.data ?? [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch purchase returns
