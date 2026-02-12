@@ -68,7 +68,6 @@ const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
       } else {
         requestBody.per_page = 10000; // Large number to get all items
       }
-
       const response = await api.post('/purchases-orders/index', requestBody);
       return response.data;
     }

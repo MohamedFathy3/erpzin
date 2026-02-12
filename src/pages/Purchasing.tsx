@@ -770,9 +770,6 @@ const Purchasing = () => {
         </Tabs>
       </div>
 
-
-
-
       {/* Modals */}
       <SupplierForm isOpen={showSupplierForm} onClose={() => setShowSupplierForm(false)} onSave={refetchAll} editSupplier={selectedSupplier} />
       <SupplierDetails isOpen={showSupplierDetails} onClose={() => setShowSupplierDetails(false)} supplier={selectedSupplier} onEdit={() => { setShowSupplierDetails(false); setShowSupplierForm(true); }} />
