@@ -28,7 +28,7 @@ const PurchaseOrderList: React.FC = () => {
     expected_delivery: string | null;
     total_amount: string;
     notes: string;
-    status: 'pending' | 'approved' | 'sent' | 'received' | 'cancelled';
+    status: string;
     supplier_id: string;
     expected_date: string;
     items: {
@@ -49,16 +49,29 @@ const PurchaseOrderList: React.FC = () => {
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showAllOrders, setShowAllOrders] = useState(false);
 
-  // Fetch purchase orders
-  const { data: orders = [], isLoading } = useQuery<PurchaseOrder[]>({
-    queryKey: ['purchase_orders'],
+  // Fetch purchase orders with pagination
+  const { data: ordersResponse, isLoading } = useQuery({
+    queryKey: ['purchase_orders', currentPage, showAllOrders],
     queryFn: async () => {
-      const response = await api.post('/purchases-orders/index');
+      const requestBody: { page?: number; per_page?: number } = {};
 
-      return response.data.data ?? [];
+      if (!showAllOrders) {
+        requestBody.page = currentPage;
+        requestBody.per_page = 10; // Default page size
+      } else {
+        requestBody.per_page = 10000; // Large number to get all items
+      }
+
+      const response = await api.post('/purchases-orders/index', requestBody);
+      return response.data;
     }
   });
+
+  const orders = ordersResponse?.data ?? [];
+  const paginationMeta = ordersResponse?.meta;
 
   // Update status mutation
   const updateStatusMutation = useMutation({
@@ -81,15 +94,23 @@ const PurchaseOrderList: React.FC = () => {
   });
 
   // Filter orders
-  const filteredOrders = orders.filter((order: PurchaseOrder) => {
-    const matchesSearch = searchTerm === '' ||
-      order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter orders safely
+  const filteredOrders = orders.filter(order => {
+    const orderNumber = (order.order_number || '').toLowerCase().trim();
+    const supplierName = (order.supplier?.name || '').toLowerCase().trim();
+    const status = (order.status || 'pending').toLowerCase().trim(); // default pending
+    const search = searchTerm.toLowerCase().trim();
 
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    const matchesSearch =
+      search === '' || orderNumber.includes(search) || supplierName.includes(search);
+
+    const matchesStatus =
+      statusFilter === 'all' || status === statusFilter.toLowerCase().trim();
 
     return matchesSearch && matchesStatus;
   });
+
+
 
 
 
@@ -191,7 +212,7 @@ const PurchaseOrderList: React.FC = () => {
                     <TableCell>
                       {order.expected_delivery ? formatDate(order.expected_delivery) : '-'}
                     </TableCell>
-                    <TableCell>{getStatusBadge(order.status)}</TableCell>
+                    <TableCell>{getStatusBadge(order.status as 'pending' | 'approved' | 'sent' | 'received' | 'cancelled')}</TableCell>
                     <TableCell>{formatDate(order.created_at)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
@@ -244,11 +265,99 @@ const PurchaseOrderList: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Pagination */}
+      {(paginationMeta && paginationMeta.last_page > 1) || showAllOrders ? (
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted-foreground">
+              {showAllOrders ? (
+                language === 'ar'
+                  ? `عرض جميع الأوامر (${paginationMeta?.total || 0})`
+                  : `Showing all orders (${paginationMeta?.total || 0})`
+              ) : (
+                language === 'ar'
+                  ? `عرض ${paginationMeta?.from} إلى ${paginationMeta?.to} من ${paginationMeta?.total} أمر`
+                  : `Showing ${paginationMeta?.from} to ${paginationMeta?.to} of ${paginationMeta?.total} orders`
+              )}
+            </div>
+            {!showAllOrders && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAllOrders(true);
+                  setCurrentPage(1);
+                }}
+                disabled={isLoading}
+              >
+                {language === 'ar' ? 'عرض الكل' : 'Show All'}
+              </Button>
+            )}
+            {showAllOrders && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAllOrders(false);
+                  setCurrentPage(1);
+                }}
+                disabled={isLoading}
+              >
+                {language === 'ar' ? 'عرض بالصفحات' : 'Paginate'}
+              </Button>
+            )}
+          </div>
+          {!showAllOrders && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || isLoading}
+              >
+                {language === 'ar' ? 'السابق' : 'Previous'}
+              </Button>
+
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, paginationMeta?.last_page || 1) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min((paginationMeta?.last_page || 1) - 4, currentPage - 2)) + i;
+                  if (pageNum > (paginationMeta?.last_page || 1)) return null;
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      disabled={isLoading}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(paginationMeta?.last_page || 1, prev + 1))}
+                disabled={currentPage === (paginationMeta?.last_page || 1) || isLoading}
+              >
+                {language === 'ar' ? 'التالي' : 'Next'}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {/* Modals */}
       <PurchaseOrderForm
         isOpen={showOrderForm}
         onClose={() => { setShowOrderForm(false); setSelectedOrder(null); }}
-        onSave={() => queryClient.invalidateQueries({ queryKey: ['purchase_orders'] })}
+        onSave={() => {
+          queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
+          setCurrentPage(1); // Reset to first page after save
+        }}
         editOrder={selectedOrder}
       />
 

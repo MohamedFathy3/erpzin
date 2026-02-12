@@ -437,20 +437,25 @@ const Purchasing = () => {
     }
   });
 
-  // Fetch purchase orders
-  const { data: purchaseOrders = [] } = useQuery({
-    queryKey: ['purchase_orders'],
+  // Fetch purchase orders (get all for stats count)
+  const { data: purchaseOrdersResponse } = useQuery({
+    queryKey: ['purchase_orders_stats'],
     queryFn: async () => {
-      const response = await api.post('/purchases-orders/index');
+      const response = await api.post('/purchases-orders/index', {
+        per_page: 10000 // Large number to get all orders for accurate count
+      });
 
       console.log("Full Response:", response.data);
 
-      return response.data.data ?? [];
+      return response.data;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
+
+  const purchaseOrders = purchaseOrdersResponse?.data ?? [];
+  const purchaseOrdersMeta = purchaseOrdersResponse?.meta;
 
   // Fetch purchase returns
   const { data: purchaseReturnsResponse } = useQuery({
@@ -475,6 +480,7 @@ const Purchasing = () => {
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     queryClient.invalidateQueries({ queryKey: ['purchase_invoices'] });
     queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
+    queryClient.invalidateQueries({ queryKey: ['purchase_orders_stats'] });
     queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
     queryClient.invalidateQueries({ queryKey: ['invoices'] });
   };
@@ -488,7 +494,7 @@ const Purchasing = () => {
     { label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', value: paginationMeta?.total || 0, icon: <FileText className="text-primary" size={24} />, color: 'bg-primary/10' },
     { label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', value: `${totalPurchaseValue.toLocaleString()} YER`, icon: <Receipt className="text-chart-2" size={24} />, color: 'bg-chart-2/10' },
     { label: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns', value: purchaseReturns.length, icon: <RotateCcw className="text-warning" size={24} />, color: 'bg-warning/10' },
-    { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
+    { label: language === 'ar' ? 'أوامر الشراء' : 'Orders', value: purchaseOrdersMeta?.total || purchaseOrders.length, icon: <ShoppingCart className="text-chart-3" size={24} />, color: 'bg-chart-3/10' },
     { label: language === 'ar' ? 'المستحق للموردين' : 'Payables', value: `${totalBalance.toLocaleString()} YER`, icon: <Wallet className="text-destructive" size={24} />, color: 'bg-destructive/10' },
   ];
 
@@ -753,7 +759,7 @@ const Purchasing = () => {
           <TabsContent value="orders" className="mt-4">
             <Card className="shadow-md border-border">
               <CardContent className="p-4">
-                <PurchaseOrderList />
+                <PurchaseOrderList onSave={refetchAll} />
               </CardContent>
             </Card>
           </TabsContent>
