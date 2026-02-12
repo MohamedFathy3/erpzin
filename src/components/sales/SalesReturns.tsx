@@ -1,646 +1,578 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { RotateCcw, FileText, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Receipt, RotateCcw, Eye, Search, Loader2, Calendar, Filter, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
+import api from "@/lib/api";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+// ========== أنواع البيانات ==========
 
-import SalesReturnForm from "./SalesReturnForm";
+interface SalesReturn {
+  id: number;
+  return_number: string;
+  sales_invoice_id: number;
+  sales_invoice_number?: string;
+  customer?: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  return_method: string; // 'نقدي' | 'بطاقة' | 'رصيد'
+  note?: string;
+  total_amount: number;
+  created_at: string;
+  items?: any[];
+}
 
-interface ReturnItem {
-  id: string;
-  product_id: string | null;
-  product_variant_id: string | null;
-  product_name: string;
-  original_quantity: number;
-  return_quantity: number;
-  unit_price: number;
-  total_price: number;
-  selected: boolean;
-  already_returned: number;
+interface ReturnsResponse {
+  data: SalesReturn[];
+  result: string;
+  message: string;
+  status: number;
 }
 
 const SalesReturns = () => {
   const { language } = useLanguage();
-  const queryClient = useQueryClient();
+  const { formatCurrency } = useRegionalSettings();
   
-  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
-  const [showReturnDialog, setShowReturnDialog] = useState(false);
-  const [showNewReturnForm, setShowNewReturnForm] = useState(false);
-  const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
-  const [refundMethod, setRefundMethod] = useState("cash");
-  const [reason, setReason] = useState("");
-  const [notes, setNotes] = useState("");
+  // ========== State ==========
+  const [searchTerm, setSearchTerm] = useState("");
+  const [methodFilter, setMethodFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
-  // Filter state
-  const [filterValues, setFilterValues] = useState<FilterValues>({});
-
-  // Fetch branches
-  const { data: branches = [] } = useQuery({
-    queryKey: ['branches'],
+  // ========== Queries ==========
+  const { data: returns = [], isLoading, refetch } = useQuery({
+    queryKey: ['sales-returns'],
     queryFn: async () => {
-      const { data } = await supabase.from('branches').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  // Fetch warehouses
-  const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses'],
-    queryFn: async () => {
-      const { data } = await supabase.from('warehouses').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  // Fetch salesmen for filter
-  const { data: salesmen = [] } = useQuery({
-    queryKey: ['salesmen'],
-    queryFn: async () => {
-      const { data } = await supabase.from('salesmen').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  const filterFields: FilterField[] = [
-    { key: 'search', label: 'Invoice/Customer', labelAr: 'الفاتورة/العميل', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
-    { key: 'invoice_type', label: 'Invoice Type', labelAr: 'نوع الفاتورة', type: 'select', options: [
-      { value: 'standard', label: 'Standard', labelAr: 'قياسية' },
-      { value: 'pos', label: 'POS', labelAr: 'نقطة بيع' },
-    ]},
-    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: any) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
-    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: any) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
-    { key: 'salesman_id', label: 'Salesman', labelAr: 'المندوب', type: 'select', options: salesmen.map((s: any) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
-    { key: 'payment_status', label: 'Payment Status', labelAr: 'حالة الدفع', type: 'select', options: [
-      { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
-      { value: 'pending', label: 'Pending', labelAr: 'معلق' },
-      { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
-    ]},
-    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
-    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
-  ];
-
-  // Fetch invoices with filters
-  const { data: invoices, isLoading, refetch } = useQuery({
-    queryKey: ['sales-invoices-for-return', filterValues],
-    queryFn: async () => {
-      // Fetch standard invoices
-      let standardQuery = supabase
-        .from('sales_invoices')
-        .select(`
-          *,
-          customer:customers(id, name, name_ar, phone),
-          branch:branches(id, name, name_ar),
-          items:sales_invoice_items(*)
-        `)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
-
-      if (filterValues.search) {
-        standardQuery = standardQuery.or(`invoice_number.ilike.%${filterValues.search}%`);
-      }
-      if (filterValues.branch_id && filterValues.branch_id !== 'all') {
-        standardQuery = standardQuery.eq('branch_id', filterValues.branch_id);
-      }
-      if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
-        standardQuery = standardQuery.eq('warehouse_id', filterValues.warehouse_id);
-      }
-      if (filterValues.salesman_id && filterValues.salesman_id !== 'all') {
-        standardQuery = standardQuery.eq('salesman_id', filterValues.salesman_id);
-      }
-      if (filterValues.payment_status && filterValues.payment_status !== 'all') {
-        standardQuery = standardQuery.eq('payment_status', filterValues.payment_status);
-      }
-      if (filterValues.date_from) {
-        standardQuery = standardQuery.gte('invoice_date', filterValues.date_from.split('T')[0]);
-      }
-      if (filterValues.date_to) {
-        standardQuery = standardQuery.lte('invoice_date', filterValues.date_to.split('T')[0]);
-      }
-      if (filterValues.amount_min) {
-        standardQuery = standardQuery.gte('total_amount', Number(filterValues.amount_min));
-      }
-      if (filterValues.amount_max) {
-        standardQuery = standardQuery.lte('total_amount', Number(filterValues.amount_max));
-      }
-
-      const { data: standardInvoices } = await standardQuery.limit(100);
-
-      // Fetch POS sales
-      let posQuery = supabase
-        .from('sales')
-        .select(`
-          *,
-          customer:customers(id, name, name_ar, phone),
-          items:sale_items(
-            id,
-            product_id,
-            quantity,
-            unit_price,
-            total_price,
-            product:products(name, name_ar)
-          )
-        `)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false });
-
-      if (filterValues.search) {
-        posQuery = posQuery.ilike('invoice_number', `%${filterValues.search}%`);
-      }
-      if (filterValues.date_from) {
-        posQuery = posQuery.gte('sale_date', filterValues.date_from.split('T')[0]);
-      }
-      if (filterValues.date_to) {
-        posQuery = posQuery.lte('sale_date', filterValues.date_to.split('T')[0]);
-      }
-
-      const { data: posInvoices } = await posQuery.limit(100);
-
-      // Combine results
-      let combined = [];
-      
-      const invoiceType = filterValues.invoice_type;
-      if (!invoiceType || invoiceType === 'all' || invoiceType === 'standard') {
-        combined.push(...(standardInvoices || []).map(inv => ({ 
-          ...inv, 
-          invoice_type: 'standard',
-          date: inv.invoice_date 
-        })));
-      }
-      
-      if (!invoiceType || invoiceType === 'all' || invoiceType === 'pos') {
-        combined.push(...(posInvoices || []).map(inv => ({ 
-          ...inv, 
-          invoice_type: 'pos',
-          date: inv.sale_date 
-        })));
-      }
-
-      combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      return combined;
-    }
-  });
-
-  // Fetch existing returns for selected invoice
-  const { data: existingReturns } = useQuery({
-    queryKey: ['existing-returns', selectedInvoice?.id],
-    queryFn: async () => {
-      if (!selectedInvoice) return [];
-      
-      const { data, error } = await supabase
-        .from('sales_return_items')
-        .select(`
-          *,
-          return:sales_returns!inner(original_invoice_id, original_invoice_number)
-        `)
-        .eq('return.original_invoice_number', selectedInvoice.invoice_number);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!selectedInvoice
-  });
-
-  // Handle invoice selection for return
-  const handleStartReturn = (invoice: any) => {
-    setSelectedInvoice(invoice);
-    
-    const returnedMap = new Map<string, number>();
-    existingReturns?.forEach(item => {
-      const key = item.product_id || item.product_name;
-      returnedMap.set(key, (returnedMap.get(key) || 0) + item.quantity);
-    });
-
-    const items: ReturnItem[] = invoice.items?.map((item: any) => {
-      const productName = invoice.invoice_type === 'pos' 
-        ? (item.product?.name || 'Unknown')
-        : item.product_name;
-      
-      const key = item.product_id || productName;
-      const alreadyReturned = returnedMap.get(key) || 0;
-      
-      return {
-        id: item.id,
-        product_id: item.product_id,
-        product_variant_id: item.product_variant_id || null,
-        product_name: productName,
-        original_quantity: item.quantity,
-        return_quantity: 0,
-        unit_price: item.unit_price,
-        total_price: 0,
-        selected: false,
-        already_returned: alreadyReturned
-      };
-    }) || [];
-    
-    setReturnItems(items);
-    setShowReturnDialog(true);
-  };
-
-  // Toggle item selection
-  const toggleItem = (id: string) => {
-    setReturnItems(items => items.map(item => {
-      if (item.id === id) {
-        const selected = !item.selected;
-        return {
-          ...item,
-          selected,
-          return_quantity: selected ? Math.max(0, item.original_quantity - item.already_returned) : 0,
-          total_price: selected ? (item.original_quantity - item.already_returned) * item.unit_price : 0
-        };
-      }
-      return item;
-    }));
-  };
-
-  // Update return quantity
-  const updateReturnQuantity = (id: string, quantity: number) => {
-    setReturnItems(items => items.map(item => {
-      if (item.id === id) {
-        const maxQty = item.original_quantity - item.already_returned;
-        const validQty = Math.min(Math.max(0, quantity), maxQty);
-        return {
-          ...item,
-          return_quantity: validQty,
-          total_price: validQty * item.unit_price
-        };
-      }
-      return item;
-    }));
-  };
-
-  // Calculate totals
-  const calculateTotals = () => {
-    const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
-    const subtotal = selectedItems.reduce((sum, item) => sum + item.total_price, 0);
-    const taxAmount = (subtotal * (selectedInvoice?.tax_percent || 15)) / 100;
-    return { subtotal, taxAmount, totalAmount: subtotal + taxAmount, itemCount: selectedItems.length };
-  };
-
-  const totals = calculateTotals();
-
-  // Process return mutation
-  const processReturnMutation = useMutation({
-    mutationFn: async () => {
-      const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
-      
-      if (selectedItems.length === 0) {
-        throw new Error(language === 'ar' ? 'يجب اختيار أصناف للإرجاع' : 'Select items to return');
-      }
-
-      const { data: returnNumber } = await supabase.rpc('generate_sales_return_number');
-
-      const { data: returnRecord, error: returnError } = await supabase
-        .from('sales_returns')
-        .insert({
-          return_number: returnNumber,
-          original_invoice_id: selectedInvoice.invoice_type === 'standard' ? selectedInvoice.id : null,
-          original_invoice_number: selectedInvoice.invoice_number,
-          invoice_type: selectedInvoice.invoice_type,
-          customer_id: selectedInvoice.customer_id,
-          subtotal: totals.subtotal,
-          tax_amount: totals.taxAmount,
-          total_amount: totals.totalAmount,
-          refund_method: refundMethod,
-          reason,
-          notes,
-          status: 'completed'
-        })
-        .select()
-        .single();
-
-      if (returnError) throw returnError;
-
-      const returnItemsData = selectedItems.map(item => ({
-        return_id: returnRecord.id,
-        original_item_id: item.id,
-        product_id: item.product_id,
-        product_variant_id: item.product_variant_id,
-        product_name: item.product_name,
-        quantity: item.return_quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
-        reason
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('sales_return_items')
-        .insert(returnItemsData);
-
-      if (itemsError) throw itemsError;
-
-      // Update product stock
-      for (const item of selectedItems) {
-        if (item.product_id) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single();
-          
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: product.stock + item.return_quantity })
-              .eq('id', item.product_id);
-          }
+      try {
+        // ✅ هنا بنادي على API المرتجعات مش فواتير المبيعات
+        const response = await api.post('/sales-invoices/index', {
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          with: ['customer', 'sales_invoice'],
+          paginate: false
+        });
+        
+        console.log('📦 Returns response:', response.data);
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
         }
+        return [];
+      } catch (error) {
+        console.error('Error fetching sales returns:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب المرتجعات' : 'Error fetching returns');
+        return [];
       }
-
-      return returnRecord;
-    },
-    onSuccess: () => {
-      toast.success(language === 'ar' ? 'تم إنشاء المرتجع بنجاح' : 'Return processed successfully');
-      queryClient.invalidateQueries({ queryKey: ['sales-invoices-for-return'] });
-      setShowReturnDialog(false);
-      resetReturnForm();
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
     }
   });
 
-  const resetReturnForm = () => {
-    setSelectedInvoice(null);
-    setReturnItems([]);
-    setRefundMethod("cash");
-    setReason("");
-    setNotes("");
+  // ========== Filter Functions ==========
+  const filterBySearch = (item: SalesReturn) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      item.return_number?.toLowerCase().includes(term) ||
+      item.sales_invoice_number?.toLowerCase().includes(term) ||
+      item.customer?.name?.toLowerCase().includes(term) ||
+      item.customer?.name_ar?.includes(term)
+    );
   };
 
-  const getStatusBadge = (invoice: any) => {
-    const status = invoice.payment_status || invoice.status || 'completed';
-    const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      paid: { label: language === 'ar' ? 'مدفوع' : 'Paid', variant: 'default' },
-      completed: { label: language === 'ar' ? 'مكتمل' : 'Completed', variant: 'default' },
-      pending: { label: language === 'ar' ? 'معلق' : 'Pending', variant: 'secondary' },
-      partial: { label: language === 'ar' ? 'جزئي' : 'Partial', variant: 'outline' }
+  const filterByMethod = (item: SalesReturn) => {
+    if (methodFilter === "all") return true;
+    return item.return_method === methodFilter;
+  };
+
+  const filterByDate = (item: SalesReturn) => {
+    if (dateFilter === "all") return true;
+    
+    const today = new Date();
+    const itemDate = new Date(item.created_at);
+    
+    switch (dateFilter) {
+      case "today":
+        return itemDate.toDateString() === today.toDateString();
+      case "week":
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return itemDate >= weekAgo;
+      case "month":
+        const monthAgo = new Date();
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return itemDate >= monthAgo;
+      default:
+        return true;
+    }
+  };
+
+  // ✅ تطبيق الفلاتر
+  const filteredReturns = returns
+    .filter(filterBySearch)
+    .filter(filterByMethod)
+    .filter(filterByDate);
+
+  // ========== Stats Calculations ==========
+  const totalReturns = filteredReturns.length;
+  const totalRefunded = filteredReturns.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
+  const cashReturns = filteredReturns.filter(r => r.return_method === 'نقدي').length;
+  const cardReturns = filteredReturns.filter(r => r.return_method === 'بطاقة').length;
+  const creditReturns = filteredReturns.filter(r => r.return_method === 'رصيد').length;
+
+  // ========== Helper Functions ==========
+  const getMethodBadge = (method: string) => {
+    const methodConfig: Record<string, { label: string; className: string }> = {
+      نقدي: { 
+        label: language === 'ar' ? 'نقدي' : 'Cash', 
+        className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
+      },
+      بطاقة: { 
+        label: language === 'ar' ? 'بطاقة' : 'Card', 
+        className: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400'
+      },
+      رصيد: { 
+        label: language === 'ar' ? 'رصيد' : 'Store Credit', 
+        className: 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400'
+      }
     };
-    const config = statusConfig[status] || statusConfig.completed;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = methodConfig[method] || methodConfig.نقدي;
+    return (
+      <Badge variant="outline" className={`${config.className} flex items-center gap-1`}>
+        {config.label}
+      </Badge>
+    );
   };
 
+  // ✅ جلب تفاصيل المرتجع
+  const fetchReturnDetails = async (returnId: number) => {
+    try {
+      const response = await api.get(`/sales-invoices/${returnId}`);
+      
+      if (response.data.result === 'Success') {
+        setSelectedReturn(response.data.data);
+        setShowDetails(true);
+      }
+    } catch (error) {
+      console.error('Error fetching return details:', error);
+      toast.error(language === 'ar' ? 'خطأ في جلب تفاصيل المرتجع' : 'Error fetching return details');
+    }
+  };
+
+  const handleRefresh = () => {
+    refetch();
+    toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
+  };
+
+  // ========== Render ==========
   return (
-    <>
-      <div className="space-y-4">
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex-1 w-full">
-            <AdvancedFilter
-              fields={filterFields}
-              values={filterValues}
-              onChange={setFilterValues}
-              onReset={() => setFilterValues({})}
-              language={language as 'ar' | 'en'}
-            />
+    <div className="space-y-4">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-100 rounded-lg">
+            <RotateCcw className="h-6 w-6 text-amber-600" />
           </div>
-          <Button onClick={() => setShowNewReturnForm(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            {language === 'ar' ? 'مرتجع جديد' : 'New Return'}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {language === 'ar' ? 'مرتجعات المبيعات' : 'Sales Returns'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {language === 'ar' 
+                ? `عرض ${filteredReturns.length} مرتجع` 
+                : `Showing ${filteredReturns.length} returns`}
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="gap-2"
+          >
+            <svg
+              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 2v6h-6" />
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M3 22v-6h6" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
+            {language === 'ar' ? 'تحديث' : 'Refresh'}
+          </Button>
+          
+          <Button 
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            {language === 'ar' ? 'فلتر' : 'Filter'}
           </Button>
         </div>
+      </div>
 
-        {/* Invoices Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              {language === 'ar' ? 'فواتير المبيعات' : 'Sales Invoices'}
-              {invoices && ` (${invoices.length})`}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
-                    <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
-                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-                      </TableCell>
-                    </TableRow>
-                  ) : !invoices || invoices.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {language === 'ar' ? 'لا توجد فواتير' : 'No invoices found'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    invoices.map((invoice: any) => (
-                      <TableRow key={invoice.id}>
-                        <TableCell className="font-mono font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell>
-                          <Badge variant={invoice.invoice_type === 'pos' ? 'secondary' : 'outline'}>
-                            {invoice.invoice_type === 'pos' ? 'POS' : (language === 'ar' ? 'قياسية' : 'Standard')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {language === 'ar' 
-                            ? invoice.customer?.name_ar || invoice.customer?.name || '-'
-                            : invoice.customer?.name || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(invoice.date, true)}
-                        </TableCell>
-                        <TableCell className="font-medium">{invoice.total_amount?.toLocaleString()}</TableCell>
-                        <TableCell>{getStatusBadge(invoice)}</TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => handleStartReturn(invoice)}>
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                            {language === 'ar' ? 'مرتجع' : 'Return'}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+      {/* Filters Section */}
+      {showFilters && (
+        <Card className="border-amber-200/50">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={language === 'ar' ? 'بحث برقم المرتجع أو الفاتورة...' : 'Search by return or invoice number...'}
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <Select value={methodFilter} onValueChange={setMethodFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'طريقة الإرجاع' : 'Return method'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{language === 'ar' ? 'جميع الطرق' : 'All methods'}</SelectItem>
+                  <SelectItem value="نقدي">{language === 'ar' ? 'نقدي' : 'Cash'}</SelectItem>
+                  <SelectItem value="بطاقة">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                  <SelectItem value="رصيد">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger>
+                  <Calendar className="h-4 w-4 ml-2" />
+                  <SelectValue placeholder={language === 'ar' ? 'التاريخ' : 'Date'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{language === 'ar' ? 'كل الأوقات' : 'All time'}</SelectItem>
+                  <SelectItem value="today">{language === 'ar' ? 'اليوم' : 'Today'}</SelectItem>
+                  <SelectItem value="week">{language === 'ar' ? 'آخر 7 أيام' : 'Last 7 days'}</SelectItem>
+                  <SelectItem value="month">{language === 'ar' ? 'آخر 30 يوم' : 'Last 30 days'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border-amber-200/50">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                {language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns'}
+              </p>
+              <p className="text-2xl font-bold text-amber-800 dark:text-amber-300">
+                {totalReturns}
+              </p>
+            </div>
+            <div className="p-2 bg-amber-200/50 dark:bg-amber-800/30 rounded-lg">
+              <RotateCcw className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200/50">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
+                {language === 'ar' ? 'إجمالي المسترد' : 'Total Refunded'}
+              </p>
+              <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
+                {formatCurrency(totalRefunded)}
+              </p>
+            </div>
+            <div className="p-2 bg-blue-200/50 dark:bg-blue-800/30 rounded-lg">
+              <Receipt className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                {language === 'ar' ? 'مرتجعات نقدي' : 'Cash Returns'}
+              </p>
+              <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300">
+                {cashReturns}
+              </p>
+            </div>
+            <div className="p-2 bg-emerald-200/50 dark:bg-emerald-800/30 rounded-lg">
+              <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200/50">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
+                {language === 'ar' ? 'مرتجعات بطاقة' : 'Card Returns'}
+              </p>
+              <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">
+                {cardReturns}
+              </p>
+            </div>
+            <div className="p-2 bg-purple-200/50 dark:bg-purple-800/30 rounded-lg">
+              <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Return Dialog */}
-      <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5" />
-              {language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
-              {selectedInvoice && ` - ${selectedInvoice.invoice_number}`}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {/* Items Table */}
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
+      {/* Table Card */}
+      <Card className="border-0 shadow-lg">
+        <CardContent className="p-0">
+          <div className="rounded-xl border overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="min-w-[150px] font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'رقم المرتجع' : 'RETURN #'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[150px] font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'رقم الفاتورة' : 'INVOICE #'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[150px] font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'العميل' : 'CUSTOMER'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[120px] font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'التاريخ' : 'DATE'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[120px] font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'طريقة الإرجاع' : 'METHOD'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[100px] text-right font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'المبلغ' : 'AMOUNT'}
+                    </span>
+                  </TableHead>
+                  <TableHead className="min-w-[100px] text-center font-bold">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {language === 'ar' ? 'الإجراءات' : 'ACTIONS'}
+                    </span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
                   <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                    <TableHead className="text-center">{language === 'ar' ? 'الكمية الأصلية' : 'Orig. Qty'}</TableHead>
-                    <TableHead className="text-center">{language === 'ar' ? 'مرتجع سابق' : 'Prev. Ret.'}</TableHead>
-                    <TableHead className="text-center">{language === 'ar' ? 'كمية الإرجاع' : 'Return Qty'}</TableHead>
-                    <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                    <TableCell colSpan={7} className="h-[400px] text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <span className="text-muted-foreground">
+                          {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                        </span>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {returnItems.map((item) => {
-                    const availableQty = item.original_quantity - item.already_returned;
-                    const canReturn = availableQty > 0;
-                    
-                    return (
-                      <TableRow key={item.id} className={!canReturn ? 'opacity-50' : ''}>
-                        <TableCell>
-                          <Checkbox
-                            checked={item.selected}
-                            onCheckedChange={() => toggleItem(item.id)}
-                            disabled={!canReturn}
-                          />
-                        </TableCell>
-                        <TableCell>{item.product_name}</TableCell>
-                        <TableCell className="text-center">{item.original_quantity}</TableCell>
-                        <TableCell className="text-center">
-                          {item.already_returned > 0 && (
-                            <Badge variant="destructive">{item.already_returned}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {canReturn ? (
-                            <Input
-                              type="number"
-                              min="0"
-                              max={availableQty}
-                              value={item.return_quantity}
-                              onChange={(e) => updateReturnQuantity(item.id, parseInt(e.target.value) || 0)}
-                              className="w-20 mx-auto"
-                              disabled={!item.selected}
-                            />
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {item.total_price.toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Return Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</Label>
-                <Select value={refundMethod} onValueChange={setRefundMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">{language === 'ar' ? 'نقدي' : 'Cash'}</SelectItem>
-                    <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                    <SelectItem value="account_deduction">{language === 'ar' ? 'خصم من الحساب' : 'Account Deduction'}</SelectItem>
-                    <SelectItem value="exchange">{language === 'ar' ? 'استبدال' : 'Exchange'}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>{language === 'ar' ? 'سبب الإرجاع' : 'Return Reason'}</Label>
-                <Select value={reason} onValueChange={setReason}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={language === 'ar' ? 'اختر السبب' : 'Select reason'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="defective">{language === 'ar' ? 'منتج معيب' : 'Defective'}</SelectItem>
-                    <SelectItem value="wrong_item">{language === 'ar' ? 'منتج خاطئ' : 'Wrong Item'}</SelectItem>
-                    <SelectItem value="not_needed">{language === 'ar' ? 'غير مطلوب' : 'Not Needed'}</SelectItem>
-                    <SelectItem value="size_issue">{language === 'ar' ? 'مشكلة في المقاس' : 'Size Issue'}</SelectItem>
-                    <SelectItem value="other">{language === 'ar' ? 'أخرى' : 'Other'}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'}
-                rows={2}
-              />
-            </div>
-
-            {/* Totals */}
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'عدد الأصناف:' : 'Items:'}</span>
-                <span className="font-medium">{totals.itemCount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
-                <span>{totals.subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'الضريبة:' : 'Tax:'}</span>
-                <span>{totals.taxAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold border-t pt-2">
-                <span>{language === 'ar' ? 'إجمالي الاسترداد:' : 'Total Refund:'}</span>
-                <span>{totals.totalAmount.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowReturnDialog(false)}>
-                {language === 'ar' ? 'إلغاء' : 'Cancel'}
-              </Button>
-              <Button 
-                onClick={() => processReturnMutation.mutate()}
-                disabled={processReturnMutation.isPending || totals.itemCount === 0}
-              >
-                {processReturnMutation.isPending 
-                  ? (language === 'ar' ? 'جاري المعالجة...' : 'Processing...') 
-                  : (language === 'ar' ? 'تأكيد المرتجع' : 'Confirm Return')}
-              </Button>
-            </div>
+                ) : filteredReturns.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-[400px] text-center">
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <div className="p-4 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
+                          <RotateCcw className="h-12 w-12 text-amber-600/50 dark:text-amber-400/50" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-2">
+                          {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground max-w-md">
+                          {language === 'ar' 
+                            ? 'لم يتم إنشاء أي مرتجعات مبيعات بعد.'
+                            : 'No sales returns have been created yet.'}
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredReturns.map((returnItem: SalesReturn, index: number) => (
+                    <TableRow 
+                      key={returnItem.id} 
+                      className={`
+                        group transition-all duration-200 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 cursor-pointer
+                        ${index % 2 === 0 ? 'bg-white dark:bg-gray-950/50' : 'bg-muted/20 dark:bg-gray-900/30'}
+                      `}
+                      onClick={() => fetchReturnDetails(returnItem.id)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1 h-8 bg-amber-400/30 rounded-full group-hover:bg-amber-500 transition-colors" />
+                          <span className="font-mono font-semibold text-sm">
+                            {returnItem.return_number || `RET-${returnItem.id}`}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm">
+                          {returnItem.sales_invoice_number || `SI-${returnItem.sales_invoice_id}`}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                              {returnItem.customer?.name?.charAt(0) || 'C'}
+                            </span>
+                          </div>
+                          <span className="font-medium text-sm">
+                            {language === 'ar' 
+                              ? returnItem.customer?.name_ar || returnItem.customer?.name 
+                              : returnItem.customer?.name || '---'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {formatDate(returnItem.created_at)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(returnItem.created_at).toLocaleTimeString([], { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getMethodBadge(returnItem.return_method)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="font-bold text-amber-600 dark:text-amber-400">
+                          {formatCurrency(Number(returnItem.total_amount) || 0)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-amber-500/10 hover:text-amber-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetchReturnDetails(returnItem.id);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
 
-      {/* New Return Form */}
-      <SalesReturnForm 
-        isOpen={showNewReturnForm} 
-        onClose={() => setShowNewReturnForm(false)} 
-      />
-    </>
+      {/* Return Details Modal */}
+      {showDetails && selectedReturn && (
+        <Dialog open={showDetails} onOpenChange={setShowDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5 text-amber-600" />
+                {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'} - {selectedReturn.return_number}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
+                  </p>
+                  <p className="font-medium font-mono">
+                    {selectedReturn.sales_invoice_number || `SI-${selectedReturn.sales_invoice_id}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'طريقة الإرجاع' : 'Return Method'}
+                  </p>
+                  <p>{getMethodBadge(selectedReturn.return_method)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'التاريخ' : 'Date'}
+                  </p>
+                  <p>{formatDate(selectedReturn.created_at, true)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'المبلغ' : 'Amount'}
+                  </p>
+                  <p className="text-xl font-bold text-amber-600">
+                    {formatCurrency(Number(selectedReturn.total_amount) || 0)}
+                  </p>
+                </div>
+              </div>
+
+              {selectedReturn.note && (
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'ar' ? 'ملاحظات' : 'Notes'}
+                  </p>
+                  <p className="p-3 bg-muted/30 rounded-lg text-sm">
+                    {selectedReturn.note}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setShowDetails(false)}>
+                  {language === 'ar' ? 'إغلاق' : 'Close'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 };
 

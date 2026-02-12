@@ -38,7 +38,7 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
   // ========== State ==========
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [formData, setFormData] = useState({
-    sales_invoice_id: "",
+    sales_invoice_id: "", // 👈 هنا هنحط رقم الفاتورة
     return_method: "نقدي",
     note: ""
   });
@@ -68,8 +68,8 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
       try {
         const response = await api.post('/sales-invoices/index', {
           filters: {
-            search: invoiceSearch,
-            payment_status: ['paid', 'partial'] // فواتير مدفوعة أو جزئية فقط
+            search: invoiceSearch, // 👈 البحث برقم الفاتورة أو اسم العميل
+            payment_status: ['paid', 'partial']
           },
           with: ['customer'],
           perPage: 10,
@@ -86,11 +86,12 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
   });
 
   // ========== جلب الفاتورة المحددة ==========
-  const loadInvoice = async (invoiceId: number, invoiceNumber: string) => {
+  const loadInvoice = async (invoiceNumber: string) => {
     try {
+      // 👈 البحث برقم الفاتورة مش ID
       const response = await api.post('/sales-invoices/index', {
         filters: { 
-          id: invoiceId
+          invoice_number: invoiceNumber // ✅ هنا بنبحث برقم الفاتورة
         },
         with: ['items', 'customer'],
         paginate: false
@@ -101,9 +102,11 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
         
         if (invoice) {
           setSelectedInvoice(invoice);
+          
+          // ✅ هنا بنحط رقم الفاتورة مش الـ ID
           setFormData(prev => ({ 
             ...prev, 
-            sales_invoice_id: invoice.invoice_number // هنا بنحط رقم الفاتورة مش الـ ID
+            sales_invoice_id: invoice.invoice_number // 👈 رقم الفاتورة زي SI-20260212-7336
           }));
           
           // تحويل items الفاتورة إلى items مرتجع
@@ -186,16 +189,9 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
         throw new Error(language === 'ar' ? 'يجب كتابة سبب الإرجاع لجميع الأصناف' : 'Reason is required for all items');
       }
 
-      // ✅ نجيب ID الفاتورة من الـ selectedInvoice
-      const invoiceId = selectedInvoice?.id;
-      
-      if (!invoiceId) {
-        throw new Error(language === 'ar' ? 'الفاتورة غير صالحة' : 'Invalid invoice');
-      }
-
-      // ✅ تجهيز payload بالضبط زي الـ API
+      // ✅ تجهيز payload بالضبط زي الـ API - بنبعت رقم الفاتورة مش ID
       const payload = {
-        sales_invoice_id: Number(invoiceId), // هنا بنبعت ID مش رقم الفاتورة
+        sales_invoice_id: formData.sales_invoice_id, // 👈 هنا رقم الفاتورة زي SI-20260212-7336
         return_method: formData.return_method,
         note: formData.note || null,
         items: items.map(item => ({
@@ -207,6 +203,7 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
       };
 
       console.log('📦 Sending payload to /invoice-return/store:', JSON.stringify(payload, null, 2));
+      console.log('📋 Invoice Number:', formData.sales_invoice_id); // ✅ هنشوف رقم الفاتورة
 
       const response = await api.post('/invoice-return/store', payload);
       return response.data;
@@ -313,7 +310,7 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
                           {invoiceResults.map((invoice: any) => (
                             <TableRow key={invoice.id} className="cursor-pointer hover:bg-muted/50">
                               <TableCell className="font-mono font-medium">
-                                {invoice.invoice_number}
+                                {invoice.invoice_number} {/* 👈 ده رقم الفاتورة */}
                               </TableCell>
                               <TableCell>
                                 {language === 'ar' 
@@ -328,7 +325,7 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => loadInvoice(invoice.id, invoice.invoice_number)}
+                                  onClick={() => loadInvoice(invoice.invoice_number)} // 👈 بنبعت رقم الفاتورة
                                 >
                                   <FileText className="h-4 w-4 ml-2" />
                                   {language === 'ar' ? 'اختيار' : 'Select'}
@@ -367,8 +364,8 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
                         <p className="text-sm text-muted-foreground">
                           {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
                         </p>
-                        <p className="text-lg font-bold text-green-700 dark:text-green-400">
-                          {selectedInvoice.invoice_number}
+                        <p className="text-lg font-bold text-green-700 dark:text-green-400 font-mono">
+                          {selectedInvoice.invoice_number} {/* 👈 هنا بيظهر رقم الفاتورة */}
                         </p>
                       </div>
                       <div className="text-right">

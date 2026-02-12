@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye, Receipt } from "lucide-react";
+import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
+  import InvoiceReturnForm from "./InvoiceReturnForm";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -102,7 +103,6 @@ interface SalesInvoice {
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
-  
   total_amount: number;
   paid_amount: number;
   remaining_amount: number;
@@ -117,6 +117,8 @@ const SalesInvoiceList = () => {
   const { language } = useLanguage();
   const [showForm, setShowForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
+  const [showReturnForm, setShowReturnForm] = useState(false);
+  const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<any>(null);
   const [filterValues, setFilterValues] = useState<FilterValues>({});
 
   // ========== Queries ==========
@@ -355,6 +357,26 @@ const SalesInvoiceList = () => {
       }
     }
   });
+
+  // ✅ جلب فاتورة محددة للمرتجع - GET /sales-invoices/{id}
+  const fetchInvoiceForReturn = async (invoiceId: number) => {
+    try {
+      console.log(`📦 Fetching invoice #${invoiceId} for return...`);
+      
+      const response = await api.get(`/sales-invoices/${invoiceId}`);
+      
+      if (response.data.result === 'Success') {
+        setSelectedInvoiceForReturn(response.data.data);
+        setShowReturnForm(true);
+        toast.success(language === 'ar' ? 'تم جلب الفاتورة بنجاح' : 'Invoice fetched successfully');
+      } else {
+        toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error fetching invoice');
+      }
+    } catch (error) {
+      console.error('Error fetching invoice for return:', error);
+      toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error fetching invoice');
+    }
+  };
 
   // ========== Filter Fields ==========
 
@@ -742,9 +764,14 @@ const SalesInvoiceList = () => {
                         </span>
                       </div>
                     </TableHead>
-                  
-                 
-                    <TableHead className="min-w-[100px] text-center font-bold">
+                    <TableHead className="min-w-[120px] font-bold">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          {language === 'ar' ? 'طريقة الدفع' : 'PAYMENT'}
+                        </span>
+                      </div>
+                    </TableHead>
+                    <TableHead className="min-w-[150px] text-center font-bold">
                       <div className="flex items-center justify-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           {language === 'ar' ? 'الإجراءات' : 'ACTIONS'}
@@ -758,7 +785,7 @@ const SalesInvoiceList = () => {
                     // Skeleton loading
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        {Array.from({ length: 8 }).map((_, j) => (
+                        {Array.from({ length: 7 }).map((_, j) => (
                           <TableCell key={j}>
                             <div className="h-5 bg-muted rounded animate-pulse" />
                           </TableCell>
@@ -767,7 +794,7 @@ const SalesInvoiceList = () => {
                     ))
                   ) : invoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-[400px] text-center">
+                      <TableCell colSpan={7} className="h-[400px] text-center">
                         <div className="flex flex-col items-center justify-center h-full">
                           <div className="p-4 bg-muted/30 rounded-full mb-4">
                             <Receipt className="h-12 w-12 text-muted-foreground/50" />
@@ -846,19 +873,23 @@ const SalesInvoiceList = () => {
                             </span>
                           </div>
                         </TableCell>
-                       
-                      
                         <TableCell className="text-right">
                           <div className="flex flex-col">
-                            <span className={`font-medium ${
-                              invoice.remaining_amount > 0 
-                                ? 'text-red-600 dark:text-red-400' 
-                                : 'text-green-600 dark:text-green-400'
-                            }`}>
+                            <span className="font-bold text-primary">
                               {invoice.total_amount?.toLocaleString()}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {invoice?.currency || 'YER'}
+                              {invoice.currency || 'YER'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {invoice.paid_amount?.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {invoice.currency || 'YER'}
                             </span>
                           </div>
                         </TableCell>
@@ -875,8 +906,23 @@ const SalesInvoiceList = () => {
                                 e.stopPropagation();
                                 setSelectedInvoice(invoice);
                               }}
+                              title={language === 'ar' ? 'عرض التفاصيل' : 'View details'}
                             >
                               <Eye className="h-4 w-4" />
+                            </Button>
+                            
+                            {/* ✅ زرار المرتجع الجديد - ديناميكي */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-amber-500/10 hover:text-amber-600 transition-all"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await fetchInvoiceForReturn(invoice.id); // ✅ هنا بنبعت الـ ID الحقيقي
+                              }}
+                              title={language === 'ar' ? 'إنشاء مرتجع' : 'Create return'}
+                            >
+                              <RotateCcw className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -902,6 +948,16 @@ const SalesInvoiceList = () => {
           onClose={() => setSelectedInvoice(null)}
         />
       )}
+
+      {/* ✅ نموذج المرتجع - بياخد بيانات الفاتورة ديناميكياً */}
+      <InvoiceReturnForm
+        isOpen={showReturnForm}
+        onClose={() => {
+          setShowReturnForm(false);
+          setSelectedInvoiceForReturn(null);
+        }}
+        invoiceData={selectedInvoiceForReturn} // ✅ بنمرر بيانات الفاتورة كاملة
+      />
     </>
   );
 };
