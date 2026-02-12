@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Trash2, Search, FileDown, Save, Package } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { toast } from 'sonner';
 
 interface OrderItem {
@@ -25,74 +26,142 @@ interface OrderItem {
   total_cost: number;
 }
 
+interface PurchaseOrder {
+  id: string;
+  order_number?: string;
+  supplier_id: string;
+  expected_date: string;
+  notes: string;
+  status?: string;
+  total_amount?: string;
+  supplier?: {
+    id: number;
+    name: string;
+  };
+  expected_delivery?: string | null;
+  items?: {
+    product_id: number;
+    product_name: string;
+    quantity: number;
+    unit_cost: string;
+    total: string;
+  }[];
+  created_at?: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  name_ar?: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  name_ar?: string;
+  sku: string;
+  cost?: number;
+  stock: number;
+  barcode?: string;
+}
+
+interface PurchaseOrderItem {
+  id: string;
+  product_id: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  products: {
+    name: string;
+    name_ar?: string;
+    sku: string;
+  };
+}
+
 interface PurchaseOrderFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
-  editOrder?: any;
+  editOrder?: PurchaseOrder;
 }
 
 const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, onSave, editOrder }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
-  
+
   const [supplierId, setSupplierId] = useState('');
-  const [expectedDate, setExpectedDate] = useState('');
+  const [expectedDelivery, setExpectedDelivery] = useState('');
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<OrderItem[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [showProductSearch, setShowProductSearch] = useState(false);
 
+
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(productSearch);
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(handler);
+  }, [productSearch]);
+
+
+
   // Fetch suppliers
-  const { data: suppliers = [] } = useQuery({
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
     queryKey: ['suppliers-active'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('suppliers').select('*').eq('is_active', true).order('name');
-      if (error) throw error;
-      return data;
+      const response = await api.post('/suppliers/index', {});
+      if (response.data.result !== 'Success') {
+        throw new Error(response.data.message || 'Failed to fetch suppliers');
+      }
+      console.log('Fetched suppliers:', response.data.data);
+      return response.data.data;
     }
   });
 
-  // Fetch products
-  const { data: products = [] } = useQuery({
+  // Fetch all products
+  const { data: products = [], isFetching } = useQuery<Product[]>({
     queryKey: ['products-for-order'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('products').select('*').eq('is_active', true).order('name');
-      if (error) throw error;
-      return data;
-    }
+      const { data } = await api.post('/product/index', {
+        params: {
+          limit: 20
+        }
+      });
+      console.log('Fetched products:', data.data);
+      return data.data ?? [];
+    },
+    enabled: showProductSearch,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
-  // Filter products based on search
-  const filteredProducts = products.filter(p => 
-    productSearch === '' || 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.name_ar?.includes(productSearch) ||
-    p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.barcode?.includes(productSearch)
-  );
 
-  // Load edit data
-  useEffect(() => {
-    if (editOrder && isOpen) {
-      setSupplierId(editOrder.supplier_id || '');
-      setExpectedDate(editOrder.expected_date ? new Date(editOrder.expected_date).toISOString().split('T')[0] : '');
-      setNotes(editOrder.notes || '');
-      loadOrderItems(editOrder.id);
-    } else if (!editOrder && isOpen) {
-      resetForm();
-    }
-  }, [editOrder, isOpen]);
 
-  const loadOrderItems = async (orderId: string) => {
+  // Filter products locally based on search
+  const filteredProducts = useMemo(() => {
+    if (!debouncedSearch) return products;
+    const searchLower = debouncedSearch.toLowerCase();
+    return products.filter(product =>
+      product.name?.toLowerCase().includes(searchLower) ||
+      product.name_ar?.toLowerCase().includes(searchLower) ||
+      product.sku?.toLowerCase().includes(searchLower) ||
+      product.barcode?.toLowerCase().includes(searchLower)
+    );
+  }, [products, debouncedSearch]);
+
+  const loadOrderItems = useCallback(async (orderId: string) => {
     const { data, error } = await supabase
       .from('purchase_order_items')
       .select('*, products(name, name_ar, sku)')
       .eq('purchase_order_id', orderId);
-    
+
     if (!error && data) {
-      setItems(data.map((item: any) => ({
+      setItems(data.map((item: PurchaseOrderItem) => ({
         product_id: item.product_id,
         product_name: language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name,
         sku: item.products?.sku || '',
@@ -101,17 +170,29 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
         total_cost: Number(item.total_cost)
       })));
     }
-  };
+  }, [language]);
+
+  // Load edit data
+  useEffect(() => {
+    if (editOrder && isOpen) {
+      setSupplierId(editOrder.supplier_id || '');
+      setExpectedDelivery(editOrder.expected_date ? new Date(editOrder.expected_date).toISOString().split('T')[0] : '');
+      setNotes(editOrder.notes || '');
+      loadOrderItems(editOrder.id);
+    } else if (!editOrder && isOpen) {
+      resetForm();
+    }
+  }, [editOrder, isOpen, loadOrderItems]);
 
   const resetForm = () => {
     setSupplierId('');
-    setExpectedDate('');
+    setExpectedDelivery('');
     setNotes('');
     setItems([]);
     setProductSearch('');
   };
 
-  const addProduct = (product: any) => {
+  const addProduct = (product: Product) => {
     const existingIndex = items.findIndex(item => item.product_id === product.id);
     if (existingIndex >= 0) {
       const newItems = [...items];
@@ -134,7 +215,13 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
 
   const updateItem = (index: number, field: string, value: number) => {
     const newItems = [...items];
-    (newItems[index] as any)[field] = value;
+    if (field === 'quantity') {
+      newItems[index].quantity = value;
+    } else if (field === 'unit_cost') {
+      newItems[index].unit_cost = value;
+    } else if (field === 'total_cost') {
+      newItems[index].total_cost = value;
+    }
     newItems[index].total_cost = newItems[index].quantity * newItems[index].unit_cost;
     setItems(newItems);
   };
@@ -149,7 +236,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
   const generateOrderNumber = async () => {
     const { count } = await supabase.from('purchase_orders').select('*', { count: 'exact', head: true });
     const num = (count || 0) + 1;
-    return `PO-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-${String(num).padStart(4, '0')}`;
+    return `PO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(num).padStart(4, '0')}`;
   };
 
   // Save mutation
@@ -159,23 +246,23 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
       if (items.length === 0) throw new Error(language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products');
 
       if (editOrder) {
-        // Update order
+        // Update order using Supabase
         const { error: orderError } = await supabase
           .from('purchase_orders')
           .update({
             supplier_id: supplierId,
-            expected_date: expectedDate || null,
+            expected_date: expectedDelivery || null,
             notes,
             total_amount: totalAmount,
             updated_at: new Date().toISOString()
           })
           .eq('id', editOrder.id);
-        
+
         if (orderError) throw orderError;
 
         // Delete old items and insert new
         await supabase.from('purchase_order_items').delete().eq('purchase_order_id', editOrder.id);
-        
+
         const { error: itemsError } = await supabase
           .from('purchase_order_items')
           .insert(items.map(item => ({
@@ -185,42 +272,30 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
             unit_cost: item.unit_cost,
             total_cost: item.total_cost
           })));
-        
+
         if (itemsError) throw itemsError;
       } else {
-        // Create new order
-        const orderNumber = await generateOrderNumber();
-        
-        const { data: newOrder, error: orderError } = await supabase
-          .from('purchase_orders')
-          .insert({
-            order_number: orderNumber,
-            supplier_id: supplierId,
-            expected_date: expectedDate || null,
-            notes,
-            total_amount: totalAmount,
-            status: 'pending'
-          })
-          .select()
-          .single();
-        
-        if (orderError) throw orderError;
-
-        const { error: itemsError } = await supabase
-          .from('purchase_order_items')
-          .insert(items.map(item => ({
-            purchase_order_id: newOrder.id,
-            product_id: item.product_id,
+        // Create new order using API
+        const payload = {
+          supplier_id: parseInt(supplierId),
+          expected_delivery: expectedDelivery || null,
+          notes,
+          items: items.map(item => ({
+            product_id: parseInt(item.product_id),
             quantity: item.quantity,
-            unit_cost: item.unit_cost,
-            total_cost: item.total_cost
-          })));
-        
-        if (itemsError) throw itemsError;
+
+
+            unit_cost: item.unit_cost
+          }))
+        };
+
+        const response = await api.post('/purchases-orders/store', payload);
+        const createdOrder = response.data.data;
+        console.log("Created Order:", createdOrder);
       }
     },
     onSuccess: () => {
-      toast.success(editOrder 
+      toast.success(editOrder
         ? (language === 'ar' ? 'تم تحديث أمر الشراء' : 'Purchase order updated')
         : (language === 'ar' ? 'تم إنشاء أمر الشراء' : 'Purchase order created')
       );
@@ -229,17 +304,20 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
       onClose();
       resetForm();
     },
-    onError: (error: any) => {
-      toast.error(error.message);
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'An error occurred');
     }
   });
+
+
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {editOrder 
+            {editOrder
               ? (language === 'ar' ? 'تعديل أمر الشراء' : 'Edit Purchase Order')
               : (language === 'ar' ? 'أمر شراء جديد' : 'New Purchase Order')
             }
@@ -257,7 +335,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
                     <SelectValue placeholder={language === 'ar' ? 'اختر المورد' : 'Select supplier'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {suppliers.map((s: any) => (
+                    {suppliers.map((s: Supplier) => (
                       <SelectItem key={s.id} value={s.id}>
                         {language === 'ar' ? s.name_ar || s.name : s.name}
                       </SelectItem>
@@ -267,7 +345,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
               </div>
               <div>
                 <Label>{language === 'ar' ? 'تاريخ التسليم المتوقع' : 'Expected Delivery'}</Label>
-                <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+                <Input type="date" value={expectedDelivery} onChange={(e) => setExpectedDelivery(e.target.value)} />
               </div>
               <div>
                 <Label>{language === 'ar' ? 'الإجمالي' : 'Total'}</Label>
@@ -286,7 +364,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
                     <Input
                       placeholder={language === 'ar' ? 'بحث عن منتج بالاسم أو SKU أو الباركود...' : 'Search by name, SKU or barcode...'}
                       value={productSearch}
-                      onChange={(e) => { setProductSearch(e.target.value); setShowProductSearch(true); }}
+                      onChange={(e) => { setProductSearch(e.target.value); }}
                       onFocus={() => setShowProductSearch(true)}
                       className="ps-10"
                     />
@@ -300,7 +378,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
                         {language === 'ar' ? 'لم يتم العثور على منتجات' : 'No products found'}
                       </div>
                     ) : (
-                      filteredProducts.slice(0, 10).map((product: any) => (
+                      filteredProducts.slice(0, 10).map((product: Product) => (
                         <div
                           key={product.id}
                           className="flex items-center justify-between p-3 hover:bg-muted cursor-pointer border-b last:border-0"
@@ -410,7 +488,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
             </Button>
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
               <Save size={16} className="me-2" />
-              {saveMutation.isPending 
+              {saveMutation.isPending
                 ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...')
                 : (language === 'ar' ? 'حفظ' : 'Save')
               }

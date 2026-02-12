@@ -14,38 +14,62 @@ import { toast } from 'sonner';
 import { formatDate } from '@/lib/utils';
 import PurchaseOrderForm from './PurchaseOrderForm';
 import PurchaseOrderDetails from './PurchaseOrderDetails';
+import api from '@/lib/api';
 
 const PurchaseOrderList: React.FC = () => {
+
+  interface PurchaseOrder {
+    id: string;
+    order_number: string;
+    supplier: {
+      id: number;
+      name: string;
+    };
+    expected_delivery: string | null;
+    total_amount: string;
+    notes: string;
+    status: string;
+    supplier_id: string;
+    expected_date: string;
+    items: {
+      product_id: number;
+      product_name: string;
+      quantity: number;
+      unit_cost: string;
+      total: string;
+    }[];
+    created_at: string;
+  }
+
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
 
   // Fetch purchase orders
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading } = useQuery<PurchaseOrder[]>({
     queryKey: ['purchase_orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .select('*, suppliers(name, name_ar)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      const response = await api.post('/purchases-orders/index');
+
+      console.log("Full Response:", response.data);
+
+      return response.data.data ?? [];
     }
   });
 
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updateData: any = { status };
+      const updateData: { status: string; received_date?: string } = { status };
       if (status === 'received') {
         updateData.received_date = new Date().toISOString();
       }
-      
+
       const { error } = await supabase.from('purchase_orders').update(updateData).eq('id', id);
       if (error) throw error;
     },
@@ -59,18 +83,37 @@ const PurchaseOrderList: React.FC = () => {
   });
 
   // Filter orders
-  const filteredOrders = orders.filter((order: any) => {
+  const filteredOrders = orders.filter((order: PurchaseOrder) => {
+    console.log('🔍 Filtering order:', {
+      order_number: order.order_number,
+      status: order.status,
+      supplier: order.supplier?.name,
+      searchTerm,
+      statusFilter
+    });
+
     const matchesSearch = searchTerm === '' ||
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.suppliers?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.suppliers?.name_ar?.includes(searchTerm);
-    
+      order.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
+
+    const passesFilter = matchesSearch && matchesStatus;
+    console.log('✅ Filter result:', {
+      matchesSearch,
+      matchesStatus,
+      passesFilter,
+      order_number: order.order_number
+    });
+
+    return passesFilter;
   });
 
-  const getStatusBadge = (status: string) => {
+
+
+
+  const getStatusBadge = (status: string): JSX.Element => {
+    console.log('getStatusBadge called with status:', status, 'language:', language);
     const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; icon: React.ReactNode }> = {
       pending: { variant: 'secondary', label: language === 'ar' ? 'معلق' : 'Pending', icon: <Clock size={14} /> },
       approved: { variant: 'default', label: language === 'ar' ? 'معتمد' : 'Approved', icon: <CheckCircle size={14} /> },
@@ -79,6 +122,7 @@ const PurchaseOrderList: React.FC = () => {
       cancelled: { variant: 'destructive', label: language === 'ar' ? 'ملغي' : 'Cancelled', icon: <XCircle size={14} /> }
     };
     const { variant, label, icon } = config[status] || config.pending;
+    console.log('getStatusBadge returning:', { variant, label, status });
     return (
       <Badge variant={variant} className="gap-1">
         {icon} {label}
@@ -86,12 +130,12 @@ const PurchaseOrderList: React.FC = () => {
     );
   };
 
-  const handleEdit = (order: any) => {
+  const handleEdit = (order: PurchaseOrder) => {
     setSelectedOrder(order);
     setShowOrderForm(true);
   };
 
-  const handleView = (order: any) => {
+  const handleView = (order: PurchaseOrder) => {
     setSelectedOrder(order);
     setShowOrderDetails(true);
   };
@@ -159,16 +203,16 @@ const PurchaseOrderList: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrders.map((order: any) => (
+                filteredOrders.map((order: PurchaseOrder) => (
                   <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleView(order)}>
                     <TableCell className="font-mono font-medium">{order.order_number}</TableCell>
-                    <TableCell>{language === 'ar' ? order.suppliers?.name_ar || order.suppliers?.name : order.suppliers?.name}</TableCell>
+                    <TableCell>{order.supplier?.name}</TableCell>
                     <TableCell className="font-medium">{Number(order.total_amount).toLocaleString()} YER</TableCell>
                     <TableCell>
-                      {order.expected_date ? formatDate(order.expected_date) : '-'}
+                      {order.expected_delivery ? formatDate(order.expected_delivery) : '-'}
                     </TableCell>
                     <TableCell>{getStatusBadge(order.status)}</TableCell>
-                    <TableCell>{formatDate(order.order_date)}</TableCell>
+                    <TableCell>{formatDate(order.created_at)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -187,24 +231,24 @@ const PurchaseOrderList: React.FC = () => {
                                 <Edit2 size={16} className="me-2" />
                                 {language === 'ar' ? 'تعديل' : 'Edit'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id, status: 'approved' })}>
+                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id.toString(), status: 'approved' })}>
                                 <CheckCircle size={16} className="me-2" />
                                 {language === 'ar' ? 'اعتماد' : 'Approve'}
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id, status: 'cancelled' })} className="text-destructive">
+                              <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id.toString(), status: 'cancelled' })} className="text-destructive">
                                 <XCircle size={16} className="me-2" />
                                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
                               </DropdownMenuItem>
                             </>
                           )}
                           {order.status === 'approved' && (
-                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id, status: 'sent' })}>
+                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id.toString(), status: 'sent' })}>
                               <Truck size={16} className="me-2" />
                               {language === 'ar' ? 'تم الإرسال' : 'Mark as Sent'}
                             </DropdownMenuItem>
                           )}
                           {order.status === 'sent' && (
-                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id, status: 'received' })}>
+                            <DropdownMenuItem onClick={() => updateStatusMutation.mutate({ id: order.id.toString(), status: 'received' })}>
                               <CheckCircle size={16} className="me-2" />
                               {language === 'ar' ? 'تم الاستلام' : 'Mark as Received'}
                             </DropdownMenuItem>
@@ -227,7 +271,7 @@ const PurchaseOrderList: React.FC = () => {
         onSave={() => queryClient.invalidateQueries({ queryKey: ['purchase_orders'] })}
         editOrder={selectedOrder}
       />
-      
+
       <PurchaseOrderDetails
         isOpen={showOrderDetails}
         onClose={() => { setShowOrderDetails(false); setSelectedOrder(null); }}
