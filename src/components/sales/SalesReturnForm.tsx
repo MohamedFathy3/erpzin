@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useCurrencyTax } from "@/hooks/useCurrencyTax";
+import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,442 +11,507 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Save } from "lucide-react";
-import QuickProductSearch from "@/components/shared/QuickProductSearch";
+import { Trash2, Save, Search, Loader2, RotateCcw, ArrowLeftRight, FileText } from "lucide-react";
+import api from "@/lib/api";
+import { debounce } from "@/lib/utils";
 
 interface ReturnItem {
   id: string;
-  product_id: string | null;
-  product_variant_id: string | null;
+  product_id: number;
   product_name: string;
   sku: string;
   quantity: number;
-  unit_price: number;
-  total_price: number;
+  price: number;
   reason: string;
 }
 
-interface SalesReturnFormProps {
+interface InvoiceReturnFormProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
+const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const { currencies, taxRates, defaultCurrency, defaultTaxRate, formatAmount, getCurrencyName, getTaxRateName } = useCurrencyTax();
+  const { formatCurrency } = useRegionalSettings();
+  
+  // ========== State ==========
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [formData, setFormData] = useState({
-    customer_id: "",
-    branch_id: "",
-    warehouse_id: "",
-    refund_method: "cash",
-    reason: "",
-    tax_rate_id: "",
-    currency_id: "",
-    notes: ""
+    sales_invoice_id: "",
+    return_method: "نقدي",
+    note: ""
   });
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [returnNumber, setReturnNumber] = useState<string>("");
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // Set defaults when data loads
+  // ========== Generate Return Number ==========
   useEffect(() => {
-    if (defaultTaxRate && !formData.tax_rate_id) {
-      setFormData(prev => ({ ...prev, tax_rate_id: defaultTaxRate.id }));
+    if (isOpen) {
+      const date = new Date();
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const random = Math.floor(Math.random() * 9000 + 1000);
+      setReturnNumber(`RET-${year}${month}${day}-${random}`);
     }
-    if (defaultCurrency && !formData.currency_id) {
-      setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id }));
-    }
-  }, [defaultTaxRate, defaultCurrency, formData.tax_rate_id, formData.currency_id]);
+  }, [isOpen]);
 
-  // Fetch customers
-  const { data: customers } = useQuery({
-    queryKey: ['customers'],
+  // ========== البحث عن الفواتير ==========
+  const { data: invoiceResults = [], isLoading: searchingInvoices } = useQuery({
+    queryKey: ['invoice-search', invoiceSearch],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+      if (!invoiceSearch || invoiceSearch.length < 2) return [];
+      
+      try {
+        const response = await api.post('/sales-invoices/index', {
+          filters: {
+            search: invoiceSearch,
+            payment_status: ['paid', 'partial'] // فواتير مدفوعة أو جزئية فقط
+          },
+          with: ['customer'],
+          perPage: 10,
+          paginate: false
+        });
+        
+        return response.data.result === 'Success' ? response.data.data || [] : [];
+      } catch (error) {
+        console.error('Error searching invoices:', error);
+        return [];
+      }
+    },
+    enabled: invoiceSearch.length >= 2
   });
 
-  // Fetch branches
-  const { data: branches } = useQuery({
-    queryKey: ['branches'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch warehouses
-  const { data: warehouses } = useQuery({
-    queryKey: ['warehouses'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('warehouses')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Generate return number
-  const { data: returnNumber } = useQuery({
-    queryKey: ['new-return-number'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('generate_sales_return_number');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Calculate totals
-  const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
-    const selectedTaxRate = taxRates.find(t => t.id === formData.tax_rate_id);
-    const taxPercent = selectedTaxRate?.rate || 0;
-    const taxAmount = (subtotal * taxPercent) / 100;
-    const totalAmount = subtotal + taxAmount;
-    
-    return { subtotal, taxAmount, totalAmount, taxPercent };
-  };
-
-  const totals = calculateTotals();
-
-  // Add product to items
-  const addProduct = (product: any) => {
-    const existingIndex = items.findIndex(item => item.product_id === product.id);
-    
-    if (existingIndex >= 0) {
-      const updated = [...items];
-      updated[existingIndex].quantity += 1;
-      updated[existingIndex].total_price = updated[existingIndex].quantity * updated[existingIndex].unit_price;
-      setItems(updated);
-    } else {
-      const newItem: ReturnItem = {
-        id: crypto.randomUUID(),
-        product_id: product.id,
-        product_variant_id: null,
-        product_name: product.name,
-        sku: product.sku,
-        quantity: 1,
-        unit_price: product.price,
-        total_price: product.price,
-        reason: ""
-      };
-      setItems([...items, newItem]);
+  // ========== جلب الفاتورة المحددة ==========
+  const loadInvoice = async (invoiceId: number, invoiceNumber: string) => {
+    try {
+      const response = await api.post('/sales-invoices/index', {
+        filters: { 
+          id: invoiceId
+        },
+        with: ['items', 'customer'],
+        paginate: false
+      });
+      
+      if (response.data.result === 'Success') {
+        const invoice = response.data.data?.[0];
+        
+        if (invoice) {
+          setSelectedInvoice(invoice);
+          setFormData(prev => ({ 
+            ...prev, 
+            sales_invoice_id: invoice.invoice_number // هنا بنحط رقم الفاتورة مش الـ ID
+          }));
+          
+          // تحويل items الفاتورة إلى items مرتجع
+          if (invoice.items?.length > 0) {
+            const returnItems = invoice.items.map((item: any) => ({
+              id: crypto.randomUUID(),
+              product_id: item.product_id,
+              product_name: item.product_name,
+              sku: item.sku || '',
+              quantity: 1,
+              price: Number(item.price) || 0,
+              reason: ""
+            }));
+            
+            setItems(returnItems);
+            toast.success(language === 'ar' ? 'تم جلب أصناف الفاتورة' : 'Invoice items loaded');
+          }
+          
+          setShowSearchResults(false);
+          setInvoiceSearch("");
+        }
+      }
+    } catch (error) {
+      console.error('Error loading invoice:', error);
+      toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error loading invoice');
     }
   };
 
-  // Update item
+  // ========== Calculations ==========
+  const totals = {
+    totalAmount: items.reduce((sum, item) => sum + (item.quantity * item.price), 0)
+  };
+
+  // ========== Handlers ==========
+
+  // ✅ تحديث منتج
   const updateItem = (id: string, field: string, value: number | string) => {
     const updated = items.map(item => {
       if (item.id === id) {
-        const newItem = { ...item, [field]: value };
-        if (field === 'quantity' || field === 'unit_price') {
-          newItem.total_price = newItem.quantity * newItem.unit_price;
-        }
-        return newItem;
+        return { ...item, [field]: value };
       }
       return item;
     });
     setItems(updated);
   };
 
-  // Remove item
+  // ✅ حذف منتج
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
+    toast.success(language === 'ar' ? 'تم حذف المنتج' : 'Product removed');
   };
 
-  // Create return mutation
+  // ✅ إعادة تعيين النموذج
+  const resetForm = () => {
+    setItems([]);
+    setFormData({
+      sales_invoice_id: "",
+      return_method: "نقدي",
+      note: ""
+    });
+    setInvoiceSearch("");
+    setShowSearchResults(false);
+    setSelectedInvoice(null);
+  };
+
+  // ✅ إنشاء مرتجع فاتورة - POST /invoice-return/store
   const createReturnMutation = useMutation({
     mutationFn: async () => {
+      // التحقق من البيانات المطلوبة
+      if (!formData.sales_invoice_id) {
+        throw new Error(language === 'ar' ? 'يجب اختيار الفاتورة' : 'Invoice is required');
+      }
       if (items.length === 0) {
         throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
       }
 
-      // Create return
-      const { data: returnRecord, error: returnError } = await supabase
-        .from('sales_returns')
-        .insert({
-          return_number: returnNumber,
-          customer_id: formData.customer_id || null,
-          branch_id: formData.branch_id || null,
-          warehouse_id: formData.warehouse_id || null,
-          subtotal: totals.subtotal,
-          tax_amount: totals.taxAmount,
-          total_amount: totals.totalAmount,
-          refund_method: formData.refund_method,
-          reason: formData.reason,
-          notes: formData.notes,
-          status: 'completed',
-          invoice_type: 'direct'
-        })
-        .select()
-        .single();
-
-      if (returnError) throw returnError;
-
-      // Create return items
-      const returnItems = items.map(item => ({
-        return_id: returnRecord.id,
-        product_id: item.product_id,
-        product_variant_id: item.product_variant_id,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
-        reason: item.reason || formData.reason
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('sales_return_items')
-        .insert(returnItems);
-
-      if (itemsError) throw itemsError;
-
-      // Update product stock (add back to inventory)
-      for (const item of items) {
-        if (item.product_id) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single();
-          
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: product.stock + item.quantity })
-              .eq('id', item.product_id);
-          }
-        }
+      // ✅ التأكد إن كل item عنده سبب
+      const invalidItems = items.filter(item => !item.reason || item.reason.trim() === '');
+      if (invalidItems.length > 0) {
+        throw new Error(language === 'ar' ? 'يجب كتابة سبب الإرجاع لجميع الأصناف' : 'Reason is required for all items');
       }
 
-      return returnRecord;
+      // ✅ نجيب ID الفاتورة من الـ selectedInvoice
+      const invoiceId = selectedInvoice?.id;
+      
+      if (!invoiceId) {
+        throw new Error(language === 'ar' ? 'الفاتورة غير صالحة' : 'Invalid invoice');
+      }
+
+      // ✅ تجهيز payload بالضبط زي الـ API
+      const payload = {
+        sales_invoice_id: Number(invoiceId), // هنا بنبعت ID مش رقم الفاتورة
+        return_method: formData.return_method,
+        note: formData.note || null,
+        items: items.map(item => ({
+          product_id: Number(item.product_id),
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          reason: item.reason
+        }))
+      };
+
+      console.log('📦 Sending payload to /invoice-return/store:', JSON.stringify(payload, null, 2));
+
+      const response = await api.post('/invoice-return/store', payload);
+      return response.data;
     },
-    onSuccess: () => {
-      toast.success(language === 'ar' ? 'تم إنشاء المرتجع بنجاح' : 'Return created successfully');
-      queryClient.invalidateQueries({ queryKey: ['sales-invoices-for-return'] });
-      queryClient.invalidateQueries({ queryKey: ['new-return-number'] });
-      onClose();
+    onSuccess: (data) => {
+      toast.success(language === 'ar' ? '✅ تم إنشاء مرتجع الفاتورة بنجاح' : '✅ Invoice return created successfully');
+      
+      // تحديث البيانات
+      queryClient.invalidateQueries({ queryKey: ['invoice-returns'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
+      
+      // إغلاق النموذج وإعادة تعيينه
       resetForm();
+      onClose();
     },
     onError: (error: any) => {
-      toast.error(error.message);
+      console.error('❌ Error creating invoice return:', error.response?.data || error);
+      
+      const errorData = error.response?.data;
+      let errorMessage = errorData?.message || error.message;
+      
+      toast.error(
+        language === 'ar' 
+          ? `❌ خطأ: ${errorMessage}`
+          : `❌ Error: ${errorMessage}`
+      );
     }
   });
 
-  const resetForm = () => {
-    setItems([]);
-    setFormData({
-      customer_id: "",
-      branch_id: "",
-      warehouse_id: "",
-      refund_method: "cash",
-      reason: "",
-      tax_rate_id: defaultTaxRate?.id || "",
-      currency_id: defaultCurrency?.id || "",
-      notes: ""
-    });
-  };
-
+  // ========== Render ==========
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {language === 'ar' ? 'فاتورة مرتجع مبيعات جديدة' : 'New Sales Return'}
-            {returnNumber && ` - ${returnNumber}`}
+    <Dialog 
+      open={isOpen} 
+      onOpenChange={(open) => {
+        if (!open) {
+          resetForm();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="sticky top-0 bg-background z-10 border-b px-6 py-4">
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <RotateCcw className="h-5 w-5 text-amber-600" />
+              </div>
+              <span className="text-xl">
+                {language === 'ar' ? 'مرتجع فاتورة مبيعات' : 'Sales Invoice Return'}
+              </span>
+              {returnNumber && (
+                <span className="text-sm font-mono bg-amber-100 text-amber-700 px-3 py-1 rounded-full">
+                  {returnNumber}
+                </span>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Form */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Return Info */}
+        <div className="p-6">
+          <div className="space-y-6">
+            {/* Invoice Search */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  {language === 'ar' ? 'معلومات المرتجع' : 'Return Information'}
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <div className="w-1 h-5 bg-amber-500 rounded-full" />
+                  {language === 'ar' ? 'البحث عن الفاتورة' : 'Search Invoice'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 md:col-span-1">
-                  <Label>{language === 'ar' ? 'العميل' : 'Customer'}</Label>
-                  <Select
-                    value={formData.customer_id}
-                    onValueChange={(value) => setFormData({ ...formData, customer_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={language === 'ar' ? 'اختر العميل (اختياري)' : 'Select customer (optional)'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers?.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {language === 'ar' ? customer.name_ar || customer.name : customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={language === 'ar' ? 'ابحث برقم الفاتورة أو اسم العميل...' : 'Search by invoice number or customer name...'}
+                      className="pl-10"
+                      value={invoiceSearch}
+                      onChange={(e) => {
+                        setInvoiceSearch(e.target.value);
+                        setShowSearchResults(true);
+                      }}
+                      onFocus={() => setShowSearchResults(true)}
+                    />
+                    {searchingInvoices && (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
 
-                <div>
-                  <Label>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</Label>
-                  <Select
-                    value={formData.refund_method}
-                    onValueChange={(value) => setFormData({ ...formData, refund_method: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                      <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                      <SelectItem value="credit">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                  {/* Search Results */}
+                  {showSearchResults && invoiceResults.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
+                            <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
+                            <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                            <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                            <TableHead></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoiceResults.map((invoice: any) => (
+                            <TableRow key={invoice.id} className="cursor-pointer hover:bg-muted/50">
+                              <TableCell className="font-mono font-medium">
+                                {invoice.invoice_number}
+                              </TableCell>
+                              <TableCell>
+                                {language === 'ar' 
+                                  ? invoice.customer?.name_ar || invoice.customer?.name 
+                                  : invoice.customer?.name}
+                              </TableCell>
+                              <TableCell>{invoice.invoice_date}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(invoice.total_amount)}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => loadInvoice(invoice.id, invoice.invoice_number)}
+                                >
+                                  <FileText className="h-4 w-4 ml-2" />
+                                  {language === 'ar' ? 'اختيار' : 'Select'}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
 
-                <div>
-                  <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
-                  <Select
-                    value={formData.branch_id}
-                    onValueChange={(value) => setFormData({ ...formData, branch_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches?.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {language === 'ar' ? branch.name_ar || branch.name : branch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>{language === 'ar' ? 'المخزن' : 'Warehouse'}</Label>
-                  <Select
-                    value={formData.warehouse_id}
-                    onValueChange={(value) => setFormData({ ...formData, warehouse_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={language === 'ar' ? 'اختر المخزن' : 'Select warehouse'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses?.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="col-span-2">
-                  <Label>{language === 'ar' ? 'سبب الإرجاع' : 'Return Reason'}</Label>
-                  <Select
-                    value={formData.reason}
-                    onValueChange={(value) => setFormData({ ...formData, reason: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={language === 'ar' ? 'اختر السبب' : 'Select reason'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="defective">{language === 'ar' ? 'عيب في المنتج' : 'Defective'}</SelectItem>
-                      <SelectItem value="wrong_item">{language === 'ar' ? 'منتج خاطئ' : 'Wrong Item'}</SelectItem>
-                      <SelectItem value="customer_change">{language === 'ar' ? 'تغيير رأي العميل' : 'Customer Changed Mind'}</SelectItem>
-                      <SelectItem value="damaged">{language === 'ar' ? 'تلف' : 'Damaged'}</SelectItem>
-                      <SelectItem value="expired">{language === 'ar' ? 'منتهي الصلاحية' : 'Expired'}</SelectItem>
-                      <SelectItem value="other">{language === 'ar' ? 'أخرى' : 'Other'}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {showSearchResults && invoiceSearch.length >= 2 && invoiceResults.length === 0 && !searchingInvoices && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <FileText className="mx-auto h-12 w-12 mb-2 opacity-20" />
+                      <p>{language === 'ar' ? 'لا توجد فواتير' : 'No invoices found'}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Product Search & Items */}
+            {/* Selected Invoice Info */}
+            {selectedInvoice && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="w-1 h-5 bg-green-500 rounded-full" />
+                    {language === 'ar' ? 'الفاتورة المحددة' : 'Selected Invoice'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
+                        </p>
+                        <p className="text-lg font-bold text-green-700 dark:text-green-400">
+                          {selectedInvoice.invoice_number}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">
+                          {language === 'ar' ? 'العميل' : 'Customer'}
+                        </p>
+                        <p className="font-medium">
+                          {language === 'ar' 
+                            ? selectedInvoice.customer?.name_ar || selectedInvoice.customer?.name 
+                            : selectedInvoice.customer?.name}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Return Method */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  {language === 'ar' ? 'الأصناف المرتجعة' : 'Return Items'}
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <div className="w-1 h-5 bg-amber-500 rounded-full" />
+                  {language === 'ar' ? 'طريقة الإرجاع' : 'Return Method'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Quick Product Search */}
-                <QuickProductSearch
-                  onSelectProduct={addProduct}
-                  priceField="price"
-                  placeholder={language === 'ar' ? 'بحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
-                  autoFocus
-                  showStock
-                />
+              <CardContent>
+                <Select
+                  value={formData.return_method}
+                  onValueChange={(value) => setFormData({ ...formData, return_method: value })}
+                >
+                  <SelectTrigger className="w-full md:w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="نقدي">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                    <SelectItem value="بطاقة">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                    <SelectItem value="رصيد">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
 
+            {/* Return Items */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <div className="w-1 h-5 bg-amber-500 rounded-full" />
+                  {language === 'ar' ? 'الأصناف المرتجعة' : 'Return Items'}
+                  {items.length > 0 && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      ({items.length} {language === 'ar' ? 'صنف' : 'items'})
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 {/* Items Table */}
-                <div className="border rounded-md">
+                <div className="border rounded-lg overflow-hidden">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted/50">
                       <TableRow>
-                        <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="w-24">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                        <TableHead className="w-32">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
-                        <TableHead className="w-32">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                        <TableHead className="w-10"></TableHead>
+                        <TableHead className="min-w-[180px]">
+                          {language === 'ar' ? 'المنتج' : 'Product'}
+                        </TableHead>
+                        <TableHead className="w-20 text-center">
+                          {language === 'ar' ? 'الكمية' : 'Qty'}
+                        </TableHead>
+                        <TableHead className="w-24 text-right">
+                          {language === 'ar' ? 'السعر' : 'Price'}
+                        </TableHead>
+                        <TableHead className="min-w-[200px]">
+                          {language === 'ar' ? 'سبب الإرجاع' : 'Reason'} 
+                          <span className="text-destructive ml-1">*</span>
+                        </TableHead>
+                        <TableHead className="w-28 text-right">
+                          {language === 'ar' ? 'الإجمالي' : 'Total'}
+                        </TableHead>
+                        <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {items.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            {language === 'ar' ? 'ابحث عن منتج لإضافته' : 'Search for a product to add'}
+                          <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                            <div className="flex flex-col items-center gap-3">
+                              <ArrowLeftRight size={32} className="opacity-30" />
+                              <span className="text-sm">
+                                {language === 'ar' 
+                                  ? 'ابحث عن الفاتورة وأخترها لجلب الأصناف' 
+                                  : 'Search and select an invoice to load items'}
+                              </span>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         items.map((item) => (
-                          <TableRow key={item.id}>
+                          <TableRow key={item.id} className="hover:bg-muted/30">
                             <TableCell>
                               <div className="font-medium">{item.product_name}</div>
-                              <div className="text-xs text-muted-foreground">{item.sku}</div>
+                              <div className="text-xs text-muted-foreground font-mono">
+                                {item.sku}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
                                 min="1"
+                                max={selectedInvoice?.items?.find((i: any) => i.product_id === item.product_id)?.quantity || 99}
                                 value={item.quantity}
                                 onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                                className="w-20"
+                                className="w-16 text-center mx-auto"
                               />
                             </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
                                 min="0"
-                                value={item.unit_price}
-                                onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                                className="w-28"
+                                step="0.01"
+                                value={item.price}
+                                onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                                className="w-24 text-right"
                               />
                             </TableCell>
-                            <TableCell className="font-medium">
-                              {item.total_price.toLocaleString()}
+                            <TableCell>
+                              <Input
+                                placeholder={language === 'ar' ? 'سبب الإرجاع' : 'Return reason'}
+                                value={item.reason}
+                                onChange={(e) => updateItem(item.id, 'reason', e.target.value)}
+                                className="w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium text-right">
+                              {formatCurrency(item.quantity * item.price)}
                             </TableCell>
                             <TableCell>
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                 onClick={() => removeItem(item.id)}
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -458,64 +522,66 @@ const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          {/* Summary Panel */}
-          <div className="space-y-4">
+            {/* Notes */}
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  {language === 'ar' ? 'ملخص المرتجع' : 'Return Summary'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}
-                  </span>
-                  <span>{totals.subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'الضريبة (15%)' : 'Tax (15%)'}
-                  </span>
-                  <span>{totals.taxAmount.toLocaleString()}</span>
-                </div>
-                <div className="border-t pt-4">
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>{language === 'ar' ? 'المبلغ المسترد' : 'Refund Amount'}</span>
-                    <span className="text-primary">{totals.totalAmount.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
+              <CardContent className="pt-4">
+                <Label className="mb-2 block">
                   {language === 'ar' ? 'ملاحظات' : 'Notes'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+                </Label>
                 <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  value={formData.note}
+                  onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                  rows={2}
                   placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'}
-                  rows={4}
+                  className="resize-none"
                 />
               </CardContent>
             </Card>
 
-            <div className="flex gap-2">
-              <Button
-                className="flex-1"
-                onClick={() => createReturnMutation.mutate()}
-                disabled={items.length === 0 || createReturnMutation.isPending}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {language === 'ar' ? 'حفظ المرتجع' : 'Save Return'}
-              </Button>
-            </div>
+            {/* Summary & Actions */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'ar' ? 'عدد الأصناف' : 'Items Count'}
+                    </p>
+                    <p className="text-2xl font-bold">{items.length}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'ar' ? 'إجمالي المبلغ المسترد' : 'Total Refund Amount'}
+                    </p>
+                    <p className="text-3xl font-bold text-amber-600">
+                      {formatCurrency(totals.totalAmount)}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => createReturnMutation.mutate()}
+                    disabled={
+                      createReturnMutation.isPending || 
+                      items.length === 0 || 
+                      !selectedInvoice
+                    }
+                    className="w-full md:w-auto gap-2 h-11 px-6 bg-amber-600 hover:bg-amber-700"
+                    size="lg"
+                  >
+                    {createReturnMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        {language === 'ar' ? 'حفظ المرتجع' : 'Save Return'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </DialogContent>
@@ -523,4 +589,4 @@ const SalesReturnForm = ({ isOpen, onClose }: SalesReturnFormProps) => {
   );
 };
 
-export default SalesReturnForm;
+export default InvoiceReturnForm;
