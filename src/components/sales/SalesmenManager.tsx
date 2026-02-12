@@ -314,7 +314,7 @@ const deleteMutation = useMutation({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <Label>{language === 'ar' ? 'الاسم (إنجليزي) *' : 'Name (English) *'}</Label>
                 <Input
@@ -322,14 +322,7 @@ const deleteMutation = useMutation({
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
-              <div>
-                <Label>{language === 'ar' ? 'الاسم (عربي)' : 'Name (Arabic)'}</Label>
-                <Input
-                  value={formData.name_ar}
-                  onChange={(e) => setFormData({ ...formData, name_ar: e.target.value })}
-                  dir="rtl"
-                />
-              </div>
+            
             </div>
 
             <div className="grid grid-cols-2 gap-4">

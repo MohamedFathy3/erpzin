@@ -442,7 +442,9 @@ const Inventory: React.FC = () => {
 
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await api.delete(`/product/${productId}`);
+      await api.delete(`/product/delete`,{
+        data: { items: [productId] }
+      });
       toast({ 
         title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully',
         variant: 'default'

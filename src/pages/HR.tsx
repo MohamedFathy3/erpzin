@@ -881,15 +881,7 @@ const HR = () => {
                         placeholder="Name" 
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>{t.nameAr}</Label>
-                      <Input 
-                        value={newDelivery.name_ar}
-                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name_ar: e.target.value }))}
-                        placeholder="الاسم" 
-                        dir="rtl"
-                      />
-                    </div>
+                
                   </div>
                   <div className="space-y-2">
                     <Label>{t.phone}</Label>
@@ -1003,15 +995,7 @@ const HR = () => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>{t.nameAr}</Label>
-                    <Input 
-                      value={newEmployee.name_ar}
-                      onChange={(e) => setNewEmployee(prev => ({ ...prev, name_ar: e.target.value }))}
-                      placeholder="الاسم بالعربي" 
-                      dir="rtl"
-                    />
-                  </div>
+             
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.position}</Label>

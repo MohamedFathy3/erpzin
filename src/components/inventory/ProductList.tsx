@@ -547,13 +547,7 @@ const ProductList: React.FC<ProductListProps> = ({
                           align="end" 
                           className="bg-popover border border-border shadow-lg min-w-[180px] z-50"
                         >
-                          <DropdownMenuItem 
-                            onClick={() => onDuplicate(product)}
-                            className="cursor-pointer hover:bg-muted"
-                          >
-                            <Copy size={14} className="me-2" />
-                            {language === 'ar' ? 'نسخ' : 'Duplicate'}
-                          </DropdownMenuItem>
+                          
                           <DropdownMenuItem 
                             onClick={() => onDelete(product.id)}
                             className="text-destructive focus:text-destructive cursor-pointer hover:bg-destructive/10"

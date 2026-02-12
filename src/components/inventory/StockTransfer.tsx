@@ -5,418 +5,374 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import { formatDate } from '@/lib/utils';
-import { AdvancedFilter, FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import api from '@/lib/api';
 import { AxiosError } from 'axios';
 import {
-  ClipboardList,
   Plus,
   Search,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Eye,
   Save,
   Warehouse,
   Package,
-  TrendingDown,
-  TrendingUp,
   Filter,
   X,
   RefreshCw,
-  Building2
+  Building2,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowLeft,
+  Truck
 } from 'lucide-react';
 
-// ========== أنواع البيانات من API ==========
-
+// ========== أنواع البيانات ==========
 interface Warehouse {
   id: number;
   name: string;
   name_ar?: string;
-  code: string;
-  phone: string;
-  address: string;
-  manager: string;
   active: boolean;
-  main_branch: boolean;
-  note: string;
-  branch_id: any;
-  image: string;
-  created_at: string;
-  updated_at: string;
 }
 
-interface Product {
-  id: number;
-  name: string;
-  name_ar?: string;
-  sku: string;
-  barcode?: string;
-  price: number | string;
-  sell_price?: number | string;
-  cost_price?: number | string;
-  stock: number;
-  reorder_level: number;
-  active: boolean;
-  image_url?: string | null;
-  imageUrl?: string | null;
-  image?: any;
-  units?: any[];
-  category?: any;
-  created_at?: string;
-  updated_at?: string;
-}
-
-// ✅ نوع بيانات مخزون المنتج في المخزن من /warehouses/index-product
-interface WarehouseProductStock {
-  id: number;
+// ✅ دي البيانات اللي جاية من /warehouses/index-product
+interface WarehouseProduct {
+  id: number;           // ده هو product_id
   product_name: string;
   warehouse_name: string;
   stock: number;
   cost: string;
-  created_at: string | null;
-  updated_at: string | null;
+  sku?: string;
 }
 
-interface CountedProduct {
-  product_id: number;
-  counted_stock: number;
+// ✅ دي البيانات اللي بنبعت فيها للـ API
+interface TransferProduct {
+  product_id: number;   // بناخدها من id بتاع WarehouseProduct
+  quantity: number;
+  note?: string;
 }
 
-interface WarehouseProduct {
-  id: number;
-  name: string;
-  name_ar?: string;
-  description?: string;
-  sku: string;
-  barcode?: string;
-  stock: number;
-  price: number | string;
-  sell_price?: number | string;
-  cost_price?: number | string;
-  reorder_level?: number;
-  active?: boolean;
-  image_url?: string | null;
-  imageUrl?: string | null;
-  image?: any;
-  category?: any;
-  units?: any[];
-  created_at?: string;
-  updated_at?: string;
-}
-
-const InventoryCount = () => {
+const WarehouseTransfer = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
 
   // ========== State ==========
-  const [newCountOpen, setNewCountOpen] = useState(false);
-  const [viewCountOpen, setViewCountOpen] = useState(false);
-  const [selectedCount, setSelectedCount] = useState<any>(null);
-  const [selectedWarehouse, setSelectedWarehouse] = useState('');
-  const [countNotes, setCountNotes] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterValues, setFilterValues] = useState<FilterValues>({});
-  const [countedProducts, setCountedProducts] = useState<CountedProduct[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [fromWarehouse, setFromWarehouse] = useState('');
+  const [toWarehouse, setToWarehouse] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const [transferItems, setTransferItems] = useState<TransferProduct[]>([]);
+  const [productNotes, setProductNotes] = useState<Record<number, string>>({});
 
   // ========== Translation ==========
   const t = {
     en: {
       title: 'Warehouse Stock',
-      description: 'View and manage stock levels across all warehouses',
+      description: 'View and transfer products between warehouses',
       warehouse: 'Warehouse',
       product: 'Product',
-      sku: 'SKU',
       stock: 'Stock',
       cost: 'Cost',
-      lastUpdated: 'Last Updated',
-      noData: 'No stock data found',
+      fromWarehouse: 'From Warehouse',
+      toWarehouse: 'To Warehouse',
+      quantity: 'Quantity',
+      note: 'Note',
+      newTransfer: 'New Transfer',
+      saveTransfer: 'Transfer Now',
+      cancel: 'Cancel',
+      selectFrom: 'Select source',
+      selectTo: 'Select destination',
+      search: 'Search products...',
+      noData: 'No products found',
       loading: 'Loading...',
-      error: 'Error',
-      success: 'Success',
-      filter: 'Filter',
-      reset: 'Reset',
       allWarehouses: 'All Warehouses',
-      searchProducts: 'Search products...',
+      refresh: 'Refresh',
+      transferSuccess: 'Transfer completed successfully',
+      differentWarehouses: 'Source and destination must be different',
+      addProduct: 'Add',
+      remove: 'Remove',
       totalItems: 'Total Items',
-      totalStock: 'Total Stock',
-      exportData: 'Export Data',
-      refresh: 'Refresh'
+      totalQuantity: 'Total Quantity',
+      filter: 'Filter',
+      reset: 'Reset'
     },
     ar: {
       title: 'مخزون المخازن',
-      description: 'عرض وإدارة مستويات المخزون في جميع المخازن',
+      description: 'عرض وتحويل المنتجات بين المخازن',
       warehouse: 'المخزن',
       product: 'المنتج',
-      sku: 'رمز المنتج',
       stock: 'المخزون',
       cost: 'التكلفة',
-      lastUpdated: 'آخر تحديث',
-      noData: 'لا توجد بيانات مخزون',
+      fromWarehouse: 'من مخزن',
+      toWarehouse: 'إلى مخزن',
+      quantity: 'الكمية',
+      note: 'ملاحظة',
+      newTransfer: 'تحويل جديد',
+      saveTransfer: 'تحويل الآن',
+      cancel: 'إلغاء',
+      selectFrom: 'اختر المصدر',
+      selectTo: 'اختر الوجهة',
+      search: 'ابحث عن منتج...',
+      noData: 'لا توجد منتجات',
       loading: 'جاري التحميل...',
-      error: 'خطأ',
-      success: 'نجاح',
-      filter: 'تصفية',
-      reset: 'إعادة تعيين',
       allWarehouses: 'جميع المخازن',
-      searchProducts: 'ابحث عن منتج...',
+      refresh: 'تحديث',
+      transferSuccess: 'تم التحويل بنجاح',
+      differentWarehouses: 'يجب أن يكون المخزنين مختلفين',
+      addProduct: 'إضافة',
+      remove: 'حذف',
       totalItems: 'إجمالي الأصناف',
-      totalStock: 'إجمالي المخزون',
-      exportData: 'تصدير البيانات',
-      refresh: 'تحديث'
+      totalQuantity: 'إجمالي الكميات',
+      filter: 'تصفية',
+      reset: 'إعادة تعيين'
     }
   }[language];
 
-  // ========== Queries ==========
-
-  // ✅ 1. جلب جميع المخازن
-  const { data: warehouses = [], isLoading: warehousesLoading } = useQuery({
+  // ========== 1. جلب المخازن ==========
+  const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
-      try {
-        const response = await api.post('/warehouse/index', {
-          filters: { active: true },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-        
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching warehouses:', error);
-        return [];
-      }
+      const res = await api.post('/warehouse/index', {
+        filters: { active: true },
+        orderBy: 'id',
+        perPage: 100,
+        paginate: false
+      });
+      return res.data.result === 'Success' ? res.data.data || [] : [];
     }
   });
 
-  // ✅ 2. جلب مخزون المنتجات في المخازن - POST /warehouses/index-product
-  const { data: warehouseStocks = [], isLoading: stocksLoading, refetch: refetchStocks } = useQuery({
-    queryKey: ['warehouse-stocks', warehouseFilter],
+  // ========== 2. جلب المنتجات في المخازن ==========
+  const { data: products = [], isLoading, refetch } = useQuery({
+    queryKey: ['warehouse-products', warehouseFilter],
     queryFn: async () => {
-      try {
-        const payload: any = {
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false
-        };
+      const payload: any = {
+        orderBy: 'id',
+        perPage: 1000,
+        paginate: false
+      };
 
-        // إضافة فلتر المخزن
-        if (warehouseFilter && warehouseFilter !== 'all') {
-          const selectedWarehouse = warehouses.find((w: Warehouse) => w.id === parseInt(warehouseFilter));
-          if (selectedWarehouse) {
-            payload.filters = {
-              warehouse_name: selectedWarehouse.name
-            };
-          }
+      if (warehouseFilter !== 'all') {
+        const warehouse = warehouses.find((w: Warehouse) => w.id === parseInt(warehouseFilter));
+        if (warehouse) {
+          payload.filters = { warehouse_name: warehouse.name };
         }
-
-        console.log('📦 Fetching warehouse stocks with payload:', payload);
-
-        const response = await api.post('/warehouses/index-product', payload);
-        
-        console.log('✅ Warehouse stocks response:', response.data);
-
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching warehouse stocks:', error);
-        toast({
-          title: t.error,
-          description: language === 'ar' ? 'خطأ في جلب مخزون المخازن' : 'Error fetching warehouse stocks',
-          variant: 'destructive'
-        });
-        return [];
       }
+
+      const res = await api.post('/warehouses/index-product', payload);
+      return res.data.result === 'Success' ? res.data.data || [] : [];
     }
   });
 
-  // ✅ 3. جلب منتجات المخزن المحدد للجرد
-  const { data: warehouseProducts = [], isLoading: productsLoading, refetch: refetchProducts } = useQuery({
-    queryKey: ['warehouse-products', selectedWarehouse],
-    queryFn: async () => {
-      if (!selectedWarehouse) return [];
-      
-      try {
-        const response = await api.get(`/warehouses/${selectedWarehouse}/products`);
-        
-        console.log('📦 Warehouse products response:', response.data);
-        
-        if (response.data && response.data.data) {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching warehouse products:', error);
-        return [];
-      }
-    },
-    enabled: !!selectedWarehouse && newCountOpen
-  });
-
-  const isLoading = warehousesLoading || stocksLoading;
-
-  // ========== Filtered Data ==========
-
-  // ✅ فلترة مخزون المخازن
-  const filteredStocks = useMemo(() => {
-    let filtered = warehouseStocks;
-
-    // فلترة حسب البحث
-    if (filterValues.search) {
-      const query = filterValues.search.toLowerCase();
-      filtered = filtered.filter((item: WarehouseProductStock) =>
-        item.product_name.toLowerCase().includes(query) ||
-        (item.warehouse_name && item.warehouse_name.toLowerCase().includes(query))
-      );
-    }
-
-    // فلترة حسب التاريخ (إذا كان متاح)
-    if (filterValues.date_from) {
-      const fromDate = new Date(filterValues.date_from);
-      filtered = filtered.filter((item: WarehouseProductStock) => 
-        item.updated_at && new Date(item.updated_at) >= fromDate
-      );
-    }
-
-    if (filterValues.date_to) {
-      const toDate = new Date(filterValues.date_to);
-      filtered = filtered.filter((item: WarehouseProductStock) => 
-        item.updated_at && new Date(item.updated_at) <= toDate
-      );
-    }
-
-    return filtered;
-  }, [warehouseStocks, filterValues]);
-
-  // ✅ فلترة منتجات المخزن للجرد
-  const filteredWarehouseProducts = useMemo(() => {
-    if (!searchQuery) return warehouseProducts;
-    const query = searchQuery.toLowerCase();
-    return warehouseProducts.filter((p: Product) =>
-      p.name?.toLowerCase().includes(query) ||
-      p.name_ar?.toLowerCase().includes(query) ||
-      p.sku?.toLowerCase().includes(query) ||
-      (p.barcode && p.barcode.toLowerCase().includes(query))
+  // ========== 3. فلترة المنتجات ==========
+  const filteredProducts = useMemo(() => {
+    if (!searchText) return products;
+    const query = searchText.toLowerCase();
+    return products.filter((p: WarehouseProduct) =>
+      p.product_name.toLowerCase().includes(query)
     );
-  }, [warehouseProducts, searchQuery]);
+  }, [products, searchText]);
 
-  // ========== Handlers ==========
+  // ========== 4. الإحصائيات ==========
+  const stats = useMemo(() => {
+    const totalItems = filteredProducts.length;
+    const totalStock = filteredProducts.reduce((sum, p: WarehouseProduct) => sum + p.stock, 0);
+    return { totalItems, totalStock };
+  }, [filteredProducts]);
 
+  // ========== 5. تحويل منتجات ==========
+  const transferMutation = useMutation({
+    mutationFn: async () => {
+      // ✅ التحقق من المدخلات
+      if (!fromWarehouse) throw new Error('Select source warehouse');
+      if (!toWarehouse) throw new Error('Select destination warehouse');
+      if (fromWarehouse === toWarehouse) throw new Error(t.differentWarehouses);
+      if (transferItems.length === 0) throw new Error('Add products to transfer');
+
+      // ✅ تجهيز البيلود بالضبط زي البوستمان
+      const payload = {
+        from_warehouse_id: parseInt(fromWarehouse),
+        to_warehouse_id: parseInt(toWarehouse),
+        products: transferItems.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          ...(productNotes[item.product_id] ? { note: productNotes[item.product_id] } : {})
+        }))
+      };
+
+      console.log('📦 Sending payload:', JSON.stringify(payload, null, 2));
+
+      const res = await api.post('/warehouses/transfer', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast({ title: t.success, description: t.transferSuccess });
+      queryClient.invalidateQueries({ queryKey: ['warehouse-products'] });
+      // ✅ إعادة تعيين الحالة
+      setShowTransferModal(false);
+      setTransferItems([]);
+      setProductNotes({});
+      setFromWarehouse('');
+      setToWarehouse('');
+    },
+    onError: (error: AxiosError) => {
+      console.error('Transfer error:', error.response?.data || error);
+      toast({
+        title: t.error,
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // ========== 6. إضافة منتج للتحويل ==========
+  const handleAddProduct = (product: WarehouseProduct) => {
+    // ✅ نستخدم product.id كـ product_id
+    const exists = transferItems.find(item => item.product_id === product.id);
+    
+    if (exists) {
+      // زيادة الكمية
+      setTransferItems(prev =>
+        prev.map(item =>
+          item.product_id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      // إضافة منتج جديد
+      setTransferItems(prev => [
+        ...prev,
+        {
+          product_id: product.id,
+          quantity: 1
+        }
+      ]);
+    }
+  };
+
+  // ========== 7. تغيير الكمية ==========
+  const handleQuantityChange = (productId: number, quantity: number) => {
+    const product = products.find((p: WarehouseProduct) => p.id === productId);
+    if (!product) return;
+    
+    setTransferItems(prev =>
+      prev.map(item =>
+        item.product_id === productId
+          ? { ...item, quantity: Math.min(Math.max(1, quantity), product.stock) }
+          : item
+      )
+    );
+  };
+
+  // ========== 8. تغيير الملاحظة ==========
+  const handleNoteChange = (productId: number, note: string) => {
+    setProductNotes(prev => ({
+      ...prev,
+      [productId]: note
+    }));
+  };
+
+  // ========== 9. حذف منتج ==========
+  const handleRemoveProduct = (productId: number) => {
+    setTransferItems(prev => prev.filter(item => item.product_id !== productId));
+    setProductNotes(prev => {
+      const newNotes = { ...prev };
+      delete newNotes[productId];
+      return newNotes;
+    });
+  };
+
+  // ========== 10. فتح/غلق المودال ==========
+  const handleOpenTransfer = () => {
+    setFromWarehouse('');
+    setToWarehouse('');
+    setTransferItems([]);
+    setProductNotes({});
+    setShowTransferModal(true);
+  };
+
+  const handleCloseTransfer = () => {
+    setShowTransferModal(false);
+    setTransferItems([]);
+    setProductNotes({});
+    setFromWarehouse('');
+    setToWarehouse('');
+  };
+
+  // ========== 11. إعادة تعيين الفلاتر ==========
   const handleResetFilters = () => {
     setWarehouseFilter('all');
-    setDateFrom('');
-    setDateTo('');
-    setFilterValues({});
+    setSearchText('');
   };
 
-  const getWarehouseName = (warehouseId: number) => {
-    const warehouse = warehouses.find((w: Warehouse) => w.id === warehouseId);
-    if (!warehouse) return '-';
-    return language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name;
+  // ========== 12. اسم المخزن ==========
+  const getWarehouseName = (warehouseId: string) => {
+    const w = warehouses.find((w: Warehouse) => w.id === parseInt(warehouseId));
+    if (!w) return '-';
+    return language === 'ar' ? w.name_ar || w.name : w.name;
   };
 
-  // ========== Stats ==========
-  const stats = useMemo(() => {
-    const totalItems = filteredStocks.length;
-    const totalStock = filteredStocks.reduce((sum: number, item: WarehouseProductStock) => sum + item.stock, 0);
-    const uniqueWarehouses = new Set(filteredStocks.map((item: WarehouseProductStock) => item.warehouse_name)).size;
-    
-    return { totalItems, totalStock, uniqueWarehouses };
-  }, [filteredStocks]);
-
-  // ========== Render ==========
+  // ========== العرض ==========
   return (
-    <div className="space-y-6">
-      {/* ========== Header ========== */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Warehouse className="text-primary" size={24} />
-          </div>
+    <div className="space-y-4">
+      {/* ===== الهيدر ===== */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Warehouse className="h-6 w-6 text-primary" />
           <div>
-            <h2 className="text-xl font-bold text-foreground">{t.title}</h2>
+            <h1 className="text-xl font-bold">{t.title}</h1>
             <p className="text-sm text-muted-foreground">{t.description}</p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => refetchStocks()}
-          className="gap-2"
-        >
-          <RefreshCw size={16} />
-          {t.refresh}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 ml-2" />
+            {t.refresh}
+          </Button>
+          <Button size="sm" onClick={handleOpenTransfer}>
+            <Plus className="h-4 w-4 ml-2" />
+            {t.newTransfer}
+          </Button>
+        </div>
       </div>
 
-      {/* ========== Stats Cards ========== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* ===== الإحصائيات ===== */}
+      <div className="grid grid-cols-2 gap-4">
         <Card>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Package className="text-primary" size={20} />
-            </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <Package className="h-5 w-5 text-primary" />
             <div>
-              <p className="text-sm text-muted-foreground">{t.totalItems}</p>
-              <p className="text-2xl font-bold">{stats.totalItems}</p>
+              <p className="text-xs text-muted-foreground">{t.totalItems}</p>
+              <p className="text-lg font-bold">{stats.totalItems}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-success/10">
-              <Warehouse className="text-success" size={20} />
-            </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <Warehouse className="h-5 w-5 text-success" />
             <div>
-              <p className="text-sm text-muted-foreground">{t.warehouse}</p>
-              <p className="text-2xl font-bold">{stats.uniqueWarehouses}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-2 rounded-lg bg-warning/10">
-              <ClipboardList className="text-warning" size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{t.totalStock}</p>
-              <p className="text-2xl font-bold">{stats.totalStock.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">{t.totalStock}</p>
+              <p className="text-lg font-bold">{stats.totalStock.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* ========== Filters Section ========== */}
+      {/* ===== الفلاتر ===== */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Filter size={16} />
+            <Filter className="h-4 w-4" />
             {t.filter}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Warehouse Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs">{t.warehouse}</Label>
+          <div className="flex gap-4">
+            <div className="flex-1">
               <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allWarehouses} />
@@ -425,134 +381,280 @@ const InventoryCount = () => {
                   <SelectItem value="all">{t.allWarehouses}</SelectItem>
                   {warehouses.map((w: Warehouse) => (
                     <SelectItem key={w.id} value={w.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <Building2 size={14} />
-                        {language === 'ar' ? w.name_ar || w.name : w.name}
-                      </div>
+                      {language === 'ar' ? w.name_ar || w.name : w.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Date From */}
-            <div className="space-y-2">
-              <Label className="text-xs">{t.lastUpdated} From</Label>
+            <div className="flex-1 relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                placeholder={t.search}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="pr-9"
               />
             </div>
-
-            {/* Date To */}
-            <div className="space-y-2">
-              <Label className="text-xs">{t.lastUpdated} To</Label>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </div>
-
-            {/* Search */}
-            <div className="space-y-2">
-              <Label className="text-xs">{t.searchProducts}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-                  <Input
-                    placeholder={t.searchProducts}
-                    value={filterValues.search || ''}
-                    onChange={(e) => setFilterValues({ ...filterValues, search: e.target.value })}
-                    className="ps-9 h-9 text-sm"
-                  />
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={handleResetFilters}
-                  title={t.reset}
-                  className="h-9 w-9"
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-            </div>
+            <Button variant="outline" size="icon" onClick={handleResetFilters}>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* ========== Stock Table ========== */}
+      {/* ===== جدول المنتجات ===== */}
       <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t.title}</CardTitle>
-        </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="h-[500px] w-full">
-            <div className="min-w-[800px]">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+          <ScrollArea className="h-[400px]">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background">
+                <TableRow>
+                  <TableHead>{t.product}</TableHead>
+                  <TableHead>{t.warehouse}</TableHead>
+                  <TableHead className="text-center">{t.stock}</TableHead>
+                  <TableHead className="text-right">{t.cost}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
                   <TableRow>
-                    <TableHead className="min-w-[200px]">{t.product}</TableHead>
-                    <TableHead className="min-w-[150px]">{t.warehouse}</TableHead>
-                    <TableHead className="min-w-[100px] text-right">{t.stock}</TableHead>
-                    <TableHead className="min-w-[120px] text-right">{t.cost}</TableHead>
+                    <TableCell colSpan={4} className="text-center py-8">
+                      {t.loading}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          <p className="text-muted-foreground">{t.loading}</p>
-                        </div>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                      {t.noData}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map((item: WarehouseProduct) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.product_name}</TableCell>
+                      <TableCell>{item.warehouse_name}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={item.stock > 10 ? 'outline' : item.stock > 0 ? 'secondary' : 'destructive'}>
+                          {item.stock}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(item.cost).toLocaleString()} ﷼
                       </TableCell>
                     </TableRow>
-                  ) : filteredStocks.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                        <Warehouse className="mx-auto h-12 w-12 mb-4 opacity-20" />
-                        <p>{t.noData}</p>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredStocks.map((item: WarehouseProductStock, index: number) => (
-                      <TableRow key={`${item.id}-${index}`}>
-                        <TableCell className="font-medium">
-                          {item.product_name}
-                        </TableCell>
-                        <TableCell>
-                          {item.warehouse_name}
-                        </TableCell>
-                       
-                        <TableCell className="text-right font-medium">
-                          <Badge variant={item.stock > 10 ? 'outline' : item.stock > 0 ? 'secondary' : 'destructive'}>
-                            {item.stock}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {Number(item.cost).toLocaleString()} ﷼
-                        </TableCell>
-                        
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                  ))
+                )}
+              </TableBody>
+            </Table>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* ===== مودال التحويل ===== */}
+      <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowLeftRight className="h-5 w-5 text-primary" />
+              {t.newTransfer}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* اختيار المخازن */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.fromWarehouse} <span className="text-destructive">*</span></Label>
+                <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectFrom} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w: Warehouse) => (
+                      <SelectItem key={w.id} value={w.id.toString()}>
+                        {language === 'ar' ? w.name_ar || w.name : w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t.toWarehouse} <span className="text-destructive">*</span></Label>
+                <Select 
+                  value={toWarehouse} 
+                  onValueChange={setToWarehouse}
+                  disabled={!fromWarehouse}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectTo} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses
+                      .filter((w: Warehouse) => w.id.toString() !== fromWarehouse)
+                      .map((w: Warehouse) => (
+                        <SelectItem key={w.id} value={w.id.toString()}>
+                          {language === 'ar' ? w.name_ar || w.name : w.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* جدول منتجات المخزن المصدر */}
+            {fromWarehouse && toWarehouse && (
+              <>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t.search}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="pr-9"
+                  />
+                </div>
+
+                <div className="border rounded-lg">
+                  <div className="p-3 bg-muted/30 border-b flex items-center gap-2">
+                    <ArrowRight className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{t.fromWarehouse}: {getWarehouseName(fromWarehouse)}</span>
+                  </div>
+                  <ScrollArea className="h-[250px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background">
+                        <TableRow>
+                          <TableHead>{t.product}</TableHead>
+                          <TableHead className="w-24 text-center">{t.stock}</TableHead>
+                          <TableHead className="w-24 text-center">{t.quantity}</TableHead>
+                          <TableHead className="w-32">{t.note}</TableHead>
+                          <TableHead className="w-20 text-center"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {products
+                          .filter((p: WarehouseProduct) => p.warehouse_name === getWarehouseName(fromWarehouse))
+                          .map((product: WarehouseProduct) => {
+                            const transferItem = transferItems.find(item => item.product_id === product.id);
+                            return (
+                              <TableRow key={product.id}>
+                                <TableCell className="font-medium">{product.product_name}</TableCell>
+                                <TableCell className="text-center">
+                                  <Badge variant={product.stock > 0 ? 'secondary' : 'destructive'}>
+                                    {product.stock}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max={product.stock}
+                                    value={transferItem?.quantity || 0}
+                                    onChange={(e) => {
+                                      const qty = parseInt(e.target.value) || 0;
+                                      if (qty > 0) {
+                                        if (transferItem) {
+                                          handleQuantityChange(product.id, qty);
+                                        } else {
+                                          handleAddProduct(product);
+                                          setTimeout(() => handleQuantityChange(product.id, qty), 0);
+                                        }
+                                      }
+                                    }}
+                                    className="w-20 text-center mx-auto"
+                                    placeholder="0"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    value={productNotes[product.id] || ''}
+                                    onChange={(e) => handleNoteChange(product.id, e.target.value)}
+                                    placeholder={t.note}
+                                    disabled={!transferItem}
+                                    className="h-8"
+                                  />
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {transferItem && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleRemoveProduct(product.id)}
+                                      className="h-8 w-8 text-destructive"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+
+                {/* ملخص التحويل */}
+                {transferItems.length > 0 && (
+                  <div className="bg-muted/30 p-4 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-6">
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t.totalItems}</p>
+                          <p className="text-xl font-bold">{transferItems.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t.totalQuantity}</p>
+                          <p className="text-xl font-bold">
+                            {transferItems.reduce((sum, item) => sum + item.quantity, 0)}
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowLeft className="h-5 w-5 text-success" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t.toWarehouse}</p>
+                        <p className="font-medium">{getWarehouseName(toWarehouse)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleCloseTransfer}>
+              {t.cancel}
+            </Button>
+            <Button
+              onClick={() => transferMutation.mutate()}
+              disabled={
+                !fromWarehouse ||
+                !toWarehouse ||
+                fromWarehouse === toWarehouse ||
+                transferItems.length === 0 ||
+                transferMutation.isPending
+              }
+            >
+              {transferMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2" />
+                  {t.transferring || 'Transferring...'}
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 ml-2" />
+                  {t.saveTransfer}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-// ========== Helper function ==========
-const cn = (...classes: any[]) => {
-  return classes.filter(Boolean).join(' ');
-};
-
-export default InventoryCount;
+export default WarehouseTransfer;

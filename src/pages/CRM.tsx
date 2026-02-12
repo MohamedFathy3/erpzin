@@ -860,15 +860,7 @@ const CRM = () => {
                   onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t.nameAr}</Label>
-                <Input
-                  placeholder={t.nameAr}
-                  value={newCustomer.name_ar}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, name_ar: e.target.value })}
-                  dir="rtl"
-                />
-              </div>
+            
               <div className="space-y-2">
                 <Label>{t.phone}</Label>
                 <Input

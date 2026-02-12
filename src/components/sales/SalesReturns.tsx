@@ -62,7 +62,7 @@ const SalesReturns = () => {
     queryFn: async () => {
       try {
         // ✅ هنا بنادي على API المرتجعات مش فواتير المبيعات
-        const response = await api.post('/sales-invoices/index', {
+        const response = await api.post('/sales-return/index', {
           orderBy: 'id',
           orderByDirection: 'desc',
           with: ['customer', 'sales_invoice'],
