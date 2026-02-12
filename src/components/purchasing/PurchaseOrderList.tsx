@@ -16,7 +16,11 @@ import PurchaseOrderForm from './PurchaseOrderForm';
 import PurchaseOrderDetails from './PurchaseOrderDetails';
 import api from '@/lib/api';
 
-const PurchaseOrderList: React.FC = () => {
+interface PurchaseOrderListProps {
+  onSave?: () => void;
+}
+
+const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
 
   interface PurchaseOrder {
     id: string;
@@ -357,6 +361,7 @@ const PurchaseOrderList: React.FC = () => {
         onSave={() => {
           queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
           setCurrentPage(1); // Reset to first page after save
+          onSave?.(); // Call parent's onSave if provided
         }}
         editOrder={selectedOrder}
       />
