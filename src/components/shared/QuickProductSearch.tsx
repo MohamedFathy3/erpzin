@@ -7,31 +7,46 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Search, Barcode, Plus, Package, Layers, X, Keyboard } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 
 interface Product {
-  id: string;
+  id: number;
   name: string;
-  name_ar: string | null;
+  name_ar?: string;
   sku: string;
-  barcode: string | null;
-  price: number;
-  cost: number | null;
+  barcode?: string | null;
+  price?: number | string;
+  cost?: number | string;
   stock: number;
-  has_variants: boolean;
-  category_id: string | null;
+  has_variants?: boolean;
+  category_id?: number | null;
+  units?: Array<{
+    id: number;
+    unit_id: number;
+    unit_name: string;
+    cost_price: string;
+    sell_price: string;
+    barcode: string;
+    colors?: Array<{
+      id: number;
+      color_id: number;
+      color: string;
+      stock: number;
+    }>;
+  }>;
 }
 
 interface ProductVariant {
-  id: string;
-  product_id: string;
+  id: number;
+  product_id: number;
   sku: string;
-  barcode: string | null;
+  barcode?: string | null;
   stock: number;
-  price_adjustment: number | null;
-  cost_adjustment: number | null;
-  size: { id: string; name: string; name_ar: string | null } | null;
-  color: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
+  price?: number;
+  cost?: number;
+  size_name?: string;
+  color_name?: string;
+  hex_code?: string | null;
 }
 
 interface QuickProductSearchProps {
@@ -42,6 +57,8 @@ interface QuickProductSearchProps {
   autoFocus?: boolean;
   showStock?: boolean;
   className?: string;
+  products?: Product[];
+  disabled?: boolean;
 }
 
 const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
@@ -51,7 +68,9 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
   placeholder,
   autoFocus = false,
   showStock = true,
-  className
+  className,
+  products = [],
+  disabled = false
 }) => {
   const { language } = useLanguage();
   const [query, setQuery] = useState('');
@@ -61,65 +80,73 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all products for quick search
-  const { data: products = [] } = useQuery({
-    queryKey: ['quick-search-products'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, barcode, price, cost, stock, has_variants, category_id')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data as Product[];
-    },
-    staleTime: 2 * 60 * 1000 // Cache for 2 minutes
-  });
-
-  // Fetch variants for barcode search
-  const { data: variants = [] } = useQuery({
-    queryKey: ['quick-search-variants'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_variants')
-        .select(`
-          id, product_id, sku, barcode, stock, price_adjustment, cost_adjustment,
-          size:sizes(id, name, name_ar),
-          color:colors(id, name, name_ar, hex_code)
-        `)
-        .eq('is_active', true);
-      if (error) throw error;
-      return data as ProductVariant[];
-    },
-    staleTime: 2 * 60 * 1000
-  });
-
-  // Filter products based on query
+  // فلترة المنتجات بناءً على البحث
   const filteredProducts = query.length > 0
     ? products.filter(p => {
         const searchLower = query.toLowerCase();
         return (
-          p.name.toLowerCase().includes(searchLower) ||
-          (p.name_ar && p.name_ar.includes(query)) ||
-          p.sku.toLowerCase().includes(searchLower) ||
+          (p.name?.toLowerCase().includes(searchLower) || false) ||
+          (p.name_ar?.toLowerCase().includes(searchLower) || false) ||
+          (p.sku?.toLowerCase().includes(searchLower) || false) ||
           (p.barcode && p.barcode.toLowerCase().includes(searchLower))
         );
       }).slice(0, 15)
     : [];
 
-  // Check for exact barcode match (product or variant)
+  // إنشاء قائمة المتغيرات من المنتجات
+  const extractVariants = useCallback((): ProductVariant[] => {
+    const variants: ProductVariant[] = [];
+    
+    products.forEach(product => {
+      if (product.units && product.units.length > 0) {
+        product.units.forEach((unit, unitIndex) => {
+          if (unit.colors && unit.colors.length > 0) {
+            unit.colors.forEach(color => {
+              variants.push({
+                id: color.id,
+                product_id: product.id,
+                sku: `${product.sku}-${unitIndex + 1}-${color.id}`,
+                barcode: unit.barcode,
+                stock: color.stock || 0,
+                price: parseFloat(unit.sell_price) || 0,
+                cost: parseFloat(unit.cost_price) || 0,
+                size_name: unit.unit_name,
+                color_name: color.color,
+              });
+            });
+          } else {
+            variants.push({
+              id: unit.id,
+              product_id: product.id,
+              sku: `${product.sku}-${unitIndex + 1}`,
+              barcode: unit.barcode,
+              stock: 0, // المخزون الرئيسي للمنتج
+              price: parseFloat(unit.sell_price) || 0,
+              cost: parseFloat(unit.cost_price) || 0,
+              size_name: unit.unit_name,
+            });
+          }
+        });
+      }
+    });
+    
+    return variants;
+  }, [products]);
+
+  const variants = extractVariants();
+
+  // التحقق من مطابقة الباركود
   const checkBarcodeMatch = useCallback((barcode: string) => {
-    // Check product barcode
+    // التحقق في المنتجات
     const productMatch = products.find(p => p.barcode === barcode);
     if (productMatch) {
-      if (productMatch.has_variants && onSelectVariant) {
-        // Need to select variant
+      if (productMatch.units && productMatch.units.length > 0 && onSelectVariant) {
         return { type: 'product-with-variants', product: productMatch };
       }
       return { type: 'product', product: productMatch };
     }
 
-    // Check variant barcode
+    // التحقق في المتغيرات
     const variantMatch = variants.find(v => v.barcode === barcode);
     if (variantMatch && onSelectVariant) {
       const product = products.find(p => p.id === variantMatch.product_id);
@@ -131,23 +158,25 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
     return null;
   }, [products, variants, onSelectVariant]);
 
-  // Handle barcode scan (fast input detection)
+  // التعامل مع الباركود
   useEffect(() => {
     let lastKeyTime = 0;
-    let buffer = '';
 
     const handleKeyPress = (e: KeyboardEvent) => {
+      if (disabled) return;
+      
       const currentTime = Date.now();
       
-      // If typing fast (< 50ms between keys), likely a barcode scanner
-      if (currentTime - lastKeyTime < 50 && buffer.length > 0) {
+      // إذا كانت سرعة الكتابة سريعة (< 50ms) فهذا يعني باركود سكانر
+      if (currentTime - lastKeyTime < 50) {
         setIsBarcodeMode(true);
       }
       
       lastKeyTime = currentTime;
 
-      // On Enter in barcode mode, process the barcode
+      // عند الضغط على Enter في وضع الباركود
       if (e.key === 'Enter' && isBarcodeMode && query.length > 3) {
+        e.preventDefault();
         const match = checkBarcodeMatch(query.trim());
         if (match) {
           if (match.type === 'product') {
@@ -158,8 +187,6 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
             onSelectVariant(match.variant!, match.product!);
             setQuery('');
             setIsOpen(false);
-          } else if (match.type === 'product-with-variants') {
-            // Keep dropdown open to show variants
           }
         }
         setIsBarcodeMode(false);
@@ -168,9 +195,20 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
 
     window.addEventListener('keypress', handleKeyPress);
     return () => window.removeEventListener('keypress', handleKeyPress);
-  }, [query, isBarcodeMode, checkBarcodeMatch, onSelectProduct, onSelectVariant]);
+  }, [query, isBarcodeMode, checkBarcodeMatch, onSelectProduct, onSelectVariant, disabled]);
 
-  // Handle keyboard navigation
+  // إعادة تعيين وضع الباركود بعد 3 ثواني من عدم الكتابة
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isBarcodeMode) {
+      timer = setTimeout(() => {
+        setIsBarcodeMode(false);
+      }, 3000);
+    }
+    return () => clearTimeout(timer);
+  }, [isBarcodeMode, query]);
+
+  // التعامل مع أزرار الكيبورد
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen || filteredProducts.length === 0) return;
 
@@ -204,7 +242,7 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
     inputRef.current?.focus();
   };
 
-  // Close dropdown when clicking outside
+  // إغلاق القائمة عند الضغط خارجها
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -222,7 +260,8 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
       stock: 'Stock',
       variants: 'Variants',
       barcodeMode: 'Barcode scanning mode',
-      pressEnter: 'Press Enter to add'
+      pressEnter: 'Press Enter to add',
+      disabled: 'Select warehouse first'
     },
     ar: {
       placeholder: placeholder || 'بحث بالاسم أو SKU أو الباركود...',
@@ -230,7 +269,8 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
       stock: 'المخزون',
       variants: 'متغيرات',
       barcodeMode: 'وضع مسح الباركود',
-      pressEnter: 'اضغط Enter للإضافة'
+      pressEnter: 'اضغط Enter للإضافة',
+      disabled: 'اختر المخزن أولاً'
     }
   }[language];
 
@@ -253,16 +293,18 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
             setIsOpen(true);
             setSelectedIndex(0);
           }}
-          onFocus={() => query.length > 0 && setIsOpen(true)}
+          onFocus={() => !disabled && query.length > 0 && setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder={t.placeholder}
-          autoFocus={autoFocus}
+          placeholder={disabled ? t.disabled : t.placeholder}
+          autoFocus={autoFocus && !disabled}
+          disabled={disabled}
           className={cn(
             "ps-10 pe-10 h-10 text-sm transition-all",
-            isBarcodeMode && "ring-2 ring-primary bg-primary/5"
+            isBarcodeMode && "ring-2 ring-primary bg-primary/5",
+            disabled && "bg-muted/50 cursor-not-allowed"
           )}
         />
-        {query && (
+        {query && !disabled && (
           <button
             onClick={() => {
               setQuery('');
@@ -277,7 +319,7 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
       </div>
 
       {/* Barcode Mode Indicator */}
-      {isBarcodeMode && (
+      {isBarcodeMode && !disabled && (
         <div className="absolute -top-6 start-0 flex items-center gap-1.5 text-xs text-primary">
           <Barcode size={12} />
           {t.barcodeMode}
@@ -285,7 +327,7 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
       )}
 
       {/* Keyboard Shortcuts Hint */}
-      {isOpen && filteredProducts.length > 0 && (
+      {isOpen && filteredProducts.length > 0 && !disabled && (
         <div className="absolute -bottom-5 start-0 flex items-center gap-3 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <Keyboard size={10} />
@@ -297,7 +339,7 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
       )}
 
       {/* Results Dropdown */}
-      {isOpen && query.length > 0 && (
+      {isOpen && query.length > 0 && !disabled && (
         <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
           {filteredProducts.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground text-sm">
@@ -307,10 +349,24 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
           ) : (
             <ScrollArea className="max-h-[280px]">
               {filteredProducts.map((product, index) => {
-                const displayPrice = priceField === 'cost' 
-                  ? (product.cost || 0) 
-                  : product.price;
+                // تحديد السعر المناسب
+                let displayPrice = 0;
+                if (priceField === 'cost') {
+                  displayPrice = parseFloat(String(product.cost || '0'));
+                } else {
+                  displayPrice = parseFloat(String(product.price || '0'));
+                }
                 
+                // حساب المخزون
+                const totalStock = product.units && product.units.length > 0
+                  ? product.units.reduce((sum, unit) => {
+                      if (unit.colors && unit.colors.length > 0) {
+                        return sum + unit.colors.reduce((s, c) => s + (c.stock || 0), 0);
+                      }
+                      return sum + (product.stock || 0);
+                    }, 0)
+                  : (product.stock || 0);
+
                 return (
                   <div
                     key={product.id}
@@ -326,9 +382,9 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
                       {/* Product Icon */}
                       <div className={cn(
                         "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                        product.has_variants ? "bg-primary/10" : "bg-muted"
+                        product.units && product.units.length > 0 ? "bg-primary/10" : "bg-muted"
                       )}>
-                        {product.has_variants ? (
+                        {product.units && product.units.length > 0 ? (
                           <Layers size={16} className="text-primary" />
                         ) : (
                           <Package size={16} className="text-muted-foreground" />
@@ -363,11 +419,11 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
                           variant="outline" 
                           className={cn(
                             "text-xs",
-                            product.stock === 0 && "border-destructive/50 text-destructive",
-                            product.stock > 0 && product.stock <= 5 && "border-warning/50 text-warning"
+                            totalStock === 0 && "border-destructive/50 text-destructive",
+                            totalStock > 0 && totalStock <= 5 && "border-warning/50 text-warning"
                           )}
                         >
-                          {product.stock}
+                          {totalStock}
                         </Badge>
                       )}
                       
@@ -376,7 +432,7 @@ const QuickProductSearch: React.FC<QuickProductSearchProps> = ({
                         <p className="font-semibold text-sm">
                           {displayPrice.toLocaleString()}
                         </p>
-                        {product.has_variants && (
+                        {product.units && product.units.length > 0 && (
                           <Badge variant="secondary" className="text-[9px] px-1.5">
                             {t.variants}
                           </Badge>

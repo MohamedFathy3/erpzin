@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,9 @@ import { TimePicker } from '@/components/ui/time-picker';
 import { useQuery } from '@tanstack/react-query';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import PrintableInvoice from '@/components/ui/PrintableInvoice';
+import { useReactToPrint } from 'react-to-print';
+
 import { 
   Search, 
   Receipt, 
@@ -29,12 +32,16 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Loader2
+  Loader2,
+  CreditCard,
+  Wallet,
+  Banknote,
+  PieChart
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
-// ========== أنواع البيانات ==========
+// ========== أنواع البيانات المحدثة ==========
 
 interface Customer {
   id: number;
@@ -48,34 +55,35 @@ interface Customer {
 }
 
 interface SaleItem {
-  id: number;
   product_id: number;
   product_name: string;
   quantity: number;
-  unit_price: number;
-  total_price: number;
+  price: string;
+  total: string;
   color?: string | null;
   size?: string | null;
+}
+
+interface Payment {
+  method: 'cash' | 'card' | 'wallet' | 'credit';
+  amount: string;
+}
+
+interface Amounts {
+  total: string;
+  paid: string;
+  remaining: string;
 }
 
 interface Sale {
   id: number;
   invoice_number: string;
-  sale_date: string;
-  total_amount: number;
-  discount_amount: number;
-  tax_amount: number;
-  payment_method: string;
-  status: 'completed' | 'pending' | 'cancelled';
-  customer_id: number | null;
-  customer?: Customer;
-  sale_items: SaleItem[];
-  payments?: {
-    method: string;
-    amount: number;
-  }[];
+  status: 'paid' | 'pending' | 'cancelled' | 'partial';
+  customer: Customer | null;
+  amounts: Amounts;
+  items: SaleItem[];
+  payments: Payment[];
   created_at: string;
-  updated_at: string;
 }
 
 interface ReturnItem {
@@ -98,6 +106,11 @@ interface ReturnInvoice {
   status: 'completed' | 'pending' | 'cancelled';
   customer_id: number | null;
   customer?: Customer;
+  invoice?: {
+    id: number;
+    invoice_number: string;
+    customer: Customer;
+  };
   return_items: ReturnItem[];
   refund_method: 'cash' | 'card' | 'wallet' | 'credit';
   created_at: string;
@@ -140,7 +153,39 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
   const [showFilters, setShowFilters] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  
+  // ========== Print State ==========
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [printType, setPrintType] = useState<'sale' | 'return'>('sale');
+  const [printData, setPrintData] = useState<any>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
+// ========== Print Handler ==========
+const handlePrint = useReactToPrint({
+  contentRef: printRef, // ✅ استخدم contentRef بدل content
+  documentTitle: (printType === 'sale' 
+    ? `Invoice-${printData?.invoice_number}` 
+    : `Return-${printData?.return_number}`) || 'invoice',
+  onAfterPrint: () => {
+    setShowPrintDialog(false);
+    setPrintData(null);
+  },
+});
+
+const onPrintClick = (type: 'sale' | 'return', data: any) => {
+  setPrintType(type);
+  setPrintData(data);
+  setShowPrintDialog(true);
+  
+  // استخدم setTimeout أصغر واتأكد إن الـ Dialog ظهر
+  setTimeout(() => {
+    if (printRef.current) {
+      handlePrint();
+    } else {
+      console.error('Print ref is not available');
+    }
+  }, 200);
+};
   // ========== Translations ==========
   const t = {
     title: language === 'ar' ? 'فواتير نقطة البيع' : 'POS Invoices',
@@ -164,15 +209,18 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     date: language === 'ar' ? 'التاريخ' : 'Date',
     customer: language === 'ar' ? 'العميل' : 'Customer',
     total: language === 'ar' ? 'الإجمالي' : 'Total',
+    paid: language === 'ar' ? 'المدفوع' : 'Paid',
+    remaining: language === 'ar' ? 'المتبقي' : 'Remaining',
     actions: language === 'ar' ? 'إجراءات' : 'Actions',
     noData: language === 'ar' ? 'لا توجد بيانات' : 'No data found',
     totalSales: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
     totalReturns: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns',
     viewDetails: language === 'ar' ? 'عرض التفاصيل' : 'View Details',
     print: language === 'ar' ? 'طباعة' : 'Print',
-    completed: language === 'ar' ? 'مكتمل' : 'Completed',
+    paid_status: language === 'ar' ? 'مدفوع' : 'Paid',
     pending: language === 'ar' ? 'معلق' : 'Pending',
     cancelled: language === 'ar' ? 'ملغي' : 'Cancelled',
+    partial: language === 'ar' ? 'مدفوع جزئياً' : 'Partially Paid',
     cash: language === 'ar' ? 'نقدي' : 'Cash',
     card: language === 'ar' ? 'بطاقة' : 'Card',
     wallet: language === 'ar' ? 'محفظة' : 'Wallet',
@@ -192,7 +240,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     showFilters: language === 'ar' ? 'إظهار الفلاتر' : 'Show Filters',
     hideFilters: language === 'ar' ? 'إخفاء الفلاتر' : 'Hide Filters',
     refresh: language === 'ar' ? 'تحديث' : 'Refresh',
-    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...'
+    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...',
+    paymentBreakdown: language === 'ar' ? 'توزيع المدفوعات' : 'Payment Breakdown',
+    totalAmount: language === 'ar' ? 'إجمالي الفاتورة' : 'Total Amount',
+    paidAmount: language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount',
+    remainingAmount: language === 'ar' ? 'المبلغ المتبقي' : 'Remaining Amount',
+    overpaid: language === 'ar' ? 'مدفوع زيادة' : 'Overpaid',
   };
 
   // ========== Queries ==========
@@ -258,7 +311,6 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           orderByDirection: 'desc',
           perPage: 100,
           paginate: false,
-          with: ['customer', 'sale_items']
         };
 
         const response = await api.post('/invoices/index', payload);
@@ -284,7 +336,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           orderByDirection: 'desc',
           perPage: 100,
           paginate: false,
-          with: ['customer', 'return_items']
+          with: ['customer', 'return_items', 'invoice.customer']
         };
 
         const response = await api.post('/return-invoices/index', payload);
@@ -303,7 +355,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   // ========== Filter Functions ==========
 
   // ✅ دالة فلترة المبيعات
-  const filterSales = (sale: any) => {
+  const filterSales = (sale: Sale) => {
     // 1. فلترة البحث
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -316,7 +368,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
     // 2. فلترة التاريخ والوقت
     if (dateFrom || timeFrom || dateTo || timeTo) {
-      const saleDate = sale.sale_date || sale.created_at;
+      const saleDate = sale.created_at;
       if (!saleDate) return false;
 
       const dateTime = new Date(saleDate);
@@ -344,30 +396,35 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       }
     }
 
-    // 3. فلترة طريقة الدفع
+    // 3. فلترة طريقة الدفع (لو اختار طريقة معينة، نتأكد إنها موجودة في المدفوعات)
     if (selectedPaymentMethod !== 'all') {
-      const paymentMethod = sale.payment_method || sale.payments?.[0]?.method;
-      if (paymentMethod !== selectedPaymentMethod) return false;
+      const hasPaymentMethod = sale.payments?.some(p => p.method === selectedPaymentMethod);
+      if (!hasPaymentMethod) return false;
     }
 
-    // 4. فلترة الحالة
-    if (selectedStatus !== 'all' && sale.status !== selectedStatus) return false;
-
-    // 5. فلترة المستخدم (الكاشير)
-    if (selectedUser !== 'all' && sale.cashier_id?.toString() !== selectedUser) return false;
+    // 4. فلترة الحالة (تحويل status من API)
+    if (selectedStatus !== 'all') {
+      const saleStatus = getSaleStatus(sale);
+      if (saleStatus !== selectedStatus) return false;
+    }
 
     return true;
   };
 
   // ✅ دالة فلترة المرتجعات
-  const filterReturns = (ret: any) => {
+  const filterReturns = (ret: ReturnInvoice) => {
     // 1. فلترة البحث
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       const matchesInvoice = ret.return_number?.toLowerCase().includes(searchLower);
-      const matchesCustomer = ret.customer?.name?.toLowerCase().includes(searchLower) ||
-                            ret.customer?.name_ar?.toLowerCase().includes(searchLower) ||
-                            ret.customer?.phone?.toLowerCase().includes(searchLower);
+      const customerName = ret.invoice?.customer?.name || ret.customer?.name || '';
+      const customerNameAr = ret.invoice?.customer?.name_ar || ret.customer?.name_ar || '';
+      const customerPhone = ret.invoice?.customer?.phone || ret.customer?.phone || '';
+      
+      const matchesCustomer = customerName.toLowerCase().includes(searchLower) ||
+                            customerNameAr.toLowerCase().includes(searchLower) ||
+                            customerPhone.toLowerCase().includes(searchLower);
+      
       if (!matchesInvoice && !matchesCustomer) return false;
     }
 
@@ -407,10 +464,25 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     return true;
   };
 
+  // ✅ دالة لتحديد حالة الفاتورة بناءً على المبالغ
+  const getSaleStatus = (sale: Sale): string => {
+    if (sale.status === 'cancelled') return 'cancelled';
+    
+    const total = parseFloat(sale.amounts?.total || '0');
+    const paid = parseFloat(sale.amounts?.paid || '0');
+    const remaining = parseFloat(sale.amounts?.remaining || '0');
+    
+    if (paid >= total && remaining <= 0) return 'paid';
+    if (paid > 0 && paid < total) return 'partial';
+    if (paid === 0) return 'pending';
+    
+    return sale.status || 'pending';
+  };
+
   // ✅ فلترة المبيعات
   const filteredSales = useMemo(() => {
     return sales.filter(filterSales);
-  }, [sales, searchTerm, dateFrom, dateTo, timeFrom, timeTo, selectedPaymentMethod, selectedStatus, selectedUser]);
+  }, [sales, searchTerm, dateFrom, dateTo, timeFrom, timeTo, selectedPaymentMethod, selectedStatus]);
 
   // ✅ فلترة المرتجعات
   const filteredReturns = useMemo(() => {
@@ -419,34 +491,127 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
   // ✅ حساب الإحصائيات
   const totalSalesAmount = useMemo(() => {
-    return filteredSales.reduce((sum: number, s: any) => sum + (parseFloat(s.total_amount) || 0), 0);
+    return filteredSales.reduce((sum: number, s: Sale) => sum + (parseFloat(s.amounts?.total || '0')), 0);
   }, [filteredSales]);
 
   const totalReturnsAmount = useMemo(() => {
-    return filteredReturns.reduce((sum: number, r: any) => sum + (parseFloat(r.total_amount) || 0), 0);
+    return filteredReturns.reduce((sum: number, r: ReturnInvoice) => sum + (parseFloat(r.total_amount?.toString() || '0')), 0);
   }, [filteredReturns]);
 
   // ========== Helper Functions ==========
 
+  // ✅ تنسيق الأرقام
+  const formatNumber = (value: string | number, decimals: number = 2): string => {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '0.00';
+    return num.toFixed(decimals).toLocaleString();
+  };
+
+  // ✅ أيقونات طرق الدفع
+  const getPaymentIcon = (method: string) => {
+    switch (method) {
+      case 'cash': return <Banknote size={14} />;
+      case 'card': return <CreditCard size={14} />;
+      case 'wallet': return <Wallet size={14} />;
+      default: return <DollarSign size={14} />;
+    }
+  };
+
+  // ✅ ألوان طرق الدفع
+  const getPaymentMethodColor = (method: string) => {
+    switch (method) {
+      case 'cash': return 'bg-green-500/10 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400';
+      case 'card': return 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400';
+      case 'wallet': return 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400';
+      case 'credit': return 'bg-orange-500/10 text-orange-600 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400';
+      default: return 'bg-gray-500/10 text-gray-600 border-gray-200 dark:bg-gray-950/30 dark:text-gray-400';
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; label: string }> = {
-      completed: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400', label: t.completed },
-      pending: { color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400', label: t.pending },
+      paid: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400', label: t.paid_status },
+      partial: { color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400', label: t.partial },
+      pending: { color: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400', label: t.pending },
       cancelled: { color: 'bg-red-500/10 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400', label: t.cancelled },
+      completed: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400', label: t.paid_status },
     };
     const { color, label } = config[status] || config.pending;
-    return <Badge variant="outline" className={cn(color)}>{label}</Badge>;
+    return <Badge variant="outline" className={cn(color, 'border-0')}>{label}</Badge>;
   };
 
   const getPaymentMethodBadge = (method: string) => {
-    const config: Record<string, { color: string; label: string }> = {
-      cash: { color: 'bg-green-500/10 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400', label: t.cash },
-      card: { color: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400', label: t.card },
-      wallet: { color: 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400', label: t.wallet },
-      credit: { color: 'bg-orange-500/10 text-orange-600 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400', label: t.credit },
-    };
-    const { color, label } = config[method] || config.cash;
-    return <Badge variant="outline" className={cn(color)}>{label}</Badge>;
+    return (
+      <Badge variant="outline" className={cn(getPaymentMethodColor(method), 'border-0 gap-1')}>
+        {getPaymentIcon(method)}
+        {method === 'cash' ? t.cash : 
+         method === 'card' ? t.card : 
+         method === 'wallet' ? t.wallet : 
+         method === 'credit' ? t.credit : method}
+      </Badge>
+    );
+  };
+
+  // ✅ عرض طرق الدفع المتعددة
+  const renderPaymentMethods = (payments: Payment[] = []) => {
+    if (!payments || payments.length === 0) {
+      return getPaymentMethodBadge('cash');
+    }
+
+    if (payments.length === 1) {
+      return getPaymentMethodBadge(payments[0].method);
+    }
+
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
+          {payments.map((payment, index) => (
+            <Badge 
+              key={index} 
+              variant="outline" 
+              className={cn(getPaymentMethodColor(payment.method), 'border-0 gap-1 text-xs')}
+            >
+              {getPaymentIcon(payment.method)}
+              {formatNumber(payment.amount)}
+            </Badge>
+          ))}
+        </div>
+        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1 w-fit">
+          <PieChart size={12} />
+          {payments.length} {language === 'ar' ? 'طرق دفع' : 'methods'}
+        </Badge>
+      </div>
+    );
+  };
+
+  // ✅ عرض المبالغ بشكل منسق
+  const renderAmounts = (amounts: Amounts) => {
+    const total = parseFloat(amounts?.total || '0');
+    const paid = parseFloat(amounts?.paid || '0');
+    const remaining = parseFloat(amounts?.remaining || '0');
+    
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{t.total}:</span>
+          <span className="font-medium">{formatNumber(total)}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{t.paid}:</span>
+          <span className="font-medium text-emerald-600">{formatNumber(paid)}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{remaining > 0 ? t.remaining : t.overpaid}:</span>
+          <span className={cn(
+            "font-medium",
+            remaining > 0 ? "text-amber-600" : remaining < 0 ? "text-blue-600" : "text-muted-foreground"
+          )}>
+            {formatNumber(Math.abs(remaining))}
+            {remaining < 0 && ' ↑'}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   const clearFilters = () => {
@@ -519,7 +684,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 <DollarSign className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xl font-bold">{totalSalesAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold">{formatNumber(totalSalesAmount)}</p>
                 <p className="text-xs text-muted-foreground">{t.totalSales}</p>
               </div>
             </div>
@@ -532,7 +697,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 <DollarSign className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <p className="text-xl font-bold">{totalReturnsAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold">{formatNumber(totalReturnsAmount)}</p>
                 <p className="text-xs text-muted-foreground">{t.totalReturns}</p>
               </div>
             </div>
@@ -588,6 +753,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       </div>
 
       {/* ========== Filters Section ========== */}
+
       {showFilters && (
         <Card>
           <CardContent className="p-4 space-y-4">
@@ -673,22 +839,6 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                   </SelectContent>
                 </Select>
               </div>
-              {/* <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">{t.user}</Label>
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t.allUsers} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t.allUsers}</SelectItem>
-                    {cashiers.map((c: any) => (
-                      <SelectItem key={c.id} value={c.id.toString()}>
-                        {language === 'ar' ? c.name_ar || c.name : c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div> */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.paymentMethod}</Label>
                 <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
@@ -704,7 +854,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                   </SelectContent>
                 </Select>
               </div>
-              {/* <div className="space-y-1.5">
+              <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.status}</Label>
                 <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                   <SelectTrigger>
@@ -712,12 +862,13 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t.allStatuses}</SelectItem>
-                    <SelectItem value="completed">{t.completed}</SelectItem>
+                    <SelectItem value="paid">{t.paid_status}</SelectItem>
+                    <SelectItem value="partial">{t.partial}</SelectItem>
                     <SelectItem value="pending">{t.pending}</SelectItem>
                     <SelectItem value="cancelled">{t.cancelled}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div> */}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -747,15 +898,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <Card>
             <CardContent className="p-0">
               <ScrollArea className="h-[500px]">
-                <div className="min-w-[800px]">
+                <div className="min-w-[1000px]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="min-w-[150px]">{t.invoiceNumber}</TableHead>
                         <TableHead className="min-w-[150px]">{t.date}</TableHead>
                         <TableHead className="min-w-[200px]">{t.customer}</TableHead>
-                        <TableHead className="min-w-[120px]">{t.paymentMethod}</TableHead>
-                        <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
+                        <TableHead className="min-w-[250px]">{t.paymentMethod}</TableHead>
+                        <TableHead className="min-w-[200px] text-right">{t.total}</TableHead>
                         <TableHead className="min-w-[120px]">{t.status}</TableHead>
                         <TableHead className="min-w-[100px] text-center">{t.actions}</TableHead>
                       </TableRow>
@@ -778,14 +929,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredSales.map((sale: any) => (
+                        filteredSales.map((sale: Sale) => (
                           <TableRow key={sale.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedSale(sale)}>
                             <TableCell className="font-mono text-sm font-medium">
                               {sale.invoice_number || '-'}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {sale.sale_date || sale.created_at ? 
-                                format(new Date(sale.sale_date || sale.created_at), 'yyyy-MM-dd HH:mm', { 
+                              {sale.created_at ? 
+                                format(new Date(sale.created_at), 'yyyy-MM-dd HH:mm', { 
                                   locale: language === 'ar' ? ar : undefined 
                                 }) : '-'
                               }
@@ -796,18 +947,18 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 <span>
                                   {sale.customer 
                                     ? (language === 'ar' ? sale.customer.name_ar || sale.customer.name : sale.customer.name)
-                                    : t.customer
+                                    : '-'
                                   }
                                 </span>
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getPaymentMethodBadge(sale.payment_method || sale.payments?.[0]?.method || 'cash')}
+                              {renderPaymentMethods(sale.payments)}
                             </TableCell>
-                            <TableCell className="font-semibold text-right">
-                              {parseFloat(sale.total_amount || 0).toLocaleString()} YER
+                            <TableCell className="text-right">
+                              {renderAmounts(sale.amounts)}
                             </TableCell>
-                            <TableCell>{getStatusBadge(sale.status || 'completed')}</TableCell>
+                            <TableCell>{getStatusBadge(getSaleStatus(sale))}</TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
                                 <Button 
@@ -821,7 +972,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 >
                                   <Eye size={16} />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPrintClick('sale', sale);
+                                  }}
+                                >
                                   <Printer size={16} />
                                 </Button>
                               </div>
@@ -838,6 +997,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         </TabsContent>
 
         {/* ========== Returns Tab ========== */}
+
         <TabsContent value="returns">
           <Card>
             <CardContent className="p-0">
@@ -873,56 +1033,68 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredReturns.map((ret: any) => (
-                          <TableRow key={ret.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedReturn(ret)}>
-                            <TableCell className="font-mono text-sm font-medium">
-                              {ret.return_number || '-'}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {ret.return_date || ret.created_at ? 
-                                format(new Date(ret.return_date || ret.created_at), 'yyyy-MM-dd HH:mm', { 
-                                  locale: language === 'ar' ? ar : undefined 
-                                }) : '-'
-                              }
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <User size={14} className="text-muted-foreground" />
-                                <span>
-                                  {ret.customer 
-                                    ? (language === 'ar' ? ret.customer.name_ar || ret.customer.name : ret.customer.name)
-                                    : t.customer
-                                  }
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {getPaymentMethodBadge(ret.refund_method || 'cash')}
-                            </TableCell>
-                            <TableCell className="font-semibold text-right text-red-600">
-                              -{parseFloat(ret.total_amount || 0).toLocaleString()} YER
-                            </TableCell>
-                            <TableCell>{getStatusBadge(ret.status || 'completed')}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-center gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedReturn(ret);
-                                  }}
-                                >
-                                  <Eye size={16} />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <Printer size={16} />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        filteredReturns.map((ret: ReturnInvoice) => {
+                          // الحصول على اسم العميل (من invoice أو customer مباشرة)
+                          const customerName = ret.invoice?.customer 
+                            ? (language === 'ar' ? ret.invoice.customer.name_ar || ret.invoice.customer.name : ret.invoice.customer.name)
+                            : ret.customer 
+                              ? (language === 'ar' ? ret.customer.name_ar || ret.customer.name : ret.customer.name)
+                              : '-';
+                          
+                          return (
+                            <TableRow key={ret.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedReturn(ret)}>
+                              <TableCell className="font-mono text-sm font-medium">
+                                {ret.return_number || '-'}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {ret.return_date || ret.created_at ? 
+                                  format(new Date(ret.return_date || ret.created_at), 'yyyy-MM-dd HH:mm', { 
+                                    locale: language === 'ar' ? ar : undefined 
+                                  }) : '-'
+                                }
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <User size={14} className="text-muted-foreground" />
+                                  <span>{customerName}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {getPaymentMethodBadge(ret.refund_method || 'cash')}
+                              </TableCell>
+                              <TableCell className="font-semibold text-right text-red-600">
+                                -{formatNumber(ret.total_amount || 0)}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(ret.status || 'completed')}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedReturn(ret);
+                                    }}
+                                  >
+                                    <Eye size={16} />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPrintClick('return', ret);
+                                    }}
+                                  >
+                                    <Printer size={16} />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -949,8 +1121,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 <div>
                   <p className="text-xs text-muted-foreground">{t.date}</p>
                   <p className="text-sm font-medium">
-                    {selectedSale.sale_date || selectedSale.created_at
-                      ? format(new Date(selectedSale.sale_date || selectedSale.created_at), 'yyyy-MM-dd HH:mm')
+                    {selectedSale.created_at
+                      ? format(new Date(selectedSale.created_at), 'yyyy-MM-dd HH:mm')
                       : '-'
                     }
                   </p>
@@ -966,15 +1138,74 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t.paymentMethod}</p>
-                  <div className="mt-1">
-                    {getPaymentMethodBadge(selectedSale.payment_method || selectedSale.payments?.[0]?.method || 'cash')}
+                  <div className="mt-1 space-y-1">
+                    {selectedSale.payments?.map((payment, idx) => (
+                      <div key={idx} className="flex items-center gap-1">
+                        {getPaymentMethodBadge(payment.method)}
+                        <span className="text-xs font-medium">{formatNumber(payment.amount)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t.status}</p>
-                  <div className="mt-1">{getStatusBadge(selectedSale.status || 'completed')}</div>
+                  <div className="mt-1">{getStatusBadge(getSaleStatus(selectedSale))}</div>
                 </div>
               </div>
+
+              {/* Amounts Summary */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
+                  <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
+                </div>
+                <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20">
+                  <p className="text-xs text-muted-foreground mb-1">{t.paidAmount}</p>
+                  <p className="text-lg font-bold text-emerald-600">{formatNumber(selectedSale.amounts?.paid || '0')}</p>
+                </div>
+                <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? t.remaining : t.overpaid}
+                  </p>
+                  <p className={cn(
+                    "text-lg font-bold",
+                    parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
+                    parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
+                  )}>
+                    {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
+                    {parseFloat(selectedSale.amounts?.remaining || '0') < 0 && ' ↑'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Payment Breakdown */}
+              {selectedSale.payments && selectedSale.payments.length > 1 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <PieChart size={16} className="text-primary" />
+                    {t.paymentBreakdown}
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {selectedSale.payments.map((payment, idx) => (
+                      <div key={idx} className={cn(
+                        "p-2 rounded-lg border",
+                        getPaymentMethodColor(payment.method).split(' ')[0]
+                      )}>
+                        <div className="flex items-center gap-1 mb-1">
+                          {getPaymentIcon(payment.method)}
+                          <span className="text-xs font-medium">
+                            {payment.method === 'cash' ? t.cash : 
+                             payment.method === 'card' ? t.card : 
+                             payment.method === 'wallet' ? t.wallet : 
+                             payment.method === 'credit' ? t.credit : payment.method}
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold">{formatNumber(payment.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Items Table */}
               <div className="space-y-2">
@@ -993,7 +1224,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedSale.sale_items?.map((item: any, index: number) => (
+                      {selectedSale.items?.map((item: SaleItem, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
                             {item.product_name || '-'}
@@ -1005,40 +1236,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                             )}
                           </TableCell>
                           <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                          <TableCell className="text-right">{parseFloat(item.unit_price || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{formatNumber(item.price || '0')}</TableCell>
                           <TableCell className="text-right font-medium">
-                            {parseFloat(item.total_price || 0).toLocaleString()}
+                            {formatNumber(item.total || '0')}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="flex justify-end">
-                <div className="w-64 space-y-2 border rounded-lg p-4 bg-muted/20">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t.subtotal}:</span>
-                    <span>{parseFloat(selectedSale.subtotal || selectedSale.total_amount || 0).toLocaleString()} YER</span>
-                  </div>
-                  {parseFloat(selectedSale.tax_amount || 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{t.tax}:</span>
-                      <span>{parseFloat(selectedSale.tax_amount || 0).toLocaleString()} YER</span>
-                    </div>
-                  )}
-                  {parseFloat(selectedSale.discount_amount || 0) > 0 && (
-                    <div className="flex justify-between text-sm text-red-600">
-                      <span>{t.discount}:</span>
-                      <span>-{parseFloat(selectedSale.discount_amount || 0).toLocaleString()} YER</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-lg border-t pt-2">
-                    <span>{t.netTotal}:</span>
-                    <span>{parseFloat(selectedSale.total_amount || 0).toLocaleString()} YER</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1071,9 +1276,11 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 <div>
                   <p className="text-xs text-muted-foreground">{t.customer}</p>
                   <p className="text-sm font-medium">
-                    {selectedReturn.customer 
-                      ? (language === 'ar' ? selectedReturn.customer.name_ar || selectedReturn.customer.name : selectedReturn.customer.name)
-                      : '-'
+                    {selectedReturn.invoice?.customer 
+                      ? (language === 'ar' ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name)
+                      : selectedReturn.customer 
+                        ? (language === 'ar' ? selectedReturn.customer.name_ar || selectedReturn.customer.name : selectedReturn.customer.name)
+                        : '-'
                     }
                   </p>
                 </div>
@@ -1110,7 +1317,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedReturn.return_items?.map((item: any, index: number) => (
+                      {selectedReturn.return_items?.map((item: ReturnItem, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
                             {item.product_name || '-'}
@@ -1122,9 +1329,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                             )}
                           </TableCell>
                           <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                          <TableCell className="text-right">{parseFloat(item.unit_price || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{formatNumber(item.unit_price || 0)}</TableCell>
                           <TableCell className="text-right font-medium text-red-600">
-                            -{parseFloat(item.total_price || 0).toLocaleString()}
+                            -{formatNumber(item.total_price || 0)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1138,7 +1345,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 <div className="w-64 border rounded-lg p-4 bg-red-500/5 border-red-200">
                   <div className="flex justify-between font-bold text-lg text-red-600">
                     <span>{t.netTotal}:</span>
-                    <span>-{parseFloat(selectedReturn.total_amount || 0).toLocaleString()} YER</span>
+                    <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
                   </div>
                 </div>
               </div>
@@ -1146,6 +1353,47 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           )}
         </DialogContent>
       </Dialog>
+
+  {/* ========== Print Dialog ========== */}
+<Dialog open={showPrintDialog} onOpenChange={() => {
+  setShowPrintDialog(false);
+  setPrintData(null);
+}}>
+  <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2">
+        <Printer size={20} className="text-primary" />
+        {printType === 'sale' 
+          ? `${t.invoiceDetails} - ${printData?.invoice_number}`
+          : `${t.returnDetails} - ${printData?.return_number}`
+        }
+      </DialogTitle>
+    </DialogHeader>
+    <div className="overflow-auto max-h-[70vh]">
+      {printData && (
+        <PrintableInvoice
+          ref={printRef}
+          data={printData}
+          type={printType}
+          language={language}
+          // 👇 مش محتاج تمرر companyInfo لأنها هتجيله من AuthContext
+        />
+      )}
+    </div>
+    <div className="flex justify-end gap-2 mt-4">
+      <Button variant="outline" onClick={() => {
+        setShowPrintDialog(false);
+        setPrintData(null);
+      }}>
+        {language === 'ar' ? 'إلغاء' : 'Cancel'}
+      </Button>
+      <Button onClick={() => handlePrint()} className="gap-2">
+        <Printer size={16} />
+        {language === 'ar' ? 'طباعة' : 'Print'}
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
     </div>
   );
 };

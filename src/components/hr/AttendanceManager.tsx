@@ -52,7 +52,6 @@ const AttendanceManager: React.FC<AttendanceManagerProps> = ({ employees, attend
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [activeTab, setActiveTab] = useState('list');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

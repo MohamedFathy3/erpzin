@@ -95,8 +95,15 @@ const HR = () => {
         // ✅ إضافة الفلاتر
         const filters: any = {};
 
+        // ✅ تعديل البحث ليدعم البحث بالاسم أو الإيميل أو الكود
         if (searchTerm) {
-          filters.search = searchTerm;
+          // هنا بنضيف البحث في حقول متعددة حسب المطلوب
+          filters.name = searchTerm;        // للبحث بالاسم
+          // filters.email = searchTerm;    // للبحث بالإيميل (لو عاوز تفعله)
+          // filters.employee_code = searchTerm; // للبحث بالكود (لو عاوز تفعله)
+          
+          // ملاحظة: لو عاوز تدعم البحث في حقل واحد بس، استخدم name أو email حسب المطلوب
+          // الـ API بتاعك بيستقبل البحث كـ name أو email مش search
         }
 
         if (employeeFilters.department && employeeFilters.department !== 'all') {
@@ -163,8 +170,10 @@ const HR = () => {
 
         const filters: any = {};
 
+        // ✅ تعديل البحث لمندوبي التوصيل
         if (searchTerm) {
-          filters.search = searchTerm;
+          filters.name = searchTerm;  // البحث بالاسم
+          // filters.phone = searchTerm; // للبحث بالهاتف (لو عاوز تفعله)
         }
 
         if (Object.keys(filters).length > 0) {
@@ -213,7 +222,8 @@ const HR = () => {
         const filters: any = {};
 
         if (searchTerm) {
-          filters.search = searchTerm;
+          // البحث في attendance ممكن يكون باسم الموظف
+          filters.employee_name = searchTerm;
         }
 
         if (Object.keys(filters).length > 0) {

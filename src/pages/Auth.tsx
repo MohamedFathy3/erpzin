@@ -249,15 +249,15 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-1 mb-6">
               <TabsTrigger value="login" className="flex items-center gap-2">
                 <LogIn size={16} />
                 {t.loginTitle}
               </TabsTrigger>
-              <TabsTrigger value="signup" className="flex items-center gap-2">
+              {/* <TabsTrigger value="signup" className="flex items-center gap-2">
                 <UserPlus size={16} />
                 {t.signupTitle}
-              </TabsTrigger>
+              </TabsTrigger> */}
             </TabsList>
 
             {/* Login Tab */}
@@ -302,7 +302,7 @@ const Auth = () => {
                   {t.login}
                 </Button>
               </form>
-              <p className="text-center text-sm text-muted-foreground mt-4">
+              {/* <p className="text-center text-sm text-muted-foreground mt-4">
                 {t.noAccount}{' '}
                 <button 
                   type="button"
@@ -311,7 +311,7 @@ const Auth = () => {
                 >
                   {t.signupTitle}
                 </button>
-              </p>
+              </p> */}
             </TabsContent>
 
             {/* Signup Tab */}

@@ -63,7 +63,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
       // ✅ حط رقم الفاتورة
       setFormData(prev => ({
         ...prev,
-        sales_invoice_id: invoiceData.invoice_number
+        sales_invoice_id: invoiceData.id
       }));
       
       // ✅ حول الأصناف من الفاتورة
@@ -135,7 +135,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
 
       // ✅ تجهيز payload
       const payload = {
-        sales_invoice_id: formData.sales_invoice_id,
+        sales_invoice_id: Number(formData.sales_invoice_id),
         return_method: formData.return_method,
         note: formData.note || null,
         items: items.map(item => ({
@@ -148,7 +148,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
 
       console.log('📦 Sending payload to /invoice-return/store:', JSON.stringify(payload, null, 2));
 
-      const response = await api.post('/invoice-return/store', payload);
+      const response = await api.post('/sales-invoice-return/store', payload);
       return response.data;
     },
     onSuccess: (data) => {
