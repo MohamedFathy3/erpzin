@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import SupplierForm from '@/components/purchasing/SupplierForm';
 import SupplierDetails from '@/components/purchasing/SupplierDetails';
 import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
@@ -22,7 +22,7 @@ import { toast } from '@/components/ui/use-toast';
 import {
   Plus, FileText, Building2, Phone,
   Wallet, Receipt, ShoppingCart, RotateCcw,
-  Eye, Calendar, DollarSign, Package
+  Eye, Calendar, DollarSign, Package, Trash2
 } from 'lucide-react';
 import {
   Dialog,
@@ -34,16 +34,19 @@ import {
 // ========== أنواع البيانات من API ==========
 
 interface Supplier {
-  id: number;
+  id: number | string;
   name: string;
   name_ar?: string;
   contact_person?: string;
   phone?: string;
+  email?: string;
   address?: string;
   tax_number?: string;
-  credit_limit?: string;
+  credit_limit?: number;
   payment_terms?: number;
-  active: boolean;
+  is_active?: boolean;
+  active?: number;
+  note?: string;
   balance?: number;
   created_at?: string;
   updated_at?: string;
@@ -162,18 +165,18 @@ const Purchasing = () => {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null); // 👈 نخزن الـ ID بس
 
   // ========== جلب تفاصيل الفاتورة عند الضغط عليها ==========
-  const { data: invoiceDetails, isLoading: invoiceDetailsLoading } = useQuery<PurchaseInvoiceDetailsResponse>({
+  const { data: invoiceDetails, isLoading: invoiceDetailsLoading, refetch: refetchInvoiceDetails } = useQuery<PurchaseInvoiceDetailsResponse>({
     queryKey: ['purchase-invoice-details', selectedInvoiceId],
     queryFn: async () => {
       if (!selectedInvoiceId) throw new Error('No invoice selected');
-      
+
       try {
         const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
-        
+
         if (response.data.result === 'Success') {
           return response.data;
         }
-        
+
         throw new Error(response.data.message || 'Failed to fetch invoice details');
       } catch (error) {
         console.error('Error fetching invoice details:', error);
@@ -188,10 +191,10 @@ const Purchasing = () => {
   });
 
   // ========== جلب فواتير الشراء مع Pagination ==========
-  const { 
-    data: invoicesResponse, 
+  const {
+    data: invoicesResponse,
     isLoading: invoicesLoading,
-    refetch: refetchInvoices 
+    refetch: refetchInvoices
   } = useQuery<PurchaseInvoicesResponse>({
     queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices],
     queryFn: async () => {
@@ -264,11 +267,46 @@ const Purchasing = () => {
 
   const paginationMeta = invoicesResponse?.meta;
 
+  // ========== حذف المورد ==========
+  const deleteSupplierMutation = useMutation({
+    mutationFn: async (supplierId: number) => {
+      const response = await api.delete('/suppliers/delete', {
+        data: { items: [supplierId] }
+      });
+
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.result === 'Success') {
+        toast({
+          title: language === 'ar' ? 'تم حذف المورد بنجاح' : 'Supplier deleted successfully',
+          variant: 'default',
+        });
+        refetchSuppliers();
+        queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      } else {
+        toast({
+          title: language === 'ar' ? 'فشل في حذف المورد' : 'Failed to delete supplier',
+          description: data.message,
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (error: any) => {
+      console.error('Error deleting supplier:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
+        description: error.response?.data?.message || error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // ========== جلب الموردين ==========
-  const { 
-    data: suppliers = [], 
+  const {
+    data: suppliers = [],
     isLoading: suppliersLoading,
-    refetch: refetchSuppliers 
+    refetch: refetchSuppliers
   } = useQuery<Supplier[]>({
     queryKey: ['suppliers', supplierFilters],
     queryFn: async () => {
@@ -358,35 +396,35 @@ const Purchasing = () => {
   const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.total_amount || 0), 0);
 
   const stats = [
-    { 
-      label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices', 
-      value: paginationMeta?.total || 0, 
-      icon: <FileText className="text-primary" size={24} />, 
-      color: 'bg-primary/10' 
+    {
+      label: language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices',
+      value: paginationMeta?.total || 0,
+      icon: <FileText className="text-primary" size={24} />,
+      color: 'bg-primary/10'
     },
-    { 
-      label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value', 
-      value: `${totalPurchaseValue.toLocaleString()} YER`, 
-      icon: <Receipt className="text-chart-2" size={24} />, 
-      color: 'bg-chart-2/10' 
+    {
+      label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value',
+      value: `${totalPurchaseValue.toLocaleString()} YER`,
+      icon: <Receipt className="text-chart-2" size={24} />,
+      color: 'bg-chart-2/10'
     },
-    { 
-      label: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns', 
-      value: purchaseReturnsCount, 
-      icon: <RotateCcw className="text-warning" size={24} />, 
-      color: 'bg-warning/10' 
+    {
+      label: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns',
+      value: purchaseReturnsCount,
+      icon: <RotateCcw className="text-warning" size={24} />,
+      color: 'bg-warning/10'
     },
-    { 
-      label: language === 'ar' ? 'أوامر الشراء' : 'Orders', 
-      value: purchaseOrdersCount, 
-      icon: <ShoppingCart className="text-chart-3" size={24} />, 
-      color: 'bg-chart-3/10' 
+    {
+      label: language === 'ar' ? 'أوامر الشراء' : 'Orders',
+      value: purchaseOrdersCount,
+      icon: <ShoppingCart className="text-chart-3" size={24} />,
+      color: 'bg-chart-3/10'
     },
-    { 
-      label: language === 'ar' ? 'المستحق للموردين' : 'Payables', 
-      value: `${totalBalance.toLocaleString()} YER`, 
-      icon: <Wallet className="text-destructive" size={24} />, 
-      color: 'bg-destructive/10' 
+    {
+      label: language === 'ar' ? 'المستحق للموردين' : 'Payables',
+      value: `${totalBalance.toLocaleString()} YER`,
+      icon: <Wallet className="text-destructive" size={24} />,
+      color: 'bg-destructive/10'
     },
   ];
 
@@ -400,43 +438,43 @@ const Purchasing = () => {
 
   // ========== Invoice filter fields ==========
   const invoiceFilterFields: FilterField[] = [
-    { 
-      key: 'search', 
-      label: 'Invoice/Supplier', 
-      labelAr: 'الفاتورة/المورد', 
-      type: 'text', 
-      placeholder: 'Search...', 
-      placeholderAr: 'بحث...' 
+    {
+      key: 'search',
+      label: 'Invoice/Supplier',
+      labelAr: 'الفاتورة/المورد',
+      type: 'text',
+      placeholder: 'Search...',
+      placeholderAr: 'بحث...'
     },
-    { 
-      key: 'date', 
-      label: 'Date', 
-      labelAr: 'التاريخ', 
-      type: 'dateRange' 
+    {
+      key: 'date',
+      label: 'Date',
+      labelAr: 'التاريخ',
+      type: 'dateRange'
     },
-    { 
-      key: 'amount', 
-      label: 'Amount', 
-      labelAr: 'المبلغ', 
-      type: 'numberRange' 
+    {
+      key: 'amount',
+      label: 'Amount',
+      labelAr: 'المبلغ',
+      type: 'numberRange'
     },
   ];
 
   // ========== Supplier filter fields ==========
   const supplierFilterFields: FilterField[] = [
-    { 
-      key: 'search', 
-      label: 'Name/Phone', 
-      labelAr: 'الاسم/الهاتف', 
-      type: 'text', 
-      placeholder: 'Search...', 
-      placeholderAr: 'بحث...' 
+    {
+      key: 'search',
+      label: 'Name/Phone',
+      labelAr: 'الاسم/الهاتف',
+      type: 'text',
+      placeholder: 'Search...',
+      placeholderAr: 'بحث...'
     },
-    { 
-      key: 'balance', 
-      label: 'Balance', 
-      labelAr: 'الرصيد', 
-      type: 'numberRange' 
+    {
+      key: 'balance',
+      label: 'Balance',
+      labelAr: 'الرصيد',
+      type: 'numberRange'
     },
   ];
 
@@ -448,8 +486,8 @@ const Purchasing = () => {
       card: { en: 'Card', ar: 'بطاقة' },
       bank_transfer: { en: 'Bank Transfer', ar: 'تحويل بنكي' },
     };
-    return language === 'ar' 
-      ? (methods[method]?.ar || method) 
+    return language === 'ar'
+      ? (methods[method]?.ar || method)
       : (methods[method]?.en || method);
   };
 
@@ -482,11 +520,11 @@ const Purchasing = () => {
               <Wallet size={16} className="me-2" />
               {language === 'ar' ? 'تسجيل دفعة' : 'Record Payment'}
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 console.log('🟢 Button clicked - opening invoice form');
                 setShowInvoiceForm(true);
-              }} 
+              }}
               className="bg-primary"
             >
               <Plus size={16} className="me-2" />
@@ -776,27 +814,32 @@ const Purchasing = () => {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {suppliers
-                      .filter((s: Supplier) => {
-                        if (supplierFilters.search) {
-                          const search = supplierFilters.search.toLowerCase();
-                          if (!s.name?.toLowerCase().includes(search) && 
-                              !s.name_ar?.includes(search) && 
-                              !s.phone?.includes(search)) return false;
-                        }
-                        if (supplierFilters.balance_min && Number(s.balance || 0) < Number(supplierFilters.balance_min)) return false;
-                        if (supplierFilters.balance_max && Number(s.balance || 0) > Number(supplierFilters.balance_max)) return false;
-                        return true;
-                      })
                       .map((supplier: Supplier) => (
-                        <Card 
-                          key={supplier.id} 
-                          className="border hover:shadow-md transition-shadow cursor-pointer" 
-                          onClick={() => { 
-                            setSelectedSupplier(supplier); 
-                            setShowSupplierDetails(true); 
+                        <Card
+                          key={supplier.id}
+                          className="border hover:shadow-md transition-shadow cursor-pointer relative"
+                          onClick={() => {
+                            setSelectedSupplier(supplier);
+                            setShowSupplierDetails(true);
                           }}
                         >
                           <CardContent className="p-4">
+                            {/* Delete Button */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا المورد؟' : 'Are you sure you want to delete this supplier?')) {
+                                  deleteSupplierMutation.mutate(supplier.id);
+                                }
+                              }}
+                              className="absolute top-2 right-2 h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={deleteSupplierMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+
                             <div className="flex items-start gap-3">
                               <div className="p-2 rounded-lg bg-primary/10">
                                 <Building2 className="text-primary" size={20} />
@@ -816,7 +859,7 @@ const Purchasing = () => {
                                     {language === 'ar' ? 'الرصيد' : 'Balance'}
                                   </span>
                                   <span className={cn(
-                                    "font-semibold", 
+                                    "font-semibold",
                                     Number(supplier.balance) > 0 ? "text-destructive" : "text-success"
                                   )}>
                                     {Number(supplier.balance || 0).toLocaleString()} YER
@@ -1022,7 +1065,7 @@ const Purchasing = () => {
                 <Button variant="outline" onClick={() => setShowInvoiceDetails(false)}>
                   {language === 'ar' ? 'إغلاق' : 'Close'}
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     console.log('🔄 Opening return form from details for invoice ID:', selectedInvoiceId);
                     setShowInvoiceDetails(false);
@@ -1057,30 +1100,30 @@ const Purchasing = () => {
       )}
 
       {/* Modals */}
-      <SupplierForm 
-        isOpen={showSupplierForm} 
-        onClose={() => setShowSupplierForm(false)} 
-        onSave={refetchAll} 
-        editSupplier={selectedSupplier} 
+      <SupplierForm
+        isOpen={showSupplierForm}
+        onClose={() => setShowSupplierForm(false)}
+        onSave={refetchAll}
+        editSupplier={selectedSupplier}
       />
-      <SupplierDetails 
-        isOpen={showSupplierDetails} 
-        onClose={() => setShowSupplierDetails(false)} 
-        supplier={selectedSupplier} 
-        onEdit={() => { 
-          setShowSupplierDetails(false); 
-          setShowSupplierForm(true); 
-        }} 
+      <SupplierDetails
+        isOpen={showSupplierDetails}
+        onClose={() => setShowSupplierDetails(false)}
+        supplier={selectedSupplier}
+        onEdit={() => {
+          setShowSupplierDetails(false);
+          setShowSupplierForm(true);
+        }}
       />
-      <PurchaseInvoiceForm 
-        isOpen={showInvoiceForm} 
-        onClose={() => setShowInvoiceForm(false)} 
-        onSave={refetchAll} 
+      <PurchaseInvoiceForm
+        isOpen={showInvoiceForm}
+        onClose={() => setShowInvoiceForm(false)}
+        onSave={refetchAll}
       />
-      <SupplierPaymentForm 
-        isOpen={showPaymentForm} 
-        onClose={() => setShowPaymentForm(false)} 
-        onSave={refetchAll} 
+      <SupplierPaymentForm
+        isOpen={showPaymentForm}
+        onClose={() => setShowPaymentForm(false)}
+        onSave={refetchAll}
       />
     </MainLayout>
   );
