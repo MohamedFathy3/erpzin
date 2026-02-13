@@ -25,10 +25,13 @@ const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
   interface PurchaseOrder {
     id: string;
     order_number: string;
+        invoice_number?: string;
+
     supplier: {
       id: number;
       name: string;
     };
+    due_date: string | null;
     expected_delivery: string | null;
     total_amount: string;
     notes: string;
@@ -209,11 +212,11 @@ const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
               ) : (
                 filteredOrders.map((order: PurchaseOrder) => (
                   <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleView(order)}>
-                    <TableCell className="font-mono font-medium">{order.order_number}</TableCell>
+                    <TableCell className="font-mono font-medium">{order.invoice_number}</TableCell>
                     <TableCell>{order.supplier?.name}</TableCell>
                     <TableCell className="font-medium">{Number(order.total_amount).toLocaleString()} YER</TableCell>
                     <TableCell>
-                      {order.expected_delivery ? formatDate(order.expected_delivery) : '-'}
+                      {order.due_date ? formatDate(order.due_date) : '-'}
                     </TableCell>
                     <TableCell>{getStatusBadge(order.status as 'pending' | 'approved' | 'sent' | 'received' | 'cancelled')}</TableCell>
                     <TableCell>{formatDate(order.created_at)}</TableCell>

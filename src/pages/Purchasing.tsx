@@ -167,7 +167,7 @@ const Purchasing = () => {
         const filters: any = {};
 
         if (invoiceFilters.search) {
-          filters.search = invoiceFilters.search;
+          filters.invoice_number = invoiceFilters.search;
         }
 
         if (invoiceFilters.date_from) {
@@ -363,8 +363,8 @@ const Purchasing = () => {
   const invoiceFilterFields: FilterField[] = [
     { 
       key: 'search', 
-      label: 'Invoice/Supplier', 
-      labelAr: 'الفاتورة/المورد', 
+      label: 'Supplier', 
+      labelAr: 'الفاتورة/', 
       type: 'text', 
       placeholder: 'Search...', 
       placeholderAr: 'بحث...' 
