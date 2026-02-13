@@ -1,137 +1,61 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RotateCcw, Eye, Plus, FileText, Package, Building2 } from "lucide-react";
+import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import PurchaseReturnForm from "./PurchaseReturnForm";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 import api from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
 
-// Interfaces for API response
-interface Product {
-  id: number;
-  name: string;
-}
+// ========== أنواع البيانات من API ==========
 
 interface ReturnItem {
-  id: number;
-  product: Product;
-  color: string | null;
-  size: string | null;
+  product: string;
   quantity: number;
-  price: number;
-  total: number;
-  created_at: string;
+  unit_price: string;
+  total_price: string;
 }
 
-interface Customer {
-  id: number;
-  name: string;
-}
-
-interface Amounts {
-  total: string;
-  paid: string;
-  remaining: string;
-}
-
-interface InvoiceItem {
-  product_id: number;
-  product_name: string;
-  color: string | null;
-  size: string | null;
-  quantity: number;
-  price: string;
-  total: string;
-}
-
-interface Payment {
-  method: string;
-  amount: string;
-}
-
-interface Invoice {
-  id: number;
-  invoice_number: string | null;
-  status: string;
-  customer: Customer;
-  amounts: Amounts;
-  items: InvoiceItem[];
-  payments: Payment[];
-  created_at: string;
-}
-
-interface ReturnInvoice {
+interface PurchaseReturn {
   id: number;
   return_number: string;
-  invoice_id: number;
-  total_amount: number;
-  refunded_amount: number;
-  refund_method: string;
-  reason: string;
-  created_at: string;
+  invoice_number: string;
+  total_amount: string;
+  reason: string | null;
   items: ReturnItem[];
-  invoice: Invoice;
+  created_at: string;
 }
 
-interface Links {
-  first: string;
-  last: string;
-  prev: string | null;
-  next: string | null;
-}
-
-interface Meta {
-  current_page: number;
-  from: number;
-  last_page: number;
-  path: string;
-  per_page: number;
-  to: number;
-  total: number;
-}
-
-interface ReturnInvoicesIndexResponse {
-  data: ReturnInvoice[];
-  links: Links;
-  meta: Meta;
+interface PurchaseReturnsResponse {
+  data: PurchaseReturn[];
+  links: {
+    first: string;
+    last: string;
+    prev: string | null;
+    next: string | null;
+  };
+  meta: {
+    current_page: number;
+    from: number;
+    last_page: number;
+    path: string;
+    per_page: number;
+    to: number;
+    total: number;
+  };
   result: string;
   message: string;
   status: number;
 }
 
-interface SupplierOption {
-  id: string;
-  name: string;
-  name_ar: string;
-}
-
-interface BranchOption {
-  id: string;
-  name: string;
-  name_ar: string;
-}
-
-interface WarehouseOption {
-  id: string;
-  name: string;
-  name_ar: string;
-}
-
 interface ReturnFilters {
   search?: string;
-  supplier_id?: string;
-  branch_id?: string;
-  warehouse_id?: string;
-  status?: string;
   date_from?: string;
   date_to?: string;
   amount_min?: string;
@@ -141,90 +65,75 @@ interface ReturnFilters {
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
   const [filterValues, setFilterValues] = useState<FilterValues>({});
-  const [showForm, setShowForm] = useState(false);
-  const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
+  const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Fetch branches for filter
-  const { data: branches = [] } = useQuery({
-    queryKey: ['branches'],
-    queryFn: async () => {
-      const { data } = await supabase.from('branches').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  // Fetch warehouses for filter
-  const { data: warehouses = [] } = useQuery({
-    queryKey: ['warehouses'],
-    queryFn: async () => {
-      const { data } = await supabase.from('warehouses').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  // Fetch suppliers for filter
-  const { data: suppliers = [] } = useQuery({
-    queryKey: ['suppliers'],
-    queryFn: async () => {
-      const { data } = await supabase.from('suppliers').select('id, name, name_ar').eq('is_active', true);
-      return data || [];
-    }
-  });
-
+  // ========== Filter fields ==========
   const filterFields: FilterField[] = [
-    { key: 'search', label: 'Return/Invoice', labelAr: 'المرتجع/الفاتورة', type: 'text', placeholder: 'Search...', placeholderAr: 'بحث...' },
-    { key: 'supplier_id', label: 'Supplier', labelAr: 'المورد', type: 'select', options: suppliers.map((s: SupplierOption) => ({ value: s.id, label: s.name, labelAr: s.name_ar })) },
-    { key: 'branch_id', label: 'Branch', labelAr: 'الفرع', type: 'select', options: branches.map((b: BranchOption) => ({ value: b.id, label: b.name, labelAr: b.name_ar })) },
-    { key: 'warehouse_id', label: 'Warehouse', labelAr: 'المستودع', type: 'select', options: warehouses.map((w: WarehouseOption) => ({ value: w.id, label: w.name, labelAr: w.name_ar })) },
-    {
-      key: 'status', label: 'Status', labelAr: 'الحالة', type: 'select', options: [
-        { value: 'completed', label: 'Completed', labelAr: 'مكتمل' },
-        { value: 'pending', label: 'Pending', labelAr: 'معلق' },
-        { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
-      ]
+    { 
+      key: 'search', 
+      label: 'Return/Invoice', 
+      labelAr: 'المرتجع/الفاتورة', 
+      type: 'text', 
+      placeholder: 'Search...', 
+      placeholderAr: 'بحث...' 
     },
-    { key: 'date', label: 'Date', labelAr: 'التاريخ', type: 'dateRange' },
-    { key: 'amount', label: 'Amount', labelAr: 'المبلغ', type: 'numberRange' },
+    { 
+      key: 'date', 
+      label: 'Date', 
+      labelAr: 'التاريخ', 
+      type: 'dateRange' 
+    },
+    { 
+      key: 'amount', 
+      label: 'Amount', 
+      labelAr: 'المبلغ', 
+      type: 'numberRange' 
+    },
   ];
 
-  // Fetch purchase returns with filters
-  const { data: returnsResponse, isLoading, refetch } = useQuery<ReturnInvoicesIndexResponse>({
+  // ========== Fetch purchase returns with filters ==========
+  const { data: returnsResponse, isLoading, refetch } = useQuery<PurchaseReturnsResponse>({
     queryKey: ['purchase-returns', filterValues],
     queryFn: async () => {
       try {
         // Build request body for filtering
-        const requestBody: Partial<ReturnFilters> = {};
+        const payload: any = {
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 100,
+          paginate: false,
+        };
+
+        const filters: any = {};
 
         if (filterValues.search) {
-          requestBody.search = filterValues.search;
-        }
-        if (filterValues.supplier_id && filterValues.supplier_id !== 'all') {
-          requestBody.supplier_id = filterValues.supplier_id;
-        }
-        if (filterValues.branch_id && filterValues.branch_id !== 'all') {
-          requestBody.branch_id = filterValues.branch_id;
-        }
-        if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
-          requestBody.warehouse_id = filterValues.warehouse_id;
-        }
-        if (filterValues.status && filterValues.status !== 'all') {
-          requestBody.status = filterValues.status;
-        }
-        if (filterValues.date_from) {
-          requestBody.date_from = filterValues.date_from.split('T')[0];
-        }
-        if (filterValues.date_to) {
-          requestBody.date_to = filterValues.date_to.split('T')[0];
-        }
-        if (filterValues.amount_min) {
-          requestBody.amount_min = filterValues.amount_min;
-        }
-        if (filterValues.amount_max) {
-          requestBody.amount_max = filterValues.amount_max;
+          filters.search = filterValues.search;
         }
 
-        const response = await api.post<ReturnInvoicesIndexResponse>('/return-invoices/index', requestBody);
+        if (filterValues.date_from) {
+          filters.date_from = filterValues.date_from.split('T')[0];
+        }
+
+        if (filterValues.date_to) {
+          filters.date_to = filterValues.date_to.split('T')[0];
+        }
+
+        if (filterValues.amount_min) {
+          filters.amount_min = Number(filterValues.amount_min);
+        }
+
+        if (filterValues.amount_max) {
+          filters.amount_max = Number(filterValues.amount_max);
+        }
+
+        if (Object.keys(filters).length > 0) {
+          payload.filters = filters;
+        }
+
+        console.log('📦 Fetching purchase returns with payload:', payload);
+
+        const response = await api.post<PurchaseReturnsResponse>('/purchase-returns/index', payload);
 
         if (response.data.result === 'Success') {
           return response.data;
@@ -243,24 +152,21 @@ const PurchaseReturnsList = () => {
   });
 
   const returns = returnsResponse?.data || [];
+  const paginationMeta = returnsResponse?.meta;
 
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-      completed: { label: language === 'ar' ? 'مكتمل' : 'Completed', variant: 'default' },
-      pending: { label: language === 'ar' ? 'معلق' : 'Pending', variant: 'secondary' },
-      cancelled: { label: language === 'ar' ? 'ملغي' : 'Cancelled', variant: 'destructive' }
-    };
-    const { label, variant } = config[status] || config.pending;
-    return <Badge variant={variant}>{label}</Badge>;
+  // ========== Helper functions ==========
+  const formatDate = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), 'yyyy/MM/dd', { 
+        locale: language === 'ar' ? ar : undefined 
+      });
+    } catch {
+      return dateStr;
+    }
   };
 
-  const getRefundMethodLabel = (method: string) => {
-    const methods: Record<string, { ar: string; en: string }> = {
-      credit: { ar: 'خصم من الرصيد', en: 'Credit' },
-      cash: { ar: 'نقداً', en: 'Cash' },
-      bank: { ar: 'تحويل بنكي', en: 'Bank Transfer' }
-    };
-    return language === 'ar' ? methods[method]?.ar || method : methods[method]?.en || method;
+  const formatAmount = (amount: string) => {
+    return Number(amount).toLocaleString();
   };
 
   return (
@@ -276,10 +182,6 @@ const PurchaseReturnsList = () => {
             language={language as 'ar' | 'en'}
           />
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus size={16} className="me-2" />
-          {language === 'ar' ? 'مرتجع جديد' : 'New Return'}
-        </Button>
       </div>
 
       {/* Returns Table */}
@@ -292,73 +194,83 @@ const PurchaseReturnsList = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{language === 'ar' ? 'رقم المرتجع' : 'Return #'}</TableHead>
-                <TableHead>{language === 'ar' ? 'فاتورة الشراء' : 'Purchase Invoice'}</TableHead>
-                <TableHead>{language === 'ar' ? 'المورد' : 'Supplier'}</TableHead>
-                <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                <TableHead>{language === 'ar' ? 'طريقة الاسترداد' : 'Refund Method'}</TableHead>
-                <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
-                <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                <TableHead>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
-                      {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-                    </div>
-                  </TableCell>
+                  <TableHead className="w-16">#</TableHead>
+                  <TableHead>{language === 'ar' ? 'رقم المرتجع' : 'Return #'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'عدد الأصناف' : 'Items'}</TableHead>
+                  <TableHead className="text-right">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'السبب' : 'Reason'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                  <TableHead className="text-center">{language === 'ar' ? 'عرض' : 'View'}</TableHead>
                 </TableRow>
-              ) : returns.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                returns.map((ret: ReturnInvoice) => (
-                  <TableRow key={ret.id}>
-                    <TableCell className="font-mono font-medium">{ret.return_number}</TableCell>
-                    <TableCell className="font-mono">{ret.invoice.invoice_number}</TableCell>
-                    <TableCell>
-                      {language === 'ar' ? ret.invoice.customer.name : ret.invoice.customer.name}
-                    </TableCell>
-                    <TableCell className="font-medium">{Number(ret.total_amount).toLocaleString()} YER</TableCell>
-                    <TableCell>{getRefundMethodLabel(ret.refund_method)}</TableCell>
-                    <TableCell>{getStatusBadge('completed')}</TableCell>
-                    <TableCell>
-                      {format(new Date(ret.created_at), 'yyyy/MM/dd', { locale: language === 'ar' ? ar : undefined })}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => { setSelectedReturn(ret); setShowDetails(true); }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                        {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                      </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : returns.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  returns.map((ret: PurchaseReturn, index: number) => (
+                    <TableRow key={ret.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell className="font-mono font-medium">{ret.return_number}</TableCell>
+                      <TableCell className="font-mono">{ret.invoice_number}</TableCell>
+                      <TableCell className="text-center">{ret.items?.length || 0}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {formatAmount(ret.total_amount)} YER
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        {ret.reason || '-'}
+                      </TableCell>
+                      <TableCell>{formatDate(ret.created_at)}</TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { 
+                            setSelectedReturn(ret); 
+                            setShowDetails(true); 
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination info */}
+          {paginationMeta && paginationMeta.total > 0 && (
+            <div className="flex items-center justify-end mt-4">
+              <div className="text-sm text-muted-foreground">
+                {language === 'ar'
+                  ? `إجمالي ${paginationMeta.total} مرتجع`
+                  : `Total ${paginationMeta.total} returns`
+                }
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* New Return Form */}
-      <PurchaseReturnForm
-        isOpen={showForm}
-        onClose={() => setShowForm(false)}
-        onSave={() => refetch()}
-      />
 
       {/* Return Details Dialog */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
@@ -377,34 +289,66 @@ const PurchaseReturnsList = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-4">
-                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'فاتورة الشراء' : 'Purchase Invoice'}</div>
-                     <div className="font-mono font-medium">{selectedReturn.invoice.invoice_number}</div>
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <FileText className="h-3 w-3" />
+                      {language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}
+                    </div>
+                    <div className="font-mono font-medium text-lg">
+                      {selectedReturn.invoice_number}
+                    </div>
                   </CardContent>
                 </Card>
+
                 <Card>
                   <CardContent className="pt-4">
                     <div className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Building2 className="h-3 w-3" />
-                      {language === 'ar' ? 'المورد' : 'Supplier'}
+                      <DollarSign className="h-3 w-3" />
+                      {language === 'ar' ? 'الإجمالي' : 'Total'}
                     </div>
-                    <div className="font-medium">
-                      {language === 'ar' ? selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name}
+                    <div className="font-bold text-lg text-primary">
+                      {formatAmount(selectedReturn.total_amount)} YER
                     </div>
                   </CardContent>
                 </Card>
+
                 <Card>
                   <CardContent className="pt-4">
-                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</div>
-                    <div className="font-bold text-primary">{Number(selectedReturn.total_amount).toLocaleString()} YER</div>
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Package className="h-3 w-3" />
+                      {language === 'ar' ? 'عدد الأصناف' : 'Items'}
+                    </div>
+                    <div className="font-medium text-lg">
+                      {selectedReturn.items?.length || 0}
+                    </div>
                   </CardContent>
                 </Card>
+
                 <Card>
                   <CardContent className="pt-4">
-                    <div className="text-sm text-muted-foreground">{language === 'ar' ? 'الحالة' : 'Status'}</div>
-                    <div>{getStatusBadge('completed')}</div>
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {language === 'ar' ? 'التاريخ' : 'Date'}
+                    </div>
+                    <div className="font-medium text-lg">
+                      {formatDate(selectedReturn.created_at)}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Reason (if exists) */}
+              {selectedReturn.reason && (
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-sm text-muted-foreground mb-1">
+                      {language === 'ar' ? 'السبب' : 'Reason'}
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg border">
+                      {selectedReturn.reason}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Items Table */}
               <Card>
@@ -415,42 +359,48 @@ const PurchaseReturnsList = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                        <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Cost'}</TableHead>
-                        <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedReturn.items?.map((item: ReturnItem) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.product.name}</TableCell>
-                          <TableCell className="text-center">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{Number(item.price).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-medium">{Number(item.total).toLocaleString()} YER</TableCell>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-16">#</TableHead>
+                          <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                          <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
+                          <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedReturn.items?.map((item: ReturnItem, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell className="font-medium">{item.product}</TableCell>
+                            <TableCell className="text-center">{item.quantity}</TableCell>
+                            <TableCell className="text-right">{formatAmount(item.unit_price)}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {formatAmount(item.total_price)} YER
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Total Summary */}
+                  <div className="flex justify-end mt-4">
+                    <div className="w-64 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold">
+                          {language === 'ar' ? 'الإجمالي:' : 'Total:'}
+                        </span>
+                        <span className="text-xl font-bold text-primary">
+                          {formatAmount(selectedReturn.total_amount)} YER
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-
-              {/* Summary */}
-              <div className="space-y-2 text-sm">
-                {selectedReturn.reason && (
-                  <div>
-                    <span className="text-muted-foreground">{language === 'ar' ? 'السبب:' : 'Reason:'}</span>
-                    <span className="ml-2">{selectedReturn.reason}</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-bold pt-2 border-t">
-                  <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
-                  <span className="text-primary">{Number(selectedReturn.total_amount).toLocaleString()} YER</span>
-                </div>
-              </div>
             </div>
           )}
         </DialogContent>
