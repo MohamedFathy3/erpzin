@@ -14,11 +14,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Search,
-  Bell,
   Languages,
   Building2,
   ChevronDown,
@@ -29,6 +27,36 @@ import {
   LogOut,
 } from 'lucide-react';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
+import { useQuery } from '@tanstack/react-query';
+import  api  from '@/lib/api';
+
+interface Branch {
+  id: number;
+  name: string;
+  name_ar?: string;
+  code: string;
+  phone?: string;
+  address?: string;
+  manager?: string;
+  active: boolean;
+  main_branch?: boolean;
+  image?: string;
+}
+
+interface Warehouse {
+  id: number;
+  name: string;
+  name_ar?: string;
+  code: string;
+  phone?: string;
+  address?: string;
+  manager?: string;
+  active: boolean;
+  main_branch?: boolean;
+  note?: string;
+  branch_id?: number | Branch; // ممكن يكون object أو رقم
+  image?: string;
+}
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -36,16 +64,63 @@ const Header: React.FC = () => {
   const { 
     currentBranch, 
     setCurrentBranch, 
-    branches, 
-    loadingBranches,
     currentWarehouse,
     setCurrentWarehouse,
-    warehouses,
     permissions,
     userBranch,
     userWarehouse
   } = useApp();
   const { user, signOut } = useAuth();
+
+  // جلب الفروع
+  const { data: branches = [], isLoading: loadingBranches } = useQuery({
+    queryKey: ['branches-header'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/branch/index', {
+          filters: { active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 دقائق
+  });
+
+  // جلب المخازن
+  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
+    queryKey: ['warehouses-header'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/warehouse/index', {
+          filters: { active: true },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 دقائق
+  });
 
   const getUserInitials = () => {
     if (user?.email) {
@@ -77,6 +152,26 @@ const Header: React.FC = () => {
     navigate('/settings');
   };
 
+  // Helper function for localized names
+  const getLocalizedName = (item: any, defaultText: string) => {
+    if (!item) return defaultText;
+    return language === 'ar' && item.name_ar ? item.name_ar : item.name;
+  };
+
+  // استخراج اسم الفرع من المخزن (لو كان object)
+  const getWarehouseBranchName = (warehouse: Warehouse) => {
+    if (!warehouse.branch_id) return '';
+    
+    // لو branch_id هو object
+    if (typeof warehouse.branch_id === 'object' && warehouse.branch_id !== null) {
+      return getLocalizedName(warehouse.branch_id, '');
+    }
+    
+    // لو هو رقم، ندور على الفرع في قائمة الفروع
+    const branch = branches.find(b => b.id === warehouse.branch_id);
+    return branch ? getLocalizedName(branch, '') : '';
+  };
+
   // Check if user has assigned branch/warehouse (restricted access)
   const hasRestrictedBranch = userBranch !== null;
   const hasRestrictedWarehouse = userWarehouse !== null;
@@ -94,15 +189,15 @@ const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Section */}
-      <div className="flex items-center gap-3">
+      {/* Right Section - Branches and Warehouses together */}
+      <div className="flex items-center gap-2">
         {/* Branch Display/Selector */}
         {hasRestrictedBranch ? (
           // User has assigned branch - show as badge (not selectable)
           <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg">
             <Building2 size={16} className="text-primary" />
             <span className="text-sm font-medium">
-              {language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name}
+              {getLocalizedName(userBranch, '')}
             </span>
           </div>
         ) : (
@@ -115,47 +210,64 @@ const Header: React.FC = () => {
                   <Skeleton className="w-20 h-4" />
                 ) : (
                   <span className="max-w-[120px] truncate">
-                    {currentBranch ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name) : (language === 'ar' ? 'كل الفروع' : 'All Branches')}
+                    {getLocalizedName(currentBranch, language === 'ar' ? 'كل الفروع' : 'All Branches')}
                   </span>
                 )}
                 <ChevronDown size={14} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 max-h-[400px] overflow-y-auto">
               <DropdownMenuLabel>
                 {language === 'ar' ? 'اختر الفرع' : 'Select Branch'}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
               {/* All Branches Option */}
               <DropdownMenuItem 
                 onClick={() => setCurrentBranch(null)}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between cursor-pointer"
               >
-                <span className="font-medium">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</span>
+                <span className="font-medium">
+                  {language === 'ar' ? 'كل الفروع' : 'All Branches'}
+                </span>
                 {currentBranch === null && <Check size={16} className="text-primary" />}
               </DropdownMenuItem>
+              
               <DropdownMenuSeparator />
-              {branches.map((branch) => (
-                <DropdownMenuItem 
-                  key={branch.id}
-                  onClick={() => setCurrentBranch(branch)}
-                  className="flex items-center justify-between"
-                >
-                  <span>{language === 'ar' && branch.name_ar ? branch.name_ar : branch.name}</span>
-                  {currentBranch?.id === branch.id && <Check size={16} className="text-primary" />}
-                </DropdownMenuItem>
-              ))}
+              
+              {/* Branches List */}
+              {branches.length > 0 ? (
+                branches.map((branch: Branch) => (
+                  <DropdownMenuItem 
+                    key={branch.id}
+                    onClick={() => setCurrentBranch(branch)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex flex-col">
+                      <span>{getLocalizedName(branch, branch.name)}</span>
+                      {branch.code && (
+                        <span className="text-xs text-muted-foreground">{branch.code}</span>
+                      )}
+                    </div>
+                    {currentBranch?.id === branch.id && <Check size={16} className="text-primary shrink-0" />}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                  {language === 'ar' ? 'لا توجد فروع' : 'No branches found'}
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
 
-        {/* Warehouse Display/Selector */}
+        {/* Warehouse Display/Selector - Now right next to branch */}
         {hasRestrictedWarehouse ? (
           // User has assigned warehouse - show as badge (not selectable)
           <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border rounded-lg">
             <Warehouse size={16} className="text-muted-foreground" />
             <span className="text-sm font-medium">
-              {language === 'ar' && userWarehouse.name_ar ? userWarehouse.name_ar : userWarehouse.name}
+              {getLocalizedName(userWarehouse, '')}
             </span>
           </div>
         ) : warehouses.length > 0 ? (
@@ -164,36 +276,61 @@ const Header: React.FC = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
                 <Warehouse size={16} />
-                <span className="max-w-[100px] truncate">
-                  {currentWarehouse ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name) : (language === 'ar' ? 'كل المخازن' : 'All Warehouses')}
-                </span>
+                {loadingWarehouses ? (
+                  <Skeleton className="w-20 h-4" />
+                ) : (
+                  <span className="max-w-[100px] truncate">
+                    {getLocalizedName(currentWarehouse, language === 'ar' ? 'كل المخازن' : 'All Warehouses')}
+                  </span>
+                )}
                 <ChevronDown size={14} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto">
               <DropdownMenuLabel>
                 {language === 'ar' ? 'اختر المخزن' : 'Select Warehouse'}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              
               {/* All Warehouses Option */}
               <DropdownMenuItem 
                 onClick={() => setCurrentWarehouse(null)}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between cursor-pointer"
               >
-                <span className="font-medium">{language === 'ar' ? 'كل المخازن' : 'All Warehouses'}</span>
+                <span className="font-medium">
+                  {language === 'ar' ? 'كل المخازن' : 'All Warehouses'}
+                </span>
                 {currentWarehouse === null && <Check size={16} className="text-primary" />}
               </DropdownMenuItem>
+              
               <DropdownMenuSeparator />
-              {warehouses.map((warehouse) => (
-                <DropdownMenuItem 
-                  key={warehouse.id}
-                  onClick={() => setCurrentWarehouse(warehouse)}
-                  className="flex items-center justify-between"
-                >
-                  <span>{language === 'ar' && warehouse.name_ar ? warehouse.name_ar : warehouse.name}</span>
-                  {currentWarehouse?.id === warehouse.id && <Check size={16} className="text-primary" />}
-                </DropdownMenuItem>
-              ))}
+              
+              {/* Warehouses List */}
+              {warehouses.map((warehouse: Warehouse) => {
+                const branchName = getWarehouseBranchName(warehouse);
+                
+                return (
+                  <DropdownMenuItem 
+                    key={warehouse.id}
+                    onClick={() => setCurrentWarehouse(warehouse)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex flex-col">
+                      <span>{getLocalizedName(warehouse, warehouse.name)}</span>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {warehouse.code && <span>كود: {warehouse.code}</span>}
+                        {branchName && (
+                          <>
+                            <span>•</span>
+                            <span>{branchName}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {currentWarehouse?.id === warehouse.id && <Check size={16} className="text-primary shrink-0" />}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
@@ -203,7 +340,7 @@ const Header: React.FC = () => {
           variant="ghost"
           size="icon"
           onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-          className="relative"
+          className="relative ml-1"
         >
           <Languages size={20} />
           <span className="absolute -bottom-1 -right-1 text-[10px] font-bold bg-primary text-primary-foreground rounded px-1">

@@ -1,578 +1,578 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Receipt, RotateCcw, Eye, Search, Loader2, Calendar, Filter, X } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import api from "@/lib/api";
-import { toast } from "sonner";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
+import MainLayout from '@/components/layout/MainLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
+import { useQuery } from '@tanstack/react-query';
+import { cn, formatDate } from '@/lib/utils';
+import api from '@/lib/api';
+import { toast } from '@/components/ui/use-toast';
+
+import {
+  RotateCcw, Search, Eye, Filter, X,
+  Calendar, Package, User, Hash, DollarSign,
+  FileText, Loader2
+} from 'lucide-react';
+
 // ========== أنواع البيانات ==========
+
+interface ReturnItem {
+  product: string;
+  quantity: number;
+  price: string;
+  total: string;
+  reason: string;
+}
 
 interface SalesReturn {
   id: number;
   return_number: string;
-  sales_invoice_id: number;
-  sales_invoice_number?: string;
-  customer?: {
-    id: number;
-    name: string;
-    name_ar?: string;
-  };
-  return_method: string; // 'نقدي' | 'بطاقة' | 'رصيد'
-  note?: string;
-  total_amount: number;
+  invoice_number: string;
+  customer: string;
+  return_method: string;
+  total_amount: string;
+  note: string | null;
+  items: ReturnItem[];
   created_at: string;
-  items?: any[];
 }
 
-interface ReturnsResponse {
-  data: SalesReturn[];
+interface ApiResponse<T> {
+  data: T[];
+  links: any;
+  meta: any;
   result: string;
   message: string;
   status: number;
 }
 
+interface FilterValues {
+  return_number: string;
+  invoice_number: string;
+  customer: string;
+}
+
 const SalesReturns = () => {
-  const { language } = useLanguage();
-  const { formatCurrency } = useRegionalSettings();
+  const navigate = useNavigate();
+  const { language, isRTL } = useLanguage();
   
-  // ========== State ==========
-  const [searchTerm, setSearchTerm] = useState("");
-  const [methodFilter, setMethodFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<string>("all");
+  // ========== حالات الفلتر ==========
+  const [filters, setFilters] = useState<FilterValues>({
+    return_number: '',
+    invoice_number: '',
+    customer: ''
+  });
+  
   const [showFilters, setShowFilters] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<SalesReturn | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage] = useState(30);
 
-  // ========== Queries ==========
-  const { data: returns = [], isLoading, refetch } = useQuery({
-    queryKey: ['sales-returns'],
+  // ========== جلب المرتجعات ==========
+  const {
+    data: returnsResponse,
+    isLoading,
+    refetch
+  } = useQuery<ApiResponse<SalesReturn>>({
+    queryKey: ['sales-returns', filters, currentPage],
     queryFn: async () => {
       try {
-        // ✅ هنا بنادي على API المرتجعات مش فواتير المبيعات
-        const response = await api.post('/sales-return/index', {
+        // بناء payload الفلتر حسب المطلوب
+        const payload: any = {
+          filters: {
+            return_number: filters.return_number || undefined,
+            invoice_number: filters.invoice_number || undefined,
+            customer: filters.customer || undefined
+          },
           orderBy: 'id',
           orderByDirection: 'desc',
-          with: ['customer', 'sales_invoice'],
-          paginate: false
-        });
+          perPage: perPage,
+          paginate: true
+        };
+
+        // إزالة الحقول الفاضية
+        if (!payload.filters.return_number) delete payload.filters.return_number;
+        if (!payload.filters.invoice_number) delete payload.filters.invoice_number;
+        if (!payload.filters.customer) delete payload.filters.customer;
         
-        console.log('📦 Returns response:', response.data);
-        
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
+        // لو كل الفلاتر فاضية، نشيل الـ filters كله
+        if (Object.keys(payload.filters).length === 0) {
+          delete payload.filters;
         }
-        return [];
+
+        console.log('📦 Fetching sales returns with payload:', payload);
+
+        const response = await api.post('/sales-return/index', payload);
+
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch returns');
       } catch (error) {
         console.error('Error fetching sales returns:', error);
-        toast.error(language === 'ar' ? 'خطأ في جلب المرتجعات' : 'Error fetching returns');
-        return [];
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب المرتجعات' : 'Error fetching returns',
+          variant: 'destructive',
+        });
+        throw error;
       }
-    }
+    },
   });
 
-  // ========== Filter Functions ==========
-  const filterBySearch = (item: SalesReturn) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      item.return_number?.toLowerCase().includes(term) ||
-      item.sales_invoice_number?.toLowerCase().includes(term) ||
-      item.customer?.name?.toLowerCase().includes(term) ||
-      item.customer?.name_ar?.includes(term)
-    );
-  };
+  const returns = returnsResponse?.data || [];
 
-  const filterByMethod = (item: SalesReturn) => {
-    if (methodFilter === "all") return true;
-    return item.return_method === methodFilter;
-  };
-
-  const filterByDate = (item: SalesReturn) => {
-    if (dateFilter === "all") return true;
-    
-    const today = new Date();
-    const itemDate = new Date(item.created_at);
-    
-    switch (dateFilter) {
-      case "today":
-        return itemDate.toDateString() === today.toDateString();
-      case "week":
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return itemDate >= weekAgo;
-      case "month":
-        const monthAgo = new Date();
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        return itemDate >= monthAgo;
-      default:
-        return true;
-    }
-  };
-
-  // ✅ تطبيق الفلاتر
-  const filteredReturns = returns
-    .filter(filterBySearch)
-    .filter(filterByMethod)
-    .filter(filterByDate);
-
-  // ========== Stats Calculations ==========
-  const totalReturns = filteredReturns.length;
-  const totalRefunded = filteredReturns.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
-  const cashReturns = filteredReturns.filter(r => r.return_method === 'نقدي').length;
-  const cardReturns = filteredReturns.filter(r => r.return_method === 'بطاقة').length;
-  const creditReturns = filteredReturns.filter(r => r.return_method === 'رصيد').length;
-
-  // ========== Helper Functions ==========
-  const getMethodBadge = (method: string) => {
-    const methodConfig: Record<string, { label: string; className: string }> = {
-      نقدي: { 
-        label: language === 'ar' ? 'نقدي' : 'Cash', 
-        className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
-      },
-      بطاقة: { 
-        label: language === 'ar' ? 'بطاقة' : 'Card', 
-        className: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400'
-      },
-      رصيد: { 
-        label: language === 'ar' ? 'رصيد' : 'Store Credit', 
-        className: 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400'
-      }
-    };
-    const config = methodConfig[method] || methodConfig.نقدي;
-    return (
-      <Badge variant="outline" className={`${config.className} flex items-center gap-1`}>
-        {config.label}
-      </Badge>
-    );
-  };
-
-  // ✅ جلب تفاصيل المرتجع
+  // ========== جلب تفاصيل المرتجع ==========
   const fetchReturnDetails = async (returnId: number) => {
     try {
-      const response = await api.get(`/sales-invoices/${returnId}`);
+      const response = await api.get(`/sales-return/${returnId}`);
       
       if (response.data.result === 'Success') {
         setSelectedReturn(response.data.data);
         setShowDetails(true);
+      } else {
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب التفاصيل' : 'Error fetching details',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       console.error('Error fetching return details:', error);
-      toast.error(language === 'ar' ? 'خطأ في جلب تفاصيل المرتجع' : 'Error fetching return details');
+      toast({
+        title: language === 'ar' ? 'خطأ في جلب تفاصيل المرتجع' : 'Error fetching return details',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleRefresh = () => {
-    refetch();
-    toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
+  // ========== إعادة تعيين الفلاتر ==========
+  const resetFilters = () => {
+    setFilters({
+      return_number: '',
+      invoice_number: '',
+      customer: ''
+    });
+    setCurrentPage(1);
   };
 
-  // ========== Render ==========
+  // ========== ترجمة طريقة المرتجع ==========
+  const getReturnMethodLabel = (method: string): string => {
+    const methods: Record<string, { en: string; ar: string }> = {
+      'نقدي': { en: 'Cash', ar: 'نقدي' },
+      'بطاقة': { en: 'Card', ar: 'بطاقة' },
+      'تحويل': { en: 'Transfer', ar: 'تحويل' },
+    };
+    
+    // لو method بالعربية
+    if (method === 'نقدي' || method === 'بطاقة' || method === 'تحويل') {
+      return language === 'ar' ? method : methods[method]?.en || method;
+    }
+    
+    // لو method بالإنجليزية
+    return language === 'ar' ? methods[method]?.ar || method : methods[method]?.en || method;
+  };
+
+  // ========== تنسيق العملة ==========
+  const formatCurrency = (amount: string) => {
+    return Number(amount).toLocaleString() + ' YER';
+  };
+
   return (
-    <div className="space-y-4">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-100 rounded-lg">
-            <RotateCcw className="h-6 w-6 text-amber-600" />
-          </div>
+      <div className="space-y-6 p-4 md:p-6" dir={isRTL ? 'rtl' : 'ltr'}>
+        {/* ========== Header ========== */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <RotateCcw className="text-primary" size={28} />
               {language === 'ar' ? 'مرتجعات المبيعات' : 'Sales Returns'}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground">
               {language === 'ar' 
-                ? `عرض ${filteredReturns.length} مرتجع` 
-                : `Showing ${filteredReturns.length} returns`}
+                ? 'إدارة وإرجاعات فواتير البيع' 
+                : 'Manage sales returns and refunds'}
             </p>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button 
-            variant="outline" 
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="gap-2"
-          >
-            <svg
-              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 2v6h-6" />
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-              <path d="M3 22v-6h6" />
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
-            {language === 'ar' ? 'تحديث' : 'Refresh'}
-          </Button>
-          
-          <Button 
+          <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
             className="gap-2"
           >
-            <Filter className="h-4 w-4" />
-            {language === 'ar' ? 'فلتر' : 'Filter'}
+            <Filter size={16} />
+            {language === 'ar' ? 'بحث متقدم' : 'Advanced Search'}
           </Button>
         </div>
-      </div>
 
-      {/* Filters Section */}
-      {showFilters && (
-        <Card className="border-amber-200/50">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={language === 'ar' ? 'بحث برقم المرتجع أو الفاتورة...' : 'Search by return or invoice number...'}
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              <Select value={methodFilter} onValueChange={setMethodFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'طريقة الإرجاع' : 'Return method'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{language === 'ar' ? 'جميع الطرق' : 'All methods'}</SelectItem>
-                  <SelectItem value="نقدي">{language === 'ar' ? 'نقدي' : 'Cash'}</SelectItem>
-                  <SelectItem value="بطاقة">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                  <SelectItem value="رصيد">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger>
-                  <Calendar className="h-4 w-4 ml-2" />
-                  <SelectValue placeholder={language === 'ar' ? 'التاريخ' : 'Date'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{language === 'ar' ? 'كل الأوقات' : 'All time'}</SelectItem>
-                  <SelectItem value="today">{language === 'ar' ? 'اليوم' : 'Today'}</SelectItem>
-                  <SelectItem value="week">{language === 'ar' ? 'آخر 7 أيام' : 'Last 7 days'}</SelectItem>
-                  <SelectItem value="month">{language === 'ar' ? 'آخر 30 يوم' : 'Last 30 days'}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border-amber-200/50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                {language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns'}
-              </p>
-              <p className="text-2xl font-bold text-amber-800 dark:text-amber-300">
-                {totalReturns}
-              </p>
-            </div>
-            <div className="p-2 bg-amber-200/50 dark:bg-amber-800/30 rounded-lg">
-              <RotateCcw className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200/50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
-                {language === 'ar' ? 'إجمالي المسترد' : 'Total Refunded'}
-              </p>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
-                {formatCurrency(totalRefunded)}
-              </p>
-            </div>
-            <div className="p-2 bg-blue-200/50 dark:bg-blue-800/30 rounded-lg">
-              <Receipt className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                {language === 'ar' ? 'مرتجعات نقدي' : 'Cash Returns'}
-              </p>
-              <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300">
-                {cashReturns}
-              </p>
-            </div>
-            <div className="p-2 bg-emerald-200/50 dark:bg-emerald-800/30 rounded-lg">
-              <svg className="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200/50">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
-                {language === 'ar' ? 'مرتجعات بطاقة' : 'Card Returns'}
-              </p>
-              <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">
-                {cardReturns}
-              </p>
-            </div>
-            <div className="p-2 bg-purple-200/50 dark:bg-purple-800/30 rounded-lg">
-              <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Table Card */}
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-0">
-          <div className="rounded-xl border overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[150px] font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'رقم المرتجع' : 'RETURN #'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[150px] font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'رقم الفاتورة' : 'INVOICE #'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[150px] font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'العميل' : 'CUSTOMER'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'التاريخ' : 'DATE'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'طريقة الإرجاع' : 'METHOD'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] text-right font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'المبلغ' : 'AMOUNT'}
-                    </span>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] text-center font-bold">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {language === 'ar' ? 'الإجراءات' : 'ACTIONS'}
-                    </span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-[400px] text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <span className="text-muted-foreground">
-                          {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-                        </span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredReturns.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-[400px] text-center">
-                      <div className="flex flex-col items-center justify-center h-full">
-                        <div className="p-4 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
-                          <RotateCcw className="h-12 w-12 text-amber-600/50 dark:text-amber-400/50" />
-                        </div>
-                        <h3 className="text-lg font-semibold mb-2">
-                          {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
-                        </h3>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                          {language === 'ar' 
-                            ? 'لم يتم إنشاء أي مرتجعات مبيعات بعد.'
-                            : 'No sales returns have been created yet.'}
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredReturns.map((returnItem: SalesReturn, index: number) => (
-                    <TableRow 
-                      key={returnItem.id} 
-                      className={`
-                        group transition-all duration-200 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 cursor-pointer
-                        ${index % 2 === 0 ? 'bg-white dark:bg-gray-950/50' : 'bg-muted/20 dark:bg-gray-900/30'}
-                      `}
-                      onClick={() => fetchReturnDetails(returnItem.id)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-1 h-8 bg-amber-400/30 rounded-full group-hover:bg-amber-500 transition-colors" />
-                          <span className="font-mono font-semibold text-sm">
-                            {returnItem.return_number || `RET-${returnItem.id}`}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-sm">
-                          {returnItem.sales_invoice_number || `SI-${returnItem.sales_invoice_id}`}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
-                              {returnItem.customer?.name?.charAt(0) || 'C'}
-                            </span>
-                          </div>
-                          <span className="font-medium text-sm">
-                            {language === 'ar' 
-                              ? returnItem.customer?.name_ar || returnItem.customer?.name 
-                              : returnItem.customer?.name || '---'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">
-                            {formatDate(returnItem.created_at)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(returnItem.created_at).toLocaleTimeString([], { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getMethodBadge(returnItem.return_method)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="font-bold text-amber-600 dark:text-amber-400">
-                          {formatCurrency(Number(returnItem.total_amount) || 0)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 hover:bg-amber-500/10 hover:text-amber-600"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fetchReturnDetails(returnItem.id);
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Return Details Modal */}
-      {showDetails && selectedReturn && (
-        <Dialog open={showDetails} onOpenChange={setShowDetails}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <RotateCcw className="h-5 w-5 text-amber-600" />
-                {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'} - {selectedReturn.return_number}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
-                  </p>
-                  <p className="font-medium font-mono">
-                    {selectedReturn.sales_invoice_number || `SI-${selectedReturn.sales_invoice_id}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'طريقة الإرجاع' : 'Return Method'}
-                  </p>
-                  <p>{getMethodBadge(selectedReturn.return_method)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'التاريخ' : 'Date'}
-                  </p>
-                  <p>{formatDate(selectedReturn.created_at, true)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'المبلغ' : 'Amount'}
-                  </p>
-                  <p className="text-xl font-bold text-amber-600">
-                    {formatCurrency(Number(selectedReturn.total_amount) || 0)}
-                  </p>
-                </div>
-              </div>
-
-              {selectedReturn.note && (
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'ملاحظات' : 'Notes'}
-                  </p>
-                  <p className="p-3 bg-muted/30 rounded-lg text-sm">
-                    {selectedReturn.note}
-                  </p>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={() => setShowDetails(false)}>
-                  {language === 'ar' ? 'إغلاق' : 'Close'}
+        {/* ========== فلتر البحث المتقدم ========== */}
+        {showFilters && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Search size={16} />
+                  {language === 'ar' ? 'فلتر البحث' : 'Search Filters'}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="h-8 gap-1"
+                >
+                  <X size={14} />
+                  {language === 'ar' ? 'إعادة تعيين' : 'Reset'}
                 </Button>
               </div>
-            </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* رقم المرتجع */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <Hash size={14} className="text-muted-foreground" />
+                    {language === 'ar' ? 'رقم المرتجع' : 'Return Number'}
+                  </label>
+                  <Input
+                    placeholder={language === 'ar' ? 'أدخل رقم المرتجع' : 'Enter return number'}
+                    value={filters.return_number}
+                    onChange={(e) => setFilters(prev => ({ ...prev, return_number: e.target.value }))}
+                  />
+                </div>
+
+                {/* رقم الفاتورة */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <FileText size={14} className="text-muted-foreground" />
+                    {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
+                  </label>
+                  <Input
+                    placeholder={language === 'ar' ? 'أدخل رقم الفاتورة' : 'Enter invoice number'}
+                    value={filters.invoice_number}
+                    onChange={(e) => setFilters(prev => ({ ...prev, invoice_number: e.target.value }))}
+                  />
+                </div>
+
+                {/* العميل */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    <User size={14} className="text-muted-foreground" />
+                    {language === 'ar' ? 'العميل' : 'Customer'}
+                  </label>
+                  <Input
+                    placeholder={language === 'ar' ? 'أدخل اسم العميل' : 'Enter customer name'}
+                    value={filters.customer}
+                    onChange={(e) => setFilters(prev => ({ ...prev, customer: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* أزرار البحث */}
+              <div className="flex justify-end gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFilters({ return_number: '', invoice_number: '', customer: '' });
+                    setCurrentPage(1);
+                  }}
+                >
+                  {language === 'ar' ? 'مسح' : 'Clear'}
+                </Button>
+                <Button onClick={() => {
+                  setCurrentPage(1);
+                  refetch();
+                }}>
+                  <Search size={16} className="me-2" />
+                  {language === 'ar' ? 'بحث' : 'Search'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ========== جدول المرتجعات ========== */}
+        <Card>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : returns.length === 0 ? (
+              <div className="text-center py-12">
+                <RotateCcw className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">
+                  {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
+                </h3>
+                <p className="text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'لم يتم العثور على أي مرتجعات تطابق معايير البحث' 
+                    : 'No returns match your search criteria'}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-16">#</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <Hash size={14} />
+                          {language === 'ar' ? 'رقم المرتجع' : 'Return #'}
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <FileText size={14} />
+                          {language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <User size={14} />
+                          {language === 'ar' ? 'العميل' : 'Customer'}
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <Package size={14} />
+                          {language === 'ar' ? 'عدد الأصناف' : 'Items'}
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <DollarSign size={14} />
+                          {language === 'ar' ? 'المبلغ' : 'Amount'}
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <Calendar size={14} />
+                          {language === 'ar' ? 'التاريخ' : 'Date'}
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        {language === 'ar' ? 'الإجراءات' : 'Actions'}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {returns.map((ret, index) => (
+                      <TableRow key={ret.id} className="hover:bg-muted/50">
+                        <TableCell className="font-mono text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
+                        <TableCell className="font-mono font-medium">
+                          {ret.return_number}
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {ret.invoice_number}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User size={14} className="text-muted-foreground" />
+                            {ret.customer}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="bg-primary/5">
+                            {ret.items.length}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          {formatCurrency(ret.total_amount)}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(ret.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => fetchReturnDetails(ret.id)}
+                              className="h-8 w-8 p-0"
+                              title={language === 'ar' ? 'عرض التفاصيل' : 'View details'}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ========== Modal عرض التفاصيل ========== */}
+        <Dialog open={showDetails} onOpenChange={setShowDetails}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <RotateCcw className="text-primary" size={24} />
+                {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'}
+                <span className="text-sm font-mono text-muted-foreground">
+                  #{selectedReturn?.return_number}
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+
+            {selectedReturn && (
+              <div className="space-y-4">
+                {/* معلومات أساسية */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <FileText className="h-3 w-3" />
+                        {language === 'ar' ? 'رقم الفاتورة' : 'Invoice'}
+                      </div>
+                      <div className="font-medium font-mono">
+                        {selectedReturn.invoice_number}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {language === 'ar' ? 'العميل' : 'Customer'}
+                      </div>
+                      <div className="font-medium">
+                        {selectedReturn.customer}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {language === 'ar' ? 'التاريخ' : 'Date'}
+                      </div>
+                      <div className="font-medium">
+                        {formatDate(selectedReturn.created_at)}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <RotateCcw className="h-3 w-3" />
+                        {language === 'ar' ? 'طريقة المرتجع' : 'Method'}
+                      </div>
+                      <div className="font-medium">
+                        {getReturnMethodLabel(selectedReturn.return_method)}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        {language === 'ar' ? 'الإجمالي' : 'Total'}
+                      </div>
+                      <div className="font-bold text-lg text-primary">
+                        {formatCurrency(selectedReturn.total_amount)}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-4">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Package className="h-3 w-3" />
+                        {language === 'ar' ? 'عدد الأصناف' : 'Items'}
+                      </div>
+                      <div className="font-medium text-lg">
+                        {selectedReturn.items.length}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ملاحظات */}
+                {selectedReturn.note && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {language === 'ar' ? 'ملاحظات' : 'Notes'}
+                      </p>
+                      <p className="text-sm">{selectedReturn.note}</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* جدول الأصناف */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      {language === 'ar' ? 'الأصناف المرتجعة' : 'Returned Items'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="w-16">#</TableHead>
+                            <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                            <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                            <TableHead className="text-right">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                            <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                            <TableHead>{language === 'ar' ? 'سبب الإرجاع' : 'Reason'}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedReturn.items.map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                              <TableCell className="font-medium">{item.product}</TableCell>
+                              <TableCell className="text-center">{item.quantity}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
+                              <TableCell className="text-right font-semibold">{formatCurrency(item.total)}</TableCell>
+                              <TableCell className="max-w-[200px]">
+                                <span className="text-sm">{item.reason}</span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* زر الإغلاق */}
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setShowDetails(false)}>
+                    {language === 'ar' ? 'إغلاق' : 'Close'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
-      )}
-    </div>
+      </div>
   );
 };
 

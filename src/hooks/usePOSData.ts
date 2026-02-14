@@ -69,11 +69,11 @@ export interface Product {
   cost: string | null;
   stock: number;
   reorder_level: number | null;
-  category_id: string | null;
+  category_id: string | null;  // 👈 مهم: null لو مفيش فئة
   image_url: string | null;
   imageUrl?: string | null;
   is_active: boolean | null;
-  has_variants: boolean | null;
+  has_variants: boolean;
   
   // الحقول الجديدة من API
   units?: ProductUnit[];
@@ -91,7 +91,6 @@ export const useCategories = () => {
     queryKey: ['categories'],
     queryFn: async () => {
       try {
-        // ✅ استخدام /index-sub-account كما طلبت
         const response = await api.get('/index-sub-account', {
           params: {
             orderBy: 'id',
@@ -101,10 +100,8 @@ export const useCategories = () => {
           }
         });
         
-        // API بترجع data.data
         const categories = response.data?.data || response.data || [];
         
-        // تحويل الفئات للشكل المطلوب
         return categories.map((cat: any) => ({
           id: cat.id?.toString() || '',
           name: cat.name || '',
@@ -137,8 +134,8 @@ export const useProducts = (categoryId?: string | null) => {
         delete: false
       };
 
-      // إضافة فلتر category_id لو موجود
-      if (categoryId && categoryId !== 'all') {
+      // إضافة فلتر category_id لو موجود وليس 'all'
+      if (categoryId && categoryId !== 'all' && categoryId !== '') {
         payload.filters = {
           category_id: parseInt(categoryId)
         };
@@ -146,10 +143,8 @@ export const useProducts = (categoryId?: string | null) => {
 
       const response = await api.post('/product/index', payload);
       
-      // API بتجيب الـ data جوا data.data
       const products = response.data?.data || response.data || [];
       
-      // ✅ تحويل المنتجات مع الحفاظ على كل البيانات بما فيها units و colors
       return products.map((prod: any) => ({
         id: prod.id?.toString() || '',
         name: prod.name || '',
@@ -161,18 +156,15 @@ export const useProducts = (categoryId?: string | null) => {
         cost: prod.cost || null,
         stock: prod.stock || 0,
         reorder_level: prod.reorder_level || null,
+        // 👈 مهم: نحتفظ بـ null لو مفيش category_id
         category_id: prod.category_id?.toString() || null,
         image_url: prod.image_url || null,
         imageUrl: prod.imageUrl || prod.image_url || null,
         is_active: prod.active ?? prod.is_active ?? true,
-        // ✅ مهم: has_variants من units
         has_variants: (prod.units && prod.units.length > 0) || false,
-        
-        // ✅ الحقول الجديدة - مهمة جداً للـ variants
         units: prod.units || [],
         image: prod.image || null,
         category: prod.category || null,
-        
         created_at: prod.created_at || null,
         updated_at: prod.updated_at || null
       }));
@@ -180,14 +172,13 @@ export const useProducts = (categoryId?: string | null) => {
   });
 };
 
-// ========== Product by Barcode Hook - من الـ API بتاعك ==========
+// ========== باقي الـ hooks زي ما هي ==========
 
 export const useProductByBarcode = (barcode: string) => {
   return useQuery({
     queryKey: ['product-barcode', barcode],
     queryFn: async () => {
       try {
-        // ✅ استخدام /product/index مع فلتر barcode
         const payload = {
           filters: { barcode: barcode },
           orderBy: 'id',
@@ -238,62 +229,8 @@ export const useProductByBarcode = (barcode: string) => {
   });
 };
 
-// ========== Product by ID Hook ==========
-
-export const useProductById = (productId: string) => {
-  return useQuery({
-    queryKey: ['product', productId],
-    queryFn: async () => {
-      try {
-        const payload = {
-          filters: { id: parseInt(productId) },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1,
-          paginate: false,
-          delete: false
-        };
-
-        const response = await api.post('/product/index', payload);
-        
-        const product = response.data?.data?.[0] || null;
-        
-        if (product) {
-          return {
-            id: product.id?.toString() || '',
-            name: product.name || '',
-            name_ar: product.name_ar || product.name || '',
-            description: product.description || null,
-            sku: product.sku || '',
-            barcode: product.barcode || null,
-            price: parseFloat(product.price || '0'),
-            cost: product.cost || null,
-            stock: product.stock || 0,
-            reorder_level: product.reorder_level || null,
-            category_id: product.category_id?.toString() || null,
-            image_url: product.image_url || null,
-            imageUrl: product.imageUrl || product.image_url || null,
-            is_active: product.active ?? product.is_active ?? true,
-            has_variants: (product.units && product.units.length > 0) || false,
-            units: product.units || [],
-            image: product.image || null,
-            category: product.category || null
-          };
-        }
-        
-        return null;
-      } catch (error) {
-        console.error('Error fetching product by id:', error);
-        return null;
-      }
-    },
-    enabled: !!productId,
-  });
-};
-
 // ========== Helper Functions ==========
 
-// دالة لاستخراج الألوان المتاحة للمنتج
 export const getProductColors = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];
   
@@ -307,7 +244,6 @@ export const getProductColors = (product: Product): string[] => {
   return Array.from(colors);
 };
 
-// دالة لاستخراج المقاسات المتاحة للمنتج
 export const getProductSizes = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];
   
@@ -319,61 +255,6 @@ export const getProductSizes = (product: Product): string[] => {
   return Array.from(sizes);
 };
 
-// دالة للبحث عن variant معين
-export const findProductVariant = (
-  product: Product, 
-  color: string, 
-  size: string
-): { unit: ProductUnit; color: ProductColor } | null => {
-  if (!product.units) return null;
-  
-  // البحث عن الوحدة (المقاس)
-  const unit = product.units.find(u => u.unit_name === size);
-  if (!unit) return null;
-  
-  // البحث عن اللون
-  const colorObj = unit.colors?.find(c => c.color === color);
-  if (!colorObj) return null;
-  
-  return { unit, color: colorObj };
-};
-
-// دالة لحساب سعر الـ variant
-export const getVariantPrice = (unit: ProductUnit): number => {
-  return parseFloat(unit.sell_price || '0');
-};
-
-// دالة لجلب صورة المنتج
-export const getProductImageUrl = (product: Product): string | null => {
-  // 1. product.image?.fullUrl
-  if (product.image?.fullUrl) {
-    return product.image.fullUrl;
-  }
-  
-  // 2. product.imageUrl
-  if (product.imageUrl) {
-    return product.imageUrl;
-  }
-  
-  // 3. product.image_url
-  if (product.image_url) {
-    return product.image_url;
-  }
-  
-  // 4. product.image?.previewUrl
-  if (product.image?.previewUrl) {
-    return product.image.previewUrl;
-  }
-  
-  return null;
-};
-
-// دالة للتحقق من وجود مخزون للـ variant
-export const hasVariantStock = (color: ProductColor): boolean => {
-  return color.stock > 0;
-};
-
-// دالة لجلب كل الـ variants المتاحة
 export const getAvailableVariants = (product: Product): Array<{ 
   size: string; 
   color: string; 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
@@ -116,8 +116,11 @@ const POS: React.FC = () => {
     })) || [])
   ];
 
-  // ✅ Transform products for the component - مع كل البيانات المهمة
-  const transformedProducts = products?.map((prod: Product) => ({
+// ✅ Transform products for the component - مع الحفاظ على null
+const transformedProducts = useMemo(() => {
+  if (!products) return [];
+  
+  return products.map((prod: Product) => ({
     id: prod.id.toString(),
     name: prod.name,
     nameAr: prod.name_ar || prod.name,
@@ -125,18 +128,15 @@ const POS: React.FC = () => {
     sku: prod.sku,
     barcode: prod.barcode || '',
     stock: prod.stock || 0,
-    category: prod.category_id?.toString() || '',
-    category_id: prod.category_id,
+    // 👈 مهم: نحتفظ بـ null لو مفيش category_id
+    category_id: prod.category_id,  // ممكن يكون null أو string
     image_url: prod.image_url,
     imageUrl: prod.imageUrl,
     image: prod.image,
-    // ✅ مهم: hasVariants من units
-    hasVariants: (prod.units && prod.units.length > 0) || false,
-    // ✅ تمرير units كاملة للـ POSProductGrid
+    hasVariants: prod.has_variants,
     units: prod.units || [],
-    // ✅ تمرير category كاملة
-    category_obj: prod.category
-  })) || [];
+  }));
+}, [products]);
 
   // Reset search when category changes
   useEffect(() => {
