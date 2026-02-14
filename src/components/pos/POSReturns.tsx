@@ -128,6 +128,7 @@ interface InvoiceProduct {
   barcode?: string;
   price: string;
   image_url?: string | null;
+  imageUrl?: string;
   stock?: number;
   quantity_sold: number;
   invoice_price: string;
@@ -144,7 +145,7 @@ const DirectReturnInvoice: React.FC<{
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
   const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount } = useCurrencyTax();
-  
+
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -167,17 +168,18 @@ const DirectReturnInvoice: React.FC<{
     queryKey: ['invoice-search', invoiceNumber],
     queryFn: async () => {
       if (!invoiceNumber.trim()) return null;
-      
+
       try {
         const response = await api.get('/invoices/search', {
           params: { invoice_number: invoiceNumber }
         });
-        
+
         setShowResults(true);
         return response.data;
-      } catch (error: any) {
+      } catch (error) {
         setShowResults(true);
-        if (error.response?.status === 404) {
+        const err = error as { response?: { status?: number } };
+        if (err.response?.status === 404) {
           toast.error('الفاتورة غير موجودة');
         } else {
           toast.error('خطأ في البحث عن الفاتورة');
@@ -189,7 +191,7 @@ const DirectReturnInvoice: React.FC<{
   });
 
   // Extract products from invoice with color and size
-  const invoiceProducts: InvoiceProduct[] = invoiceData?.data?.items?.map((item: any) => ({
+  const invoiceProducts: InvoiceProduct[] = invoiceData?.data?.items?.map((item: { product: { id: number; name: string; name_ar?: string | null; sku: string; barcode?: string; price: string; image_url?: string | null; stock?: number }; quantity: number; price: string; color?: string | null; size?: string | null }) => ({
     ...item.product,
     id: item.product.id,
     name: item.product.name,
@@ -210,7 +212,7 @@ const DirectReturnInvoice: React.FC<{
     queryKey: ['product-search', searchQuery],
     queryFn: async () => {
       if (!searchQuery.trim() || searchMode !== 'product') return [];
-      
+
       try {
         const response = await api.get('/products/search', {
           params: { name: searchQuery }
@@ -231,26 +233,26 @@ const DirectReturnInvoice: React.FC<{
   const isSearching = searchMode === 'invoice' ? isSearchingInvoice : isSearchingProducts;
 
   // ========== Item Management ==========
-  const addItem = (product: any) => {
-    const unitPrice = searchMode === 'invoice' 
+  const addItem = (product: InvoiceProduct) => {
+    const unitPrice = searchMode === 'invoice'
       ? parseFloat(product.invoice_price || product.price || '0')
       : parseFloat(product.price || '0');
 
     const quantitySold = searchMode === 'invoice' ? product.quantity_sold : undefined;
 
     // Check for existing item with same product, color, and size
-    const existing = items.find(i => 
-      i.product_id === product.id && 
+    const existing = items.find(i =>
+      i.product_id === product.id &&
       i.color === product.color &&
       i.size === product.size
     );
-    
+
     if (existing) {
       if (quantitySold && existing.quantity + 1 > quantitySold) {
         toast.error(`لا يمكن إرجاع أكثر من ${quantitySold} قطعة من هذا المنتج`);
         return;
       }
-      
+
       setItems(items.map(i =>
         i.product_id === product.id && i.color === product.color && i.size === product.size
           ? { ...i, quantity: i.quantity + 1 }
@@ -276,13 +278,13 @@ const DirectReturnInvoice: React.FC<{
         }
       }]);
     }
-    
+
     // Clear search and close dropdown
     setSearchQuery('');
     setShowResults(false);
-    
+
     const productName = product.name_ar || product.name;
-    const variant = product.color || product.size 
+    const variant = product.color || product.size
       ? ` (${product.color || ''} ${product.size || ''})`.trim()
       : '';
     toast.success(`تم إضافة ${productName}${variant}`);
@@ -293,17 +295,17 @@ const DirectReturnInvoice: React.FC<{
       const newItems = prev.map(item => {
         if (item.id === id) {
           const newQty = item.quantity + delta;
-          
+
           if (item.quantity_sold && newQty > item.quantity_sold) {
             toast.error(`لا يمكن إرجاع أكثر من ${item.quantity_sold} قطعة`);
             return item;
           }
-          
+
           return newQty > 0 ? { ...item, quantity: newQty } : null;
         }
         return item;
       }).filter((item): item is DirectReturnItem => item !== null);
-      
+
       return newItems;
     });
   };
@@ -374,7 +376,7 @@ const DirectReturnInvoice: React.FC<{
       queryClient.invalidateQueries({ queryKey: ['active-shift'] });
       toast.success('تم إنشاء فاتورة المرتجع بنجاح');
       onComplete(total);
-      
+
       // Clear form
       setItems([]);
       setInvoiceNumber('');
@@ -417,24 +419,11 @@ const DirectReturnInvoice: React.FC<{
           <Receipt className="h-4 w-4 me-2" />
           بحث بفاتورة
         </Button>
-        <Button
-          variant={searchMode === 'product' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => {
-            setSearchMode('product');
-            setSearchQuery('');
-            setInvoiceNumber('');
-            setItems([]);
-            setShowResults(false);
-          }}
-          className="rounded-lg"
-        >
-          <Package className="h-4 w-4 me-2" />
-          بحث بمنتج
-        </Button>
+
       </div>
 
       {/* Search Input */}
+
       <div className="relative" onClick={(e) => e.stopPropagation()}>
         <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
         {searchMode === 'invoice' ? (
@@ -577,7 +566,7 @@ const DirectReturnInvoice: React.FC<{
                           <div className="text-sm text-muted-foreground">
                             {product.sku || 'N/A'}
                           </div>
-                          
+
                           {/* Color and Size */}
                           {(product.color || product.size) && (
                             <div className="flex items-center gap-2 mt-1 text-xs">
@@ -595,7 +584,7 @@ const DirectReturnInvoice: React.FC<{
                               )}
                             </div>
                           )}
-                          
+
                           {searchMode === 'invoice' && product.quantity_sold && (
                             <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-md inline-block mt-2">
                               الكمية المباعة: {product.quantity_sold}
@@ -605,7 +594,7 @@ const DirectReturnInvoice: React.FC<{
                         <div className="text-left flex-shrink-0">
                           <div className="font-bold text-lg text-primary">
                             {formatCurrency(
-                              searchMode === 'invoice' 
+                              searchMode === 'invoice'
                                 ? (product.invoice_price || product.price)
                                 : product.price
                             )}
@@ -639,8 +628,8 @@ const DirectReturnInvoice: React.FC<{
               <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>لم يتم إضافة أصناف بعد</p>
               <p className="text-sm mt-1">
-                {searchMode === 'invoice' 
-                  ? 'أدخل رقم الفاتورة لإظهار منتجاتها' 
+                {searchMode === 'invoice'
+                  ? 'أدخل رقم الفاتورة لإظهار منتجاتها'
                   : 'ابحث عن المنتجات لإضافتها'}
               </p>
             </div>
@@ -670,7 +659,7 @@ const DirectReturnInvoice: React.FC<{
                     <div className="text-sm text-muted-foreground">
                       {item.sku}
                     </div>
-                    
+
                     {/* Color and Size Display/Edit */}
                     <div className="flex items-center gap-2 mt-2">
                       <div className="flex items-center gap-1">
@@ -694,7 +683,7 @@ const DirectReturnInvoice: React.FC<{
                         />
                       </div>
                     </div>
-                    
+
                     {item.quantity_sold && (
                       <div className="text-xs text-muted-foreground mt-2">
                         الكمية المباعة: {item.quantity_sold}
@@ -705,29 +694,29 @@ const DirectReturnInvoice: React.FC<{
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      onClick={() => updateQuantity(item.id, -1)} 
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => updateQuantity(item.id, -1)}
                       className="h-8 w-8"
                       disabled={item.quantity <= 1}
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
                     <span className="w-8 text-center font-bold">{item.quantity}</span>
-                    <Button 
-                      size="icon" 
-                      variant="outline" 
-                      onClick={() => updateQuantity(item.id, 1)} 
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => updateQuantity(item.id, 1)}
                       className="h-8 w-8"
                       disabled={item.quantity_sold ? item.quantity >= item.quantity_sold : false}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      size="icon" 
-                      variant="ghost" 
-                      onClick={() => removeItem(item.id)} 
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeItem(item.id)}
                       className="h-8 w-8 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -853,11 +842,11 @@ const POSReturns: React.FC<POSReturnsProps> = ({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const selectedItems = returnItems.filter(item => item.selected && item.return_quantity > 0);
-      
+
       if (selectedItems.length === 0) throw new Error('لم يتم تحديد أي صنف للإرجاع');
       if (!selectedSale) throw new Error('لم يتم اختيار فاتورة');
 
-      const subtotal = selectedItems.reduce((sum, item) => 
+      const subtotal = selectedItems.reduce((sum, item) =>
         sum + (item.unit_price * item.return_quantity), 0
       );
       const totalAmount = subtotal;
@@ -884,7 +873,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
       // Call API
       const apiResponse = await api.post('/invoice-return/store', payload);
-      
+
       if (!apiResponse.data?.data?.id) {
         throw new Error('فشل في الحصول على معرف الفاتورة من API');
       }
@@ -1010,8 +999,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
 
   const updateReturnQuantity = (itemId: string, quantity: number) => {
     setReturnItems(prev => prev.map(item =>
-      item.id === itemId 
-        ? { ...item, return_quantity: Math.min(Math.max(1, quantity), item.quantity) } 
+      item.id === itemId
+        ? { ...item, return_quantity: Math.min(Math.max(1, quantity), item.quantity) }
         : item
     ));
   };
@@ -1067,9 +1056,9 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 {step === 'invoice' ? 'فاتورة مرتجع مباشرة' : 'مرتجعات المبيعات'}
               </h2>
               <p className="text-white/60 text-sm">
-                {step === 'invoice' 
-                  ? 'إنشاء فاتورة مرتجع بدون ربط بفاتورة بيع' 
-                  : step === 'search' 
+                {step === 'invoice'
+                  ? 'إنشاء فاتورة مرتجع بدون ربط بفاتورة بيع'
+                  : step === 'search'
                     ? 'البحث عن فاتورة للإرجاع'
                     : step === 'invoice-search'
                       ? 'البحث عن فاتورة محددة'
@@ -1080,15 +1069,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
           <div className="flex items-center gap-2">
             {step === 'invoice' && (
               <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setStep('invoice-search')}
-                  className="text-white/80 hover:text-white hover:bg-white/10"
-                >
-                  <FileSearch className="h-4 w-4 me-1" />
-                  <span className="text-xs">بحث بفاتورة</span>
-                </Button>
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1152,8 +1133,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                 <div className="flex-1 relative">
                   <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
                   <Input
-                    placeholder={step === 'invoice-search' 
-                      ? "أدخل رقم الفاتورة للبحث..." 
+                    placeholder={step === 'invoice-search'
+                      ? "أدخل رقم الفاتورة للبحث..."
                       : "ابحث برقم الفاتورة أو اسم العميل..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1215,9 +1196,9 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                                 📦 {sale.sale_items.length} صنف
                               </div>
                               <Badge variant="secondary" className="mt-2">
-                                {sale.payment_method === 'cash' ? 'نقدي' : 
-                                 sale.payment_method === 'card' ? 'بطاقة' : 
-                                 sale.payment_method === 'wallet' ? 'محفظة' : sale.payment_method}
+                                {sale.payment_method === 'cash' ? 'نقدي' :
+                                  sale.payment_method === 'card' ? 'بطاقة' :
+                                    sale.payment_method === 'wallet' ? 'محفظة' : sale.payment_method}
                               </Badge>
                             </div>
                           </div>
@@ -1245,8 +1226,8 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                         {step === 'invoice-search' ? 'أدخل رقم الفاتورة' : 'ابحث عن فاتورة'}
                       </p>
                       <p className="text-sm mt-1">
-                        {step === 'invoice-search' 
-                          ? 'أدخل رقم الفاتورة للبحث عنها' 
+                        {step === 'invoice-search'
+                          ? 'أدخل رقم الفاتورة للبحث عنها'
                           : 'أدخل رقم الفاتورة أو اسم العميل للبحث'}
                       </p>
                     </div>
@@ -1300,11 +1281,10 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                   {returnItems.map((item) => (
                     <div
                       key={item.id}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        item.selected
-                          ? 'border-primary bg-primary/5 shadow-sm'
-                          : 'border-transparent bg-muted/30 hover:bg-muted/50'
-                      }`}
+                      className={`p-4 rounded-xl border-2 transition-all ${item.selected
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-transparent bg-muted/30 hover:bg-muted/50'
+                        }`}
                     >
                       <div className="flex items-center gap-4">
                         <Checkbox
@@ -1322,7 +1302,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                           <div className="text-sm text-muted-foreground">
                             {item.product?.sku}
                           </div>
-                          
+
                           {/* Color and Size Edit */}
                           {item.selected && (
                             <div className="flex items-center gap-2 mt-2">
@@ -1348,7 +1328,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
                               </div>
                             </div>
                           )}
-                          
+
                           <div className="text-xs text-muted-foreground mt-2">
                             الكمية المباعة: {item.quantity}
                           </div>
