@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,7 +36,14 @@ import {
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
+
+
 // ==================== Types ====================
+
+
+
+
+
 interface SaleItem {
   id: string;
   product_id: string;
@@ -76,6 +84,10 @@ interface ReturnItem extends SaleItem {
   return_reason: string;
   return_color?: string | null;
   return_size?: string | null;
+}
+
+interface ApiError {
+  message?: string;
 }
 
 interface POSReturnsProps {
@@ -383,9 +395,15 @@ const DirectReturnInvoice: React.FC<{
       setReturnReason('');
       setRefundMethod('cash');
     },
-    onError: (error: any) => {
-      console.error('❌ API Error:', error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'خطأ في إنشاء فاتورة المرتجع');
+    onError: (error: AxiosError<ApiError>) => {
+      console.error(
+        '❌ Return Error:',
+        error.response?.data || error.message
+      );
+
+      toast.error(
+        error.response?.data?.message || 'خطأ في معالجة المرتجع'
+      );
     }
   });
 
@@ -965,7 +983,7 @@ const POSReturns: React.FC<POSReturnsProps> = ({
       onReturnComplete?.(totalAmount);
       handleClose();
     },
-    onError: (error: any) => {
+    onError: (error: AxiosError<ApiError>) => {
       console.error('❌ Return Error:', error.response?.data || error.message);
       toast.error(error.response?.data?.message || 'خطأ في معالجة المرتجع');
     }
