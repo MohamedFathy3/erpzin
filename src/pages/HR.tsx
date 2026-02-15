@@ -119,7 +119,7 @@ const HR = () => {
         }
 
         if (employeeFilters.salary_min) {
-          filters.salary_min = Number(employeeFilters.salary_min);
+          filters.salary = Number(employeeFilters.salary_min);
         }
         if (employeeFilters.salary_max) {
           filters.salary_max = Number(employeeFilters.salary_max);
@@ -740,7 +740,7 @@ const HR = () => {
       editEmployee: 'تعديل الموظف',
       newDelivery: 'مندوب توصيل جديد',
       editDelivery: 'تعديل مندوب التوصيل',
-      search: 'بحث بالاسم، الكود، الهاتف...',
+      search: 'بحث بالاسم،  ...',
       code: 'الكود',
       name: 'الاسم',
       nameAr: 'الاسم (عربي)',
@@ -1159,7 +1159,7 @@ const HR = () => {
                         labelAr: 'القسم', 
                         type: 'select',
                         options: [
-                          { value: 'all', label: 'All', labelAr: 'الكل' },
+                          
                           ...Array.from(new Set(employees.map((e: any) => e.department))).filter(Boolean).map(dept => ({
                             value: dept,
                             label: dept,
@@ -1173,7 +1173,6 @@ const HR = () => {
                         labelAr: 'المنصب', 
                         type: 'select',
                         options: [
-                          { value: 'all', label: 'All', labelAr: 'الكل' },
                           ...Array.from(new Set(employees.map((e: any) => e.position))).filter(Boolean).map(pos => ({
                             value: pos,
                             label: pos,
@@ -1187,7 +1186,6 @@ const HR = () => {
                         labelAr: 'الحالة', 
                         type: 'select', 
                         options: [
-                          { value: 'all', label: 'All', labelAr: 'الكل' },
                           { value: 'active', label: 'Active', labelAr: 'نشط' },
                           { value: 'inactive', label: 'Inactive', labelAr: 'غير نشط' },
                         ]

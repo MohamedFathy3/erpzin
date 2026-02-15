@@ -244,7 +244,7 @@ const CRM = () => {
         const filters: any = {};
 
         if (searchQuery) {
-          filters.search = searchQuery;
+          filters.name = searchQuery;
         }
 
         if (customerFilters.address) {
@@ -252,17 +252,17 @@ const CRM = () => {
         }
 
         if (customerFilters.points_min) {
-          filters.points_min = Number(customerFilters.points_min);
+          filters.point = Number(customerFilters.points_min);
         }
         if (customerFilters.points_max) {
-          filters.points_max = Number(customerFilters.points_max);
+          filters.point = Number(customerFilters.points_max);
         }
 
         if (customerFilters.purchases_min) {
-          filters.purchases_min = Number(customerFilters.purchases_min);
+          filters.last_paid_amount = Number(customerFilters.purchases_min);
         }
         if (customerFilters.purchases_max) {
-          filters.purchases_max = Number(customerFilters.purchases_max);
+          filters.last_paid_amount = Number(customerFilters.purchases_max);
         }
 
         if (Object.keys(filters).length > 0) {
@@ -464,14 +464,7 @@ const CRM = () => {
 
   // ========== Filter Fields ==========
   const customerFilterFields: FilterField[] = [
-    {
-      key: 'search',
-      label: 'Name/Phone/Email',
-      labelAr: 'الاسم/الهاتف/البريد',
-      type: 'text',
-      placeholder: 'Search...',
-      placeholderAr: 'بحث...'
-    },
+ 
     {
       key: 'address',
       label: 'Address',

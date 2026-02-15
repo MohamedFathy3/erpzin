@@ -73,7 +73,7 @@ const PurchaseReturnsList = () => {
     { 
       key: 'search', 
       label: 'Return/Invoice', 
-      labelAr: 'المرتجع/الفاتورة', 
+      labelAr: 'المرتجع/', 
       type: 'text', 
       placeholder: 'Search...', 
       placeholderAr: 'بحث...' 
@@ -84,12 +84,12 @@ const PurchaseReturnsList = () => {
       labelAr: 'التاريخ', 
       type: 'dateRange' 
     },
-    { 
-      key: 'amount', 
-      label: 'Amount', 
-      labelAr: 'المبلغ', 
-      type: 'numberRange' 
-    },
+    // { 
+    //   key: 'amount', 
+    //   label: 'Amount', 
+    //   labelAr: 'المبلغ', 
+    //   type: 'numberRange' 
+    // },
   ];
 
   // ========== Fetch purchase returns with filters ==========
@@ -108,7 +108,7 @@ const PurchaseReturnsList = () => {
         const filters: any = {};
 
         if (filterValues.search) {
-          filters.search = filterValues.search;
+          filters.return_number = filterValues.search;
         }
 
         if (filterValues.date_from) {
@@ -120,12 +120,9 @@ const PurchaseReturnsList = () => {
         }
 
         if (filterValues.amount_min) {
-          filters.amount_min = Number(filterValues.amount_min);
+          filters.total_amount = Number(filterValues.amount_min);
         }
 
-        if (filterValues.amount_max) {
-          filters.amount_max = Number(filterValues.amount_max);
-        }
 
         if (Object.keys(filters).length > 0) {
           payload.filters = filters;

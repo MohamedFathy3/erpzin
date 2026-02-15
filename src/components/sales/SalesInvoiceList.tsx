@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight } from "lucide-react";
+import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight, X } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
-  import InvoiceReturnForm from "./InvoiceReturnForm";
+import InvoiceReturnForm from "./InvoiceReturnForm";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -119,7 +119,23 @@ const SalesInvoiceList = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<any>(null);
-  const [filterValues, setFilterValues] = useState<FilterValues>({});
+  
+  // ========== Client-side Filter State ==========
+  const [filters, setFilters] = useState({
+    search: '',
+    payment_status: 'all',
+    invoice_type: 'all',
+    branch_id: 'all',
+    salesman_id: 'all',
+    customer_id: 'all',
+    warehouse_id: 'all',
+    currency_id: 'all',
+    tax_id: 'all',
+    date_from: '',
+    date_to: '',
+    amount_min: '',
+    amount_max: ''
+  });
 
   // ========== Queries ==========
 
@@ -270,79 +286,20 @@ const SalesInvoiceList = () => {
     },
   });
 
-  // ✅ جلب فواتير المبيعات - POST /sales-invoices/index
+  // ✅ جلب فواتير المبيعات - POST /sales-invoices/index (مرة واحدة فقط)
   const { data: invoices = [], isLoading, refetch } = useQuery({
-    queryKey: ['sales-invoices', filterValues],
+    queryKey: ['sales-invoices'],
     queryFn: async () => {
       try {
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
-          perPage: 100,
+          perPage: 1000, // جلب عدد كبير مرة واحدة
           paginate: false,
           with: ['customer', 'sales_representative', 'branch', 'warehouse', 'currency', 'tax']
         };
 
-        // إضافة الفلاتر
-        const filters: any = {};
-
-        if (filterValues.search) {
-          filters.search = filterValues.search;
-        }
-
-        if (filterValues.payment_status && filterValues.payment_status !== 'all') {
-          filters.payment_status = filterValues.payment_status;
-        }
-
-        if (filterValues.invoice_type && filterValues.invoice_type !== 'all') {
-          filters.invoice_type = filterValues.invoice_type;
-        }
-
-        if (filterValues.branch_id && filterValues.branch_id !== 'all') {
-          filters.branch_id = Number(filterValues.branch_id);
-        }
-
-        if (filterValues.salesman_id && filterValues.salesman_id !== 'all') {
-          filters.sales_representative_id = Number(filterValues.salesman_id);
-        }
-
-        if (filterValues.customer_id && filterValues.customer_id !== 'all') {
-          filters.customer_id = Number(filterValues.customer_id);
-        }
-
-        if (filterValues.warehouse_id && filterValues.warehouse_id !== 'all') {
-          filters.warehouse_id = Number(filterValues.warehouse_id);
-        }
-
-        if (filterValues.currency_id && filterValues.currency_id !== 'all') {
-          filters.currency_id = Number(filterValues.currency_id);
-        }
-
-        if (filterValues.tax_id && filterValues.tax_id !== 'all') {
-          filters.tax_id = Number(filterValues.tax_id);
-        }
-
-        if (filterValues.date_from) {
-          filters.date_from = filterValues.date_from.split('T')[0];
-        }
-
-        if (filterValues.date_to) {
-          filters.date_to = filterValues.date_to.split('T')[0];
-        }
-
-        if (filterValues.amount_min) {
-          filters.amount_min = Number(filterValues.amount_min);
-        }
-
-        if (filterValues.amount_max) {
-          filters.amount_max = Number(filterValues.amount_max);
-        }
-
-        if (Object.keys(filters).length > 0) {
-          payload.filters = filters;
-        }
-
-        console.log('📦 Fetching sales invoices with payload:', payload);
+        console.log('📦 Fetching all sales invoices...');
 
         const response = await api.post('/sales-invoices/index', payload);
 
@@ -378,138 +335,122 @@ const SalesInvoiceList = () => {
     }
   };
 
-  // ========== Filter Fields ==========
+  // ========== Client-side Filter Function ==========
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice: SalesInvoice) => {
+      
+      // 1. فلتر البحث النصي
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const invoiceNumber = (invoice.invoice_number || '').toLowerCase();
+        const customerName = (invoice.customer?.name || '').toLowerCase();
+        const customerNameAr = (invoice.customer?.name_ar || '').toLowerCase();
+        const customerPhone = (invoice.customer?.phone || '').toLowerCase();
+        
+        const matchesSearch = 
+          invoiceNumber.includes(searchLower) ||
+          customerName.includes(searchLower) ||
+          customerNameAr.includes(searchLower) ||
+          customerPhone.includes(searchLower);
+        
+        if (!matchesSearch) return false;
+      }
+      
+      // 2. فلتر حالة الدفع
+      if (filters.payment_status !== 'all' && invoice.payment_status !== filters.payment_status) {
+        return false;
+      }
+      
+      // 3. فلتر نوع الفاتورة
+      if (filters.invoice_type !== 'all' && invoice.invoice_type !== filters.invoice_type) {
+        return false;
+      }
+      
+      // 4. فلتر الفرع
+      if (filters.branch_id !== 'all' && invoice.branch_id !== Number(filters.branch_id)) {
+        return false;
+      }
+      
+      // 5. فلتر المندوب
+      if (filters.salesman_id !== 'all' && invoice.sales_representative_id !== Number(filters.salesman_id)) {
+        return false;
+      }
+      
+      // 6. فلتر العميل
+      if (filters.customer_id !== 'all' && invoice.customer_id !== Number(filters.customer_id)) {
+        return false;
+      }
+      
+      // 7. فلتر المخزن
+      if (filters.warehouse_id !== 'all' && invoice.warehouse_id !== Number(filters.warehouse_id)) {
+        return false;
+      }
+      
+      // 8. فلتر العملة
+      if (filters.currency_id !== 'all' && invoice.currency_id !== Number(filters.currency_id)) {
+        return false;
+      }
+      
+      // 9. فلتر الضريبة
+      if (filters.tax_id !== 'all' && invoice.tax_id !== Number(filters.tax_id)) {
+        return false;
+      }
+      
+      // 10. فلتر التاريخ (من)
+      if (filters.date_from) {
+        const invoiceDate = new Date(invoice.invoice_date).setHours(0,0,0,0);
+        const fromDate = new Date(filters.date_from).setHours(0,0,0,0);
+        if (invoiceDate < fromDate) return false;
+      }
+      
+      // 11. فلتر التاريخ (إلى)
+      if (filters.date_to) {
+        const invoiceDate = new Date(invoice.invoice_date).setHours(0,0,0,0);
+        const toDate = new Date(filters.date_to).setHours(0,0,0,0);
+        if (invoiceDate > toDate) return false;
+      }
+      
+      // 12. فلتر المبلغ (من)
+      if (filters.amount_min && invoice.total_amount < Number(filters.amount_min)) {
+        return false;
+      }
+      
+      // 13. فلتر المبلغ (إلى)
+      if (filters.amount_max && invoice.total_amount > Number(filters.amount_max)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [invoices, filters]);
 
-  const filterFields: FilterField[] = [
-    { 
-      key: 'search', 
-      label: 'Invoice/Customer', 
-      labelAr: 'الفاتورة/العميل', 
-      type: 'text', 
-      placeholder: 'Search...', 
-      placeholderAr: 'بحث...' 
-    },
-    { 
-      key: 'payment_status', 
-      label: 'Payment Status', 
-      labelAr: 'حالة الدفع', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All', labelAr: ' الكل ' },
-        { value: 'paid', label: 'Paid', labelAr: 'مدفوع' },
-        { value: 'pending', label: 'Pending', labelAr: 'معلق' },
-        { value: 'partial', label: 'Partial', labelAr: 'جزئي' },
-        { value: 'cancelled', label: 'Cancelled', labelAr: 'ملغي' },
-      ]
-    },
-    { 
-      key: 'invoice_type', 
-      label: 'Invoice Type', 
-      labelAr: 'نوع الفاتورة', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All', labelAr: 'الكل' },
-        { value: 'cash', label: 'Cash', labelAr: 'نقدي' },
-        { value: 'credit', label: 'Credit', labelAr: 'آجل' },
-      ]
-    },
-    { 
-      key: 'branch_id', 
-      label: 'Branch', 
-      labelAr: 'الفرع', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Branches', labelAr: 'جميع الفروع' },
-        ...branches.map((b: any) => ({ 
-          value: b.id.toString(), 
-          label: b.name, 
-          labelAr: b.name_ar || b.name 
-        }))
-      ]
-    },
-    { 
-      key: 'salesman_id', 
-      label: 'Salesman', 
-      labelAr: 'المندوب', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Salesmen', labelAr: 'جميع المندوبين' },
-        ...salesmen.map((s: any) => ({ 
-          value: s.id.toString(), 
-          label: s.name, 
-          labelAr: s.name_ar || s.name 
-        }))
-      ]
-    },
-    { 
-      key: 'customer_id', 
-      label: 'Customer', 
-      labelAr: 'العميل', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Customers', labelAr: 'جميع العملاء' },
-        ...customers.slice(0, 50).map((c: any) => ({ 
-          value: c.id.toString(), 
-          label: c.name, 
-          labelAr: c.name_ar || c.name 
-        }))
-      ]
-    },
-    { 
-      key: 'warehouse_id', 
-      label: 'Warehouse', 
-      labelAr: 'المخزن', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Warehouses', labelAr: 'جميع المخازن' },
-        ...warehouses.map((w: any) => ({ 
-          value: w.id.toString(), 
-          label: w.name, 
-          labelAr: w.name_ar || w.name 
-        }))
-      ]
-    },
-    { 
-      key: 'currency_id', 
-      label: 'Currency', 
-      labelAr: 'العملة', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Currencies', labelAr: 'جميع العملات' },
-        ...currencies.map((c: any) => ({ 
-          value: c.id.toString(), 
-          label: `${c.name} (${c.code})`, 
-          labelAr: `${c.name} (${c.code})` 
-        }))
-      ]
-    },
-    { 
-      key: 'tax_id', 
-      label: 'Tax', 
-      labelAr: 'الضريبة', 
-      type: 'select', 
-      options: [
-        { value: 'all', label: 'All Taxes', labelAr: 'جميع الضرائب' },
-        ...taxes.map((t: any) => ({ 
-          value: t.id.toString(), 
-          label: `${t.name} (${t.rate}%)`, 
-          labelAr: `${t.name_ar || t.name} (${t.rate}%)` 
-        }))
-      ]
-    },
-    { 
-      key: 'date', 
-      label: 'Date', 
-      labelAr: 'التاريخ', 
-      type: 'dateRange' 
-    },
-    { 
-      key: 'amount', 
-      label: 'Amount', 
-      labelAr: 'المبلغ', 
-      type: 'numberRange' 
-    },
-  ];
+  // ========== Filter Handlers ==========
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      search: '',
+      payment_status: 'all',
+      invoice_type: 'all',
+      branch_id: 'all',
+      salesman_id: 'all',
+      customer_id: 'all',
+      warehouse_id: 'all',
+      currency_id: 'all',
+      tax_id: 'all',
+      date_from: '',
+      date_to: '',
+      amount_min: '',
+      amount_max: ''
+    });
+  };
+
+  const handleRefresh = () => {
+    refetch();
+    toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
+  };
 
   // ========== Helper Functions ==========
 
@@ -562,13 +503,32 @@ const SalesInvoiceList = () => {
     );
   };
 
-  const handleResetFilters = () => {
-    setFilterValues({});
-  };
-
-  const handleRefresh = () => {
-    refetch();
-    toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
+  // ✅ دالة عرض حالة الدفع
+  const getPaymentStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      paid: { 
+        label: language === 'ar' ? 'مدفوع' : 'Paid', 
+        className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
+      },
+      pending: { 
+        label: language === 'ar' ? 'معلق' : 'Pending', 
+        className: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400'
+      },
+      partial: { 
+        label: language === 'ar' ? 'جزئي' : 'Partial', 
+        className: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400'
+      },
+      cancelled: { 
+        label: language === 'ar' ? 'ملغي' : 'Cancelled', 
+        className: 'bg-red-500/10 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400'
+      }
+    };
+    const config = statusConfig[status] || statusConfig.pending;
+    return (
+      <Badge variant="outline" className={config.className}>
+        {config.label}
+      </Badge>
+    );
   };
 
   // ========== Render ==========
@@ -587,8 +547,8 @@ const SalesInvoiceList = () => {
               </h1>
               <p className="text-sm text-muted-foreground">
                 {language === 'ar' 
-                  ? `عرض ${invoices.length} فاتورة` 
-                  : `Showing ${invoices.length} invoices`}
+                  ? `عرض ${filteredInvoices.length} من أصل ${invoices.length} فاتورة` 
+                  : `Showing ${filteredInvoices.length} of ${invoices.length} invoices`}
               </p>
             </div>
           </div>
@@ -630,7 +590,7 @@ const SalesInvoiceList = () => {
           </div>
         </div>
 
-        {/* Stats Cards - إحصائيات سريعة */}
+        {/* Stats Cards - إحصائيات سريعة مع الفلاتر */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
             <CardContent className="p-4 flex items-center justify-between">
@@ -639,7 +599,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices'}
                 </p>
                 <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300">
-                  {invoices.length}
+                  {filteredInvoices.length}
                 </p>
               </div>
               <div className="p-2 bg-emerald-200/50 dark:bg-emerald-800/30 rounded-lg">
@@ -655,7 +615,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales'}
                 </p>
                 <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
-                  {invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0).toLocaleString()}
+                  {filteredInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-blue-200/50 dark:bg-blue-800/30 rounded-lg">
@@ -673,7 +633,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'المدفوع' : 'Paid'}
                 </p>
                 <p className="text-2xl font-bold text-amber-800 dark:text-amber-300">
-                  {invoices.reduce((sum, inv) => sum + (inv.paid_amount || 0), 0).toLocaleString()}
+                  {filteredInvoices.reduce((sum, inv) => sum + (inv.paid_amount || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-amber-200/50 dark:bg-amber-800/30 rounded-lg">
@@ -691,7 +651,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'المتبقي' : 'Remaining'}
                 </p>
                 <p className="text-2xl font-bold text-red-800 dark:text-red-300">
-                  {invoices.reduce((sum, inv) => sum + (inv.remaining_amount || 0), 0).toLocaleString()}
+                  {filteredInvoices.reduce((sum, inv) => sum + (inv.remaining_amount || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-red-200/50 dark:bg-red-800/30 rounded-lg">
@@ -703,22 +663,176 @@ const SalesInvoiceList = () => {
           </Card>
         </div>
 
-        {/* Advanced Filter */}
+        {/* Filter Bar - Manual Filters بالـ JS */}
         <Card className="border-primary/20 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <div className="w-1 h-5 bg-primary rounded-full" />
-              {language === 'ar' ? 'بحث متقدم' : 'Advanced Search'}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="w-1 h-5 bg-primary rounded-full" />
+                {language === 'ar' ? 'بحث وتصفية' : 'Search & Filter'}
+              </CardTitle>
+              
+            </div>
           </CardHeader>
           <CardContent>
-            <AdvancedFilter
-              fields={filterFields}
-              values={filterValues}
-              onChange={setFilterValues}
-              onReset={handleResetFilters}
-              language={language}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Search Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'بحث' : 'Search'}
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  placeholder={language === 'ar' ? 'رقم الفاتورة، اسم العميل، رقم الهاتف...' : 'Invoice #, customer name, phone...'}
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                />
+              </div>
+
+              {/* Payment Status Filter */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'حالة الدفع' : 'Payment Status'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.payment_status}
+                  onChange={(e) => handleFilterChange('payment_status', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
+                  <option value="paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</option>
+                  <option value="pending">{language === 'ar' ? 'معلق' : 'Pending'}</option>
+                  <option value="partial">{language === 'ar' ? 'جزئي' : 'Partial'}</option>
+                  <option value="cancelled">{language === 'ar' ? 'ملغي' : 'Cancelled'}</option>
+                </select>
+              </div> */}
+
+              {/* Invoice Type Filter */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'نوع الفاتورة' : 'Invoice Type'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.invoice_type}
+                  onChange={(e) => handleFilterChange('invoice_type', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
+                  <option value="cash">{language === 'ar' ? 'نقدي' : 'Cash'}</option>
+                  <option value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</option>
+                </select>
+              </div> */}
+
+              {/* Customer Filter */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'العميل' : 'Customer'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.customer_id}
+                  onChange={(e) => handleFilterChange('customer_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل العملاء' : 'All Customers'}</option>
+                  {customers.slice(0, 50).map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `- ${c.phone}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div> */}
+
+              {/* Branch Filter */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'الفرع' : 'Branch'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.branch_id}
+                  onChange={(e) => handleFilterChange('branch_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</option>
+                  {branches.map((b: any) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div> */}
+
+              {/* Salesman Filter */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'المندوب' : 'Salesman'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.salesman_id}
+                  onChange={(e) => handleFilterChange('salesman_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل المندوبين' : 'All Salesmen'}</option>
+                  {salesmen.map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div> */}
+
+              {/* Date Range */}
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'من تاريخ' : 'From Date'}
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.date_from}
+                  onChange={(e) => handleFilterChange('date_from', e.target.value)}
+                />
+              </div> */}
+
+              {/* <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'إلى تاريخ' : 'To Date'}
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.date_to}
+                  onChange={(e) => handleFilterChange('date_to', e.target.value)}
+                />
+              </div> */}
+
+              {/* Amount Range */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'أقل مبلغ' : 'Min Amount'}
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  placeholder="0"
+                  value={filters.amount_min}
+                  onChange={(e) => handleFilterChange('amount_min', e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'أكبر مبلغ' : 'Max Amount'}
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  placeholder="1000000"
+                  value={filters.amount_max}
+                  onChange={(e) => handleFilterChange('amount_max', e.target.value)}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -792,7 +906,7 @@ const SalesInvoiceList = () => {
                         ))}
                       </TableRow>
                     ))
-                  ) : invoices.length === 0 ? (
+                  ) : filteredInvoices.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-[400px] text-center">
                         <div className="flex flex-col items-center justify-center h-full">
@@ -800,25 +914,26 @@ const SalesInvoiceList = () => {
                             <Receipt className="h-12 w-12 text-muted-foreground/50" />
                           </div>
                           <h3 className="text-lg font-semibold mb-2">
-                            {language === 'ar' ? 'لا توجد فواتير' : 'No invoices found'}
+                            {language === 'ar' ? 'لا توجد نتائج' : 'No results found'}
                           </h3>
                           <p className="text-sm text-muted-foreground mb-4 max-w-md">
                             {language === 'ar' 
-                              ? 'لم يتم إنشاء أي فواتير مبيعات بعد. ابدأ بإنشاء أول فاتورة الآن.'
-                              : 'No sales invoices have been created yet. Start by creating your first invoice.'}
+                              ? 'لم يتم العثور على فواتير تطابق معايير البحث. حاول تغيير الفلاتر.'
+                              : 'No invoices match your search criteria. Try adjusting the filters.'}
                           </p>
                           <Button 
-                            onClick={() => setShowForm(true)}
+                            variant="outline"
+                            onClick={handleResetFilters}
                             className="gap-2"
                           >
-                            <Plus className="h-4 w-4" />
-                            {language === 'ar' ? 'إنشاء فاتورة' : 'Create Invoice'}
+                            <X className="h-4 w-4" />
+                            {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    invoices.map((invoice: SalesInvoice, index: number) => (
+                    filteredInvoices.map((invoice: SalesInvoice, index: number) => (
                       <TableRow 
                         key={invoice.id} 
                         className={`
@@ -894,7 +1009,12 @@ const SalesInvoiceList = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getPaymentMethodBadge(invoice.payment_method)}
+                          <div className="flex items-center gap-1">
+                            {getPaymentMethodBadge(invoice.payment_method)}
+                            <div className="ml-1">
+                              {getPaymentStatusBadge(invoice.payment_status)}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center gap-1">
@@ -911,14 +1031,13 @@ const SalesInvoiceList = () => {
                               <Eye className="h-4 w-4" />
                             </Button>
                             
-                            {/* ✅ زرار المرتجع الجديد - ديناميكي */}
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 hover:bg-amber-500/10 hover:text-amber-600 transition-all"
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                await fetchInvoiceForReturn(invoice.id); // ✅ هنا بنبعت الـ ID الحقيقي
+                                await fetchInvoiceForReturn(invoice.id);
                               }}
                               title={language === 'ar' ? 'إنشاء مرتجع' : 'Create return'}
                             >
@@ -949,14 +1068,13 @@ const SalesInvoiceList = () => {
         />
       )}
 
-      {/* ✅ نموذج المرتجع - بياخد بيانات الفاتورة ديناميكياً */}
       <InvoiceReturnForm
         isOpen={showReturnForm}
         onClose={() => {
           setShowReturnForm(false);
           setSelectedInvoiceForReturn(null);
         }}
-        invoiceData={selectedInvoiceForReturn} // ✅ بنمرر بيانات الفاتورة كاملة
+        invoiceData={selectedInvoiceForReturn}
       />
     </>
   );

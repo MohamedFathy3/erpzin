@@ -1123,7 +1123,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       )}
                     </Button>
                     
-                    <Button 
+                    {/* <Button 
                       variant="outline" 
                       className="w-full gap-2 h-11"
                       onClick={handleSaveAndPrint}
@@ -1131,7 +1131,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     >
                       <Printer className="h-4 w-4" />
                       {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
-                    </Button>
+                    </Button> */}
                   </div>
                 </CardContent>
               </Card>

@@ -109,16 +109,10 @@ export const AdvancedFilter: React.FC<AdvancedFilterProps> = ({
                 type="number"
                 value={values[`${field.key}_min`] || ''}
                 onChange={(e) => handleFieldChange(`${field.key}_min`, e.target.value)}
-                placeholder={language === 'ar' ? 'من' : 'Min'}
+                placeholder={language === 'ar' ? 'ادخل الرقم' : 'enternumber'}
                 className="h-9 text-sm"
               />
-              <Input
-                type="number"
-                value={values[`${field.key}_max`] || ''}
-                onChange={(e) => handleFieldChange(`${field.key}_max`, e.target.value)}
-                placeholder={language === 'ar' ? 'إلى' : 'Max'}
-                className="h-9 text-sm"
-              />
+          
             </div>
           </div>
         );

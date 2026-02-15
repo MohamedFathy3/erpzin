@@ -321,13 +321,13 @@ const Purchasing = () => {
         const filters: any = { active: true };
 
         if (supplierFilters.search) {
-          filters.search = supplierFilters.search;
+          filters.name = supplierFilters.search;
         }
 
         if (supplierFilters.balance_min || supplierFilters.balance_max) {
-          filters.balance = {};
+          
           if (supplierFilters.balance_min) {
-            filters.balance.min = Number(supplierFilters.balance_min);
+            filters.credit_limit = Number(supplierFilters.balance_min);
           }
           if (supplierFilters.balance_max) {
             filters.balance.max = Number(supplierFilters.balance_max);
@@ -392,7 +392,7 @@ const Purchasing = () => {
   const purchaseReturnsCount = purchaseReturnsResponse?.meta?.total || purchaseReturns.length;
 
   // ========== حساب الإحصائيات ==========
-  const totalBalance = suppliers.reduce((sum: number, s: Supplier) => sum + Number(s.balance || 0), 0);
+  const totalBalance = suppliers.reduce((sum: number, s: Supplier) => sum + Number(s.credit_limit || 0), 0);
   const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.total_amount || 0), 0);
 
   const stats = [
@@ -856,13 +856,13 @@ const Purchasing = () => {
                                 )}
                                 <div className="flex items-center justify-between mt-2 pt-2 border-t">
                                   <span className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'الرصيد' : 'Balance'}
+                                    {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
                                   </span>
                                   <span className={cn(
                                     "font-semibold",
                                     Number(supplier.balance) > 0 ? "text-destructive" : "text-success"
                                   )}>
-                                    {Number(supplier.balance || 0).toLocaleString()} YER
+                                    {Number(supplier.credit_limit || 0).toLocaleString()} YER
                                   </span>
                                 </div>
                               </div>

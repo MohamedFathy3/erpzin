@@ -779,7 +779,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
             </div>
 
             {/* Row 2: Date & Time Filters */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.dateFrom}</Label>
                 <DatePicker
@@ -789,7 +789,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   language={language}
                 />
               </div>
-              <div className="space-y-1.5">
+              {/* <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.timeFrom}</Label>
                 <TimePicker
                   value={timeFrom}
@@ -797,7 +797,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   placeholder={t.timeFrom}
                   language={language}
                 />
-              </div>
+              </div> */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.dateTo}</Label>
                 <DatePicker
@@ -807,7 +807,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   language={language}
                 />
               </div>
-              <div className="space-y-1.5">
+              {/* <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.timeTo}</Label>
                 <TimePicker
                   value={timeTo}
@@ -815,11 +815,11 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   placeholder={t.timeTo}
                   language={language}
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* Row 3: Selects */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.branch}</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
