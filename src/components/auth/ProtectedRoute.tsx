@@ -1,7 +1,10 @@
+// components/auth/ProtectedRoute.tsx
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { canAccessPage } from '@/config/permissions';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,6 +27,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // التحقق من صلاحية الوصول
+  if (!canAccessPage(user.role as any, location.pathname)) {
+    toast.error('ليس لديك صلاحية للوصول إلى هذه الصفحة');
+    
+    // توجيه المستخدم إلى الصفحة المناسبة حسب دوره
+    if (user.role === 'cashier') {
+      return <Navigate to="/pos" replace />;
+    }
+    
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

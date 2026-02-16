@@ -588,12 +588,11 @@ const handleEditEmployee = async (employee: any) => {
       name: employeeData.name || '',
       name_ar: employeeData.name_ar || '',
       position: employeeData.position || '',
-      // department: employeeData.department || '',
       phone: employeeData.phone || '',
       email: employeeData.email || '',
       salary: employeeData.salary || '',
       is_active: employeeData.is_active ?? true,
-      role_id: employeeData.role?.id?.toString() || '', // 👈 هنا الفرق! بناخد role.id من object الـ role
+      role_id: employeeData.role || '', // 👈 هنا الفرق! بناخد role مباشرة لأنها string
       password: '' // 👈 الباسورد فاضي عشان ما يظهرش
     });
     
@@ -1357,10 +1356,10 @@ const handleEditEmployee = async (employee: any) => {
                               </TableCell>
                               <TableCell>{employee.position || '-'}</TableCell>
                               <TableCell>
-                                {employee.role.name ? (
+                                {employee.role ? (
                                   <div className="flex items-center gap-1">
                                     <Shield size={14} className="text-muted-foreground" />
-                                    {employee.role.name}
+                                    {employee.role}
                                   </div>
                                 ) : (
                                   '-'

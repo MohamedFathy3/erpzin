@@ -1,22 +1,11 @@
+// components/layout/Sidebar.tsx
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAllowedPages } from '@/config/permissions';
 import { cn } from '@/lib/utils';
-import {
-  LayoutDashboard,
-  Package,
-  Truck,
-  Wallet,
-  Users,
-  Crown,
-  FileBarChart,
-  Settings,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Receipt,
-  ShoppingCart,
-} from 'lucide-react';
+import * as Icons from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
 import logoFull from '@/assets/logo-full.png';
 
@@ -45,35 +34,77 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, collapsed, onCli
   );
 };
 
+// دالة لجلب الأيقونة المناسبة
+const getIcon = (iconName: string) => {
+  const icons: Record<string, any> = {
+    LayoutDashboard: Icons.LayoutDashboard,
+    ShoppingCart: Icons.ShoppingCart,
+    Package: Icons.Package,
+    Receipt: Icons.Receipt,
+    Truck: Icons.Truck,
+    Wallet: Icons.Wallet,
+    Users: Icons.Users,
+    Crown: Icons.Crown,
+    FileBarChart: Icons.FileBarChart,
+    Settings: Icons.Settings,
+    LogOut: Icons.LogOut,
+    Warehouse: Icons.Warehouse,
+  };
+  
+  const Icon = icons[iconName] || Icons.LayoutDashboard;
+  return <Icon size={20} />;
+};
+
 interface SidebarProps {
   activeItem?: string;
   onNavigate?: (item: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
-  const { t, direction } = useLanguage();
+  // ✅ هنا بنستخدم hooks في بداية المكون
+  const { t, direction, language } = useLanguage(); // ✅ language موجودة هنا
   const { collapsed, toggle } = useSidebarContext();
+  const { user } = useAuth();
 
-  const navItems = [
-    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('nav.dashboard') },
-    { id: 'pos', icon: <ShoppingCart size={20} />, label: t('nav.pos') },
-    { id: 'inventory', icon: <Package size={20} />, label: t('nav.inventory') },
-    { id: 'sales', icon: <Receipt size={20} />, label: t('nav.sales') },
-    { id: 'purchasing', icon: <Truck size={20} />, label: t('nav.purchasing') },
-    { id: 'finance', icon: <Wallet size={20} />, label: t('nav.finance') },
-    { id: 'hr', icon: <Users size={20} />, label: t('nav.hr') },
-    { id: 'crm', icon: <Crown size={20} />, label: t('nav.crm') },
-    { id: 'reports', icon: <FileBarChart size={20} />, label: t('nav.reports') },
-  ];
+  // جلب الصفحات المسموحة للمستخدم
+  const allowedPages = getAllowedPages(user?.role as any);
 
-  const bottomItems = [
-    { id: 'settings', icon: <Settings size={20} />, label: t('nav.settings') },
-    { id: 'logout', icon: <LogOut size={20} />, label: t('nav.logout') },
-  ];
+  // ✅ تصفية وبناء عناصر القائمة
+  const navItems = React.useMemo(() => {
+    return allowedPages
+      .filter(page => page.id !== 'settings')
+      .map(page => ({
+        id: page.id,
+        icon: getIcon(page.icon),
+        label: language === 'ar' ? page.labelAr : page.label, // ✅ هنا بنستخدم language
+      }));
+  }, [allowedPages, language]);
+
+  // ✅ عناصر القائمة السفلية
+  const bottomItems = React.useMemo(() => {
+    const items = [];
+    
+    const settingsPage = allowedPages.find(page => page.id === 'settings');
+    if (settingsPage) {
+      items.push({
+        id: 'settings',
+        icon: getIcon(settingsPage.icon),
+        label: language === 'ar' ? settingsPage.labelAr : settingsPage.label,
+      });
+    }
+
+    items.push({
+      id: 'logout',
+      icon: <Icons.LogOut size={20} />,
+      label: t('nav.logout'),
+    });
+
+    return items;
+  }, [allowedPages, language, t]);
 
   const CollapseIcon = direction === 'rtl' 
-    ? (collapsed ? ChevronLeft : ChevronRight)
-    : (collapsed ? ChevronRight : ChevronLeft);
+    ? (collapsed ? Icons.ChevronLeft : Icons.ChevronRight)
+    : (collapsed ? Icons.ChevronRight : Icons.ChevronLeft);
 
   return (
     <aside
@@ -89,7 +120,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         collapsed ? 'justify-center p-3' : 'justify-center p-4'
       )}>
         <div className="relative w-full h-12 flex items-center justify-center">
-          {/* Icon Logo - visible when collapsed */}
           <img 
             src={logoIcon} 
             alt="INJAZ" 
@@ -100,7 +130,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
                 : 'w-0 h-0 opacity-0 scale-50 rotate-180'
             )}
           />
-          {/* Full Logo - visible when expanded */}
           <img 
             src={logoFull} 
             alt="INJAZ ERP" 
@@ -141,18 +170,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
       </nav>
 
       {/* Bottom Items */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
-        {bottomItems.map((item) => (
-          <NavItem
-            key={item.id}
-            icon={item.icon}
-            label={item.label}
-            active={activeItem === item.id}
-            collapsed={collapsed}
-            onClick={() => onNavigate?.(item.id)}
-          />
-        ))}
-      </div>
+      {bottomItems.length > 0 && (
+        <div className="p-3 border-t border-sidebar-border space-y-1">
+          {bottomItems.map((item) => (
+            <NavItem
+              key={item.id}
+              icon={item.icon}
+              label={item.label}
+              active={activeItem === item.id}
+              collapsed={collapsed}
+              onClick={() => {
+                if (item.id === 'logout') {
+                  // تسجيل الخروج
+                  console.log('Logout clicked');
+                } else {
+                  onNavigate?.(item.id);
+                }
+              }}
+            />
+          ))}
+        </div>
+      )}
     </aside>
   );
 };
