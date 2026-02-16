@@ -51,11 +51,11 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 7000,
     allowedHosts: [
-      'dentin.cloud',
+      'injazyemen.cloud',
       'localhost',
       '127.0.0.1',
       '::1',
-      '.dentin.cloud' // للسماح بالنطاقات الفرعية أيضاً
+      '.injazyemen.cloud' // للسماح بالنطاقات الفرعية أيضاً
     ]
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
