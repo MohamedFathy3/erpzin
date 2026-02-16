@@ -4,6 +4,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import MainLayout from "@/components/layout/MainLayout";
 import SalesInvoiceList from "@/components/sales/SalesInvoiceList";
 import SalesReturns from "@/components/sales/SalesReturns";
+import Shift from "@/components/sales/shift";
 import POSTransactionsList from "@/components/pos/POSTransactionsList";
 import { FileText, RotateCcw, Receipt } from "lucide-react";
 
@@ -26,7 +27,7 @@ const Sales = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
             <TabsTrigger value="pos-invoices" className="flex items-center gap-2">
               <Receipt className="h-4 w-4" />
               <span className="hidden sm:inline">
@@ -45,6 +46,12 @@ const Sales = () => {
                 {language === 'ar' ? 'المرتجعات' : 'Returns'}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="shift" className="flex items-center gap-2">
+              <Receipt className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {language === 'ar' ? '  الورديه ' : 'POS shift'}
+              </span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="pos-invoices" className="mt-6">
@@ -57,6 +64,9 @@ const Sales = () => {
 
           <TabsContent value="returns" className="mt-6">
             <SalesReturns />
+          </TabsContent>
+          <TabsContent value="shift" className="mt-6">
+            <Shift />
           </TabsContent>
         </Tabs>
       </div>

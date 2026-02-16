@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   DollarSign, 
   Clock, 
@@ -18,134 +19,148 @@ import {
   CheckCircle2,
   Printer,
   X,
-  RefreshCw
+  RefreshCw,
+  User,
+  Calendar
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import api from '@/lib/api';
 
 // ========== أنواع البيانات ==========
 interface POSShift {
-  id: string;
-  shift_number: string;
-  cashier_id: string;
-  cashier_name?: string;
+  id: number;
+  employee_id: number | null;
+  admin_id: number | null;
+  opening_balance: string;
+  closing_balance: string | null;
+  cash_sales: string;
+  card_sales: string;
+  returns_amount: string;
+  expected_amount: string | null;
+  actual_amount: string | null;
+  difference: string | null;
   opened_at: string;
   closed_at: string | null;
-  opening_amount: number;
-  closing_amount: number | null;
-  expected_amount: number | null;
-  cash_sales: number;
-  card_sales: number;
-  other_sales: number;
-  total_sales: number;
-  total_returns: number;
-  transactions_count: number;
-  variance: number | null;
-  variance_notes: string | null;
   status: 'open' | 'closed';
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OpenShiftPayload {
+  opening_balance: number;
+  notes?: string;
+}
+
+interface CloseShiftPayload {
+  actual_amount: number;
+  notes?: string;
 }
 
 interface POSShiftManagementProps {
-  currentShift: POSShift | null;
-  onShiftChange: (shift: POSShift | null) => void;
+  onShiftChange?: (shift: POSShift | null) => void;
 }
 
-// ========== Local Storage Keys ==========
-const STORAGE_KEYS = {
-  ACTIVE_SHIFT: 'pos_active_shift',
-  SHIFT_HISTORY: 'pos_shift_history',
-  LAST_CLEANUP: 'pos_last_cleanup'
-};
-
-// ========== Local Storage Service ==========
-class LocalStorageService {
-  // ✅ حفظ الوردية النشطة
-  static saveActiveShift(shift: POSShift | null) {
-    if (shift) {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_SHIFT, JSON.stringify(shift));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.ACTIVE_SHIFT);
-    }
-  }
-
-  // ✅ جلب الوردية النشطة
-  static getActiveShift(): POSShift | null {
-    const shift = localStorage.getItem(STORAGE_KEYS.ACTIVE_SHIFT);
-    return shift ? JSON.parse(shift) : null;
-  }
-
-  // ✅ حفظ سجل الورديات
-  static saveShiftToHistory(shift: POSShift) {
-    const history = this.getShiftHistory();
-    const existingIndex = history.findIndex(s => s.id === shift.id);
-    
-    if (existingIndex >= 0) {
-      history[existingIndex] = shift;
-    } else {
-      history.push(shift);
-    }
-    
-    localStorage.setItem(STORAGE_KEYS.SHIFT_HISTORY, JSON.stringify(history));
-  }
-
-  // ✅ جلب سجل الورديات
-  static getShiftHistory(): POSShift[] {
-    const history = localStorage.getItem(STORAGE_KEYS.SHIFT_HISTORY);
-    return history ? JSON.parse(history) : [];
-  }
-
-  // ✅ حذف الورديات الأقدم من 24 ساعة
-  static cleanupOldShifts() {
-    const lastCleanup = localStorage.getItem(STORAGE_KEYS.LAST_CLEANUP);
-    const now = Date.now();
-    
-    // نعمل cleanup مرة كل 24 ساعة بس
-    if (lastCleanup && now - parseInt(lastCleanup) < 24 * 60 * 60 * 1000) {
-      return;
-    }
-
-    const history = this.getShiftHistory();
-    const oneDayAgo = now - 24 * 60 * 60 * 1000;
-    
-    // نشيل الورديات اللي اتعملت من أكتر من 24 ساعة
-    const filteredHistory = history.filter(shift => {
-      const shiftDate = new Date(shift.opened_at).getTime();
-      return shiftDate > oneDayAgo;
-    });
-    
-    localStorage.setItem(STORAGE_KEYS.SHIFT_HISTORY, JSON.stringify(filteredHistory));
-    localStorage.setItem(STORAGE_KEYS.LAST_CLEANUP, now.toString());
-  }
-
-  // ✅ توليد رقم وردية جديد
-  static generateShiftNumber(): string {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const random = Math.floor(Math.random() * 9000 + 1000);
-    
-    return `SH-${year}${month}${day}-${random}`;
-  }
-
-  // ✅ توليد ID جديد
-  static generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substring(2);
-  }
-}
-
-const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, onShiftChange }) => {
+const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ onShiftChange }) => {
   const { language } = useLanguage();
+  const queryClient = useQueryClient();
   
   // ========== State ==========
   const [openShiftModal, setOpenShiftModal] = useState(false);
   const [closeShiftModal, setCloseShiftModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState('');
   const [closingAmount, setClosingAmount] = useState('');
-  const [varianceNotes, setVarianceNotes] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [cashierName, setCashierName] = useState('');
+  const [openingNotes, setOpeningNotes] = useState('');
+  const [closingNotes, setClosingNotes] = useState('');
+  
+  // ========== جلب الوردية الحالية ==========
+  const { 
+    data: currentShift, 
+    isLoading, 
+    refetch 
+  } = useQuery({
+    queryKey: ['current-shift'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/shifts/current');
+        if (response.data.status && response.data.data) {
+          return response.data.data as POSShift;
+        }
+        return null;
+      } catch (error) {
+        console.error('Error fetching current shift:', error);
+        return null;
+      }
+    }
+  });
+
+  // ========== فتح وردية جديدة ==========
+  const openShiftMutation = useMutation({
+    mutationFn: async (data: OpenShiftPayload) => {
+      const response = await api.post('/shifts/open', data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.status) {
+        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        setOpenShiftModal(false);
+        setOpeningAmount('');
+        setOpeningNotes('');
+        toast.success(language === 'ar' ? 'تم فتح الوردية بنجاح' : 'Shift opened successfully');
+        
+        // إشعار المكون الأب
+        if (onShiftChange) {
+          refetch().then(result => {
+            onShiftChange(result.data || null);
+          });
+        }
+      } else {
+        toast.error(data.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
+      }
+    },
+    onError: (error: any) => {
+      console.error('Error opening shift:', error);
+      toast.error(error.response?.data?.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
+    }
+  });
+
+  // ========== إغلاق الوردية ==========
+  const closeShiftMutation = useMutation({
+    mutationFn: async (data: CloseShiftPayload) => {
+      const response = await api.post('/shifts/close', data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.status) {
+        queryClient.invalidateQueries({ queryKey: ['current-shift'] });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        setCloseShiftModal(false);
+        setClosingAmount('');
+        setClosingNotes('');
+        toast.success(language === 'ar' ? 'تم إغلاق الوردية بنجاح' : 'Shift closed successfully');
+        
+        // إشعار المكون الأب
+        if (onShiftChange) {
+          onShiftChange(null);
+        }
+      } else {
+        toast.error(data.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
+      }
+    },
+    onError: (error: any) => {
+      console.error('Error closing shift:', error);
+      toast.error(error.response?.data?.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
+    }
+  });
+
+  // ========== إشعار المكون الأب عند تغير الوردية ==========
+  useEffect(() => {
+    if (onShiftChange) {
+      onShiftChange(currentShift || null);
+    }
+  }, [currentShift, onShiftChange]);
 
   // ========== Translations ==========
   const t = {
@@ -157,26 +172,34 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       shiftNumber: 'Shift #',
       openTime: 'Open Time',
       openingBalance: 'Opening Balance',
-      transactions: 'Transactions',
       cash: 'Cash',
       card: 'Card',
       returns: 'Returns',
       expectedAmount: 'Expected Amount',
       actualAmount: 'Actual Amount',
-      variance: 'Variance',
+      variance: 'Difference',
       surplus: 'Surplus',
       shortage: 'Shortage',
       exact: 'Exact',
       notes: 'Notes',
-      varianceNotes: 'Variance Notes',
+      varianceNotes: 'Notes',
       print: 'Print',
       cancel: 'Cancel',
       save: 'Save',
       openShiftSuccess: 'Shift opened successfully',
       closeShiftSuccess: 'Shift closed successfully',
       enterOpeningAmount: 'Enter opening balance',
-      enterClosingAmount: 'Enter closing balance',
-      loading: 'Loading...'
+      enterClosingAmount: 'Enter actual amount',
+      loading: 'Loading...',
+      totalSales: 'Total Sales',
+      cashier: 'Cashier',
+      date: 'Date',
+      time: 'Time',
+      thankYou:"thankYou",
+      shiftDetails: 'Shift Details',
+      openingNotes: 'Opening Notes',
+      closingNotes: 'Closing Notes',
+      optional: 'Optional'
     },
     ar: {
       currentShift: 'الوردية الحالية',
@@ -186,7 +209,6 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       shiftNumber: 'رقم الوردية',
       openTime: 'وقت الفتح',
       openingBalance: 'رصيد الافتتاح',
-      transactions: 'المعاملات',
       cash: 'نقدي',
       card: 'بطاقة',
       returns: 'مرتجعات',
@@ -197,7 +219,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       shortage: 'عجز',
       exact: 'مطابق',
       notes: 'ملاحظات',
-      varianceNotes: 'ملاحظات الفرق',
+      varianceNotes: 'ملاحظات',
       print: 'طباعة',
       cancel: 'إلغاء',
       save: 'حفظ',
@@ -205,168 +227,59 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       closeShiftSuccess: 'تم إغلاق الوردية بنجاح',
       enterOpeningAmount: 'أدخل رصيد الافتتاح',
       enterClosingAmount: 'أدخل الرصيد الفعلي',
-      loading: 'جاري التحميل...'
+      loading: 'جاري التحميل...',
+      totalSales: 'إجمالي المبيعات',
+      cashier: 'الكاشير',
+      date: 'التاريخ',
+      thankYou:"شكرا لك",
+      time: 'الوقت',
+      shiftDetails: 'تفاصيل الوردية',
+      openingNotes: 'ملاحظات الافتتاح',
+      closingNotes: 'ملاحظات الإغلاق',
+      optional: 'اختياري'
     }
   }[language === 'ar' ? 'ar' : 'en'];
 
-  // ========== Load Active Shift on Mount ==========
-  useEffect(() => {
-    // تنظيف الورديات القديمة
-    LocalStorageService.cleanupOldShifts();
-    
-    // جلب الوردية النشطة
-    const activeShift = LocalStorageService.getActiveShift();
-    
-    // لو الوردية النشطة قديمة (أكتر من 24 ساعة)، نقفلها
-    if (activeShift) {
-      const shiftDate = new Date(activeShift.opened_at).getTime();
-      const now = Date.now();
-      
-      if (now - shiftDate > 24 * 60 * 60 * 1000) {
-        // نقفل الوردية تلقائياً
-        const closedShift = {
-          ...activeShift,
-          closed_at: new Date().toISOString(),
-          status: 'closed' as const
-        };
-        
-        LocalStorageService.saveShiftToHistory(closedShift);
-        LocalStorageService.saveActiveShift(null);
-        onShiftChange(null);
-        
-        toast.warning(t.shiftNumber + ' ' + activeShift.shift_number + ' ' + 
-          (language === 'ar' ? 'تم إغلاقها تلقائياً بعد 24 ساعة' : 'automatically closed after 24 hours'));
-      } else {
-        onShiftChange(activeShift);
-      }
-    }
-    
-    // جلب اسم الكاشير من localStorage
-    const savedName = localStorage.getItem('pos_cashier_name');
-    if (savedName) {
-      setCashierName(savedName);
-    } else {
-      const name = prompt(language === 'ar' ? 'أدخل اسم الكاشير' : 'Enter cashier name');
-      if (name) {
-        setCashierName(name);
-        localStorage.setItem('pos_cashier_name', name);
-      }
-    }
-    
-    setIsLoading(false);
-  }, []);
-
-  // ========== Open Shift ==========
-  const openShiftMutation = {
-    isPending: false,
-    mutate: (amount: number) => {
-      try {
-        if (!cashierName) {
-          toast.error(language === 'ar' ? 'الرجاء إدخال اسم الكاشير' : 'Please enter cashier name');
-          return;
-        }
-
-        const now = new Date().toISOString();
-        const newShift: POSShift = {
-          id: LocalStorageService.generateId(),
-          shift_number: LocalStorageService.generateShiftNumber(),
-          cashier_id: 'local-' + Date.now(),
-          cashier_name: cashierName,
-          opened_at: now,
-          closed_at: null,
-          opening_amount: amount,
-          closing_amount: null,
-          expected_amount: null,
-          cash_sales: 0,
-          card_sales: 0,
-          other_sales: 0,
-          total_sales: 0,
-          total_returns: 0,
-          transactions_count: 0,
-          variance: null,
-          variance_notes: null,
-          status: 'open',
-          notes: null
-        };
-
-        LocalStorageService.saveActiveShift(newShift);
-        LocalStorageService.saveShiftToHistory(newShift);
-        
-        onShiftChange(newShift);
-        setOpenShiftModal(false);
-        setOpeningAmount('');
-        
-        toast.success(t.openShiftSuccess);
-      } catch (error: any) {
-        toast.error(error.message);
-      }
-    }
-  };
-
-  // ========== Close Shift ==========
-  const closeShiftMutation = {
-    isPending: false,
-    mutate: ({ amount, notes }: { amount: number; notes: string }) => {
-      try {
-        if (!currentShift) {
-          throw new Error(language === 'ar' ? 'لا توجد وردية مفتوحة' : 'No open shift');
-        }
-
-        const expectedAmount = currentShift.opening_amount + currentShift.cash_sales - currentShift.total_returns;
-        const variance = amount - expectedAmount;
-
-        const closedShift: POSShift = {
-          ...currentShift,
-          closed_at: new Date().toISOString(),
-          closing_amount: amount,
-          expected_amount: expectedAmount,
-          variance: variance,
-          variance_notes: notes || null,
-          status: 'closed'
-        };
-
-        LocalStorageService.saveActiveShift(null);
-        LocalStorageService.saveShiftToHistory(closedShift);
-        
-        onShiftChange(null);
-        setCloseShiftModal(false);
-        setClosingAmount('');
-        setVarianceNotes('');
-        
-        toast.success(t.closeShiftSuccess);
-      } catch (error: any) {
-        toast.error(error.message);
-      }
-    }
-  };
-
-  // ========== Handlers ==========
-  const handleOpenShift = () => {
-    const amount = parseFloat(openingAmount) || 0;
-    if (amount <= 0) {
-      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
-      return;
-    }
-    openShiftMutation.mutate(amount);
-  };
-
-  const handleCloseShift = () => {
-    const amount = parseFloat(closingAmount) || 0;
-    if (amount <= 0) {
-      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
-      return;
-    }
-    closeShiftMutation.mutate({ amount, notes: varianceNotes });
-  };
-
+  // ========== حساب المبلغ المتوقع ==========
   const expectedAmount = currentShift 
-    ? currentShift.opening_amount + currentShift.cash_sales - currentShift.total_returns 
+    ? parseFloat(currentShift.opening_balance) + 
+      parseFloat(currentShift.cash_sales) - 
+      parseFloat(currentShift.returns_amount)
     : 0;
 
+  // ========== حساب الفرق ==========
   const currentVariance = currentShift && closingAmount 
     ? parseFloat(closingAmount) - expectedAmount 
     : 0;
 
+  // ========== Handlers ==========
+  const handleOpenShift = () => {
+    const amount = parseFloat(openingAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
+      return;
+    }
+
+    openShiftMutation.mutate({
+      opening_balance: amount,
+      notes: openingNotes || undefined
+    });
+  };
+
+  const handleCloseShift = () => {
+    const amount = parseFloat(closingAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال مبلغ صحيح' : 'Please enter a valid amount');
+      return;
+    }
+
+    closeShiftMutation.mutate({
+      actual_amount: amount,
+      notes: closingNotes || undefined
+    });
+  };
+
+  // ========== طباعة تقرير Z ==========
   const printZReport = () => {
     if (!currentShift) return;
 
@@ -382,7 +295,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       <html dir="rtl">
       <head>
         <meta charset="utf-8">
-        <title>${t.closeShift} - ${currentShift.shift_number}</title>
+        <title>${t.closeShift} - #${currentShift.id}</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; background: #fff; }
           .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #000; }
@@ -403,72 +316,52 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
       </head>
       <body>
         <div class="header">
-          <h1 class="shop-name">${localStorage.getItem('pos_shop_name') || t.currentShift}</h1>
-          <p>${currentShift.shift_number}</p>
+          <h1 class="shop-name">${localStorage.getItem('shop_name') || t.currentShift}</h1>
+          <p>الوردية #${currentShift.id}</p>
           <span class="badge badge-closed">${t.closeShift}</span>
         </div>
         
         <div class="shift-info">
           <div class="row">
-            <span>${t.cashier}:</span>
-            <span class="font-bold">${currentShift.cashier_name || cashierName}</span>
-          </div>
-          <div class="row">
             <span>${t.openTime}:</span>
             <span>${format(new Date(currentShift.opened_at), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</span>
           </div>
           <div class="row">
-            <span>${t.closeTime || 'وقت الإغلاق'}:</span>
+            <span>${t.time || 'وقت الإغلاق'}:</span>
             <span>${format(new Date(), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</span>
           </div>
         </div>
         
         <div class="section">
-          <div class="section-title">📊 ${t.salesSummary || 'ملخص المبيعات'}</div>
+          <div class="section-title">💰 ${t.openingBalance}</div>
           <div class="row">
-            <span>${t.transactions}:</span>
-            <span class="amount">${currentShift.transactions_count}</span>
-          </div>
-          <div class="row">
-            <span>💰 ${t.cash}:</span>
-            <span class="amount">${currentShift.cash_sales.toLocaleString()} ر.ي</span>
-          </div>
-          <div class="row">
-            <span>💳 ${t.card}:</span>
-            <span class="amount">${currentShift.card_sales.toLocaleString()} ر.ي</span>
-          </div>
-          <div class="row">
-            <span>↩️ ${t.returns}:</span>
-            <span class="amount">${currentShift.total_returns.toLocaleString()} ر.ي</span>
-          </div>
-          <div class="row total">
-            <span>${t.total}:</span>
-            <span class="amount">${currentShift.total_sales.toLocaleString()} ر.ي</span>
+            <span>${t.openingBalance}:</span>
+            <span class="amount">${parseFloat(currentShift.opening_balance).toLocaleString()} ر.ي</span>
           </div>
         </div>
         
         <div class="section">
-          <div class="section-title">💰 ${t.cashSummary || 'ملخص النقدية'}</div>
+          <div class="section-title">📊 ${t.totalSales || 'المبيعات'}</div>
           <div class="row">
-            <span>${t.openingBalance}:</span>
-            <span class="amount">${currentShift.opening_amount.toLocaleString()} ر.ي</span>
+            <span>💰 ${t.cash}:</span>
+            <span class="amount">${parseFloat(currentShift.cash_sales).toLocaleString()} ر.ي</span>
           </div>
           <div class="row">
-            <span>+ ${t.cashSales || 'مبيعات نقدية'}:</span>
-            <span class="amount">+ ${currentShift.cash_sales.toLocaleString()} ر.ي</span>
+            <span>💳 ${t.card}:</span>
+            <span class="amount">${parseFloat(currentShift.card_sales).toLocaleString()} ر.ي</span>
           </div>
           <div class="row">
-            <span>- ${t.returns}:</span>
-            <span class="amount">- ${currentShift.total_returns.toLocaleString()} ر.ي</span>
-          </div>
-          <div class="row total">
-            <span>${t.expectedAmount}:</span>
-            <span class="amount">${expectedAmount.toLocaleString()} ر.ي</span>
+            <span>↩️ ${t.returns}:</span>
+            <span class="amount">-${parseFloat(currentShift.returns_amount).toLocaleString()} ر.ي</span>
           </div>
         </div>
         
         <div class="section">
           <div class="section-title">⚖️ ${t.variance}</div>
+          <div class="row">
+            <span>${t.expectedAmount}:</span>
+            <span class="amount">${expectedAmount.toLocaleString()} ر.ي</span>
+          </div>
           <div class="row">
             <span>${t.actualAmount}:</span>
             <span class="amount">${parseFloat(closingAmount || '0').toLocaleString()} ر.ي</span>
@@ -477,10 +370,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
             <span>${varianceIcon} ${varianceText}:</span>
             <span class="amount">${Math.abs(currentVariance).toLocaleString()} ر.ي</span>
           </div>
-          ${varianceNotes ? `
+          ${closingNotes ? `
           <div class="row">
             <span>${t.notes}:</span>
-            <span>${varianceNotes}</span>
+            <span>${closingNotes}</span>
           </div>
           ` : ''}
         </div>
@@ -498,15 +391,17 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
     printWindow.print();
   };
 
+  // ========== Badge الفرق ==========
   const getVarianceBadge = () => {
-    if (!currentShift || !currentShift.variance) return null;
+    if (!currentShift || !currentShift.difference) return null;
     
-    if (currentShift.variance === 0) {
+    const diff = parseFloat(currentShift.difference);
+    if (diff === 0) {
       return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">✓ {t.exact}</Badge>;
-    } else if (currentShift.variance > 0) {
-      return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">↑ {t.surplus} {currentShift.variance.toLocaleString()} ر.ي</Badge>;
+    } else if (diff > 0) {
+      return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">↑ {t.surplus} {diff.toLocaleString()} ر.ي</Badge>;
     } else {
-      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">↓ {t.shortage} {Math.abs(currentShift.variance).toLocaleString()} ر.ي</Badge>;
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">↓ {t.shortage} {Math.abs(diff).toLocaleString()} ر.ي</Badge>;
     }
   };
 
@@ -532,53 +427,51 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
                 <Clock className="h-5 w-5 text-primary" />
                 {t.currentShift}
               </CardTitle>
-              <Badge variant="default" className="bg-green-600">
+              <Badge variant="default" className="bg-emerald-600">
                 <CheckCircle2 className="h-3 w-3 ml-1" />
-                {t.openShift}
+                {language === 'ar' ? 'مفتوحة' : 'Open'}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
-                <span className="text-muted-foreground">{t.shiftNumber}:</span>
-                <div className="font-medium font-mono">{currentShift.shift_number}</div>
-              </div>
-              <div className="space-y-1">
-                <span className="text-muted-foreground">{t.cashier || 'الكاشير'}:</span>
-                <div className="font-medium">{currentShift.cashier_name || cashierName}</div>
-              </div>
-              <div className="space-y-1">
-                <span className="text-muted-foreground">{t.openTime}:</span>
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Calendar size={12} />
+                  {t.openTime}:
+                </span>
                 <div className="font-medium">
-                  {format(new Date(currentShift.opened_at), 'HH:mm:ss', { locale: ar })}
+                  {format(new Date(currentShift.opened_at), 'yyyy-MM-dd HH:mm', { locale: ar })}
                 </div>
               </div>
               <div className="space-y-1">
-                <span className="text-muted-foreground">{t.openingBalance}:</span>
-                <div className="font-medium">{currentShift.opening_amount.toLocaleString()} ر.ي</div>
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <DollarSign size={12} />
+                  {t.openingBalance}:
+                </span>
+                <div className="font-medium">{parseFloat(currentShift.opening_balance).toLocaleString()} ر.ي</div>
               </div>
             </div>
             
             <Separator />
             
             <div className="grid grid-cols-3 gap-2">
-              <div className="p-3 rounded-lg bg-green-100/50 dark:bg-green-900/20 text-center">
+              <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t.cash}</div>
-                <div className="font-bold text-green-700 dark:text-green-400">
-                  {currentShift.cash_sales.toLocaleString()}
+                <div className="font-bold text-emerald-700 dark:text-emerald-400">
+                  {parseFloat(currentShift.cash_sales).toLocaleString()}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-blue-100/50 dark:bg-blue-900/20 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t.card}</div>
                 <div className="font-bold text-blue-700 dark:text-blue-400">
-                  {currentShift.card_sales.toLocaleString()}
+                  {parseFloat(currentShift.card_sales).toLocaleString()}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-red-100/50 dark:bg-red-900/20 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t.returns}</div>
                 <div className="font-bold text-red-700 dark:text-red-400">
-                  {currentShift.total_returns.toLocaleString()}
+                  {parseFloat(currentShift.returns_amount).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -588,7 +481,14 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
               <span className="text-lg font-bold">{expectedAmount.toLocaleString()} ر.ي</span>
             </div>
 
-            {currentShift.variance !== null && getVarianceBadge()}
+            {currentShift.difference && getVarianceBadge()}
+
+            {currentShift.notes && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">{t.notes}</p>
+                <p className="text-sm">{currentShift.notes}</p>
+              </div>
+            )}
 
             <Button 
               className="w-full gap-2" 
@@ -601,10 +501,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20">
+        <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20">
           <CardContent className="p-6 text-center">
-            <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
             </div>
             <h3 className="font-bold text-lg mb-2">{t.noActiveShift}</h3>
             <p className="text-muted-foreground text-sm mb-6">
@@ -656,6 +556,19 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
                 {t.enterOpeningAmount}
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="opening-notes" className="text-base">
+                {t.openingNotes} <span className="text-muted-foreground text-xs">({t.optional})</span>
+              </Label>
+              <Textarea
+                id="opening-notes"
+                placeholder={t.notes}
+                value={openingNotes}
+                onChange={(e) => setOpeningNotes(e.target.value)}
+                rows={2}
+              />
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
@@ -691,20 +604,16 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
               {/* Shift Summary */}
               <div className="p-4 rounded-lg bg-muted/30 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">{t.shiftNumber}:</span>
-                  <span className="font-mono font-medium">{currentShift.shift_number}</span>
-                </div>
-                <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t.openingBalance}:</span>
-                  <span className="font-medium">{currentShift.opening_amount.toLocaleString()} ر.ي</span>
+                  <span className="font-medium">{parseFloat(currentShift.opening_balance).toLocaleString()} ر.ي</span>
                 </div>
-                <div className="flex justify-between items-center text-green-600">
+                <div className="flex justify-between items-center text-emerald-600">
                   <span>+ {t.cash}:</span>
-                  <span className="font-medium">+ {currentShift.cash_sales.toLocaleString()} ر.ي</span>
+                  <span className="font-medium">+ {parseFloat(currentShift.cash_sales).toLocaleString()} ر.ي</span>
                 </div>
                 <div className="flex justify-between items-center text-red-600">
                   <span>- {t.returns}:</span>
-                  <span className="font-medium">- {currentShift.total_returns.toLocaleString()} ر.ي</span>
+                  <span className="font-medium">- {parseFloat(currentShift.returns_amount).toLocaleString()} ر.ي</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center font-bold text-lg">
@@ -739,14 +648,14 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
               {closingAmount && (
                 <div className={`p-4 rounded-lg flex items-center justify-between ${
                   currentVariance === 0 
-                    ? 'bg-green-100/50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
+                    ? 'bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800' 
                     : currentVariance > 0 
                       ? 'bg-blue-100/50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
                       : 'bg-red-100/50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 }`}>
                   <div className="flex items-center gap-2">
                     {currentVariance === 0 ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                     ) : currentVariance > 0 ? (
                       <TrendingUp className="h-5 w-5 text-blue-600" />
                     ) : (
@@ -762,19 +671,19 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ currentShift, o
                 </div>
               )}
 
-              {/* Variance Notes */}
-              {closingAmount && currentVariance !== 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="variance-notes">{t.varianceNotes}</Label>
-                  <Textarea
-                    id="variance-notes"
-                    placeholder={t.notes}
-                    value={varianceNotes}
-                    onChange={(e) => setVarianceNotes(e.target.value)}
-                    rows={2}
-                  />
-                </div>
-              )}
+              {/* Closing Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="closing-notes" className="text-base">
+                  {t.closingNotes} <span className="text-muted-foreground text-xs">({t.optional})</span>
+                </Label>
+                <Textarea
+                  id="closing-notes"
+                  placeholder={t.notes}
+                  value={closingNotes}
+                  onChange={(e) => setClosingNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
             </div>
           )}
 

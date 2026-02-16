@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { toast } from "sonner";
 import { 
   Users, 
   Shield, 
@@ -55,10 +55,30 @@ import {
   Calendar,
   Warehouse,
   Lock,
-  Palette
+  Palette,
+  Filter,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import api from '@/lib/api';
+import { useDebounce } from '@/hooks/use-debounce';
+
+
+interface ApiRole {
+  id: number;
+  name: string;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiResponse<T> {
+  result: string;
+  data: T[];
+  message: string;
+  status: number;
+}
 
 type AppRole = 'admin' | 'moderator' | 'cashier' | 'viewer';
 
@@ -135,7 +155,7 @@ const UsersPermissions = () => {
   const [isAddRoleDialogOpen, setIsAddRoleDialogOpen] = useState(false);
   const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<CustomRole | null>(null);
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('roles');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<AppRole | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -183,192 +203,58 @@ const UsersPermissions = () => {
     icon: 'Shield'
   });
 
-  const translations = {
-    en: {
-      title: 'Users & Permissions',
-      subtitle: 'Manage system users, roles, and access control',
-      users: 'Users',
-      roles: 'Roles',
-      permissions: 'Permissions Matrix',
-      addUser: 'Add User',
-      addRole: 'Add Role',
-      editUser: 'Edit User',
-      editRole: 'Edit Role',
-      userName: 'Full Name',
-      userNameAr: 'Full Name (Arabic)',
-      username: 'Username',
-      password: 'Password',
-      email: 'Email',
-      phone: 'Phone',
-      role: 'Role',
-      branch: 'Branch',
-      warehouse: 'Warehouse',
-      status: 'Status',
-      active: 'Active',
-      inactive: 'Inactive',
-      save: 'Save Changes',
-      savePermissions: 'Save Permissions',
-      cancel: 'Cancel',
-      delete: 'Delete',
-      actions: 'Actions',
-      admin: 'Administrator',
-      moderator: 'Moderator',
-      cashier: 'Cashier',
-      viewer: 'Viewer',
-      adminDesc: 'Full system access with all permissions',
-      moderatorDesc: 'Manage inventory, sales, and reports',
-      cashierDesc: 'POS operations and basic access',
-      viewerDesc: 'Read-only access to view data',
-      noUsers: 'No users found',
-      roleUpdated: 'Role updated successfully',
-      userUpdated: 'User updated successfully',
-      userAdded: 'User added successfully',
-      roleAdded: 'Role added successfully',
-      permissionsSaved: 'Permissions saved successfully',
-      selectBranch: 'Select Branch',
-      selectWarehouse: 'Select Warehouse',
-      allBranches: 'All Branches',
-      allWarehouses: 'All Warehouses',
-      allRoles: 'All Roles',
-      allStatus: 'All Status',
-      search: 'Search users...',
-      totalUsers: 'Total Users',
-      activeUsers: 'Active Users',
-      inactiveUsers: 'Inactive Users',
-      recentlyAdded: 'Recently Added',
-      module: 'Module',
-      view: 'View',
-      create: 'Create',
-      edit: 'Edit',
-      deleteAction: 'Delete',
-      export: 'Export',
-      import: 'Import',
-      approve: 'Approve',
-      dashboard: 'Dashboard',
-      inventory: 'Inventory',
-      pos: 'Point of Sale',
-      crm: 'CRM',
-      hr: 'HR',
-      finance: 'Finance',
-      reports: 'Reports',
-      settings: 'Settings',
-      sales: 'Sales',
-      purchasing: 'Purchasing',
-      unsavedChanges: 'You have unsaved changes',
-      discardChanges: 'Discard',
-      selectRole: 'Select role to edit permissions',
-      roleName: 'Role Name',
-      roleNameAr: 'Role Name (Arabic)',
-      roleDescription: 'Description',
-      roleDescriptionAr: 'Description (Arabic)',
-      roleColor: 'Color',
-      roleIcon: 'Icon',
-      systemRole: 'System Role',
-      customRole: 'Custom Role',
-      cannotDeleteSystemRole: 'Cannot delete system roles',
-      roleDeleted: 'Role deleted successfully',
-      loginWithUsername: 'Login with username and password',
-      createUserNote: 'Create a user with username and password for direct login'
-    },
-    ar: {
-      title: 'المستخدمين والصلاحيات',
-      subtitle: 'إدارة مستخدمي النظام والأدوار والتحكم في الوصول',
-      users: 'المستخدمين',
-      roles: 'الأدوار',
-      permissions: 'مصفوفة الصلاحيات',
-      addUser: 'إضافة مستخدم',
-      addRole: 'إضافة دور',
-      editUser: 'تعديل مستخدم',
-      editRole: 'تعديل دور',
-      userName: 'الاسم الكامل',
-      userNameAr: 'الاسم بالعربية',
-      username: 'اسم المستخدم',
-      password: 'كلمة المرور',
-      email: 'البريد الإلكتروني',
-      phone: 'الهاتف',
-      role: 'الدور',
-      branch: 'الفرع',
-      warehouse: 'المخزن',
-      status: 'الحالة',
-      active: 'نشط',
-      inactive: 'غير نشط',
-      save: 'حفظ التغييرات',
-      savePermissions: 'حفظ الصلاحيات',
-      cancel: 'إلغاء',
-      delete: 'حذف',
-      actions: 'الإجراءات',
-      admin: 'مدير النظام',
-      moderator: 'مشرف',
-      cashier: 'كاشير',
-      viewer: 'مشاهد',
-      adminDesc: 'صلاحيات كاملة للوصول إلى جميع الميزات',
-      moderatorDesc: 'إدارة المخزون والمبيعات والتقارير',
-      cashierDesc: 'عمليات نقطة البيع والوصول الأساسي',
-      viewerDesc: 'صلاحية القراءة فقط لعرض البيانات',
-      noUsers: 'لا يوجد مستخدمين',
-      roleUpdated: 'تم تحديث الدور بنجاح',
-      userUpdated: 'تم تحديث المستخدم بنجاح',
-      userAdded: 'تم إضافة المستخدم بنجاح',
-      roleAdded: 'تم إضافة الدور بنجاح',
-      permissionsSaved: 'تم حفظ الصلاحيات بنجاح',
-      selectBranch: 'اختر الفرع',
-      selectWarehouse: 'اختر المخزن',
-      allBranches: 'جميع الفروع',
-      allWarehouses: 'جميع المخازن',
-      allRoles: 'جميع الأدوار',
-      allStatus: 'جميع الحالات',
-      search: 'بحث عن المستخدمين...',
-      totalUsers: 'إجمالي المستخدمين',
-      activeUsers: 'المستخدمين النشطين',
-      inactiveUsers: 'المستخدمين غير النشطين',
-      recentlyAdded: 'المضافين حديثاً',
-      module: 'الموديول',
-      view: 'عرض',
-      create: 'إنشاء',
-      edit: 'تعديل',
-      deleteAction: 'حذف',
-      export: 'تصدير',
-      import: 'استيراد',
-      approve: 'موافقة',
-      dashboard: 'لوحة التحكم',
-      inventory: 'المخزون',
-      pos: 'نقطة البيع',
-      crm: 'العملاء',
-      hr: 'الموارد البشرية',
-      finance: 'المالية',
-      reports: 'التقارير',
-      settings: 'الإعدادات',
-      sales: 'المبيعات',
-      purchasing: 'المشتريات',
-      unsavedChanges: 'لديك تغييرات غير محفوظة',
-      discardChanges: 'تجاهل',
-      selectRole: 'اختر دور لتعديل الصلاحيات',
-      roleName: 'اسم الدور',
-      roleNameAr: 'اسم الدور بالعربية',
-      roleDescription: 'الوصف',
-      roleDescriptionAr: 'الوصف بالعربية',
-      roleColor: 'اللون',
-      roleIcon: 'الأيقونة',
-      systemRole: 'دور نظامي',
-      customRole: 'دور مخصص',
-      cannotDeleteSystemRole: 'لا يمكن حذف الأدوار النظامية',
-      roleDeleted: 'تم حذف الدور بنجاح',
-      loginWithUsername: 'الدخول باسم المستخدم وكلمة المرور',
-      createUserNote: 'إنشاء مستخدم باسم مستخدم وكلمة مرور للدخول المباشر'
+  // ========== فلاتر Roles ==========
+  const [roleFilters, setRoleFilters] = useState({
+    search: '',
+  });
+  const [showRoleFilters, setShowRoleFilters] = useState(false);
+  const debouncedRoleSearch = useDebounce(roleFilters.search, 500);
+
+  // ========== جلب الـ Roles من API ==========
+  const { 
+    data: apiRolesResponse, 
+    isLoading: apiRolesLoading,
+    refetch: refetchApiRoles
+  } = useQuery<ApiResponse<ApiRole>>({
+    queryKey: ['api-roles', debouncedRoleSearch],
+    queryFn: async () => {
+      try {
+        const payload: any = {
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        };
+
+        // إضافة فلتر البحث لو موجود
+        if (debouncedRoleSearch) {
+          payload.filters = {
+            name: debouncedRoleSearch
+          };
+        }
+
+        console.log('📦 Fetching roles with payload:', payload);
+
+        const response = await api.post<ApiResponse<ApiRole>>('/role/index', payload);
+        
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+        
+        throw new Error(response.data.message || 'Failed to fetch roles');
+      } catch (error) {
+        console.error('Error fetching roles:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب الأدوار' : 'Error fetching roles');
+        throw error;
+      }
     }
-  };
+  });
 
-  const t = translations[language];
+  // تحويل البيانات من API إلى الشكل المطلوب للواجهة
+  const apiRoles = apiRolesResponse?.data || [];
 
-  const iconOptions = [
-    'Shield', 'Crown', 'Eye', 'ShoppingCart', 'User', 'Users', 'Key', 'Lock',
-    'Package', 'TrendingUp', 'FileText', 'Wallet', 'Briefcase', 'Home', 'Settings'
-  ];
-
-  const colorOptions = [
-    '#f59e0b', '#3b82f6', '#10b981', '#64748b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'
-  ];
-
+  // ========== جلب البيانات الأخرى من Supabase ==========
+  
   // Fetch profiles
   const { data: profiles = [], isLoading: loadingProfiles, refetch: refetchProfiles } = useQuery({
     queryKey: ['profiles'],
@@ -458,6 +344,198 @@ const UsersPermissions = () => {
     }
   });
 
+  const translations = {
+    en: {
+      title: 'Users & Permissions',
+      subtitle: 'Manage system users, roles, and access control',
+      users: 'Users',
+      roles: 'Roles',
+      permissions: 'Permissions Matrix',
+      addUser: 'Add User',
+      addRole: 'Add Role',
+      editUser: 'Edit User',
+      editRole: 'Edit Role',
+      userName: 'Full Name',
+      userNameAr: 'Full Name (Arabic)',
+      username: 'Username',
+      password: 'Password',
+      email: 'Email',
+      phone: 'Phone',
+      role: 'Role',
+      branch: 'Branch',
+      warehouse: 'Warehouse',
+      status: 'Status',
+      active: 'Active',
+      inactive: 'Inactive',
+      save: 'Save Changes',
+      savePermissions: 'Save Permissions',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      actions: 'Actions',
+      admin: 'Administrator',
+      moderator: 'Moderator',
+      cashier: 'Cashier',
+      viewer: 'Viewer',
+      adminDesc: 'Full system access with all permissions',
+      moderatorDesc: 'Manage inventory, sales, and reports',
+      cashierDesc: 'POS operations and basic access',
+      viewerDesc: 'Read-only access to view data',
+      noUsers: 'No users found',
+      noRoles: 'No roles found',
+      roleUpdated: 'Role updated successfully',
+      userUpdated: 'User updated successfully',
+      userAdded: 'User added successfully',
+      roleAdded: 'Role added successfully',
+      permissionsSaved: 'Permissions saved successfully',
+      selectBranch: 'Select Branch',
+      selectWarehouse: 'Select Warehouse',
+      allBranches: 'All Branches',
+      allWarehouses: 'All Warehouses',
+      allRoles: 'All Roles',
+      allStatus: 'All Status',
+      search: 'Search users...',
+      searchRoles: 'Search roles...',
+      totalUsers: 'Total Users',
+      activeUsers: 'Active Users',
+      inactiveUsers: 'Inactive Users',
+      recentlyAdded: 'Recently Added',
+      module: 'Module',
+      view: 'View',
+      create: 'Create',
+      edit: 'Edit',
+      deleteAction: 'Delete',
+      export: 'Export',
+      import: 'Import',
+      approve: 'Approve',
+      dashboard: 'Dashboard',
+      inventory: 'Inventory',
+      pos: 'Point of Sale',
+      crm: 'CRM',
+      hr: 'HR',
+      finance: 'Finance',
+      reports: 'Reports',
+      settings: 'Settings',
+      sales: 'Sales',
+      purchasing: 'Purchasing',
+      unsavedChanges: 'You have unsaved changes',
+      discardChanges: 'Discard',
+      selectRole: 'Select role to edit permissions',
+      roleName: 'Role Name',
+      roleNameAr: 'Role Name (Arabic)',
+      roleDescription: 'Description',
+      roleDescriptionAr: 'Description (Arabic)',
+      roleColor: 'Color',
+      roleIcon: 'Icon',
+      systemRole: 'System Role',
+      customRole: 'Custom Role',
+      cannotDeleteSystemRole: 'Cannot delete system roles',
+      roleDeleted: 'Role deleted successfully',
+      loginWithUsername: 'Login with username and password',
+      createUserNote: 'Create a user with username and password for direct login',
+      apiRoles: 'API Roles',
+    },
+    ar: {
+      title: 'المستخدمين والصلاحيات',
+      subtitle: 'إدارة مستخدمي النظام والأدوار والتحكم في الوصول',
+      users: 'المستخدمين',
+      roles: 'الأدوار',
+      permissions: 'مصفوفة الصلاحيات',
+      addUser: 'إضافة مستخدم',
+      addRole: 'إضافة دور',
+      editUser: 'تعديل مستخدم',
+      editRole: 'تعديل دور',
+      userName: 'الاسم الكامل',
+      userNameAr: 'الاسم بالعربية',
+      username: 'اسم المستخدم',
+      password: 'كلمة المرور',
+      email: 'البريد الإلكتروني',
+      phone: 'الهاتف',
+      role: 'الدور',
+      branch: 'الفرع',
+      warehouse: 'المخزن',
+      status: 'الحالة',
+      active: 'نشط',
+      inactive: 'غير نشط',
+      save: 'حفظ التغييرات',
+      savePermissions: 'حفظ الصلاحيات',
+      cancel: 'إلغاء',
+      delete: 'حذف',
+      actions: 'الإجراءات',
+      admin: 'مدير النظام',
+      moderator: 'مشرف',
+      cashier: 'كاشير',
+      viewer: 'مشاهد',
+      adminDesc: 'صلاحيات كاملة للوصول إلى جميع الميزات',
+      moderatorDesc: 'إدارة المخزون والمبيعات والتقارير',
+      cashierDesc: 'عمليات نقطة البيع والوصول الأساسي',
+      viewerDesc: 'صلاحية القراءة فقط لعرض البيانات',
+      noUsers: 'لا يوجد مستخدمين',
+      noRoles: 'لا يوجد أدوار',
+      roleUpdated: 'تم تحديث الدور بنجاح',
+      userUpdated: 'تم تحديث المستخدم بنجاح',
+      userAdded: 'تم إضافة المستخدم بنجاح',
+      roleAdded: 'تم إضافة الدور بنجاح',
+      permissionsSaved: 'تم حفظ الصلاحيات بنجاح',
+      selectBranch: 'اختر الفرع',
+      selectWarehouse: 'اختر المخزن',
+      allBranches: 'جميع الفروع',
+      allWarehouses: 'جميع المخازن',
+      allRoles: 'جميع الأدوار',
+      allStatus: 'جميع الحالات',
+      search: 'بحث عن المستخدمين...',
+      searchRoles: 'بحث عن الأدوار...',
+      totalUsers: 'إجمالي المستخدمين',
+      activeUsers: 'المستخدمين النشطين',
+      inactiveUsers: 'المستخدمين غير النشطين',
+      recentlyAdded: 'المضافين حديثاً',
+      module: 'الموديول',
+      view: 'عرض',
+      create: 'إنشاء',
+      edit: 'تعديل',
+      deleteAction: 'حذف',
+      export: 'تصدير',
+      import: 'استيراد',
+      approve: 'موافقة',
+      dashboard: 'لوحة التحكم',
+      inventory: 'المخزون',
+      pos: 'نقطة البيع',
+      crm: 'العملاء',
+      hr: 'الموارد البشرية',
+      finance: 'المالية',
+      reports: 'التقارير',
+      settings: 'الإعدادات',
+      sales: 'المبيعات',
+      purchasing: 'المشتريات',
+      unsavedChanges: 'لديك تغييرات غير محفوظة',
+      discardChanges: 'تجاهل',
+      selectRole: 'اختر دور لتعديل الصلاحيات',
+      roleName: 'اسم الدور',
+      roleNameAr: 'اسم الدور بالعربية',
+      roleDescription: 'الوصف',
+      roleDescriptionAr: 'الوصف بالعربية',
+      roleColor: 'اللون',
+      roleIcon: 'الأيقونة',
+      systemRole: 'دور نظامي',
+      customRole: 'دور مخصص',
+      cannotDeleteSystemRole: 'لا يمكن حذف الأدوار النظامية',
+      roleDeleted: 'تم حذف الدور بنجاح',
+      loginWithUsername: 'الدخول باسم المستخدم وكلمة المرور',
+      createUserNote: 'إنشاء مستخدم باسم مستخدم وكلمة مرور للدخول المباشر',
+      apiRoles: 'أدوار API',
+    }
+  };
+
+  const t = translations[language];
+
+  const iconOptions = [
+    'Shield', 'Crown', 'Eye', 'ShoppingCart', 'User', 'Users', 'Key', 'Lock',
+    'Package', 'TrendingUp', 'FileText', 'Wallet', 'Briefcase', 'Home', 'Settings'
+  ];
+
+  const colorOptions = [
+    '#f59e0b', '#3b82f6', '#10b981', '#64748b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'
+  ];
+
   // Group permissions by module
   const groupedPermissions = useMemo(() => {
     const groups: Record<string, Permission[]> = {};
@@ -505,10 +583,10 @@ const UsersPermissions = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-permissions'] });
       setPendingPermissionChanges({});
-      toast({ title: t.permissionsSaved });
+      toast.success(t.permissionsSaved);
     },
     onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في حفظ الصلاحيات' : 'Error saving permissions', variant: 'destructive' });
+      toast.error(language === 'ar' ? 'خطأ في حفظ الصلاحيات' : 'Error saving permissions');
     }
   });
 
@@ -523,11 +601,11 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast({ title: t.userUpdated });
+      toast.success(t.userUpdated);
       setIsEditDialogOpen(false);
     },
     onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في التحديث' : 'Update failed', variant: 'destructive' });
+      toast.error(language === 'ar' ? 'خطأ في التحديث' : 'Update failed');
     }
   });
 
@@ -570,10 +648,10 @@ const UsersPermissions = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast({ title: t.roleUpdated });
+      toast.success(t.roleUpdated);
     },
     onError: (error: any) => {
-      toast({ title: error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'), variant: 'destructive' });
+      toast.error(error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'));
     }
   });
 
@@ -588,10 +666,10 @@ const UsersPermissions = () => {
       return data;
     },
     onSuccess: () => {
-      toast({ title: language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully' });
+      toast.success(language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
     },
     onError: (error: any) => {
-      toast({ title: error.message, variant: 'destructive' });
+      toast.error(error.message);
     }
   });
 
@@ -613,12 +691,12 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
-      toast({ title: t.roleAdded });
+      toast.success(t.roleAdded);
       setIsAddRoleDialogOpen(false);
       setNewRoleForm({ name: '', name_ar: '', description: '', description_ar: '', color: '#6366f1', icon: 'Shield' });
     },
     onError: (error: any) => {
-      toast({ title: error.message || (language === 'ar' ? 'خطأ في إضافة الدور' : 'Error adding role'), variant: 'destructive' });
+      toast.error(error.message || (language === 'ar' ? 'خطأ في إضافة الدور' : 'Error adding role'));
     }
   });
 
@@ -640,12 +718,12 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
-      toast({ title: t.roleUpdated });
+      toast.success(t.roleUpdated);
       setIsEditRoleDialogOpen(false);
       setSelectedRole(null);
     },
     onError: (error: any) => {
-      toast({ title: error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'), variant: 'destructive' });
+      toast.error(error.message || (language === 'ar' ? 'خطأ في تحديث الدور' : 'Error updating role'));
     }
   });
 
@@ -660,10 +738,10 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-roles'] });
-      toast({ title: t.roleDeleted });
+      toast.success(t.roleDeleted);
     },
     onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في حذف الدور' : 'Error deleting role', variant: 'destructive' });
+      toast.error(language === 'ar' ? 'خطأ في حذف الدور' : 'Error deleting role');
     }
   });
 
@@ -716,12 +794,12 @@ const UsersPermissions = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
-      toast({ title: t.userAdded });
+      toast.success(t.userAdded);
       setIsAddUserDialogOpen(false);
       setNewUserForm({ username: '', password: '', full_name: '', full_name_ar: '', phone: '', branch_id: '', warehouse_id: '', role: 'viewer', preferred_language: 'ar' });
     },
     onError: (error: any) => {
-      toast({ title: error.message || (language === 'ar' ? 'خطأ في إضافة المستخدم' : 'Error adding user'), variant: 'destructive' });
+      toast.error(error.message || (language === 'ar' ? 'خطأ في إضافة المستخدم' : 'Error adding user'));
     }
   });
 
@@ -736,7 +814,7 @@ const UsersPermissions = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast({ title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated' });
+      toast.success(language === 'ar' ? 'تم تحديث الحالة' : 'Status updated');
     }
   });
 
@@ -992,7 +1070,10 @@ const UsersPermissions = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchProfiles()}>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                refetchProfiles();
+                refetchApiRoles();
+              }}>
                 <RefreshCw size={16} />
               </Button>
               <Button variant="outline" size="sm" className="gap-2">
@@ -1189,70 +1270,222 @@ const UsersPermissions = () => {
 
         {/* Roles Tab */}
         <TabsContent value="roles" className="mt-6 space-y-4">
-          <div className="flex justify-end">
-            <Button onClick={() => setIsAddRoleDialogOpen(true)} className="gap-2">
-              <Plus size={16} />
-              {t.addRole}
-            </Button>
+          {/* Roles Header with Filters */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRoleFilters(!showRoleFilters)}
+                className="gap-2"
+              >
+                <Filter size={16} />
+                {language === 'ar' ? 'فلتر' : 'Filter'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchApiRoles()}
+                disabled={apiRolesLoading}
+              >
+                <RefreshCw size={16} className={apiRolesLoading ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+           
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customRoles.map((role) => {
-              const RoleIcon = getIconComponent(role.icon);
-              const count = profiles.filter(p => getUserRole(p.id) === role.name).length;
-              const percentage = totalUsers > 0 ? (count / totalUsers) * 100 : 0;
 
-              return (
-                <Card key={role.id} className="card-elevated overflow-hidden">
-                  <div className="h-1" style={{ background: `linear-gradient(to right, ${role.color}33, ${role.color}11)` }} />
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-xl" style={{ backgroundColor: `${role.color}15` }}>
-                        <RoleIcon style={{ color: role.color }} size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-lg">
-                            {language === 'ar' ? role.name_ar || role.name : role.name}
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-lg px-3">{count}</Badge>
-                            {!role.is_system && (
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEditRole(role)}>
-                                  <Edit size={14} />
-                                </Button>
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteRoleMutation.mutate(role.id)}>
-                                  <Trash2 size={14} />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {language === 'ar' ? role.description_ar || role.description : role.description}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          {role.is_system ? (
-                            <Badge variant="outline" className="text-xs">{t.systemRole}</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="text-xs">{t.customRole}</Badge>
-                          )}
-                        </div>
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                            <span>{language === 'ar' ? 'نسبة المستخدمين' : 'User percentage'}</span>
-                            <span>{percentage.toFixed(0)}%</span>
-                          </div>
-                          <Progress value={percentage} className="h-1.5" style={{ '--progress-color': role.color } as any} />
-                        </div>
-                      </div>
+          {/* Role Filters Panel */}
+          {showRoleFilters && (
+            <Card className="border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium flex items-center gap-2">
+                    <Filter size={16} />
+                    {language === 'ar' ? 'فلترة الأدوار' : 'Role Filters'}
+                  </h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setRoleFilters({ search: '' });
+                      setShowRoleFilters(false);
+                    }} 
+                    className="h-8 gap-1"
+                  >
+                    <X size={14} />
+                    {language === 'ar' ? 'إغلاق' : 'Close'}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      {language === 'ar' ? 'بحث باسم الدور' : 'Search by role name'}
+                    </label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                      <Input
+                        placeholder={language === 'ar' ? 'اسم الدور...' : 'Role name...'}
+                        value={roleFilters.search}
+                        onChange={(e) => setRoleFilters(prev => ({ ...prev, search: e.target.value }))}
+                        className="pl-9"
+                      />
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Roles Display from API */}
+          <Card className="card-elevated">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                <Shield size={16} />
+                {t.apiRoles}
+                <Badge variant="outline" className="text-xs">
+                  {apiRoles.length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {apiRolesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="animate-spin text-muted-foreground" size={24} />
+                </div>
+              ) : apiRoles.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {language === 'ar' ? 'لا توجد أدوار' : 'No roles found'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {apiRoles.map((role) => {
+                    // نختار أيقونة ولون بناءً على اسم الدور
+                    let iconColor = '#64748b';
+                    let IconComponent = Shield;
+                    
+                    if (role.name.toLowerCase().includes('admin')) {
+                      iconColor = '#f59e0b';
+                      IconComponent = Crown;
+                    } else if (role.name.toLowerCase().includes('manager')) {
+                      iconColor = '#3b82f6';
+                      IconComponent = Briefcase;
+                    } else if (role.name.toLowerCase().includes('sales')) {
+                      iconColor = '#10b981';
+                      IconComponent = TrendingUp;
+                    } else if (role.name.toLowerCase().includes('accountant')) {
+                      iconColor = '#8b5cf6';
+                      IconComponent = Wallet;
+                    } else if (role.name.toLowerCase().includes('warehouse')) {
+                      iconColor = '#06b6d4';
+                      IconComponent = Package;
+                    } else if (role.name.toLowerCase().includes('hr')) {
+                      iconColor = '#ec4899';
+                      IconComponent = Users;
+                    } else if (role.name.toLowerCase().includes('cashier')) {
+                      iconColor = '#f97316';
+                      IconComponent = ShoppingCart;
+                    }
+
+                    return (
+                      <Card key={role.id} className="border hover:shadow-md transition-all">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg" style={{ backgroundColor: `${iconColor}15` }}>
+                              <IconComponent style={{ color: iconColor }} size={20} />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <h3 className="font-semibold">{role.name}</h3>
+                               
+                              </div>
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <span>ID: {role.id}</span>
+                                <span>•</span>
+                                <span>{new Date(role.created_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Custom Roles from Supabase */}
+          {customRoles.length > 0 && (
+            <>
+              <CardHeader className="pb-2 px-0">
+                <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+                  <Shield size={16} />
+                  {language === 'ar' ? 'أدوار مخصصة' : 'Custom Roles'}
+                  <Badge variant="outline" className="text-xs">
+                    {customRoles.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {customRoles.map((role) => {
+                  const RoleIcon = getIconComponent(role.icon);
+                  const count = profiles.filter(p => getUserRole(p.id) === role.name).length;
+                  const percentage = totalUsers > 0 ? (count / totalUsers) * 100 : 0;
+
+                  return (
+                    <Card key={role.id} className="card-elevated overflow-hidden">
+                      <div className="h-1" style={{ background: `linear-gradient(to right, ${role.color}33, ${role.color}11)` }} />
+                      <CardContent className="p-5">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 rounded-xl" style={{ backgroundColor: `${role.color}15` }}>
+                            <RoleIcon style={{ color: role.color }} size={24} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-semibold text-lg">
+                                {language === 'ar' ? role.name_ar || role.name : role.name}
+                              </h3>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-lg px-3">{count}</Badge>
+                                {!role.is_system && (
+                                  <div className="flex gap-1">
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEditRole(role)}>
+                                      <Edit size={14} />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteRoleMutation.mutate(role.id)}>
+                                      <Trash2 size={14} />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {language === 'ar' ? role.description_ar || role.description : role.description}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              {role.is_system ? (
+                                <Badge variant="outline" className="text-xs">{t.systemRole}</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">{t.customRole}</Badge>
+                              )}
+                            </div>
+                            <div className="mt-4">
+                              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                <span>{language === 'ar' ? 'نسبة المستخدمين' : 'User percentage'}</span>
+                                <span>{percentage.toFixed(0)}%</span>
+                              </div>
+                              <Progress value={percentage} className="h-1.5" style={{ '--progress-color': role.color } as any} />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </TabsContent>
 
         {/* Permissions Tab */}

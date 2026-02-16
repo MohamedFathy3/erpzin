@@ -188,7 +188,6 @@ const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
                 <TableHead>{language === 'ar' ? 'المورد' : 'Supplier'}</TableHead>
                 <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                 <TableHead>{language === 'ar' ? 'التاريخ المتوقع' : 'Expected'}</TableHead>
-                <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
                 <TableHead>{language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
@@ -215,7 +214,6 @@ const PurchaseOrderList: React.FC<PurchaseOrderListProps> = ({ onSave }) => {
                     <TableCell>
                       {order.expected_delivery ? formatDate(order.expected_delivery) : '-'}
                     </TableCell>
-                    <TableCell>{getStatusBadge(order.status as 'pending' | 'approved' | 'sent' | 'received' | 'cancelled')}</TableCell>
                     <TableCell>{formatDate(order.created_at)}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>

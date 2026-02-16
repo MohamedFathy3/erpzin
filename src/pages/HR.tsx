@@ -31,10 +31,13 @@ import {
   Trash2,
   Eye,
   Filter,
-  X
+  X,
+  Key,
+  Shield
 } from 'lucide-react';
 import SalesmenManager from "@/components/sales/SalesmenManager";
 import api from '@/lib/api';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const HR = () => {
   const { language, direction } = useLanguage();
@@ -45,6 +48,9 @@ const HR = () => {
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Debounce للبحث
+  const debouncedSearch = useDebounce(searchTerm, 500);
   
   // States for employee CRUD
   const [isEditingEmployee, setIsEditingEmployee] = useState(false);
@@ -59,11 +65,14 @@ const HR = () => {
     name: '',
     name_ar: '',
     position: '',
-    department: '',
+    // department: '',
     phone: '',
     email: '',
     salary: '',
-    is_active: true
+    is_active: true,
+    role_id: '',
+    password: '',
+  
   });
   
   const [newDelivery, setNewDelivery] = useState({
@@ -75,6 +84,21 @@ const HR = () => {
     is_active: true
   });
 
+  // ========== جلب الـ Roles ==========
+  const { data: roles = [], isLoading: rolesLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const response = await api.post('/role/index', {
+        filters: { },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 100,
+        paginate: false
+      });
+      return response.data.data || [];
+    }
+  });
+
   // ========== Fetch Employees ==========
   const { 
     data: employees = [], 
@@ -82,34 +106,26 @@ const HR = () => {
     error: employeesError,
     refetch: refetchEmployees 
   } = useQuery({
-    queryKey: ['employees', activeTab, employeeFilters, searchTerm],
+    queryKey: ['employees', activeTab, employeeFilters, debouncedSearch],
     queryFn: async () => {
       try {
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 100,
-          paginate: false
+          paginate: false,
+          with: ['role'] // 👈 نجيب بيانات الدور
         };
 
-        // ✅ إضافة الفلاتر
+        // ✅ بناء الفلاتر حسب الـ payload المطلوب
         const filters: any = {};
 
-        // ✅ تعديل البحث ليدعم البحث بالاسم أو الإيميل أو الكود
-        if (searchTerm) {
-          // هنا بنضيف البحث في حقول متعددة حسب المطلوب
-          filters.name = searchTerm;        // للبحث بالاسم
-          // filters.email = searchTerm;    // للبحث بالإيميل (لو عاوز تفعله)
-          // filters.employee_code = searchTerm; // للبحث بالكود (لو عاوز تفعله)
-          
-          // ملاحظة: لو عاوز تدعم البحث في حقل واحد بس، استخدم name أو email حسب المطلوب
-          // الـ API بتاعك بيستقبل البحث كـ name أو email مش search
+        // ✅ البحث بالاسم (زي ما انت عاوز)
+        if (debouncedSearch) {
+          filters.name = debouncedSearch;
         }
 
-        if (employeeFilters.department && employeeFilters.department !== 'all') {
-          filters.department = employeeFilters.department;
-        }
-
+        // فلاتر تانية
         if (employeeFilters.position && employeeFilters.position !== 'all') {
           filters.position = employeeFilters.position;
         }
@@ -125,6 +141,7 @@ const HR = () => {
           filters.salary_max = Number(employeeFilters.salary_max);
         }
 
+        // إضافة الفلاتر للـ payload لو موجودة
         if (Object.keys(filters).length > 0) {
           payload.filters = filters;
         }
@@ -158,7 +175,7 @@ const HR = () => {
     error: deliveryError,
     refetch: refetchDelivery 
   } = useQuery({
-    queryKey: ['delivery-persons', activeTab, searchTerm],
+    queryKey: ['delivery-persons', activeTab, debouncedSearch],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -170,10 +187,9 @@ const HR = () => {
 
         const filters: any = {};
 
-        // ✅ تعديل البحث لمندوبي التوصيل
-        if (searchTerm) {
-          filters.name = searchTerm;  // البحث بالاسم
-          // filters.phone = searchTerm; // للبحث بالهاتف (لو عاوز تفعله)
+        // البحث بالاسم
+        if (debouncedSearch) {
+          filters.name = debouncedSearch;
         }
 
         if (Object.keys(filters).length > 0) {
@@ -208,7 +224,7 @@ const HR = () => {
     error: attendanceError,
     refetch: refetchAttendance 
   } = useQuery({
-    queryKey: ['attendance', activeTab, searchTerm],
+    queryKey: ['attendance', activeTab, debouncedSearch],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -221,9 +237,8 @@ const HR = () => {
 
         const filters: any = {};
 
-        if (searchTerm) {
-          // البحث في attendance ممكن يكون باسم الموظف
-          filters.employee_name = searchTerm;
+        if (debouncedSearch) {
+          filters.employee_name = debouncedSearch;
         }
 
         if (Object.keys(filters).length > 0) {
@@ -258,17 +273,31 @@ const HR = () => {
   // ✅ Add employee mutation
   const addEmployeeMutation = useMutation({
     mutationFn: async (employee: typeof newEmployee) => {
-      const response = await api.post('/employee', {
+      const payload: any = {
         employee_code: employee.employee_code,
         name: employee.name,
         name_ar: employee.name_ar || null,
         position: employee.position || null,
-        department: employee.department || null,
+        // department: employee.department || null,
         phone: employee.phone || null,
         email: employee.email || null,
         salary: employee.salary ? parseFloat(employee.salary) : 0,
-        is_active: employee.is_active
-      });
+        is_active: employee.is_active,
+      };
+
+      // 👈 إضافة role_id لو موجود
+      if (employee.role_id) {
+        payload.role_id = parseInt(employee.role_id);
+      }
+
+      // 👈 إضافة password لو موجود
+      if (employee.password) {
+        payload.password = employee.password;
+      }
+
+      console.log('📤 Adding employee with payload:', payload);
+
+      const response = await api.post('/employee', payload);
 
       return response.data;
     },
@@ -299,17 +328,27 @@ const HR = () => {
   // ✅ Update employee mutation - PATCH /employee/{id}
   const updateEmployeeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof newEmployee }) => {
-      const payload = {
+      const payload: any = {
         employee_code: data.employee_code || null,
         name: data.name,
         name_ar: data.name_ar || null,
         position: data.position || null,
-        department: data.department || null,
+        // department: data.department || null,
         phone: data.phone || null,
         email: data.email || null,
         salary: data.salary ? parseFloat(data.salary) : 0,
-        is_active: data.is_active
+        is_active: data.is_active,
       };
+
+      // 👈 إضافة role_id لو موجود
+      if (data.role_id) {
+        payload.role_id = parseInt(data.role_id);
+      }
+
+      // 👈 إضافة password لو تم إدخاله (فقط لو مش فاضي)
+      if (data.password && data.password.trim() !== '') {
+        payload.password = data.password;
+      }
 
       console.log('📤 Updating employee:', id, payload);
 
@@ -482,11 +521,13 @@ const HR = () => {
       name: '',
       name_ar: '',
       position: '',
-      department: '',
+      // department: '',
       phone: '',
       email: '',
       salary: '',
-      is_active: true
+      is_active: true,
+      role_id: '',
+      password: ''
     });
   };
 
@@ -534,35 +575,39 @@ const HR = () => {
     addEmployeeMutation.mutate(newEmployee);
   };
 
-  const handleEditEmployee = async (employee: any) => {
-    try {
-      // جلب بيانات الموظف كاملة من API
-      const response = await api.get(`/employee/${employee.id}`);
-      const employeeData = response.data.data;
-      
-      setNewEmployee({
-        employee_code: employeeData.employee_code || '',
-        name: employeeData.name || '',
-        name_ar: employeeData.name_ar || '',
-        position: employeeData.position || '',
-        department: employeeData.department || '',
-        phone: employeeData.phone || '',
-        email: employeeData.email || '',
-        salary: employeeData.salary || '',
-        is_active: employeeData.is_active ?? true
-      });
-      
-      setIsEditingEmployee(true);
-      setCurrentEmployeeId(employee.id);
-      setShowEmployeeDialog(true);
-    } catch (error) {
-      console.error('Error fetching employee details:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
-        variant: 'destructive'
-      });
-    }
-  };
+const handleEditEmployee = async (employee: any) => {
+  try {
+    // جلب بيانات الموظف كاملة من API
+    const response = await api.get(`/employee/${employee.id}`);
+    const employeeData = response.data.data;
+    
+    console.log('📦 Employee data from API:', employeeData); // للتصحيح
+    
+    setNewEmployee({
+      employee_code: employeeData.employee_code || '',
+      name: employeeData.name || '',
+      name_ar: employeeData.name_ar || '',
+      position: employeeData.position || '',
+      // department: employeeData.department || '',
+      phone: employeeData.phone || '',
+      email: employeeData.email || '',
+      salary: employeeData.salary || '',
+      is_active: employeeData.is_active ?? true,
+      role_id: employeeData.role?.id?.toString() || '', // 👈 هنا الفرق! بناخد role.id من object الـ role
+      password: '' // 👈 الباسورد فاضي عشان ما يظهرش
+    });
+    
+    setIsEditingEmployee(true);
+    setCurrentEmployeeId(employee.id);
+    setShowEmployeeDialog(true);
+  } catch (error) {
+    console.error('Error fetching employee details:', error);
+    toast({
+      title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
+      variant: 'destructive'
+    });
+  }
+};
 
   const handleUpdateEmployee = () => {
     if (!newEmployee.employee_code || !newEmployee.name) {
@@ -679,12 +724,13 @@ const HR = () => {
       editEmployee: 'Edit Employee',
       newDelivery: 'New Delivery Person',
       editDelivery: 'Edit Delivery Person',
-      search: 'Search by name, code, phone...',
+      search: 'Search by name...',
       code: 'Code',
       name: 'Name',
       nameAr: 'Name (Arabic)',
       position: 'Position',
-      department: 'Department',
+      role: 'Role',
+      password: 'Password',
       salary: 'Salary',
       status: 'Status',
       date: 'Date',
@@ -727,7 +773,11 @@ const HR = () => {
       all: 'All',
       filter: 'Filter',
       reset: 'Reset',
-      employeeDetails: 'Employee Details'
+      employeeDetails: 'Employee Details',
+      noRole: 'No Role',
+      selectRole: 'Select Role',
+      leaveEmptyForNoChange: 'Leave empty to keep current password',
+      createUserAccount: 'Create user account for login'
     },
     ar: {
       title: 'الموارد البشرية والرواتب',
@@ -740,12 +790,13 @@ const HR = () => {
       editEmployee: 'تعديل الموظف',
       newDelivery: 'مندوب توصيل جديد',
       editDelivery: 'تعديل مندوب التوصيل',
-      search: 'بحث بالاسم،  ...',
+      search: 'بحث بالاسم...',
       code: 'الكود',
       name: 'الاسم',
       nameAr: 'الاسم (عربي)',
       position: 'المنصب',
-      department: 'القسم',
+      role: 'الدور',
+      password: 'كلمة المرور',
       salary: 'الراتب',
       status: 'الحالة',
       date: 'التاريخ',
@@ -788,7 +839,11 @@ const HR = () => {
       all: 'الكل',
       filter: 'تصفية',
       reset: 'إعادة تعيين',
-      employeeDetails: 'تفاصيل الموظف'
+      employeeDetails: 'تفاصيل الموظف',
+      noRole: 'بدون دور',
+      selectRole: 'اختر الدور',
+      leaveEmptyForNoChange: 'اتركها فارغة للإبقاء على كلمة المرور الحالية',
+      createUserAccount: 'إنشاء حساب للموظف'
     }
   };
 
@@ -891,7 +946,15 @@ const HR = () => {
                         placeholder="Name" 
                       />
                     </div>
-                
+                    <div className="space-y-2">
+                      <Label>{t.nameAr}</Label>
+                      <Input 
+                        value={newDelivery.name_ar}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name_ar: e.target.value }))}
+                        placeholder="الاسم" 
+                        dir="rtl"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{t.phone}</Label>
@@ -980,13 +1043,15 @@ const HR = () => {
                   {t.newEmployee}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>
+                  <DialogTitle className="flex items-center gap-2">
+                    {isEditingEmployee ? <Edit2 size={18} /> : <Plus size={18} />}
                     {isEditingEmployee ? t.editEmployee : t.newEmployee}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  {/* معلومات أساسية */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.code} *</Label>
@@ -1005,8 +1070,17 @@ const HR = () => {
                       />
                     </div>
                   </div>
-             
+
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.nameAr}</Label>
+                      <Input 
+                        value={newEmployee.name_ar}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, name_ar: e.target.value }))}
+                        placeholder={t.nameAr} 
+                        dir="rtl"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label>{t.position}</Label>
                       <Input 
@@ -1015,15 +1089,8 @@ const HR = () => {
                         placeholder={t.position} 
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>{t.department}</Label>
-                      <Input 
-                        value={newEmployee.department}
-                        onChange={(e) => setNewEmployee(prev => ({ ...prev, department: e.target.value }))}
-                        placeholder={t.department} 
-                      />
-                    </div>
                   </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.phone}</Label>
@@ -1043,7 +1110,23 @@ const HR = () => {
                       />
                     </div>
                   </div>
+
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.role}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.role_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, role_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون دور' : 'No Role'}</option>
+                        {roles.map((role: any) => (
+                          <option key={role.id} value={role.id.toString()}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="space-y-2">
                       <Label>{t.salary}</Label>
                       <Input 
@@ -1053,22 +1136,49 @@ const HR = () => {
                         placeholder="0" 
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>{t.status}</Label>
-                      <div className="flex items-center gap-2 pt-2">
-                        <input
-                          type="checkbox"
-                          id="employee_is_active"
-                          checked={newEmployee.is_active}
-                          onChange={(e) => setNewEmployee(prev => ({ ...prev, is_active: e.target.checked }))}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <Label htmlFor="employee_is_active" className="cursor-pointer">
-                          {newEmployee.is_active ? t.active : t.inactive}
-                        </Label>
-                      </div>
-                    </div>
                   </div>
+
+                  {/* ========== حقل الباسورد الجديد ========== */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Key size={14} />
+                      {t.password}
+                      {isEditingEmployee && (
+                        <span className="text-xs text-muted-foreground font-normal">
+                          ({t.leaveEmptyForNoChange})
+                        </span>
+                      )}
+                    </Label>
+                    <Input 
+                      type="password"
+                      value={newEmployee.password}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder={isEditingEmployee ? "••••••" : t.password}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="employee_is_active"
+                      checked={newEmployee.is_active}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, is_active: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="employee_is_active" className="cursor-pointer">
+                      {newEmployee.is_active ? t.active : t.inactive}
+                    </Label>
+                  </div>
+
+                  {!isEditingEmployee && (
+                    <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Key size={14} />
+                        {t.createUserAccount}
+                      </p>
+                    </div>
+                  )}
+
                   <Button 
                     onClick={isEditingEmployee ? handleUpdateEmployee : handleAddEmployee}
                     disabled={isEditingEmployee ? updateEmployeeMutation.isPending : addEmployeeMutation.isPending}
@@ -1154,20 +1264,6 @@ const HR = () => {
                   <AdvancedFilter
                     fields={[
                       { 
-                        key: 'department', 
-                        label: 'Department', 
-                        labelAr: 'القسم', 
-                        type: 'select',
-                        options: [
-                          
-                          ...Array.from(new Set(employees.map((e: any) => e.department))).filter(Boolean).map(dept => ({
-                            value: dept,
-                            label: dept,
-                            labelAr: dept
-                          }))
-                        ]
-                      },
-                      { 
                         key: 'position', 
                         label: 'Position', 
                         labelAr: 'المنصب', 
@@ -1181,6 +1277,12 @@ const HR = () => {
                         ]
                       },
                       { 
+                        key: 'salary', 
+                        label: 'Salary', 
+                        labelAr: 'الراتب', 
+                        type: 'numberRange' 
+                      },
+                      { 
                         key: 'status', 
                         label: 'Status', 
                         labelAr: 'الحالة', 
@@ -1189,13 +1291,7 @@ const HR = () => {
                           { value: 'active', label: 'Active', labelAr: 'نشط' },
                           { value: 'inactive', label: 'Inactive', labelAr: 'غير نشط' },
                         ]
-                      },
-                      { 
-                        key: 'salary', 
-                        label: 'Salary', 
-                        labelAr: 'الراتب', 
-                        type: 'numberRange' 
-                      },
+                      }
                     ]}
                     values={employeeFilters}
                     onChange={setEmployeeFilters}
@@ -1235,69 +1331,72 @@ const HR = () => {
                           <TableHead>{t.code}</TableHead>
                           <TableHead>{t.name}</TableHead>
                           <TableHead>{t.position}</TableHead>
-                          <TableHead>{t.department}</TableHead>
+                          <TableHead>{t.role}</TableHead>
                           <TableHead>{t.salary}</TableHead>
-                          <TableHead>{t.status}</TableHead>
                           <TableHead className="text-end">{t.actions}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {employees.map((employee: any) => (
-                          <TableRow key={employee.id}>
-                            <TableCell className="font-mono">{employee.employee_code}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                    {(language === 'ar' ? employee.name_ar || employee.name : employee.name).charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="font-medium">
-                                  {language === 'ar' ? employee.name_ar || employee.name : employee.name}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>{employee.position || '-'}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Building size={14} className="text-muted-foreground" />
-                                {employee.department || '-'}
-                              </div>
-                            </TableCell>
-                            <TableCell>{parseFloat(employee.salary || 0).toLocaleString()} YER</TableCell>
-                            <TableCell>
-                              <Badge variant={employee.is_active ? 'default' : 'secondary'}>
-                                {employee.is_active ? t.active : t.inactive}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-end">
-                              <div className="flex items-center justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditEmployee(employee)}
-                                  title={t.edit}
-                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
-                                >
-                                  <Edit2 size={14} />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteEmployee(employee.id, employee.name_ar || employee.name)}
-                                  title={t.delete}
-                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
-                                >
-                                  {deleteEmployeeMutation.isPending && deleteEmployeeMutation.variables === employee.id ? (
-                                    <Loader2 size={14} className="animate-spin text-destructive" />
-                                  ) : (
-                                    <Trash2 size={14} className="text-destructive" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {employees.map((employee: any) => {
+                          // البحث عن الدور
+                          
+                          return (
+                            <TableRow key={employee.id}>
+                              <TableCell className="font-mono">{employee.employee_code}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                      {(language === 'ar' ? employee.name_ar || employee.name : employee.name).charAt(0)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium">
+                                    {language === 'ar' ? employee.name_ar || employee.name : employee.name}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{employee.position || '-'}</TableCell>
+                              <TableCell>
+                                {employee.role.name ? (
+                                  <div className="flex items-center gap-1">
+                                    <Shield size={14} className="text-muted-foreground" />
+                                    {employee.role.name}
+                                  </div>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                              <TableCell>{parseFloat(employee.salary || 0).toLocaleString()} YER</TableCell>
+                              
+                              <TableCell className="text-end">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditEmployee(employee)}
+                                    title={t.edit}
+                                    disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                  >
+                                    <Edit2 size={14} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteEmployee(employee.id, employee.name_ar || employee.name)}
+                                    title={t.delete}
+                                    disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                  >
+                                    {deleteEmployeeMutation.isPending && deleteEmployeeMutation.variables === employee.id ? (
+                                      <Loader2 size={14} className="animate-spin text-destructive" />
+                                    ) : (
+                                      <Trash2 size={14} className="text-destructive" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

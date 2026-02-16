@@ -998,6 +998,8 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
 
         {/* ========== Returns Tab ========== */}
 
+
+
         <TabsContent value="returns">
           <Card>
             <CardContent className="p-0">

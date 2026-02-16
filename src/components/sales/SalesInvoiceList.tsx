@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight, X } from "lucide-react";
+import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight, X, Filter, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
 import InvoiceReturnForm from "./InvoiceReturnForm";
-import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { useDebounce } from "@/hooks/use-debounce";
 
 // ========== أنواع البيانات ==========
 
@@ -113,6 +113,23 @@ interface SalesInvoice {
   updated_at: string;
 }
 
+// نوع الفلاتر اللي هنبعتها للباك اند
+interface InvoiceFilters {
+  invoice_number?: string;
+  customer_id?: number;
+  branch_id?: number;
+  sales_representative_id?: number;
+  warehouse_id?: number;
+  tax_id?: number;
+  currency_id?: number;
+  date_from?: string;
+  date_to?: string;
+  payment_status?: string;
+  invoice_type?: string;
+  amount_min?: number;
+  amount_max?: number;
+}
+
 const SalesInvoiceList = () => {
   const { language } = useLanguage();
   const [showForm, setShowForm] = useState(false);
@@ -120,7 +137,7 @@ const SalesInvoiceList = () => {
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<any>(null);
   
-  // ========== Client-side Filter State ==========
+  // ========== Filter State للباك اند ==========
   const [filters, setFilters] = useState({
     search: '',
     payment_status: 'all',
@@ -136,6 +153,64 @@ const SalesInvoiceList = () => {
     amount_min: '',
     amount_max: ''
   });
+
+  // Debounce للبحث عشان منضغطش على السيرفر كتير
+  const debouncedSearch = useDebounce(filters.search, 500);
+
+  // ========== بناء الفلاتر للباك اند ==========
+  const buildFilters = (): InvoiceFilters => {
+    const apiFilters: InvoiceFilters = {};
+
+    // الفلاتر النصية
+    if (debouncedSearch) {
+      apiFilters.invoice_number = debouncedSearch;
+    }
+
+    // الفلاتر الرقمية (بتحويلها لرقم)
+    if (filters.customer_id !== 'all') {
+      apiFilters.customer_id = Number(filters.customer_id);
+    }
+
+    if (filters.branch_id !== 'all') {
+      apiFilters.branch_id = Number(filters.branch_id);
+    }
+
+    if (filters.salesman_id !== 'all') {
+      apiFilters.sales_representative_id = Number(filters.salesman_id);
+    }
+
+    if (filters.warehouse_id !== 'all') {
+      apiFilters.warehouse_id = Number(filters.warehouse_id);
+    }
+
+    if (filters.tax_id !== 'all') {
+      apiFilters.tax_id = Number(filters.tax_id);
+    }
+
+    if (filters.currency_id !== 'all') {
+      apiFilters.currency_id = Number(filters.currency_id);
+    }
+
+    // فلاتر التاريخ
+    if (filters.date_from) {
+      apiFilters.date_from = filters.date_from;
+    }
+
+    if (filters.date_to) {
+      apiFilters.date_to = filters.date_to;
+    }
+
+    // فلاتر المبلغ (لو الباك اند بيدعمها)
+    if (filters.amount_min) {
+      apiFilters.amount_min = Number(filters.amount_min);
+    }
+
+    if (filters.amount_max) {
+      apiFilters.amount_max = Number(filters.amount_max);
+    }
+
+    return apiFilters;
+  };
 
   // ========== Queries ==========
 
@@ -286,34 +361,41 @@ const SalesInvoiceList = () => {
     },
   });
 
-  // ✅ جلب فواتير المبيعات - POST /sales-invoices/index (مرة واحدة فقط)
-  const { data: invoices = [], isLoading, refetch } = useQuery({
-    queryKey: ['sales-invoices'],
+  // ✅ جلب فواتير المبيعات - مع الفلاتر من الباك اند
+  const { data: responseData, isLoading, refetch } = useQuery({
+    queryKey: ['sales-invoices', buildFilters()], // الفلاتر كـ query key عشان يعمل refetch لو اتغيرت
     queryFn: async () => {
       try {
+        const apiFilters = buildFilters();
+        
         const payload: any = {
+          filters: apiFilters,
           orderBy: 'id',
           orderByDirection: 'desc',
-          perPage: 1000, // جلب عدد كبير مرة واحدة
-          paginate: false,
+          perPage: 50,
+          paginate: true, // نشغل pagination عشان أحسن
           with: ['customer', 'sales_representative', 'branch', 'warehouse', 'currency', 'tax']
         };
 
-        console.log('📦 Fetching all sales invoices...');
+        console.log('📦 Fetching sales invoices with filters:', apiFilters);
 
         const response = await api.post('/sales-invoices/index', payload);
 
         if (response.data.result === 'Success') {
-          return response.data.data || [];
+          return response.data;
         }
-        return [];
+        return { data: [], meta: { total: 0 } };
       } catch (error) {
         console.error('Error fetching sales invoices:', error);
         toast.error(language === 'ar' ? 'خطأ في جلب الفواتير' : 'Error fetching invoices');
-        return [];
+        return { data: [], meta: { total: 0 } };
       }
     }
   });
+
+  // استخراج البيانات من الـ response
+  const invoices = responseData?.data || [];
+  const totalInvoices = responseData?.meta?.total || 0;
 
   // ✅ جلب فاتورة محددة للمرتجع - GET /sales-invoices/{id}
   const fetchInvoiceForReturn = async (invoiceId: number) => {
@@ -334,95 +416,6 @@ const SalesInvoiceList = () => {
       toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error fetching invoice');
     }
   };
-
-  // ========== Client-side Filter Function ==========
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice: SalesInvoice) => {
-      
-      // 1. فلتر البحث النصي
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        const invoiceNumber = (invoice.invoice_number || '').toLowerCase();
-        const customerName = (invoice.customer?.name || '').toLowerCase();
-        const customerNameAr = (invoice.customer?.name_ar || '').toLowerCase();
-        const customerPhone = (invoice.customer?.phone || '').toLowerCase();
-        
-        const matchesSearch = 
-          invoiceNumber.includes(searchLower) ||
-          customerName.includes(searchLower) ||
-          customerNameAr.includes(searchLower) ||
-          customerPhone.includes(searchLower);
-        
-        if (!matchesSearch) return false;
-      }
-      
-      // 2. فلتر حالة الدفع
-      if (filters.payment_status !== 'all' && invoice.payment_status !== filters.payment_status) {
-        return false;
-      }
-      
-      // 3. فلتر نوع الفاتورة
-      if (filters.invoice_type !== 'all' && invoice.invoice_type !== filters.invoice_type) {
-        return false;
-      }
-      
-      // 4. فلتر الفرع
-      if (filters.branch_id !== 'all' && invoice.branch_id !== Number(filters.branch_id)) {
-        return false;
-      }
-      
-      // 5. فلتر المندوب
-      if (filters.salesman_id !== 'all' && invoice.sales_representative_id !== Number(filters.salesman_id)) {
-        return false;
-      }
-      
-      // 6. فلتر العميل
-      if (filters.customer_id !== 'all' && invoice.customer_id !== Number(filters.customer_id)) {
-        return false;
-      }
-      
-      // 7. فلتر المخزن
-      if (filters.warehouse_id !== 'all' && invoice.warehouse_id !== Number(filters.warehouse_id)) {
-        return false;
-      }
-      
-      // 8. فلتر العملة
-      if (filters.currency_id !== 'all' && invoice.currency_id !== Number(filters.currency_id)) {
-        return false;
-      }
-      
-      // 9. فلتر الضريبة
-      if (filters.tax_id !== 'all' && invoice.tax_id !== Number(filters.tax_id)) {
-        return false;
-      }
-      
-      // 10. فلتر التاريخ (من)
-      if (filters.date_from) {
-        const invoiceDate = new Date(invoice.invoice_date).setHours(0,0,0,0);
-        const fromDate = new Date(filters.date_from).setHours(0,0,0,0);
-        if (invoiceDate < fromDate) return false;
-      }
-      
-      // 11. فلتر التاريخ (إلى)
-      if (filters.date_to) {
-        const invoiceDate = new Date(invoice.invoice_date).setHours(0,0,0,0);
-        const toDate = new Date(filters.date_to).setHours(0,0,0,0);
-        if (invoiceDate > toDate) return false;
-      }
-      
-      // 12. فلتر المبلغ (من)
-      if (filters.amount_min && invoice.total_amount < Number(filters.amount_min)) {
-        return false;
-      }
-      
-      // 13. فلتر المبلغ (إلى)
-      if (filters.amount_max && invoice.total_amount > Number(filters.amount_max)) {
-        return false;
-      }
-      
-      return true;
-    });
-  }, [invoices, filters]);
 
   // ========== Filter Handlers ==========
   const handleFilterChange = (key: string, value: string) => {
@@ -451,6 +444,12 @@ const SalesInvoiceList = () => {
     refetch();
     toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
   };
+
+  // عدد الفلاتر النشطة
+  const activeFiltersCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === 'search') return value !== '';
+    return value !== 'all' && value !== '';
+  }).length;
 
   // ========== Helper Functions ==========
 
@@ -547,8 +546,8 @@ const SalesInvoiceList = () => {
               </h1>
               <p className="text-sm text-muted-foreground">
                 {language === 'ar' 
-                  ? `عرض ${filteredInvoices.length} من أصل ${invoices.length} فاتورة` 
-                  : `Showing ${filteredInvoices.length} of ${invoices.length} invoices`}
+                  ? `عرض ${invoices.length} من أصل ${totalInvoices} فاتورة` 
+                  : `Showing ${invoices.length} of ${totalInvoices} invoices`}
               </p>
             </div>
           </div>
@@ -590,7 +589,7 @@ const SalesInvoiceList = () => {
           </div>
         </div>
 
-        {/* Stats Cards - إحصائيات سريعة مع الفلاتر */}
+        {/* Stats Cards - إحصائيات سريعة */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
             <CardContent className="p-4 flex items-center justify-between">
@@ -599,7 +598,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'إجمالي الفواتير' : 'Total Invoices'}
                 </p>
                 <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300">
-                  {filteredInvoices.length}
+                  {totalInvoices}
                 </p>
               </div>
               <div className="p-2 bg-emerald-200/50 dark:bg-emerald-800/30 rounded-lg">
@@ -615,7 +614,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales'}
                 </p>
                 <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
-                  {filteredInvoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0).toLocaleString()}
+                  {invoices.reduce((sum: number, inv: SalesInvoice) => sum + (Number(inv.total_amount) || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-blue-200/50 dark:bg-blue-800/30 rounded-lg">
@@ -633,7 +632,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'المدفوع' : 'Paid'}
                 </p>
                 <p className="text-2xl font-bold text-amber-800 dark:text-amber-300">
-                  {filteredInvoices.reduce((sum, inv) => sum + (inv.paid_amount || 0), 0).toLocaleString()}
+                  {invoices.reduce((sum: number, inv: SalesInvoice) => sum + (Number(inv.paid_amount) || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-amber-200/50 dark:bg-amber-800/30 rounded-lg">
@@ -651,7 +650,7 @@ const SalesInvoiceList = () => {
                   {language === 'ar' ? 'المتبقي' : 'Remaining'}
                 </p>
                 <p className="text-2xl font-bold text-red-800 dark:text-red-300">
-                  {filteredInvoices.reduce((sum, inv) => sum + (inv.remaining_amount || 0), 0).toLocaleString()}
+                  {invoices.reduce((sum: number, inv: SalesInvoice) => sum + (Number(inv.remaining_amount) || 0), 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-2 bg-red-200/50 dark:bg-red-800/30 rounded-lg">
@@ -663,69 +662,54 @@ const SalesInvoiceList = () => {
           </Card>
         </div>
 
-        {/* Filter Bar - Manual Filters بالـ JS */}
+        {/* Filter Bar - Filters from Backend */}
         <Card className="border-primary/20 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="w-1 h-5 bg-primary rounded-full" />
+                <Filter className="h-4 w-4" />
                 {language === 'ar' ? 'بحث وتصفية' : 'Search & Filter'}
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
               </CardTitle>
               
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleResetFilters}
+                className="h-8 px-2 text-xs"
+              >
+                <X className="h-3 w-3 ml-1" />
+                {language === 'ar' ? 'مسح الكل' : 'Clear all'}
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Search Input */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  <Search className="h-3 w-3" />
                   {language === 'ar' ? 'بحث' : 'Search'}
                 </label>
                 <input
                   type="text"
                   className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder={language === 'ar' ? 'رقم الفاتورة، اسم العميل، رقم الهاتف...' : 'Invoice #, customer name, phone...'}
+                  placeholder={language === 'ar' ? 'رقم الفاتورة...' : 'Invoice number...'}
                   value={filters.search}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
                 />
               </div>
 
               {/* Payment Status Filter */}
-              {/* <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {language === 'ar' ? 'حالة الدفع' : 'Payment Status'}
-                </label>
-                <select
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                  value={filters.payment_status}
-                  onChange={(e) => handleFilterChange('payment_status', e.target.value)}
-                >
-                  <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
-                  <option value="paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</option>
-                  <option value="pending">{language === 'ar' ? 'معلق' : 'Pending'}</option>
-                  <option value="partial">{language === 'ar' ? 'جزئي' : 'Partial'}</option>
-                  <option value="cancelled">{language === 'ar' ? 'ملغي' : 'Cancelled'}</option>
-                </select>
-              </div> */}
-
-              {/* Invoice Type Filter */}
-              {/* <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {language === 'ar' ? 'نوع الفاتورة' : 'Invoice Type'}
-                </label>
-                <select
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                  value={filters.invoice_type}
-                  onChange={(e) => handleFilterChange('invoice_type', e.target.value)}
-                >
-                  <option value="all">{language === 'ar' ? 'الكل' : 'All'}</option>
-                  <option value="cash">{language === 'ar' ? 'نقدي' : 'Cash'}</option>
-                  <option value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</option>
-                </select>
-              </div> */}
+            
 
               {/* Customer Filter */}
-              {/* <div className="space-y-2">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {language === 'ar' ? 'العميل' : 'Customer'}
                 </label>
@@ -741,10 +725,10 @@ const SalesInvoiceList = () => {
                     </option>
                   ))}
                 </select>
-              </div> */}
+              </div>
 
               {/* Branch Filter */}
-              {/* <div className="space-y-2">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {language === 'ar' ? 'الفرع' : 'Branch'}
                 </label>
@@ -760,10 +744,10 @@ const SalesInvoiceList = () => {
                     </option>
                   ))}
                 </select>
-              </div> */}
+              </div>
 
               {/* Salesman Filter */}
-              {/* <div className="space-y-2">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {language === 'ar' ? 'المندوب' : 'Salesman'}
                 </label>
@@ -779,10 +763,67 @@ const SalesInvoiceList = () => {
                     </option>
                   ))}
                 </select>
-              </div> */}
+              </div>
+
+              {/* Warehouse Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'المخزن' : 'Warehouse'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.warehouse_id}
+                  onChange={(e) => handleFilterChange('warehouse_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل المخازن' : 'All Warehouses'}</option>
+                  {warehouses.map((w: any) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Currency Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'العملة' : 'Currency'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.currency_id}
+                  onChange={(e) => handleFilterChange('currency_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل العملات' : 'All Currencies'}</option>
+                  {currencies.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tax Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'الضريبة' : 'Tax'}
+                </label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  value={filters.tax_id}
+                  onChange={(e) => handleFilterChange('tax_id', e.target.value)}
+                >
+                  <option value="all">{language === 'ar' ? 'كل الضرائب' : 'All Taxes'}</option>
+                  {taxes.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.rate}%)
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {/* Date Range */}
-              {/* <div className="space-y-2">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {language === 'ar' ? 'من تاريخ' : 'From Date'}
                 </label>
@@ -792,9 +833,9 @@ const SalesInvoiceList = () => {
                   value={filters.date_from}
                   onChange={(e) => handleFilterChange('date_from', e.target.value)}
                 />
-              </div> */}
+              </div>
 
-              {/* <div className="space-y-2">
+              <div className="space-y-2">
                 <label className="text-sm font-medium">
                   {language === 'ar' ? 'إلى تاريخ' : 'To Date'}
                 </label>
@@ -804,7 +845,7 @@ const SalesInvoiceList = () => {
                   value={filters.date_to}
                   onChange={(e) => handleFilterChange('date_to', e.target.value)}
                 />
-              </div> */}
+              </div>
 
               {/* Amount Range */}
               <div className="space-y-2">
@@ -871,13 +912,7 @@ const SalesInvoiceList = () => {
                         </span>
                       </div>
                     </TableHead>
-                    <TableHead className="min-w-[100px] text-right font-bold">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          {language === 'ar' ? 'المدفوع' : 'PAID'}
-                        </span>
-                      </div>
-                    </TableHead>
+                   
                     <TableHead className="min-w-[120px] font-bold">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -906,7 +941,7 @@ const SalesInvoiceList = () => {
                         ))}
                       </TableRow>
                     ))
-                  ) : filteredInvoices.length === 0 ? (
+                  ) : invoices.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-[400px] text-center">
                         <div className="flex flex-col items-center justify-center h-full">
@@ -933,7 +968,7 @@ const SalesInvoiceList = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredInvoices.map((invoice: SalesInvoice, index: number) => (
+                    invoices.map((invoice: SalesInvoice, index: number) => (
                       <TableRow 
                         key={invoice.id} 
                         className={`
@@ -991,23 +1026,14 @@ const SalesInvoiceList = () => {
                         <TableCell className="text-right">
                           <div className="flex flex-col">
                             <span className="font-bold text-primary">
-                              {invoice.total_amount?.toLocaleString()}
+                              {Number(invoice.total_amount)?.toLocaleString()}
                             </span>
                             <span className="text-xs text-muted-foreground">
                               {invoice.currency || 'YER'}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                              {invoice.paid_amount?.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {invoice.currency || 'YER'}
-                            </span>
-                          </div>
-                        </TableCell>
+                       
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {getPaymentMethodBadge(invoice.payment_method)}
