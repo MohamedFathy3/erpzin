@@ -21,10 +21,11 @@ import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
 import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
-
+import {useAuth} from '@/contexts/AuthContext';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
+import defaultLogo from "@/assets/logo-full.png";
 
 interface CartItem {
   id: string;
@@ -87,7 +88,7 @@ const POS: React.FC = () => {
   const [showShiftPanel, setShowShiftPanel] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  
+  const { user } = useAuth();
   // جلب الفئات
   const { data: categories, isLoading: categoriesLoading } = useCategories();
   
@@ -395,19 +396,19 @@ const transformedProducts = useMemo(() => {
           )}
           
           {/* Warehouse Info */}
-          {(userWarehouse || currentWarehouse) && (
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-success/20 text-success rounded-full text-sm font-medium">
-              <Warehouse size={14} />
-              <span>
-                {userWarehouse 
-                  ? (language === 'ar' && userWarehouse.name_ar ? userWarehouse.name_ar : userWarehouse.name)
-                  : currentWarehouse 
-                    ? (language === 'ar' && currentWarehouse.name_ar ? currentWarehouse.name_ar : currentWarehouse.name)
-                    : null
-                }
-              </span>
-            </div>
-          )}
+          
+<div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-xl shadow-sm">
+  <div className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white">
+    <User size={18} />
+  </div>
+
+  <div className="flex flex-col">
+    <span className="text-sm font-semibold text-gray-800">
+      {user?.name}
+    </span>
+    
+  </div>
+</div>
           
           {currentShift && (
             <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">

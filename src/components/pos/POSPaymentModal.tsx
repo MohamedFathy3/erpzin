@@ -191,10 +191,14 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleComplete = async () => {
     // Check if customer is selected
-    if (!customer?.id) {
-      toast.error(language === 'ar' ? 'يجب اختيار عميل قبل إتمام الدفع' : 'Customer must be selected before completing payment');
-      return;
-    }
+   let customerId;
+
+if (!customer?.id) {
+  customerId = 1;
+} else {
+  customerId = customer.id;
+}
+
 
     setIsProcessing(true);
     try {
@@ -218,7 +222,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
       // Prepare invoice data according to the required format
       const invoiceData = {
-        customer_id: parseInt(customer.id),
+        customer_id: parseInt(customer?.id) || 1, // Default to 1 if no customer selected
         items: cartItems.map(item => ({
           product_id: parseInt(item.id),
           quantity: item.quantity,
