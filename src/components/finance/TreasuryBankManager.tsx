@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -428,6 +428,16 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     
     return types[type]?.[language === 'ar' ? 'ar' : 'en'] || type;
   };
+ useEffect(() => {
+    // Reset to fields when type changes
+    setTransferForm(prev => ({
+      ...prev,
+      from_treasury_id: '',
+      to_treasury_id: '',
+      from_bank_id: '',
+      to_bank_id: ''
+    }));
+  }, [transferForm.type]);
 
   // Get movement source
   const getMovementSource = (movement: Movement) => {
@@ -639,30 +649,44 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   });
 
   // Transfer mutation
-  const transferMutation = useMutation({
-    mutationFn: async (data: typeof transferForm) => {
-      const response = await api.post('/transfer', {
-        type: data.type,
-        from_treasury_id: data.from_treasury_id ? parseInt(data.from_treasury_id) : undefined,
-        to_treasury_id: data.to_treasury_id ? parseInt(data.to_treasury_id) : undefined,
-        from_bank_id: data.from_bank_id ? parseInt(data.from_bank_id) : undefined,
-        to_bank_id: data.to_bank_id ? parseInt(data.to_bank_id) : undefined,
-        amount: parseFloat(data.amount),
-        currency: data.currency,
-        notes: data.notes || null
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['treasuries'] });
-      queryClient.invalidateQueries({ queryKey: ['banks'] });
-      queryClient.invalidateQueries({ queryKey: ['treasury-movements'] });
-      queryClient.invalidateQueries({ queryKey: ['bank-movements'] });
-      toast.success(language === 'ar' ? 'تم التحويل بنجاح' : 'Transfer completed successfully');
-      handleCloseTransferForm();
-    },
-    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
-  });
+// Transfer mutation - تأكدي من إنها كده
+const transferMutation = useMutation({
+  mutationFn: async (data: typeof transferForm) => {
+    const payload: any = {
+      type: data.type,
+      amount: parseFloat(data.amount),
+      currency: data.currency,
+      notes: data.notes || null
+    };
+
+    // بناء على نوع التحويل
+    if (data.type === 'treasury_to_treasury') {
+      payload.from_treasury_id = parseInt(data.from_treasury_id);
+      payload.to_treasury_id = parseInt(data.to_treasury_id);
+    } else if (data.type === 'treasury_to_bank') {
+      payload.from_treasury_id = parseInt(data.from_treasury_id);
+      payload.to_bank_id = parseInt(data.to_bank_id);
+    } else if (data.type === 'bank_to_treasury') {
+      payload.from_bank_id = parseInt(data.from_bank_id);
+      payload.to_treasury_id = parseInt(data.to_treasury_id);
+    } else if (data.type === 'bank_to_bank') {
+      payload.from_bank_id = parseInt(data.from_bank_id);
+      payload.to_bank_id = parseInt(data.to_bank_id);
+    }
+
+    const response = await api.post('/transfer', payload);
+    return response.data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['treasuries'] });
+    queryClient.invalidateQueries({ queryKey: ['banks'] });
+    queryClient.invalidateQueries({ queryKey: ['treasury-movements'] });
+    queryClient.invalidateQueries({ queryKey: ['bank-movements'] });
+    toast.success(language === 'ar' ? 'تم التحويل بنجاح' : 'Transfer completed successfully');
+    handleCloseTransferForm();
+  },
+  onError: (error: any) => toast.error(error.response?.data?.message || error.message)
+});
 
   const handleCloseTreasuryForm = () => {
     setShowTreasuryForm(false);
@@ -788,18 +812,22 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     return banks;
   };
 
-  const getTransferToOptions = () => {
-    if (transferForm.type === 'treasury_to_treasury') {
-      return treasuries.filter((t: Treasury) => t.id !== parseInt(transferForm.from_treasury_id));
-    } else if (transferForm.type === 'treasury_to_bank') {
-      return banks;
-    } else if (transferForm.type === 'bank_to_treasury') {
-      return treasuries;
-    } else if (transferForm.type === 'bank_to_bank') {
-      return banks.filter((b: Bank) => b.id !== parseInt(transferForm.from_bank_id));
-    }
-    return [];
-  };
+const getTransferToOptions = () => {
+  if (transferForm.type === 'treasury_to_treasury') {
+    return treasuries.filter((t: Treasury) => 
+      t.id.toString() !== transferForm.from_treasury_id
+    );
+  } else if (transferForm.type === 'treasury_to_bank') {
+    return banks;
+  } else if (transferForm.type === 'bank_to_treasury') {
+    return treasuries; // دي بتاع بنك → خزينة
+  } else if (transferForm.type === 'bank_to_bank') {
+    return banks.filter((b: Bank) => 
+      b.id.toString() !== transferForm.from_bank_id
+    );
+  }
+  return [];
+};
 
   // Update form based on transfer type
   const updateTransferFormByType = (type: string) => {
@@ -889,7 +917,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="treasuries" className="gap-2">
             <Wallet size={16} />
             {language === 'ar' ? 'الخزائن' : 'Treasuries'}
@@ -910,12 +938,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             <History size={16} />
             {language === 'ar' ? 'حركات البنك' : 'Bank Mov.'}
           </TabsTrigger>
-          <TabsTrigger value="treasury-transactions" className="gap-2">
-            {language === 'ar' ? 'معاملات الخزينة' : 'Treasury Trans.'}
-          </TabsTrigger>
-          <TabsTrigger value="bank-transactions" className="gap-2">
-            {language === 'ar' ? 'معاملات البنك' : 'Bank Trans.'}
-          </TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="treasuries" className="space-y-4">
@@ -1031,9 +1054,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       <TableHead>{language === 'ar' ? 'رقم الحساب' : 'Account #'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الفرع' : 'Branch'}</TableHead>
                       <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'الرصيد' : 'Balance'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الاجراءات' : 'Action'}</TableHead>
             
-                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1052,7 +1075,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                             {bank.currency}
                           </Badge>
                         </TableCell>
-                      
+                        <TableCell>{Number(bank.balance).toLocaleString()} {bank.currency}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEditBank(bank)}><Edit size={16} /></Button>
@@ -1320,71 +1343,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
           </Card>
         </TabsContent>
 
-        <TabsContent value="treasury-transactions">
-          <Card>
-            <CardHeader>
-              <CardTitle>{language === 'ar' ? 'معاملات الخزينة' : 'Treasury Transactions'}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[400px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الرصيد بعد' : 'Balance After'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* We'll need to add treasury transactions data */}
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {language === 'ar' ? 'لا توجد معاملات' : 'No transactions'}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="bank-transactions">
-          <Card>
-            <CardHeader>
-              <CardTitle>{language === 'ar' ? 'معاملات البنك' : 'Bank Transactions'}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ScrollArea className="h-[400px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'البنك' : 'Bank'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الرصيد بعد' : 'Balance After'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* We'll need to add bank transactions data */}
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        {language === 'ar' ? 'لا توجد معاملات' : 'No transactions'}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
+       
       </Tabs>
 
       {/* Treasury Form Dialog */}
@@ -1485,15 +1444,12 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             <DialogTitle>{editingItem ? (language === 'ar' ? 'تعديل البنك' : 'Edit Bank') : (language === 'ar' ? 'بنك جديد' : 'New Bank')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label>{language === 'ar' ? 'اسم البنك' : 'Bank Name'} *</Label>
                 <Input value={bankForm.name} onChange={(e) => setBankForm(prev => ({ ...prev, name: e.target.value }))} />
               </div>
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الاسم بالعربية' : 'Arabic Name'}</Label>
-                <Input value={bankForm.name_ar} onChange={(e) => setBankForm(prev => ({ ...prev, name_ar: e.target.value }))} dir="rtl" />
-              </div>
+              
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1651,161 +1607,230 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       </Dialog>
 
       {/* Transfer Form Dialog */}
-      <Dialog open={showTransferForm} onOpenChange={handleCloseTransferForm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{language === 'ar' ? 'تحويل أموال' : 'Transfer Funds'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'نوع التحويل' : 'Transfer Type'} *</Label>
-              <Select value={transferForm.type} onValueChange={(v) => updateTransferFormByType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="treasury_to_treasury">{language === 'ar' ? 'خزينة إلى خزينة' : 'Treasury to Treasury'}</SelectItem>
-                  <SelectItem value="treasury_to_bank">{language === 'ar' ? 'خزينة إلى بنك' : 'Treasury to Bank'}</SelectItem>
-                  <SelectItem value="bank_to_treasury">{language === 'ar' ? 'بنك إلى خزينة' : 'Bank to Treasury'}</SelectItem>
-                  <SelectItem value="bank_to_bank">{language === 'ar' ? 'بنك إلى بنك' : 'Bank to Bank'}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+  <Dialog open={showTransferForm} onOpenChange={handleCloseTransferForm}>
+  <DialogContent className="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>{language === 'ar' ? 'تحويل أموال' : 'Transfer Funds'}</DialogTitle>
+    </DialogHeader>
+    
+    <div className="space-y-4 py-4">
+      {/* نوع التحويل */}
+      <div className="space-y-2">
+        <Label>{language === 'ar' ? 'نوع التحويل' : 'Transfer Type'} *</Label>
+        <Select 
+          value={transferForm.type} 
+          onValueChange={(v) => updateTransferFormByType(v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="treasury_to_treasury">
+              {language === 'ar' ? 'خزينة ← خزينة' : 'Treasury → Treasury'}
+            </SelectItem>
+            <SelectItem value="treasury_to_bank">
+              {language === 'ar' ? 'خزينة ← بنك' : 'Treasury → Bank'}
+            </SelectItem>
+            <SelectItem value="bank_to_treasury">
+              {language === 'ar' ? 'بنك ← خزينة' : 'Bank → Treasury'}
+            </SelectItem>
+            <SelectItem value="bank_to_bank">
+              {language === 'ar' ? 'بنك ← بنك' : 'Bank → Bank'}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-            {/* From Field */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'من' : 'From'} *</Label>
-              {transferForm.type.includes('treasury') ? (
-                <Select 
-                  value={transferForm.from_treasury_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_treasury_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
-                  <SelectContent>
-                    {treasuries.map((t: Treasury) => (
-                      <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select 
-                  value={transferForm.from_bank_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_bank_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
-                  <SelectContent>
-                    {banks.map((b: Bank) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+      {/* من (المصدر) */}
+   {/* From Field - عدلي الشرط كده */}
+<div className="space-y-2">
+  <Label>{language === 'ar' ? 'من' : 'From'} *</Label>
+  
+  {/* لو التحويل من خزينة (خزينة → خزينة أو خزينة → بنك) */}
+  {transferForm.type === 'treasury_to_treasury' || transferForm.type === 'treasury_to_bank' ? (
+    <Select 
+      value={transferForm.from_treasury_id} 
+      onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_treasury_id: v }))}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+      </SelectTrigger>
+      <SelectContent>
+        {treasuries.map((t: Treasury) => (
+          <SelectItem key={t.id} value={t.id.toString()}>
+            {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : null}
 
-            {/* To Field */}
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'إلى' : 'To'} *</Label>
-              {transferForm.type === 'treasury_to_treasury' ? (
-                <Select 
-                  value={transferForm.to_treasury_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
-                  <SelectContent>
-                    {treasuries
-                      .filter((t: Treasury) => t.id.toString() !== transferForm.from_treasury_id)
-                      .map((t: Treasury) => (
-                        <SelectItem key={t.id} value={t.id.toString()}>
-                          {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              ) : transferForm.type === 'treasury_to_bank' ? (
-                <Select 
-                  value={transferForm.to_bank_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
-                  <SelectContent>
-                    {banks.map((b: Bank) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : transferForm.type === 'bank_to_treasury' ? (
-                <Select 
-                  value={transferForm.to_treasury_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
-                  <SelectContent>
-                    {treasuries.map((t: Treasury) => (
-                      <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select 
-                  value={transferForm.to_bank_id} 
-                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
-                  <SelectContent>
-                    {banks
-                      .filter((b: Bank) => b.id.toString() !== transferForm.from_bank_id)
-                      .map((b: Bank) => (
-                        <SelectItem key={b.id} value={b.id.toString()}>
-                          {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+  {/* لو التحويل من بنك (بنك → خزينة أو بنك → بنك) */}
+  {transferForm.type === 'bank_to_treasury' || transferForm.type === 'bank_to_bank' ? (
+    <Select 
+      value={transferForm.from_bank_id} 
+      onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_bank_id: v }))}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} />
+      </SelectTrigger>
+      <SelectContent>
+        {banks.map((b: Bank) => (
+          <SelectItem key={b.id} value={b.id.toString()}>
+            {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : null}
+</div>
 
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} *</Label>
-              <Input type="number" value={transferForm.amount} onChange={(e) => setTransferForm(prev => ({ ...prev, amount: e.target.value }))} />
-            </div>
+      {/* إلى (الوجهة) */}
+      <div className="space-y-2">
+        <Label>{language === 'ar' ? 'إلى' : 'To'} *</Label>
+        
+        {/* خزينة → خزينة */}
+        {transferForm.type === 'treasury_to_treasury' && (
+          <Select 
+            value={transferForm.to_treasury_id} 
+            onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+            </SelectTrigger>
+            <SelectContent>
+              {getTransferToOptions().map((item: Treasury) => (
+                <SelectItem key={item.id} value={item.id.toString()}>
+                  {item.name} ({Number(item.balance).toLocaleString()} {item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
-              <Select value={transferForm.currency} onValueChange={(v) => setTransferForm(prev => ({ ...prev, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {currencies.map((c: Currency) => (
-                    <SelectItem key={c.id} value={c.code}>
-                      {c.code} - {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {/* خزينة → بنك */}
+        {transferForm.type === 'treasury_to_bank' && (
+          <Select 
+            value={transferForm.to_bank_id} 
+            onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} />
+            </SelectTrigger>
+            <SelectContent>
+              {getTransferToOptions().map((item: Bank) => (
+                <SelectItem key={item.id} value={item.id.toString()}>
+                  {item.name} ({Number(item.balance).toLocaleString()} {item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-              <Input value={transferForm.notes} onChange={(e) => setTransferForm(prev => ({ ...prev, notes: e.target.value }))} />
-            </div>
-          </div>
+        {/* بنك → خزينة */}
+        {transferForm.type === 'bank_to_treasury' && (
+          <Select 
+            value={transferForm.to_treasury_id} 
+            onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+            </SelectTrigger>
+            <SelectContent>
+              {getTransferToOptions().map((item: Treasury) => (
+                <SelectItem key={item.id} value={item.id.toString()}>
+                  {item.name} ({Number(item.balance).toLocaleString()} {item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseTransferForm}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
-            <Button 
-              onClick={() => transferMutation.mutate(transferForm)} 
-              
-            >
-              {language === 'ar' ? 'تحويل' : 'Transfer'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* بنك → بنك */}
+        {transferForm.type === 'bank_to_bank' && (
+          <Select 
+            value={transferForm.to_bank_id} 
+            onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} />
+            </SelectTrigger>
+            <SelectContent>
+              {getTransferToOptions().map((item: Bank) => (
+                <SelectItem key={item.id} value={item.id.toString()}>
+                  {item.name} ({Number(item.balance).toLocaleString()} {item.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* المبلغ */}
+      <div className="space-y-2">
+        <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} *</Label>
+        <Input 
+          type="number" 
+          value={transferForm.amount} 
+          onChange={(e) => setTransferForm(prev => ({ ...prev, amount: e.target.value }))}
+          placeholder={language === 'ar' ? 'أدخل المبلغ' : 'Enter amount'}
+        />
+      </div>
+
+      {/* العملة */}
+      <div className="space-y-2">
+        <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
+        <Select 
+          value={transferForm.currency} 
+          onValueChange={(v) => setTransferForm(prev => ({ ...prev, currency: v }))}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+          </SelectTrigger>
+          <SelectContent>
+            {currencies.map((c: Currency) => (
+              <SelectItem key={c.id} value={c.code}>
+                {c.code} - {c.name} {c.symbol}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* ملاحظات */}
+      <div className="space-y-2">
+        <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+        <Input 
+          value={transferForm.notes} 
+          onChange={(e) => setTransferForm(prev => ({ ...prev, notes: e.target.value }))}
+          placeholder={language === 'ar' ? 'أضف ملاحظات...' : 'Add notes...'}
+        />
+      </div>
+    </div>
+
+    <DialogFooter>
+      <Button variant="outline" onClick={handleCloseTransferForm}>
+        {language === 'ar' ? 'إلغاء' : 'Cancel'}
+      </Button>
+      <Button 
+        onClick={() => transferMutation.mutate(transferForm)}
+        disabled={
+          !transferForm.amount ||
+          !transferForm.currency ||
+          (transferForm.type.includes('treasury') && !transferForm.from_treasury_id) ||
+          (transferForm.type.includes('bank') && !transferForm.from_bank_id) ||
+          (transferForm.type === 'treasury_to_treasury' && !transferForm.to_treasury_id) ||
+          (transferForm.type === 'treasury_to_bank' && !transferForm.to_bank_id) ||
+          (transferForm.type === 'bank_to_treasury' && !transferForm.to_treasury_id) ||
+          (transferForm.type === 'bank_to_bank' && !transferForm.to_bank_id)
+        }
+        className="bg-green-600 hover:bg-green-700"
+      >
+        {language === 'ar' ? 'تحويل' : 'Transfer'}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
     </div>
   );
 };

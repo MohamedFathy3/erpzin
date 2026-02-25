@@ -32,7 +32,6 @@ const Finance = () => {
     { id: 'expenses', label: language === 'ar' ? 'المصروفات' : 'Expenses', icon: Receipt },
     { id: 'treasury', label: language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks', icon: Wallet },
     { id: 'accounts', label: language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts', icon: FolderTree },
-    { id: 'payables', label: language === 'ar' ? 'الذمم الدائنة' : 'Payables', icon: Building2 }
   ];
 
   // Finance filter fields based on active tab
@@ -103,7 +102,7 @@ const Finance = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon size={16} />
@@ -148,9 +147,6 @@ const Finance = () => {
             <ChartOfAccounts language={language} />
           </TabsContent>
 
-          <TabsContent value="payables" className="mt-6">
-            <AccountsPayable language={language} />
-          </TabsContent>
         </Tabs>
       </div>
     </MainLayout>
