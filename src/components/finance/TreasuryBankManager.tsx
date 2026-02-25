@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,12 +11,118 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Plus, Wallet, Building2, Edit, Trash2, ArrowUpCircle, ArrowDownCircle, RefreshCw, ArrowRightLeft } from 'lucide-react';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { 
+  Plus, 
+  Wallet, 
+  Building2, 
+  Edit, 
+  Trash2, 
+  ArrowUpCircle, 
+  ArrowDownCircle, 
+  RefreshCw, 
+  ArrowRightLeft,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Star,
+  History
+} from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { cn } from '@/lib/utils';
+import api from '@/lib/api';
 
 interface TreasuryBankManagerProps {
   language: string;
+}
+
+interface Currency {
+  id: number;
+  name: string;
+  code: string;
+  symbol: string;
+  exchange_rate: string;
+  active: boolean;
+  default: boolean;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  code: string;
+  phone: string;
+  address: string;
+  manager: string;
+  active: boolean;
+  main_branch: boolean;
+  image: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Treasury {
+  id: number;
+  name: string;
+  code: string;
+  branch_id: number;
+  branch: Branch;
+  balance: number;
+  currency: string;
+  is_main: boolean;
+  notes: string;
+  created_at: string;
+}
+
+interface Bank {
+  id: number;
+  name: string;
+  name_ar?: string;
+  account_number?: string;
+  iban?: string;
+  swift_code?: string;
+  branch_id?: number;
+  branch?: Branch;
+  balance: number;
+  currency: string;
+  contact_person?: string;
+  phone?: string;
+  address?: string;
+  is_active: boolean;
+  notes?: string;
+}
+
+interface Movement {
+  id: number;
+  type: string;
+  from: {
+    treasury: string | null;
+    bank: string | null;
+  };
+  to: {
+    treasury: string | null;
+    bank: string | null;
+  };
+  amount: string;
+  currency: string;
+  notes: string;
+  date: string;
+}
+
+interface MovementResponse {
+  data: Movement[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface TreasuryResponse {
+  data: Treasury[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
 }
 
 const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) => {
@@ -29,153 +134,416 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   const [showTransferForm, setShowTransferForm] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [transactionType, setTransactionType] = useState<'treasury' | 'bank'>('treasury');
+  const [showMainWarning, setShowMainWarning] = useState(false);
+  const [pendingMainChange, setPendingMainChange] = useState<{value: boolean, callback: () => void} | null>(null);
+  const [updatingMainId, setUpdatingMainId] = useState<number | null>(null);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
   const [treasuryForm, setTreasuryForm] = useState({
-    name: '', name_ar: '', code: '', branch_id: '', balance: '', currency: 'YER', is_main: false, notes: ''
+    name: '',
+    code: '',
+    branch_id: '',
+    balance: '',
+    currency: '',
+    is_main: false,
+    notes: ''
   });
 
   const [bankForm, setBankForm] = useState({
-    name: '', name_ar: '', account_number: '', iban: '', swift_code: '', branch_id: '', 
-    balance: '', currency: 'YER', contact_person: '', phone: '', address: '', notes: ''
+    name: '',
+    name_ar: '',
+    account_number: '',
+    iban: '',
+    swift_code: '',
+    branch_id: '',
+    balance: '',
+    currency: '',
+    contact_person: '',
+    phone: '',
+    address: '',
+    notes: ''
   });
 
   const [transactionForm, setTransactionForm] = useState({
-    entity_id: '', transaction_type: 'deposit', amount: '', description: ''
-  });
-
-  const [transferForm, setTransferForm] = useState({
-    transfer_type: 'treasury_to_treasury', // treasury_to_treasury, treasury_to_bank, bank_to_treasury
-    from_id: '',
-    to_id: '',
+    entity_id: '',
+    transaction_type: 'deposit',
     amount: '',
+    currency: '',
     description: ''
   });
 
-  const { data: branches = [] } = useQuery({
+  const [transferForm, setTransferForm] = useState({
+    type: 'treasury_to_treasury',
+    from_treasury_id: '',
+    to_treasury_id: '',
+    from_bank_id: '',
+    to_bank_id: '',
+    amount: '',
+    currency: '',
+    notes: ''
+  });
+
+  // Fetch currencies
+  const { data: currenciesData } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => {
+      const response = await api.post('/currency/index', {
+        filters: { active: true },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 100,
+        paginate: true
+      });
+      return response.data.data || [];
+    }
+  });
+  const currencies = currenciesData || [];
+  const defaultCurrency = currencies.find((c: Currency) => c.default);
+
+  // Fetch branches
+  const { data: branchesData } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('branches').select('*').eq('is_active', true);
-      if (error) throw error;
-      return data;
+      const response = await api.post('/branch/index', {
+        filters: { active: true },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 100,
+        paginate: true
+      });
+      return response.data.data || [];
     }
   });
+  const branches = branchesData || [];
 
-  const { data: treasuries = [], isLoading: loadingTreasuries } = useQuery({
+  // Fetch treasuries
+  const { data: treasuriesResponse, isLoading: loadingTreasuries } = useQuery({
     queryKey: ['treasuries'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('treasuries')
-        .select('*, branches(name, name_ar)')
-        .order('name');
-      if (error) throw error;
-      return data;
+      const response = await api.post('/treasury/index', {
+        filters: {},
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 100,
+        paginate: true
+      });
+      return response.data as TreasuryResponse;
     }
   });
+  const treasuries = treasuriesResponse?.data || [];
 
-  const { data: banks = [], isLoading: loadingBanks } = useQuery({
+  // Fetch banks
+  const { data: banksData, isLoading: loadingBanks } = useQuery({
     queryKey: ['banks'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('banks')
-        .select('*, branches(name, name_ar)')
-        .order('name');
-      if (error) throw error;
-      return data;
+      const response = await api.post('/bank/index', {
+        filters: {},
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 100,
+        paginate: true
+      });
+      return response.data.data || [];
+    }
+  });
+  const banks = banksData || [];
+
+  // Fetch treasury movements
+  const { data: treasuryMovementsData, isLoading: loadingTreasuryMovements } = useQuery({
+    queryKey: ['treasury-movements', currentPage, perPage],
+    queryFn: async () => {
+      const response = await api.post('/treasury-movement/index', {
+        filters: {},
+        orderBy: 'date',
+        orderByDirection: 'desc',
+        perPage: perPage,
+        paginate: true
+      });
+      return response.data as MovementResponse;
+    }
+  });
+  const treasuryMovements = treasuryMovementsData?.data || [];
+  const treasuryMovementsMeta = treasuryMovementsData?.meta || {};
+
+  // Fetch bank movements
+  const { data: bankMovementsData, isLoading: loadingBankMovements } = useQuery({
+    queryKey: ['bank-movements', currentPage, perPage],
+    queryFn: async () => {
+      const response = await api.post('/bank-movement/index', {
+        filters: {},
+        orderBy: 'date',
+        orderByDirection: 'desc',
+        perPage: perPage,
+        paginate: true
+      });
+      return response.data as MovementResponse;
+    }
+  });
+  const bankMovements = bankMovementsData?.data || [];
+  const bankMovementsMeta = bankMovementsData?.meta || {};
+
+  // Update column mutation for treasury
+  const updateTreasuryColumnMutation = useMutation({
+    mutationFn: async ({ id, column, value }: { id: number; column: string; value: any }) => {
+      const response = await api.put(`/treasury/${id}/${column}`, {
+        [column]: value
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['treasuries'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.message);
     }
   });
 
-  const { data: treasuryTransactions = [] } = useQuery({
-    queryKey: ['treasury-transactions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('treasury_transactions')
-        .select('*, treasuries(name, name_ar)')
-        .order('transaction_date', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data;
+  // Update column mutation for bank
+  const updateBankColumnMutation = useMutation({
+    mutationFn: async ({ id, column, value }: { id: number; column: string; value: any }) => {
+      const response = await api.put(`/bank/${id}/${column}`, {
+        [column]: value
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['banks'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.message);
     }
   });
 
-  const { data: bankTransactions = [] } = useQuery({
-    queryKey: ['bank-transactions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('bank_transactions')
-        .select('*, banks(name, name_ar)')
-        .order('transaction_date', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data;
+  // Handle main treasury toggle
+  const handleMainTreasuryToggle = async (treasury: Treasury) => {
+    try {
+      setUpdatingMainId(treasury.id);
+      
+      // If we're unchecking is_main, just update this one
+      if (treasury.is_main) {
+        await updateTreasuryColumnMutation.mutateAsync({
+          id: treasury.id,
+          column: 'is_main',
+          value: false
+        });
+        
+        toast.success(
+          language === 'ar' 
+            ? 'تم إلغاء تعيين الخزينة كرئيسية' 
+            : 'Treasury unset as main successfully'
+        );
+        return;
+      }
+
+      // Check if there's another main treasury for the same branch
+      const otherMainTreasury = treasuries.find((t: Treasury) => 
+        t.branch_id === treasury.branch_id && 
+        t.is_main && 
+        t.id !== treasury.id
+      );
+
+      // If there's another main treasury, update it first then set this one
+      if (otherMainTreasury) {
+        // First set the other treasury to false
+        await updateTreasuryColumnMutation.mutateAsync({
+          id: otherMainTreasury.id,
+          column: 'is_main',
+          value: false
+        });
+      }
+      
+      // Then set this treasury to true
+      await updateTreasuryColumnMutation.mutateAsync({
+        id: treasury.id,
+        column: 'is_main',
+        value: true
+      });
+
+      toast.success(
+        language === 'ar' 
+          ? 'تم تغيير الخزينة الرئيسية بنجاح' 
+          : 'Main treasury updated successfully'
+      );
+      
+    } catch (error) {
+      console.error('Error updating main treasury:', error);
+    } finally {
+      setUpdatingMainId(null);
     }
-  });
+  };
+
+  // Format date safely
+  const formatDate = (dateString: string) => {
+    try {
+      if (!dateString) return '-';
+      
+      // Try different date formats
+      let date: Date | null = null;
+      
+      // Format: "2026-02-25 10:12"
+      if (dateString.includes(' ')) {
+        const [datePart, timePart] = dateString.split(' ');
+        date = new Date(`${datePart}T${timePart}:00`);
+      } else {
+        date = new Date(dateString);
+      }
+      
+      if (isNaN(date.getTime())) {
+        return dateString; // Return original string if invalid
+      }
+      
+      return format(date, 'yyyy/MM/dd HH:mm');
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateString || '-';
+    }
+  };
+
+  // Format amount
+  const formatAmount = (amount: string) => {
+    try {
+      return Number(amount).toLocaleString();
+    } catch {
+      return amount;
+    }
+  };
+
+  // Get movement type label
+  const getMovementTypeLabel = (type: string) => {
+    const types: Record<string, { ar: string, en: string }> = {
+      'treasury_to_treasury': { ar: 'خزينة → خزينة', en: 'Treasury → Treasury' },
+      'treasury_to_bank': { ar: 'خزينة → بنك', en: 'Treasury → Bank' },
+      'bank_to_treasury': { ar: 'بنك → خزينة', en: 'Bank → Treasury' },
+      'bank_to_bank': { ar: 'بنك → بنك', en: 'Bank → Bank' },
+      'treasury_deposit': { ar: 'إيداع خزينة', en: 'Treasury Deposit' },
+      'treasury_withdraw': { ar: 'سحب خزينة', en: 'Treasury Withdrawal' },
+      'bank_deposit': { ar: 'إيداع بنك', en: 'Bank Deposit' },
+      'bank_withdraw': { ar: 'سحب بنك', en: 'Bank Withdrawal' }
+    };
+    
+    return types[type]?.[language === 'ar' ? 'ar' : 'en'] || type;
+  };
+
+  // Get movement source
+  const getMovementSource = (movement: Movement) => {
+    if (movement.from.treasury) return movement.from.treasury;
+    if (movement.from.bank) return movement.from.bank;
+    return '-';
+  };
+
+  // Get movement destination
+  const getMovementDestination = (movement: Movement) => {
+    if (movement.to.treasury) return movement.to.treasury;
+    if (movement.to.bank) return movement.to.bank;
+    return '-';
+  };
 
   // Treasury mutations
   const createTreasuryMutation = useMutation({
     mutationFn: async (data: typeof treasuryForm) => {
-      const { error } = await supabase.from('treasuries').insert({
+      // Check if there's another main treasury for the same branch
+      if (data.is_main && data.branch_id) {
+        const otherMainTreasury = treasuries.find((t: Treasury) => 
+          t.branch_id === parseInt(data.branch_id) && 
+          t.is_main
+        );
+
+        if (otherMainTreasury) {
+          // First update the other treasury to false
+          await updateTreasuryColumnMutation.mutateAsync({
+            id: otherMainTreasury.id,
+            column: 'is_main',
+            value: false
+          });
+        }
+      }
+
+      const response = await api.post('/treasury', {
         name: data.name,
-        name_ar: data.name_ar || null,
         code: data.code || null,
-        branch_id: data.branch_id || null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null,
         balance: parseFloat(data.balance) || 0,
         currency: data.currency,
         is_main: data.is_main,
         notes: data.notes || null
       });
-      if (error) throw error;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
       toast.success(language === 'ar' ? 'تم إضافة الخزينة بنجاح' : 'Treasury added successfully');
       handleCloseTreasuryForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   const updateTreasuryMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof treasuryForm }) => {
-      const { error } = await supabase.from('treasuries').update({
+    mutationFn: async ({ id, data }: { id: number; data: typeof treasuryForm }) => {
+      // Check if we're changing is_main to true and there's another main
+      if (data.is_main && data.branch_id) {
+        const otherMainTreasury = treasuries.find((t: Treasury) => 
+          t.branch_id === parseInt(data.branch_id) && 
+          t.is_main &&
+          t.id !== id
+        );
+
+        if (otherMainTreasury) {
+          // First update the other treasury to false
+          await updateTreasuryColumnMutation.mutateAsync({
+            id: otherMainTreasury.id,
+            column: 'is_main',
+            value: false
+          });
+        }
+      }
+
+      const response = await api.put(`/treasury/${id}`, {
         name: data.name,
-        name_ar: data.name_ar || null,
         code: data.code || null,
-        branch_id: data.branch_id || null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null,
         currency: data.currency,
         is_main: data.is_main,
         notes: data.notes || null
-      }).eq('id', id);
-      if (error) throw error;
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
       toast.success(language === 'ar' ? 'تم تحديث الخزينة بنجاح' : 'Treasury updated successfully');
       handleCloseTreasuryForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   const deleteTreasuryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('treasuries').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      const response = await api.delete('/treasury/delete', {
+        data: { items: [id] }
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
       toast.success(language === 'ar' ? 'تم حذف الخزينة' : 'Treasury deleted');
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   // Bank mutations
   const createBankMutation = useMutation({
     mutationFn: async (data: typeof bankForm) => {
-      const { error } = await supabase.from('banks').insert({
+      const response = await api.post('/bank', {
         name: data.name,
         name_ar: data.name_ar || null,
         account_number: data.account_number || null,
         iban: data.iban || null,
         swift_code: data.swift_code || null,
-        branch_id: data.branch_id || null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null,
         balance: parseFloat(data.balance) || 0,
         currency: data.currency,
         contact_person: data.contact_person || null,
@@ -183,268 +551,186 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
         address: data.address || null,
         notes: data.notes || null
       });
-      if (error) throw error;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
       toast.success(language === 'ar' ? 'تم إضافة البنك بنجاح' : 'Bank added successfully');
       handleCloseBankForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   const updateBankMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof bankForm }) => {
-      const { error } = await supabase.from('banks').update({
+    mutationFn: async ({ id, data }: { id: number; data: typeof bankForm }) => {
+      const response = await api.put(`/bank/${id}`, {
         name: data.name,
         name_ar: data.name_ar || null,
         account_number: data.account_number || null,
         iban: data.iban || null,
         swift_code: data.swift_code || null,
-        branch_id: data.branch_id || null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null,
         currency: data.currency,
         contact_person: data.contact_person || null,
         phone: data.phone || null,
         address: data.address || null,
         notes: data.notes || null
-      }).eq('id', id);
-      if (error) throw error;
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
       toast.success(language === 'ar' ? 'تم تحديث البنك بنجاح' : 'Bank updated successfully');
       handleCloseBankForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   const deleteBankMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('banks').delete().eq('id', id);
-      if (error) throw error;
+    mutationFn: async (id: number) => {
+      const response = await api.delete('/bank/delete', {
+        data: { items: [id] }
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
       toast.success(language === 'ar' ? 'تم حذف البنك' : 'Bank deleted');
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
-  // Transaction mutations
+  // Transaction mutation
   const createTransactionMutation = useMutation({
     mutationFn: async (data: typeof transactionForm & { type: 'treasury' | 'bank' }) => {
       const amount = parseFloat(data.amount);
-      const isDeposit = data.transaction_type === 'deposit';
 
       if (data.type === 'treasury') {
-        const treasury = treasuries.find(t => t.id === data.entity_id);
-        if (!treasury) throw new Error('Treasury not found');
-        
-        const newBalance = isDeposit ? Number(treasury.balance) + amount : Number(treasury.balance) - amount;
-        
-        const { error: txError } = await supabase.from('treasury_transactions').insert({
-          treasury_id: data.entity_id,
-          transaction_type: data.transaction_type,
-          amount,
-          balance_before: treasury.balance,
-          balance_after: newBalance,
-          description: data.description || null
+        const response = await api.post('/transfer', {
+          type: data.transaction_type === 'deposit' ? 'treasury_deposit' : 'treasury_withdraw',
+          to_treasury_id: data.transaction_type === 'deposit' ? parseInt(data.entity_id) : undefined,
+          from_treasury_id: data.transaction_type === 'withdrawal' ? parseInt(data.entity_id) : undefined,
+          amount: amount,
+          currency: data.currency,
+          notes: data.description || null
         });
-        if (txError) throw txError;
-
-        const { error: updateError } = await supabase
-          .from('treasuries')
-          .update({ balance: newBalance })
-          .eq('id', data.entity_id);
-        if (updateError) throw updateError;
+        return response.data;
       } else {
-        const bank = banks.find(b => b.id === data.entity_id);
-        if (!bank) throw new Error('Bank not found');
-        
-        const newBalance = isDeposit ? Number(bank.balance) + amount : Number(bank.balance) - amount;
-        
-        const { error: txError } = await supabase.from('bank_transactions').insert({
-          bank_id: data.entity_id,
-          transaction_type: data.transaction_type,
-          amount,
-          balance_before: bank.balance,
-          balance_after: newBalance,
-          description: data.description || null
+        const response = await api.post('/transfer', {
+          type: data.transaction_type === 'deposit' ? 'bank_deposit' : 'bank_withdraw',
+          to_bank_id: data.transaction_type === 'deposit' ? parseInt(data.entity_id) : undefined,
+          from_bank_id: data.transaction_type === 'withdrawal' ? parseInt(data.entity_id) : undefined,
+          amount: amount,
+          currency: data.currency,
+          notes: data.description || null
         });
-        if (txError) throw txError;
-
-        const { error: updateError } = await supabase
-          .from('banks')
-          .update({ balance: newBalance })
-          .eq('id', data.entity_id);
-        if (updateError) throw updateError;
+        return response.data;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
       queryClient.invalidateQueries({ queryKey: ['banks'] });
-      queryClient.invalidateQueries({ queryKey: ['treasury-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['treasury-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-movements'] });
       toast.success(language === 'ar' ? 'تم تسجيل الحركة بنجاح' : 'Transaction recorded successfully');
       handleCloseTransactionForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   // Transfer mutation
   const transferMutation = useMutation({
     mutationFn: async (data: typeof transferForm) => {
-      const amount = parseFloat(data.amount);
-      
-      if (data.transfer_type === 'treasury_to_treasury') {
-        const fromTreasury = treasuries.find(t => t.id === data.from_id);
-        const toTreasury = treasuries.find(t => t.id === data.to_id);
-        if (!fromTreasury || !toTreasury) throw new Error('Treasury not found');
-        if (Number(fromTreasury.balance) < amount) throw new Error(language === 'ar' ? 'الرصيد غير كافي' : 'Insufficient balance');
-
-        const fromNewBalance = Number(fromTreasury.balance) - amount;
-        const toNewBalance = Number(toTreasury.balance) + amount;
-
-        // Record withdrawal from source
-        await supabase.from('treasury_transactions').insert({
-          treasury_id: data.from_id,
-          transaction_type: 'transfer_out',
-          amount,
-          balance_before: fromTreasury.balance,
-          balance_after: fromNewBalance,
-          description: `${language === 'ar' ? 'تحويل إلى' : 'Transfer to'}: ${toTreasury.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Record deposit to destination
-        await supabase.from('treasury_transactions').insert({
-          treasury_id: data.to_id,
-          transaction_type: 'transfer_in',
-          amount,
-          balance_before: toTreasury.balance,
-          balance_after: toNewBalance,
-          description: `${language === 'ar' ? 'تحويل من' : 'Transfer from'}: ${fromTreasury.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Update balances
-        await supabase.from('treasuries').update({ balance: fromNewBalance }).eq('id', data.from_id);
-        await supabase.from('treasuries').update({ balance: toNewBalance }).eq('id', data.to_id);
-
-      } else if (data.transfer_type === 'treasury_to_bank') {
-        const fromTreasury = treasuries.find(t => t.id === data.from_id);
-        const toBank = banks.find(b => b.id === data.to_id);
-        if (!fromTreasury || !toBank) throw new Error('Treasury or Bank not found');
-        if (Number(fromTreasury.balance) < amount) throw new Error(language === 'ar' ? 'الرصيد غير كافي' : 'Insufficient balance');
-
-        const fromNewBalance = Number(fromTreasury.balance) - amount;
-        const toNewBalance = Number(toBank.balance) + amount;
-
-        // Record withdrawal from treasury
-        await supabase.from('treasury_transactions').insert({
-          treasury_id: data.from_id,
-          transaction_type: 'transfer_out',
-          amount,
-          balance_before: fromTreasury.balance,
-          balance_after: fromNewBalance,
-          description: `${language === 'ar' ? 'تحويل إلى بنك' : 'Transfer to bank'}: ${toBank.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Record deposit to bank
-        await supabase.from('bank_transactions').insert({
-          bank_id: data.to_id,
-          transaction_type: 'transfer_in',
-          amount,
-          balance_before: toBank.balance,
-          balance_after: toNewBalance,
-          description: `${language === 'ar' ? 'تحويل من خزينة' : 'Transfer from treasury'}: ${fromTreasury.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Update balances
-        await supabase.from('treasuries').update({ balance: fromNewBalance }).eq('id', data.from_id);
-        await supabase.from('banks').update({ balance: toNewBalance }).eq('id', data.to_id);
-
-      } else if (data.transfer_type === 'bank_to_treasury') {
-        const fromBank = banks.find(b => b.id === data.from_id);
-        const toTreasury = treasuries.find(t => t.id === data.to_id);
-        if (!fromBank || !toTreasury) throw new Error('Bank or Treasury not found');
-        if (Number(fromBank.balance) < amount) throw new Error(language === 'ar' ? 'الرصيد غير كافي' : 'Insufficient balance');
-
-        const fromNewBalance = Number(fromBank.balance) - amount;
-        const toNewBalance = Number(toTreasury.balance) + amount;
-
-        // Record withdrawal from bank
-        await supabase.from('bank_transactions').insert({
-          bank_id: data.from_id,
-          transaction_type: 'transfer_out',
-          amount,
-          balance_before: fromBank.balance,
-          balance_after: fromNewBalance,
-          description: `${language === 'ar' ? 'تحويل إلى خزينة' : 'Transfer to treasury'}: ${toTreasury.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Record deposit to treasury
-        await supabase.from('treasury_transactions').insert({
-          treasury_id: data.to_id,
-          transaction_type: 'transfer_in',
-          amount,
-          balance_before: toTreasury.balance,
-          balance_after: toNewBalance,
-          description: `${language === 'ar' ? 'تحويل من بنك' : 'Transfer from bank'}: ${fromBank.name}${data.description ? ' - ' + data.description : ''}`
-        });
-
-        // Update balances
-        await supabase.from('banks').update({ balance: fromNewBalance }).eq('id', data.from_id);
-        await supabase.from('treasuries').update({ balance: toNewBalance }).eq('id', data.to_id);
-      }
+      const response = await api.post('/transfer', {
+        type: data.type,
+        from_treasury_id: data.from_treasury_id ? parseInt(data.from_treasury_id) : undefined,
+        to_treasury_id: data.to_treasury_id ? parseInt(data.to_treasury_id) : undefined,
+        from_bank_id: data.from_bank_id ? parseInt(data.from_bank_id) : undefined,
+        to_bank_id: data.to_bank_id ? parseInt(data.to_bank_id) : undefined,
+        amount: parseFloat(data.amount),
+        currency: data.currency,
+        notes: data.notes || null
+      });
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
       queryClient.invalidateQueries({ queryKey: ['banks'] });
-      queryClient.invalidateQueries({ queryKey: ['treasury-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['treasury-movements'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-movements'] });
       toast.success(language === 'ar' ? 'تم التحويل بنجاح' : 'Transfer completed successfully');
       handleCloseTransferForm();
     },
-    onError: (error: any) => toast.error(error.message)
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message)
   });
 
   const handleCloseTreasuryForm = () => {
     setShowTreasuryForm(false);
     setEditingItem(null);
-    setTreasuryForm({ name: '', name_ar: '', code: '', branch_id: '', balance: '', currency: 'YER', is_main: false, notes: '' });
+    setTreasuryForm({ 
+      name: '', 
+      code: '', 
+      branch_id: '', 
+      balance: '', 
+      currency: defaultCurrency?.code || 'YER', 
+      is_main: false, 
+      notes: '' 
+    });
   };
 
   const handleCloseBankForm = () => {
     setShowBankForm(false);
     setEditingItem(null);
-    setBankForm({ name: '', name_ar: '', account_number: '', iban: '', swift_code: '', branch_id: '', balance: '', currency: 'YER', contact_person: '', phone: '', address: '', notes: '' });
+    setBankForm({ 
+      name: '', 
+      name_ar: '', 
+      account_number: '', 
+      iban: '', 
+      swift_code: '', 
+      branch_id: '', 
+      balance: '', 
+      currency: defaultCurrency?.code || 'YER', 
+      contact_person: '', 
+      phone: '', 
+      address: '', 
+      notes: '' 
+    });
   };
 
   const handleCloseTransactionForm = () => {
     setShowTransactionForm(false);
-    setTransactionForm({ entity_id: '', transaction_type: 'deposit', amount: '', description: '' });
+    setTransactionForm({ entity_id: '', transaction_type: 'deposit', amount: '', currency: defaultCurrency?.code || 'YER', description: '' });
   };
 
   const handleCloseTransferForm = () => {
     setShowTransferForm(false);
-    setTransferForm({ transfer_type: 'treasury_to_treasury', from_id: '', to_id: '', amount: '', description: '' });
+    setTransferForm({ 
+      type: 'treasury_to_treasury', 
+      from_treasury_id: '', 
+      to_treasury_id: '', 
+      from_bank_id: '', 
+      to_bank_id: '', 
+      amount: '', 
+      currency: defaultCurrency?.code || 'YER', 
+      notes: '' 
+    });
   };
 
-  const handleEditTreasury = (treasury: any) => {
+  const handleEditTreasury = (treasury: Treasury) => {
     setEditingItem(treasury);
     setTreasuryForm({
       name: treasury.name,
-      name_ar: treasury.name_ar || '',
       code: treasury.code || '',
-      branch_id: treasury.branch_id || '',
+      branch_id: treasury.branch_id?.toString() || '',
       balance: treasury.balance?.toString() || '0',
-      currency: treasury.currency || 'YER',
+      currency: treasury.currency || defaultCurrency?.code || 'YER',
       is_main: treasury.is_main || false,
       notes: treasury.notes || ''
     });
     setShowTreasuryForm(true);
   };
 
-  const handleEditBank = (bank: any) => {
+  const handleEditBank = (bank: Bank) => {
     setEditingItem(bank);
     setBankForm({
       name: bank.name,
@@ -452,9 +738,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       account_number: bank.account_number || '',
       iban: bank.iban || '',
       swift_code: bank.swift_code || '',
-      branch_id: bank.branch_id || '',
+      branch_id: bank.branch_id?.toString() || '',
       balance: bank.balance?.toString() || '0',
-      currency: bank.currency || 'YER',
+      currency: bank.currency || defaultCurrency?.code || 'YER',
       contact_person: bank.contact_person || '',
       phone: bank.phone || '',
       address: bank.address || '',
@@ -463,41 +749,85 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     setShowBankForm(true);
   };
 
+  const handleTreasurySubmit = () => {
+    if (!treasuryForm.name || !treasuryForm.currency || !treasuryForm.branch_id) {
+      toast.error(language === 'ar' ? 'يرجى ملء الحقول المطلوبة' : 'Please fill required fields');
+      return;
+    }
+
+    if (editingItem) {
+      updateTreasuryMutation.mutate({ id: editingItem.id, data: treasuryForm });
+    } else {
+      createTreasuryMutation.mutate(treasuryForm);
+    }
+  };
+
   const openTransactionForm = (type: 'treasury' | 'bank') => {
     setTransactionType(type);
     setShowTransactionForm(true);
   };
 
-  const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + Number(t.balance || 0), 0);
-  const totalBankBalance = banks.reduce((sum, b) => sum + Number(b.balance || 0), 0);
+  const clearDateFilters = () => {
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setCurrentPage(1);
+  };
+
+  const getCurrencySymbol = (currencyCode: string) => {
+    const currency = currencies.find((c: Currency) => c.code === currencyCode);
+    return currency?.symbol || currencyCode;
+  };
+
+  const totalTreasuryBalance = treasuries.reduce((sum: number, t: Treasury) => sum + Number(t.balance || 0), 0);
+  const totalBankBalance = banks.reduce((sum: number, b: Bank) => sum + Number(b.balance || 0), 0);
 
   const getTransferFromOptions = () => {
-    if (transferForm.transfer_type === 'treasury_to_treasury' || transferForm.transfer_type === 'treasury_to_bank') {
+    if (transferForm.type === 'treasury_to_treasury' || transferForm.type === 'treasury_to_bank') {
       return treasuries;
     }
     return banks;
   };
 
   const getTransferToOptions = () => {
-    if (transferForm.transfer_type === 'treasury_to_treasury') {
-      return treasuries.filter(t => t.id !== transferForm.from_id);
-    } else if (transferForm.transfer_type === 'treasury_to_bank') {
+    if (transferForm.type === 'treasury_to_treasury') {
+      return treasuries.filter((t: Treasury) => t.id !== parseInt(transferForm.from_treasury_id));
+    } else if (transferForm.type === 'treasury_to_bank') {
       return banks;
+    } else if (transferForm.type === 'bank_to_treasury') {
+      return treasuries;
+    } else if (transferForm.type === 'bank_to_bank') {
+      return banks.filter((b: Bank) => b.id !== parseInt(transferForm.from_bank_id));
     }
-    return treasuries;
+    return [];
+  };
+
+  // Update form based on transfer type
+  const updateTransferFormByType = (type: string) => {
+    setTransferForm({
+      type,
+      from_treasury_id: '',
+      to_treasury_id: '',
+      from_bank_id: '',
+      to_bank_id: '',
+      amount: '',
+      currency: defaultCurrency?.code || 'YER',
+      notes: ''
+    });
   };
 
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-200 dark:border-amber-800">
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
               <Wallet className="h-8 w-8 text-amber-600" />
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي الخزائن' : 'Total Treasuries'}</p>
-                <p className="text-2xl font-bold text-amber-600">{totalTreasuryBalance.toLocaleString()} ر.ي</p>
+                <p className="text-2xl font-bold text-amber-600">
+                  {totalTreasuryBalance.toLocaleString()} {getCurrencySymbol(defaultCurrency?.code || 'YER')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -509,7 +839,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <Building2 className="h-8 w-8 text-blue-600" />
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي البنوك' : 'Total Banks'}</p>
-                <p className="text-2xl font-bold text-blue-600">{totalBankBalance.toLocaleString()} ر.ي</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {totalBankBalance.toLocaleString()} {getCurrencySymbol(defaultCurrency?.code || 'YER')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -521,7 +853,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <RefreshCw className="h-8 w-8 text-green-600" />
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي السيولة' : 'Total Liquidity'}</p>
-                <p className="text-2xl font-bold text-green-600">{(totalTreasuryBalance + totalBankBalance).toLocaleString()} ر.ي</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {(totalTreasuryBalance + totalBankBalance).toLocaleString()} {getCurrencySymbol(defaultCurrency?.code || 'YER')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -538,10 +872,24 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             </div>
           </CardContent>
         </Card>
+
+        <Card className="bg-gradient-to-r from-indigo-500/10 to-blue-500/10 border-indigo-200 dark:border-indigo-800">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <History className="h-8 w-8 text-indigo-600" />
+              <div>
+                <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي الحركات' : 'Total Movements'}</p>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {(treasuryMovementsMeta.total || 0) + (bankMovementsMeta.total || 0)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="treasuries" className="gap-2">
             <Wallet size={16} />
             {language === 'ar' ? 'الخزائن' : 'Treasuries'}
@@ -554,11 +902,19 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             <ArrowRightLeft size={16} />
             {language === 'ar' ? 'التحويلات' : 'Transfers'}
           </TabsTrigger>
+          <TabsTrigger value="treasury-movements" className="gap-2">
+            <History size={16} />
+            {language === 'ar' ? 'حركات الخزينة' : 'Treasury Mov.'}
+          </TabsTrigger>
+          <TabsTrigger value="bank-movements" className="gap-2">
+            <History size={16} />
+            {language === 'ar' ? 'حركات البنك' : 'Bank Mov.'}
+          </TabsTrigger>
           <TabsTrigger value="treasury-transactions" className="gap-2">
-            {language === 'ar' ? 'حركات الخزينة' : 'Treasury Trans.'}
+            {language === 'ar' ? 'معاملات الخزينة' : 'Treasury Trans.'}
           </TabsTrigger>
           <TabsTrigger value="bank-transactions" className="gap-2">
-            {language === 'ar' ? 'حركات البنك' : 'Bank Trans.'}
+            {language === 'ar' ? 'معاملات البنك' : 'Bank Trans.'}
           </TabsTrigger>
         </TabsList>
 
@@ -587,25 +943,54 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       <TableHead>{language === 'ar' ? 'الاسم' : 'Name'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الفرع' : 'Branch'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الرصيد' : 'Balance'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'رئيسية' : 'Main'}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingTreasuries ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
                     ) : treasuries.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد خزائن' : 'No treasuries'}</TableCell></TableRow>
-                    ) : treasuries.map((treasury: any) => (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد خزائن' : 'No treasuries'}</TableCell></TableRow>
+                    ) : treasuries.map((treasury: Treasury) => (
                       <TableRow key={treasury.id}>
                         <TableCell className="font-mono">{treasury.code || '-'}</TableCell>
                         <TableCell className="font-medium">
-                          {language === 'ar' ? treasury.name_ar || treasury.name : treasury.name}
-                          {treasury.is_main && <Badge className="ms-2" variant="secondary">{language === 'ar' ? 'رئيسية' : 'Main'}</Badge>}
+                          {treasury.name}
+                          {treasury.is_main && (
+                            <Badge className="ms-2 bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">
+                              <Star size={12} className="me-1" />
+                              {language === 'ar' ? 'رئيسية' : 'Main'}
+                            </Badge>
+                          )}
                         </TableCell>
-                        <TableCell>{treasury.branches ? (language === 'ar' ? treasury.branches.name_ar : treasury.branches.name) : '-'}</TableCell>
-                        <TableCell className="font-bold text-amber-600">{Number(treasury.balance).toLocaleString()} {treasury.currency}</TableCell>
-                        <TableCell><Badge variant={treasury.is_active ? 'default' : 'secondary'}>{treasury.is_active ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'غير نشط' : 'Inactive')}</Badge></TableCell>
+                        <TableCell>{treasury.branch?.name || '-'}</TableCell>
+                        <TableCell className="font-bold text-amber-600">{Number(treasury.balance).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            <Coins size={12} />
+                            {treasury.currency}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => handleMainTreasuryToggle(treasury)}
+                            disabled={updatingMainId === treasury.id}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2",
+                              treasury.is_main ? "bg-green-600" : "bg-gray-200",
+                              updatingMainId === treasury.id && "opacity-50 cursor-not-allowed"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "inline-block h-5 w-5 transform rounded-full bg-white transition-transform",
+                                treasury.is_main ? "translate-x-6" : "translate-x-1"
+                              )}
+                            />
+                          </button>
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEditTreasury(treasury)}><Edit size={16} /></Button>
@@ -645,23 +1030,29 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       <TableHead>{language === 'ar' ? 'البنك' : 'Bank'}</TableHead>
                       <TableHead>{language === 'ar' ? 'رقم الحساب' : 'Account #'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الفرع' : 'Branch'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الرصيد' : 'Balance'}</TableHead>
-                      <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'الاجراءات' : 'Action'}</TableHead>
+            
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingBanks ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
                     ) : banks.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد بنوك' : 'No banks'}</TableCell></TableRow>
-                    ) : banks.map((bank: any) => (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد بنوك' : 'No banks'}</TableCell></TableRow>
+                    ) : banks.map((bank: Bank) => (
                       <TableRow key={bank.id}>
-                        <TableCell className="font-medium">{language === 'ar' ? bank.name_ar || bank.name : bank.name}</TableCell>
+                        <TableCell className="font-medium">{bank.name}</TableCell>
                         <TableCell className="font-mono">{bank.account_number || '-'}</TableCell>
-                        <TableCell>{bank.branches ? (language === 'ar' ? bank.branches.name_ar : bank.branches.name) : '-'}</TableCell>
-                        <TableCell className="font-bold text-blue-600">{Number(bank.balance).toLocaleString()} {bank.currency}</TableCell>
-                        <TableCell><Badge variant={bank.is_active ? 'default' : 'secondary'}>{bank.is_active ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'غير نشط' : 'Inactive')}</Badge></TableCell>
+                        <TableCell>{bank.branch?.name || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            <Coins size={12} />
+                            {bank.currency}
+                          </Badge>
+                        </TableCell>
+                      
                         <TableCell>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEditBank(bank)}><Edit size={16} /></Button>
@@ -686,45 +1077,254 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setTransferForm(prev => ({ ...prev, transfer_type: 'treasury_to_treasury' })); setShowTransferForm(true); }}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { updateTransferFormByType('treasury_to_treasury'); setShowTransferForm(true); }}>
               <CardContent className="py-6 text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <Wallet className="h-6 w-6 text-amber-600" />
                   <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                   <Wallet className="h-6 w-6 text-amber-600" />
                 </div>
-                <p className="font-medium">{language === 'ar' ? 'من خزينة لخزينة' : 'Treasury to Treasury'}</p>
+                <p className="font-medium">{language === 'ar' ? 'خزينة → خزينة' : 'Treasury → Treasury'}</p>
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setTransferForm(prev => ({ ...prev, transfer_type: 'treasury_to_bank' })); setShowTransferForm(true); }}>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { updateTransferFormByType('treasury_to_bank'); setShowTransferForm(true); }}>
               <CardContent className="py-6 text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <Wallet className="h-6 w-6 text-amber-600" />
                   <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                   <Building2 className="h-6 w-6 text-blue-600" />
                 </div>
-                <p className="font-medium">{language === 'ar' ? 'من خزينة لبنك' : 'Treasury to Bank'}</p>
+                <p className="font-medium">{language === 'ar' ? 'خزينة → بنك' : 'Treasury → Bank'}</p>
               </CardContent>
             </Card>
 
-            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { setTransferForm(prev => ({ ...prev, transfer_type: 'bank_to_treasury' })); setShowTransferForm(true); }}>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { updateTransferFormByType('bank_to_treasury'); setShowTransferForm(true); }}>
               <CardContent className="py-6 text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <Building2 className="h-6 w-6 text-blue-600" />
                   <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                   <Wallet className="h-6 w-6 text-amber-600" />
                 </div>
-                <p className="font-medium">{language === 'ar' ? 'من بنك لخزينة' : 'Bank to Treasury'}</p>
+                <p className="font-medium">{language === 'ar' ? 'بنك → خزينة' : 'Bank → Treasury'}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { updateTransferFormByType('bank_to_bank'); setShowTransferForm(true); }}>
+              <CardContent className="py-6 text-center">
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Building2 className="h-6 w-6 text-blue-600" />
+                  <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                  <Building2 className="h-6 w-6 text-blue-600" />
+                </div>
+                <p className="font-medium">{language === 'ar' ? 'بنك → بنك' : 'Bank → Bank'}</p>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
+        <TabsContent value="treasury-movements">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>{language === 'ar' ? 'حركات الخزينة' : 'Treasury Movements'}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Select value={perPage.toString()} onValueChange={(v) => { setPerPage(parseInt(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'من' : 'From'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'إلى' : 'To'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'ملاحظات' : 'Notes'}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingTreasuryMovements ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
+                    ) : treasuryMovements.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد حركات' : 'No movements'}</TableCell></TableRow>
+                    ) : treasuryMovements.map((movement: Movement) => (
+                      <TableRow key={movement.id}>
+                        <TableCell>{formatDate(movement.date)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {getMovementTypeLabel(movement.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getMovementSource(movement)}</TableCell>
+                        <TableCell>{getMovementDestination(movement)}</TableCell>
+                        <TableCell className="font-bold">{formatAmount(movement.amount)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{movement.currency}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-48 truncate">{movement.notes || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+            {treasuryMovementsMeta.last_page > 1 && (
+              <CardContent className="border-t py-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    {language === 'ar' 
+                      ? `عرض ${treasuryMovementsMeta.from || 0} إلى ${treasuryMovementsMeta.to || 0} من ${treasuryMovementsMeta.total || 0}`
+                      : `Showing ${treasuryMovementsMeta.from || 0} to ${treasuryMovementsMeta.to || 0} of ${treasuryMovementsMeta.total || 0}`
+                    }
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronRight size={16} />
+                      {language === 'ar' ? 'السابق' : 'Previous'}
+                    </Button>
+                    <span className="text-sm">
+                      {currentPage} / {treasuryMovementsMeta.last_page}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(treasuryMovementsMeta.last_page, prev + 1))}
+                      disabled={currentPage === treasuryMovementsMeta.last_page}
+                    >
+                      {language === 'ar' ? 'التالي' : 'Next'}
+                      <ChevronLeft size={16} />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bank-movements">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>{language === 'ar' ? 'حركات البنك' : 'Bank Movements'}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Select value={perPage.toString()} onValueChange={(v) => { setPerPage(parseInt(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'من' : 'From'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'إلى' : 'To'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'ملاحظات' : 'Notes'}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingBankMovements ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8">{language === 'ar' ? 'جاري التحميل...' : 'Loading...'}</TableCell></TableRow>
+                    ) : bankMovements.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{language === 'ar' ? 'لا توجد حركات' : 'No movements'}</TableCell></TableRow>
+                    ) : bankMovements.map((movement: Movement) => (
+                      <TableRow key={movement.id}>
+                        <TableCell>{formatDate(movement.date)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {getMovementTypeLabel(movement.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getMovementSource(movement)}</TableCell>
+                        <TableCell>{getMovementDestination(movement)}</TableCell>
+                        <TableCell className="font-bold">{formatAmount(movement.amount)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{movement.currency}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-48 truncate">{movement.notes || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+            {bankMovementsMeta.last_page > 1 && (
+              <CardContent className="border-t py-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    {language === 'ar' 
+                      ? `عرض ${bankMovementsMeta.from || 0} إلى ${bankMovementsMeta.to || 0} من ${bankMovementsMeta.total || 0}`
+                      : `Showing ${bankMovementsMeta.from || 0} to ${bankMovementsMeta.to || 0} of ${bankMovementsMeta.total || 0}`
+                    }
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronRight size={16} />
+                      {language === 'ar' ? 'السابق' : 'Previous'}
+                    </Button>
+                    <span className="text-sm">
+                      {currentPage} / {bankMovementsMeta.last_page}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(bankMovementsMeta.last_page, prev + 1))}
+                      disabled={currentPage === bankMovementsMeta.last_page}
+                    >
+                      {language === 'ar' ? 'التالي' : 'Next'}
+                      <ChevronLeft size={16} />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        </TabsContent>
+
         <TabsContent value="treasury-transactions">
           <Card>
-            <CardHeader><CardTitle>{language === 'ar' ? 'حركات الخزينة' : 'Treasury Transactions'}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>{language === 'ar' ? 'معاملات الخزينة' : 'Treasury Transactions'}</CardTitle>
+            </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[400px]">
                 <Table>
@@ -734,31 +1334,18 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
                       <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
                       <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الرصيد بعد' : 'Balance After'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {treasuryTransactions.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell>{format(new Date(tx.transaction_date), 'yyyy/MM/dd HH:mm')}</TableCell>
-                        <TableCell>{tx.treasuries?.name || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? 'default' : 'destructive'} className="gap-1">
-                            {tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
-                            {tx.transaction_type === 'deposit' ? (language === 'ar' ? 'إيداع' : 'Deposit') : 
-                             tx.transaction_type === 'withdrawal' ? (language === 'ar' ? 'سحب' : 'Withdrawal') :
-                             tx.transaction_type === 'transfer_in' ? (language === 'ar' ? 'تحويل وارد' : 'Transfer In') :
-                             (language === 'ar' ? 'تحويل صادر' : 'Transfer Out')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? 'text-green-600' : 'text-red-600'}>
-                          {tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? '+' : '-'}{Number(tx.amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell>{Number(tx.balance_after).toLocaleString()}</TableCell>
-                        <TableCell className="max-w-48 truncate">{tx.description || '-'}</TableCell>
-                      </TableRow>
-                    ))}
+                    {/* We'll need to add treasury transactions data */}
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        {language === 'ar' ? 'لا توجد معاملات' : 'No transactions'}
+                      </TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -768,7 +1355,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
 
         <TabsContent value="bank-transactions">
           <Card>
-            <CardHeader><CardTitle>{language === 'ar' ? 'حركات البنك' : 'Bank Transactions'}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>{language === 'ar' ? 'معاملات البنك' : 'Bank Transactions'}</CardTitle>
+            </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[400px]">
                 <Table>
@@ -778,31 +1367,18 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       <TableHead>{language === 'ar' ? 'البنك' : 'Bank'}</TableHead>
                       <TableHead>{language === 'ar' ? 'النوع' : 'Type'}</TableHead>
                       <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                      <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الرصيد بعد' : 'Balance After'}</TableHead>
                       <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bankTransactions.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell>{format(new Date(tx.transaction_date), 'yyyy/MM/dd HH:mm')}</TableCell>
-                        <TableCell>{tx.banks?.name || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? 'default' : 'destructive'} className="gap-1">
-                            {tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
-                            {tx.transaction_type === 'deposit' ? (language === 'ar' ? 'إيداع' : 'Deposit') : 
-                             tx.transaction_type === 'withdrawal' ? (language === 'ar' ? 'سحب' : 'Withdrawal') :
-                             tx.transaction_type === 'transfer_in' ? (language === 'ar' ? 'تحويل وارد' : 'Transfer In') :
-                             (language === 'ar' ? 'تحويل صادر' : 'Transfer Out')}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? 'text-green-600' : 'text-red-600'}>
-                          {tx.transaction_type.includes('in') || tx.transaction_type === 'deposit' ? '+' : '-'}{Number(tx.amount).toLocaleString()}
-                        </TableCell>
-                        <TableCell>{Number(tx.balance_after).toLocaleString()}</TableCell>
-                        <TableCell className="max-w-48 truncate">{tx.description || '-'}</TableCell>
-                      </TableRow>
-                    ))}
+                    {/* We'll need to add bank transactions data */}
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        {language === 'ar' ? 'لا توجد معاملات' : 'No transactions'}
+                      </TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </ScrollArea>
@@ -820,53 +1396,82 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الاسم (إنجليزي)' : 'Name (EN)'} *</Label>
+                <Label>{language === 'ar' ? 'الاسم' : 'Name'} *</Label>
                 <Input value={treasuryForm.name} onChange={(e) => setTreasuryForm(prev => ({ ...prev, name: e.target.value }))} />
               </div>
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الاسم (عربي)' : 'Name (AR)'}</Label>
-                <Input value={treasuryForm.name_ar} onChange={(e) => setTreasuryForm(prev => ({ ...prev, name_ar: e.target.value }))} dir="rtl" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{language === 'ar' ? 'الكود' : 'Code'}</Label>
                 <Input value={treasuryForm.code} onChange={(e) => setTreasuryForm(prev => ({ ...prev, code: e.target.value }))} />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                <Label>{language === 'ar' ? 'الفرع' : 'Branch'} *</Label>
                 <Select value={treasuryForm.branch_id} onValueChange={(v) => setTreasuryForm(prev => ({ ...prev, branch_id: v }))}>
                   <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
-                    {branches.map((b: any) => <SelectItem key={b.id} value={b.id}>{language === 'ar' ? b.name_ar || b.name : b.name}</SelectItem>)}
+                    {branches.map((b: Branch) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
+                <Select value={treasuryForm.currency} onValueChange={(v) => setTreasuryForm(prev => ({ ...prev, currency: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((c: Currency) => (
+                      <SelectItem key={c.id} value={c.code}>
+                        {c.code} - {c.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
             {!editingItem && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{language === 'ar' ? 'الرصيد الافتتاحي' : 'Opening Balance'}</Label>
-                  <Input type="number" value={treasuryForm.balance} onChange={(e) => setTreasuryForm(prev => ({ ...prev, balance: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
-                  <Select value={treasuryForm.currency} onValueChange={(v) => setTreasuryForm(prev => ({ ...prev, currency: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="YER">YER</SelectItem>
-                      <SelectItem value="SAR">SAR</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الرصيد الافتتاحي' : 'Opening Balance'}</Label>
+                <Input type="number" value={treasuryForm.balance} onChange={(e) => setTreasuryForm(prev => ({ ...prev, balance: e.target.value }))} />
               </div>
             )}
+
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <input
+                type="checkbox"
+                id="is_main"
+                checked={treasuryForm.is_main}
+                onChange={(e) => setTreasuryForm(prev => ({ ...prev, is_main: e.target.checked }))}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="is_main" className="cursor-pointer">
+                {language === 'ar' ? 'خزينة رئيسية' : 'Main Treasury'}
+              </Label>
+              {treasuryForm.is_main && (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                  <Star size={12} className="me-1" />
+                  {language === 'ar' ? 'سيتم جعلها الرئيسية' : 'Will be set as main'}
+                </Badge>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+              <Input value={treasuryForm.notes} onChange={(e) => setTreasuryForm(prev => ({ ...prev, notes: e.target.value }))} />
+            </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseTreasuryForm}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
-            <Button onClick={() => editingItem ? updateTreasuryMutation.mutate({ id: editingItem.id, data: treasuryForm }) : createTreasuryMutation.mutate(treasuryForm)}>
+            <Button variant="outline" onClick={handleCloseTreasuryForm}>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={handleTreasurySubmit}>
               {editingItem ? (language === 'ar' ? 'تحديث' : 'Update') : (language === 'ar' ? 'إضافة' : 'Add')}
             </Button>
           </DialogFooter>
@@ -882,14 +1487,15 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'اسم البنك (إنجليزي)' : 'Bank Name (EN)'} *</Label>
+                <Label>{language === 'ar' ? 'اسم البنك' : 'Bank Name'} *</Label>
                 <Input value={bankForm.name} onChange={(e) => setBankForm(prev => ({ ...prev, name: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'اسم البنك (عربي)' : 'Bank Name (AR)'}</Label>
+                <Label>{language === 'ar' ? 'الاسم بالعربية' : 'Arabic Name'}</Label>
                 <Input value={bankForm.name_ar} onChange={(e) => setBankForm(prev => ({ ...prev, name_ar: e.target.value }))} dir="rtl" />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{language === 'ar' ? 'رقم الحساب' : 'Account Number'}</Label>
@@ -900,6 +1506,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 <Input value={bankForm.iban} onChange={(e) => setBankForm(prev => ({ ...prev, iban: e.target.value }))} />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>SWIFT Code</Label>
@@ -910,12 +1517,32 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 <Select value={bankForm.branch_id} onValueChange={(v) => setBankForm(prev => ({ ...prev, branch_id: v }))}>
                   <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
-                    {branches.map((b: any) => <SelectItem key={b.id} value={b.id}>{language === 'ar' ? b.name_ar || b.name : b.name}</SelectItem>)}
+                    {branches.map((b: Branch) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'جهة الاتصال' : 'Contact Person'}</Label>
+                <Input value={bankForm.contact_person} onChange={(e) => setBankForm(prev => ({ ...prev, contact_person: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الهاتف' : 'Phone'}</Label>
+                <Input value={bankForm.phone} onChange={(e) => setBankForm(prev => ({ ...prev, phone: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'العنوان' : 'Address'}</Label>
+              <Input value={bankForm.address} onChange={(e) => setBankForm(prev => ({ ...prev, address: e.target.value }))} />
+            </div>
+
             {!editingItem && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -927,15 +1554,23 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                   <Select value={bankForm.currency} onValueChange={(v) => setBankForm(prev => ({ ...prev, currency: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="YER">YER</SelectItem>
-                      <SelectItem value="SAR">SAR</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
+                      {currencies.map((c: Currency) => (
+                        <SelectItem key={c.id} value={c.code}>
+                          {c.code} - {c.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+              <Input value={bankForm.notes} onChange={(e) => setBankForm(prev => ({ ...prev, notes: e.target.value }))} />
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseBankForm}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
             <Button onClick={() => editingItem ? updateBankMutation.mutate({ id: editingItem.id, data: bankForm }) : createBankMutation.mutate(bankForm)}>
@@ -962,13 +1597,14 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر...' : 'Select...'} /></SelectTrigger>
                 <SelectContent>
                   {(transactionType === 'treasury' ? treasuries : banks).map((item: any) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {language === 'ar' ? item.name_ar || item.name : item.name} ({Number(item.balance).toLocaleString()})
+                    <SelectItem key={item.id} value={item.id.toString()}>
+                      {item.name} ({Number(item.balance).toLocaleString()})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'نوع الحركة' : 'Transaction Type'} *</Label>
               <Select value={transactionForm.transaction_type} onValueChange={(v) => setTransactionForm(prev => ({ ...prev, transaction_type: v }))}>
@@ -979,15 +1615,32 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} *</Label>
               <Input type="number" value={transactionForm.amount} onChange={(e) => setTransactionForm(prev => ({ ...prev, amount: e.target.value }))} />
             </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
+              <Select value={transactionForm.currency} onValueChange={(v) => setTransactionForm(prev => ({ ...prev, currency: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {currencies.map((c: Currency) => (
+                    <SelectItem key={c.id} value={c.code}>
+                      {c.code} - {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'الوصف' : 'Description'}</Label>
               <Input value={transactionForm.description} onChange={(e) => setTransactionForm(prev => ({ ...prev, description: e.target.value }))} />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseTransactionForm}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
             <Button onClick={() => createTransactionMutation.mutate({ ...transactionForm, type: transactionType })}>
@@ -1006,53 +1659,148 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'نوع التحويل' : 'Transfer Type'} *</Label>
-              <Select value={transferForm.transfer_type} onValueChange={(v) => setTransferForm(prev => ({ ...prev, transfer_type: v, from_id: '', to_id: '' }))}>
+              <Select value={transferForm.type} onValueChange={(v) => updateTransferFormByType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="treasury_to_treasury">{language === 'ar' ? 'من خزينة لخزينة' : 'Treasury to Treasury'}</SelectItem>
-                  <SelectItem value="treasury_to_bank">{language === 'ar' ? 'من خزينة لبنك' : 'Treasury to Bank'}</SelectItem>
-                  <SelectItem value="bank_to_treasury">{language === 'ar' ? 'من بنك لخزينة' : 'Bank to Treasury'}</SelectItem>
+                  <SelectItem value="treasury_to_treasury">{language === 'ar' ? 'خزينة إلى خزينة' : 'Treasury to Treasury'}</SelectItem>
+                  <SelectItem value="treasury_to_bank">{language === 'ar' ? 'خزينة إلى بنك' : 'Treasury to Bank'}</SelectItem>
+                  <SelectItem value="bank_to_treasury">{language === 'ar' ? 'بنك إلى خزينة' : 'Bank to Treasury'}</SelectItem>
+                  <SelectItem value="bank_to_bank">{language === 'ar' ? 'بنك إلى بنك' : 'Bank to Bank'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* From Field */}
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'من' : 'From'} *</Label>
-              <Select value={transferForm.from_id} onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_id: v }))}>
-                <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر المصدر...' : 'Select source...'} /></SelectTrigger>
-                <SelectContent>
-                  {getTransferFromOptions().map((item: any) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {language === 'ar' ? item.name_ar || item.name : item.name} ({Number(item.balance).toLocaleString()})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {transferForm.type.includes('treasury') ? (
+                <Select 
+                  value={transferForm.from_treasury_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_treasury_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
+                  <SelectContent>
+                    {treasuries.map((t: Treasury) => (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select 
+                  value={transferForm.from_bank_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, from_bank_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
+                  <SelectContent>
+                    {banks.map((b: Bank) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
+            {/* To Field */}
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'إلى' : 'To'} *</Label>
-              <Select value={transferForm.to_id} onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_id: v }))}>
-                <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الوجهة...' : 'Select destination...'} /></SelectTrigger>
-                <SelectContent>
-                  {getTransferToOptions().map((item: any) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {language === 'ar' ? item.name_ar || item.name : item.name} ({Number(item.balance).toLocaleString()})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {transferForm.type === 'treasury_to_treasury' ? (
+                <Select 
+                  value={transferForm.to_treasury_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
+                  <SelectContent>
+                    {treasuries
+                      .filter((t: Treasury) => t.id.toString() !== transferForm.from_treasury_id)
+                      .map((t: Treasury) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : transferForm.type === 'treasury_to_bank' ? (
+                <Select 
+                  value={transferForm.to_bank_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
+                  <SelectContent>
+                    {banks.map((b: Bank) => (
+                      <SelectItem key={b.id} value={b.id.toString()}>
+                        {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : transferForm.type === 'bank_to_treasury' ? (
+                <Select 
+                  value={transferForm.to_treasury_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_treasury_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger>
+                  <SelectContent>
+                    {treasuries.map((t: Treasury) => (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        {t.name} ({Number(t.balance).toLocaleString()} {t.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select 
+                  value={transferForm.to_bank_id} 
+                  onValueChange={(v) => setTransferForm(prev => ({ ...prev, to_bank_id: v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر البنك' : 'Select bank'} /></SelectTrigger>
+                  <SelectContent>
+                    {banks
+                      .filter((b: Bank) => b.id.toString() !== transferForm.from_bank_id)
+                      .map((b: Bank) => (
+                        <SelectItem key={b.id} value={b.id.toString()}>
+                          {b.name} ({Number(b.balance).toLocaleString()} {b.currency})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} *</Label>
               <Input type="number" value={transferForm.amount} onChange={(e) => setTransferForm(prev => ({ ...prev, amount: e.target.value }))} />
             </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
+              <Select value={transferForm.currency} onValueChange={(v) => setTransferForm(prev => ({ ...prev, currency: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {currencies.map((c: Currency) => (
+                    <SelectItem key={c.id} value={c.code}>
+                      {c.code} - {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-              <Input value={transferForm.description} onChange={(e) => setTransferForm(prev => ({ ...prev, description: e.target.value }))} />
+              <Input value={transferForm.notes} onChange={(e) => setTransferForm(prev => ({ ...prev, notes: e.target.value }))} />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseTransferForm}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
-            <Button onClick={() => transferMutation.mutate(transferForm)} disabled={!transferForm.from_id || !transferForm.to_id || !transferForm.amount}>
+            <Button 
+              onClick={() => transferMutation.mutate(transferForm)} 
+              
+            >
               {language === 'ar' ? 'تحويل' : 'Transfer'}
             </Button>
           </DialogFooter>
