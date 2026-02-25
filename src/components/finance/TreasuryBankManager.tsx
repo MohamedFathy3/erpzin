@@ -1090,7 +1090,6 @@ const getTransferToOptions = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
         <TabsContent value="transfers" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">{language === 'ar' ? 'التحويلات المالية' : 'Money Transfers'}</h3>
@@ -1342,8 +1341,6 @@ const getTransferToOptions = () => {
             )}
           </Card>
         </TabsContent>
-
-       
       </Tabs>
 
       {/* Treasury Form Dialog */}
