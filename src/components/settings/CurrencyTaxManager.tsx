@@ -73,7 +73,7 @@ const CurrencyTaxManager = () => {
     queryKey: ['currencies'],
     queryFn: async () => {
       const response = await api.post('/currency/index');
-      
+
       // ✅ تحويل البيانات - active -> is_active, default -> is_default
       let data = [];
       if (Array.isArray(response.data)) {
@@ -81,7 +81,7 @@ const CurrencyTaxManager = () => {
       } else if (response.data?.data && Array.isArray(response.data.data)) {
         data = response.data.data;
       }
-      
+
       return data.map((item: any) => ({
         ...item,
         is_active: item.active === true || item.active === 1,  // ✅ تحويل active
@@ -95,7 +95,7 @@ const CurrencyTaxManager = () => {
     queryKey: ['tax-rates'],
     queryFn: async () => {
       const response = await api.post('/tax/index');
-      
+
       // ✅ تحويل البيانات
       let data = [];
       if (Array.isArray(response.data)) {
@@ -103,7 +103,7 @@ const CurrencyTaxManager = () => {
       } else if (response.data?.data && Array.isArray(response.data.data)) {
         data = response.data.data;
       }
-      
+
       return data.map((item: any) => ({
         ...item,
         is_active: item.active === true || item.active === 1,  // ✅ تحويل active
@@ -124,7 +124,7 @@ const CurrencyTaxManager = () => {
         active: 1, // ✅ active = 1
         default: 0 // ✅ default = 0
       };
-      
+
       if (data.id) {
         await api.put('/currency/' + data.id, payload);
       } else {
@@ -138,9 +138,9 @@ const CurrencyTaxManager = () => {
     },
     onError: (error) => {
       console.error('Error saving currency:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
@@ -152,35 +152,45 @@ const CurrencyTaxManager = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
-      toast({ 
-        title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated' 
+      toast({
+        title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated'
       });
     },
     onError: (error) => {
       console.error('Error toggling currency:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
 
   const setDefaultCurrencyMutation = useMutation({
     mutationFn: async (id: string) => {
-      // ✅ بنبعت default = 1
+      // ✅ نجيب كل العملات ون reset all to default = 0
+      const allCurrencies = queryClient.getQueryData<Currency[]>(['currencies']) || [];
+
+      // ن reset كل العملات عدا العملة المختارة
+      const resetPromises = allCurrencies
+        .filter(c => c.id !== id) // ما نresetش العملة المختارة
+        .map(c => api.put('/currency/' + c.id, { default: 0 }));
+
+      await Promise.all(resetPromises);
+
+      // ✅ ثم ن set العملة المختارة كـ default
       await api.put('/currency/' + id, { default: 1 });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
-      toast({ 
-        title: language === 'ar' ? 'تم تعيين العملة الافتراضية' : 'Default currency set' 
+      toast({
+        title: language === 'ar' ? 'تم تعيين العملة الافتراضية' : 'Default currency set'
       });
     },
     onError: (error) => {
       console.error('Error setting default currency:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
@@ -214,7 +224,7 @@ const CurrencyTaxManager = () => {
         active: 1, // ✅ active = 1
         main_branch: 0 // ✅ main_branch مش default
       };
-      
+
       if (data.id) {
         await api.put('/tax/' + data.id, payload);
       } else {
@@ -228,9 +238,9 @@ const CurrencyTaxManager = () => {
     },
     onError: (error) => {
       console.error('Error saving tax:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
@@ -242,35 +252,45 @@ const CurrencyTaxManager = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
-      toast({ 
-        title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated' 
+      toast({
+        title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated'
       });
     },
     onError: (error) => {
       console.error('Error toggling tax:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
 
   const setDefaultTaxMutation = useMutation({
     mutationFn: async (id: string) => {
-      // ✅ بنبعت main_branch = 1 (دي الـ default)
+      // ✅ نجيب كل الضرائب ون reset all to main_branch = 0
+      const allTaxes = queryClient.getQueryData<TaxRate[]>(['tax-rates']) || [];
+
+      // ن reset كل الضرائب عدا الضريبة المختارة
+      const resetPromises = allTaxes
+        .filter(t => t.id !== id) // ما نresetش الضريبة المختارة
+        .map(t => api.put('/tax/' + t.id, { main_branch: 0 }));
+
+      await Promise.all(resetPromises);
+
+      // ✅ ثم ن set الضريبة المختارة كـ default
       await api.put('/tax/' + id, { main_branch: 1 });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
-      toast({ 
-        title: language === 'ar' ? 'تم تعيين الضريبة الافتراضية' : 'Default tax set' 
+      toast({
+        title: language === 'ar' ? 'تم تعيين الضريبة الافتراضية' : 'Default tax set'
       });
     },
     onError: (error) => {
       console.error('Error setting default tax:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'An error occurred',
+        variant: 'destructive'
       });
     }
   });
@@ -298,15 +318,15 @@ const CurrencyTaxManager = () => {
   const resetCurrencyForm = () => {
     setCurrencyDialogOpen(false);
     setEditingCurrency(null);
-    setCurrencyForm({ 
-      code: '', 
-      name: '', 
-      name_ar: '', 
-      symbol: '', 
-      country_code: '', 
-      exchange_rate: 1, 
-      decimal_places: 2, 
-      sort_order: 0 
+    setCurrencyForm({
+      code: '',
+      name: '',
+      name_ar: '',
+      symbol: '',
+      country_code: '',
+      exchange_rate: 1,
+      decimal_places: 2,
+      sort_order: 0
     });
   };
 
@@ -334,10 +354,10 @@ const CurrencyTaxManager = () => {
 
   const openEditTax = (tax: TaxRate) => {
     setEditingTax(tax);
-    setTaxForm({ 
-      name: tax.name, 
-      name_ar: tax.name_ar || '', 
-      rate: tax.rate 
+    setTaxForm({
+      name: tax.name,
+      name_ar: tax.name_ar || '',
+      rate: tax.rate
     });
     setTaxDialogOpen(true);
   };
@@ -379,21 +399,21 @@ const CurrencyTaxManager = () => {
             </CardTitle>
             <Dialog open={currencyDialogOpen} onOpenChange={setCurrencyDialogOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="gap-2" 
-                  onClick={() => { 
-                    setEditingCurrency(null); 
-                    setCurrencyForm({ 
-                      code: '', 
-                      name: '', 
-                      name_ar: '', 
-                      symbol: '', 
-                      country_code: '', 
-                      exchange_rate: 1, 
-                      decimal_places: 2, 
-                      sort_order: currencies.length 
-                    }); 
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingCurrency(null);
+                    setCurrencyForm({
+                      code: '',
+                      name: '',
+                      name_ar: '',
+                      symbol: '',
+                      country_code: '',
+                      exchange_rate: 1,
+                      decimal_places: 2,
+                      sort_order: currencies.length
+                    });
                   }}
                 >
                   <Plus size={16} />
@@ -408,56 +428,56 @@ const CurrencyTaxManager = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.code}</Label>
-                      <Input 
-                        value={currencyForm.code} 
-                        onChange={(e) => setCurrencyForm({ ...currencyForm, code: e.target.value.toUpperCase() })} 
-                        placeholder="USD" 
-                        maxLength={5} 
+                      <Input
+                        value={currencyForm.code}
+                        onChange={(e) => setCurrencyForm({ ...currencyForm, code: e.target.value.toUpperCase() })}
+                        placeholder="USD"
+                        maxLength={5}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>{t.symbol}</Label>
-                      <Input 
-                        value={currencyForm.symbol} 
-                        onChange={(e) => setCurrencyForm({ ...currencyForm, symbol: e.target.value })} 
-                        placeholder="$" 
-                        maxLength={5} 
+                      <Input
+                        value={currencyForm.symbol}
+                        onChange={(e) => setCurrencyForm({ ...currencyForm, symbol: e.target.value })}
+                        placeholder="$"
+                        maxLength={5}
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
                       <Label>{t.name}</Label>
-                      <Input 
-                        value={currencyForm.name} 
-                        onChange={(e) => setCurrencyForm({ ...currencyForm, name: e.target.value })} 
-                        placeholder="US Dollar" 
+                      <Input
+                        value={currencyForm.name}
+                        onChange={(e) => setCurrencyForm({ ...currencyForm, name: e.target.value })}
+                        placeholder="US Dollar"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>{t.nameAr}</Label>
-                      <Input 
-                        value={currencyForm.name_ar} 
-                        onChange={(e) => setCurrencyForm({ ...currencyForm, name_ar: e.target.value })} 
-                        placeholder="دولار أمريكي" 
-                        dir="rtl" 
+                      <Input
+                        value={currencyForm.name_ar}
+                        onChange={(e) => setCurrencyForm({ ...currencyForm, name_ar: e.target.value })}
+                        placeholder="دولار أمريكي"
+                        dir="rtl"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{t.exchangeRate}</Label>
-                    <Input 
-                      type="number" 
-                      step="0.0001" 
-                      value={currencyForm.exchange_rate} 
-                      onChange={(e) => setCurrencyForm({ ...currencyForm, exchange_rate: parseFloat(e.target.value) || 0 })} 
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      value={currencyForm.exchange_rate}
+                      onChange={(e) => setCurrencyForm({ ...currencyForm, exchange_rate: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={resetCurrencyForm}>{t.cancel}</Button>
-                  <Button 
-                    onClick={() => saveCurrencyMutation.mutate({ ...currencyForm, id: editingCurrency?.id })} 
+                  <Button
+                    onClick={() => saveCurrencyMutation.mutate({ ...currencyForm, id: editingCurrency?.id })}
                     disabled={saveCurrencyMutation.isPending}
                   >
                     <Save size={16} className="mr-2" />
@@ -502,12 +522,12 @@ const CurrencyTaxManager = () => {
                     <TableCell className="text-xl">{currency.symbol}</TableCell>
                     <TableCell>{currency.exchange_rate}</TableCell>
                     <TableCell>
-                      <Switch 
-                        checked={currency.is_active} 
-                        onCheckedChange={(checked) => 
-                          toggleCurrencyActiveMutation.mutate({ 
-                            id: currency.id, 
-                            active: checked 
+                      <Switch
+                        checked={currency.is_active}
+                        onCheckedChange={(checked) =>
+                          toggleCurrencyActiveMutation.mutate({
+                            id: currency.id,
+                            active: checked
                           })
                         }
                         disabled={toggleCurrencyActiveMutation.isPending}
@@ -520,9 +540,9 @@ const CurrencyTaxManager = () => {
                           {t.default}
                         </Badge>
                       ) : (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setDefaultCurrencyMutation.mutate(currency.id)}
                           disabled={setDefaultCurrencyMutation.isPending}
                         >
@@ -532,18 +552,18 @@ const CurrencyTaxManager = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => openEditCurrency(currency)}
                         >
                           <Edit size={16} />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-destructive hover:text-destructive"
                             >
                               <Trash2 size={16} />
@@ -555,7 +575,7 @@ const CurrencyTaxManager = () => {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                              <AlertDialogAction 
+                              <AlertDialogAction
                                 onClick={() => deleteCurrencyMutation.mutate(currency.id)}
                               >
                                 {t.delete}
@@ -583,12 +603,12 @@ const CurrencyTaxManager = () => {
             </CardTitle>
             <Dialog open={taxDialogOpen} onOpenChange={setTaxDialogOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="gap-2" 
-                  onClick={() => { 
-                    setEditingTax(null); 
-                    setTaxForm({ name: '', name_ar: '', rate: 0 }); 
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingTax(null);
+                    setTaxForm({ name: '', name_ar: '', rate: 0 });
                   }}
                 >
                   <Plus size={16} />
@@ -603,38 +623,38 @@ const CurrencyTaxManager = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.name}</Label>
-                      <Input 
-                        value={taxForm.name} 
-                        onChange={(e) => setTaxForm({ ...taxForm, name: e.target.value })} 
-                        placeholder="VAT 15%" 
+                      <Input
+                        value={taxForm.name}
+                        onChange={(e) => setTaxForm({ ...taxForm, name: e.target.value })}
+                        placeholder="VAT 15%"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>{t.nameAr}</Label>
-                      <Input 
-                        value={taxForm.name_ar} 
-                        onChange={(e) => setTaxForm({ ...taxForm, name_ar: e.target.value })} 
-                        placeholder="ضريبة القيمة المضافة 15%" 
-                        dir="rtl" 
+                      <Input
+                        value={taxForm.name_ar}
+                        onChange={(e) => setTaxForm({ ...taxForm, name_ar: e.target.value })}
+                        placeholder="ضريبة القيمة المضافة 15%"
+                        dir="rtl"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label>{t.rate} (%)</Label>
-                    <Input 
-                      type="number" 
-                      min="0" 
-                      max="100" 
-                      step="0.01" 
-                      value={taxForm.rate} 
-                      onChange={(e) => setTaxForm({ ...taxForm, rate: parseFloat(e.target.value) || 0 })} 
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={taxForm.rate}
+                      onChange={(e) => setTaxForm({ ...taxForm, rate: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={resetTaxForm}>{t.cancel}</Button>
-                  <Button 
-                    onClick={() => saveTaxMutation.mutate({ ...taxForm, id: editingTax?.id })} 
+                  <Button
+                    onClick={() => saveTaxMutation.mutate({ ...taxForm, id: editingTax?.id })}
                     disabled={saveTaxMutation.isPending}
                   >
                     <Save size={16} className="mr-2" />
@@ -679,12 +699,12 @@ const CurrencyTaxManager = () => {
                       <Badge variant="outline">{tax.rate}%</Badge>
                     </TableCell>
                     <TableCell>
-                      <Switch 
-                        checked={tax.is_active} 
-                        onCheckedChange={(checked) => 
-                          toggleTaxActiveMutation.mutate({ 
-                            id: tax.id, 
-                            active: checked 
+                      <Switch
+                        checked={tax.is_active}
+                        onCheckedChange={(checked) =>
+                          toggleTaxActiveMutation.mutate({
+                            id: tax.id,
+                            active: checked
                           })
                         }
                         disabled={toggleTaxActiveMutation.isPending}
@@ -697,30 +717,53 @@ const CurrencyTaxManager = () => {
                           {t.default}
                         </Badge>
                       ) : (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setDefaultTaxMutation.mutate(tax.id)}
-                          disabled={setDefaultTaxMutation.isPending}
-                        >
-                          {t.setDefault}
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={setDefaultTaxMutation.isPending}
+                            >
+                              {t.setDefault}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {language === 'ar' ? 'تعيين الضريبة الافتراضية' : 'Set Default Tax'}
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {language === 'ar'
+                                  ? `هل أنت متأكد من تعيين "${tax.name}" كضريبة افتراضية؟`
+                                  : `Are you sure you want to set "${tax.name}" as the default tax?`}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => setDefaultTaxMutation.mutate(tax.id)}
+                              >
+                                {language === 'ar' ? 'تعيين' : 'Set'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => openEditTax(tax)}
                         >
                           <Edit size={16} />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-destructive hover:text-destructive"
                             >
                               <Trash2 size={16} />
@@ -732,7 +775,7 @@ const CurrencyTaxManager = () => {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
-                              <AlertDialogAction 
+                              <AlertDialogAction
                                 onClick={() => deleteTaxMutation.mutate(tax.id)}
                               >
                                 {t.delete}

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,6 +36,65 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
+// Type definitions for entities and transactions
+interface EntityBase {
+  id: string | number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+}
+
+interface CustomerEntity extends EntityBase {
+  loyalty_points?: number;
+  totalAmount: number;
+  orderCount: number;
+  avgOrderValue: number;
+}
+
+interface SupplierEntity extends EntityBase {
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  invoiceCount: number;
+}
+
+interface SalesTransaction {
+  id: string | number;
+  branch_id: string;
+  created_at: string;
+  created_by: string;
+  customer_id: string;
+  discount_amount: number;
+  due_date: string;
+  invoice_date: string;
+  invoice_number: string;
+  notes: string;
+  paid_amount: number;
+  payment_method: string;
+  tax_amount: number;
+  total_amount: number | string;
+  warehouse_id: string;
+}
+
+interface PurchaseTransaction {
+  id: string | number;
+  branch_id: string;
+  created_at: string;
+  created_by: string;
+  supplier_id: string;
+  discount_amount: number;
+  due_date: string;
+  invoice_date: string;
+  invoice_number: string;
+  notes: string;
+  paid_amount: number;
+  payment_method: string;
+  payment_status: string;
+  tax_amount: number;
+  total_amount: number | string;
+  warehouse_id: string;
+}
+
 const CustomerSupplierMovement: React.FC = () => {
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState('customers');
@@ -42,7 +102,8 @@ const CustomerSupplierMovement: React.FC = () => {
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [selectedEntity, setSelectedEntity] = useState<any>(null);
+  const [selectedEntity, setSelectedEntity] = useState<CustomerEntity | SupplierEntity | null>(null);
+
 
   const getDateRange = () => {
     const now = new Date();
@@ -121,7 +182,8 @@ const CustomerSupplierMovement: React.FC = () => {
         const { data } = await supabase
           .from('sales')
           .select('*')
-          .eq('customer_id', selectedEntity.id)
+          .eq('customer_id', String(selectedEntity.id))
+
           .order('sale_date', { ascending: false })
           .limit(50);
         return data || [];
@@ -129,7 +191,8 @@ const CustomerSupplierMovement: React.FC = () => {
         const { data } = await supabase
           .from('purchase_invoices')
           .select('*')
-          .eq('supplier_id', selectedEntity.id)
+          .eq('supplier_id', String(selectedEntity.id))
+
           .order('invoice_date', { ascending: false })
           .limit(50);
         return data || [];
@@ -172,15 +235,15 @@ const CustomerSupplierMovement: React.FC = () => {
     balance: language === 'ar' ? 'الرصيد' : 'Balance',
   };
 
-  const filteredCustomers = customers.filter(c => 
-    !searchQuery || 
+  const filteredCustomers = customers.filter(c =>
+    !searchQuery ||
     c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.name_ar?.includes(searchQuery) ||
     c.phone?.includes(searchQuery)
   );
 
-  const filteredSuppliers = suppliers.filter(s => 
-    !searchQuery || 
+  const filteredSuppliers = suppliers.filter(s =>
+    !searchQuery ||
     s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.name_ar?.includes(searchQuery) ||
     s.phone?.includes(searchQuery)
@@ -343,9 +406,9 @@ const CustomerSupplierMovement: React.FC = () => {
                         <TableCell>
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8"
                                 onClick={() => setSelectedEntity(customer)}
                               >
@@ -391,7 +454,7 @@ const CustomerSupplierMovement: React.FC = () => {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {entityTransactions.map((tx: any) => (
+                                      {entityTransactions.map((tx: SalesTransaction) => (
                                         <TableRow key={tx.id}>
                                           <TableCell>
                                             {format(new Date(tx.sale_date), 'yyyy-MM-dd')}
@@ -408,6 +471,7 @@ const CustomerSupplierMovement: React.FC = () => {
                                         </TableRow>
                                       ))}
                                     </TableBody>
+
                                   </Table>
                                 </ScrollArea>
                               </div>
@@ -533,9 +597,9 @@ const CustomerSupplierMovement: React.FC = () => {
                         <TableCell>
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8"
                                 onClick={() => setSelectedEntity(supplier)}
                               >
@@ -587,7 +651,7 @@ const CustomerSupplierMovement: React.FC = () => {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {entityTransactions.map((tx: any) => (
+                                      {entityTransactions.map((tx: PurchaseTransaction) => (
                                         <TableRow key={tx.id}>
                                           <TableCell>
                                             {format(new Date(tx.invoice_date), 'yyyy-MM-dd')}
@@ -598,8 +662,8 @@ const CustomerSupplierMovement: React.FC = () => {
                                           </TableCell>
                                           <TableCell>
                                             <Badge variant={
-                                              tx.payment_status === 'paid' ? 'default' : 
-                                              tx.payment_status === 'partial' ? 'secondary' : 'destructive'
+                                              tx.payment_status === 'paid' ? 'default' :
+                                                tx.payment_status === 'partial' ? 'secondary' : 'destructive'
                                             }>
                                               {tx.payment_status}
                                             </Badge>
@@ -607,6 +671,7 @@ const CustomerSupplierMovement: React.FC = () => {
                                         </TableRow>
                                       ))}
                                     </TableBody>
+
                                   </Table>
                                 </ScrollArea>
                               </div>

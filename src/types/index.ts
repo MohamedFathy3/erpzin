@@ -101,3 +101,22 @@ export interface PurchaseReturnsResponse {
         to?: number;
     };
 }
+
+export interface Customer {
+    id: number;
+    name: string;
+    address?: string;
+    email?: string;
+    phone?: string;
+    point?: number;
+    last_paid_amount?: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface CustomersResponse {
+    data: Customer[];
+    result: string;
+    message: string;
+    status: number;
+}
