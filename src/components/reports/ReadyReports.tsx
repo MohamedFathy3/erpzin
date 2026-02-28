@@ -1,3 +1,4 @@
+// pages/ReadyReports.tsx
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,12 +9,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import api from '@/lib/api';
-import { Supplier, PurchaseInvoice as ImportedPurchaseInvoice, PurchaseReturnsResponse } from '@/types';
-
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import {
   Printer,
   FileSpreadsheet,
@@ -28,7 +26,6 @@ import {
   Wallet,
   Receipt,
   RotateCcw,
-  ClipboardList,
   UserCheck,
   Calendar,
   Warehouse,
@@ -37,296 +34,52 @@ import {
   CreditCard,
   Banknote,
   ArrowLeftRight,
-  Clock
+  Clock,
+  HandCoins,
+  BarChart3,
+  ListChecks,
+  UserPlus,
+  Store,
+  ArrowRightLeft,
+  Scale,
+  PieChart,
+  Coins,
+  Landmark,
+  CircleDollarSign
 } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { format, subMonths, parseISO } from 'date-fns';
 import * as XLSX from 'xlsx';
 import CompanyHeader from '@/components/shared/CompanyHeader';
-
-// Type definitions for report data
-interface Branch {
-  id?: string;
-  name: string;
-  name_ar?: string;
-}
-
-interface Warehouse {
-  id?: string;
-  name: string;
-  name_ar?: string;
-}
-
-
-interface User {
-  id: string;
-  full_name: string;
-  full_name_ar?: string;
-  email: string;
-}
-
-interface Customer {
-  id?: string;
-  name: string;
-  name_ar?: string;
-  phone?: string;
-  email?: string;
-  total_purchases?: number;
-}
-
-
-interface Salesman {
-  id?: string;
-  name: string;
-  name_ar?: string;
-}
-
-
-interface POSShift {
-  id?: string;
-  opened_at: string;
-  shift_number: string;
-  branches?: Branch;
-  opening_amount: number;
-  closing_amount: number;
-  total_sales: number;
-  status: string;
-}
-
-
-interface Sale {
-  id?: string;
-  sale_date: string;
-  invoice_number: string;
-  customers?: Customer;
-  total_amount: number;
-  status?: string;
-}
-
-
-interface SalesInvoice {
-  id?: string;
-  invoice_date: string;
-  invoice_number: string;
-  customers?: Customer;
-  salesmen?: Salesman;
-  total_amount: number;
-  paid_amount?: number;
-  remaining_amount?: number;
-  payment_status?: string;
-  status?: string;
-}
-
-
-interface SalesReturn {
-  id?: string;
-  return_date: string;
-  return_number: string;
-  customers?: Customer;
-  total_amount: number;
-  status: string;
-}
-
-
-interface Product {
-  id?: string;
-  sku: string;
-  name: string;
-  name_ar?: string;
-  stock: number;
-  min_stock?: number;
-  cost?: number;
-  categories?: {
-    name: string;
-    name_ar?: string;
-  };
-}
-
-
-interface InventoryMovement {
-  id?: string;
-  created_at: string;
-  products?: {
-    name: string;
-    name_ar?: string;
-  };
-  movement_type: string;
-  quantity: number;
-  warehouses?: Warehouse;
-}
-
-
-interface ReportPurchaseInvoice {
-  id?: string;
-  invoice_date: string;
-  invoice_number: string;
-  supplier?: {
-    name: string;
-    name_ar?: string;
-  };
-  total_amount: number;
-  paid_amount?: number;
-  remaining_amount?: number;
-  payment_status?: string;
-}
-
-
-
-interface PurchaseReturn {
-  id?: string;
-  return_date: string;
-  return_number: string;
-  supplier?: {
-    name: string;
-    name_ar?: string;
-  };
-  total_amount: number;
-  status: string;
-}
-
-
-interface Expense {
-  id?: string;
-  expense_date: string;
-  category: string;
-  description?: string;
-  amount: number;
-  branches?: Branch;
-}
-
-
-interface Revenue {
-  id?: string;
-  revenue_date: string;
-  category: string;
-  description?: string;
-  amount: number;
-  branches?: Branch;
-}
-
-
-interface Treasury {
-  id?: string;
-  name: string;
-  name_ar?: string;
-  balance?: number;
-  branches?: Branch;
-}
-
-interface Bank {
-  id?: string;
-  name: string;
-  name_ar?: string;
-  balance?: number;
-  branches?: Branch;
-}
-
-
-interface TreasuryTransaction {
-  id?: string;
-  transaction_date: string;
-  treasuries?: Treasury;
-  transaction_type: string;
-  amount: number;
-  balance_after?: number;
-  description?: string;
-}
-
-interface BankTransaction {
-  id?: string;
-  transaction_date: string;
-  banks?: Bank;
-  transaction_type: string;
-  amount: number;
-  balance_after?: number;
-  description?: string;
-}
-
-
-interface Employee {
-  id?: string;
-  employee_code: string;
-  name: string;
-  name_ar?: string;
-  department?: string;
-  position?: string;
-  phone?: string;
-  salary?: number;
-  is_active?: boolean;
-}
-
-interface Attendance {
-  id?: string;
-  date: string;
-  employees?: Employee;
-  check_in?: string;
-  check_out?: string;
-  status: string;
-  notes?: string;
-}
-
-interface DeliveryPerson {
-  id?: string;
-  name: string;
-  name_ar?: string;
-  phone?: string;
-  vehicle_type?: string;
-  vehicle_number?: string;
-  is_active: boolean;
-  is_available: boolean;
-}
-
-
-interface ReportAccumulator {
-  [key: string]: {
-    name: string;
-    count?: number;
-    total?: number;
-    invoices?: number;
-    sales?: number;
-    commission?: number;
-    paid?: number;
-    remaining?: number;
-    category?: string;
-    stock?: number;
-    value?: number;
-    code?: string;
-    present?: number;
-    absent?: number;
-    late?: number;
-    leave?: number;
-  };
-}
-
-
-
-interface AttendanceSummary {
-  code: string;
-  name: string;
-  present: number;
-  absent: number;
-  late: number;
-  leave: number;
-  total: number;
-}
-
-interface ReportDefinition {
-
-  id: string;
-  name: string;
-  nameAr: string;
-  description: string;
-  descriptionAr: string;
-  icon: React.ReactNode;
-  module: string;
-}
+import {
+  Branch,
+  Warehouse as WarehouseType,
+  User as UserType,
+  Customer,
+  Supplier,
+  SalesRepresentative,
+  Employee,
+  Attendance,
+  DeliveryMan,
+  Product,
+  Invoice,
+  PurchaseInvoice,
+  SalesInvoice,
+  SalesReturn,
+  PurchaseReturn,
+  ReturnInvoice,
+  Treasury,
+  Finance,
+  ReportDefinition,
+  ReportData,
+  ReportAccumulator
+} from '@/types';
 
 const ReadyReports = () => {
   const { language, direction } = useLanguage();
+  const { formatCurrency, settings } = useRegionalSettings();
   const printRef = useRef<HTMLDivElement>(null);
   const [activeModule, setActiveModule] = useState('sales');
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
 
   // Filters
   const [dateFrom, setDateFrom] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
@@ -338,311 +91,180 @@ const ReadyReports = () => {
   const [selectedUser, setSelectedUser] = useState('all');
 
   // Fetch filter data
-  const { data: branches = [] } = useQuery({
-    queryKey: ['report-branches'],
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ['branches'],
     queryFn: async () => {
-      const { data } = await supabase.from('branches').select('*').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  const { data: warehouses = [] } = useQuery({
-    queryKey: ['report-warehouses'],
-    queryFn: async () => {
-      const { data } = await supabase.from('warehouses').select('*').eq('is_active', true);
-      return data || [];
-    }
-  });
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['report-users'],
-    queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('*');
-      return data || [];
-    }
-  });
-
-  // Fetch report data based on selected report
-  const dateTimeFrom = `${dateFrom}T${timeFrom}:00`;
-  const dateTimeTo = `${dateTo}T${timeTo}:59`;
-
-  const { data: salesData = [] } = useQuery({
-    queryKey: ['report-sales', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
-    queryFn: async () => {
-      let query = supabase
-        .from('sales')
-        .select('*, customers(name, name_ar)')
-        .gte('sale_date', dateTimeFrom)
-        .lte('sale_date', dateTimeTo)
-        .order('sale_date', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch', selectedBranch);
-      const { data } = await query;
-      return data || [];
+      const response = await api.post('/branch/index');
+      return response.data.data || [];
     },
-    enabled: activeModule === 'sales' || activeModule === 'pos'
   });
 
-  const { data: salesInvoices = [] } = useQuery({
-    queryKey: ['report-sales-invoices', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
+  const { data: warehouses = [] } = useQuery<WarehouseType[]>({
+    queryKey: ['warehouses'],
     queryFn: async () => {
-      let query = supabase
-        .from('sales_invoices')
-        .select('*, customers(name, name_ar), salesmen(name, name_ar), branches(name, name_ar), warehouses(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('invoice_date', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
-      if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
-      const { data } = await query;
-      return data || [];
+      const response = await api.post('/warehouse/index');
+      return response.data.data || [];
+    }
+  });
+
+  const { data: users = [] } = useQuery<UserType[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await api.post('/user/index');
+      return response.data.data || [];
+    }
+  });
+
+  // ==================== Sales Data ====================
+  const { data: salesInvoices = [] } = useQuery<SalesInvoice[]>({
+    queryKey: ['sales-invoices', dateFrom, dateTo],
+    queryFn: async () => {
+      const response = await api.post('/sales-invoices/index', {
+        date_from: `${dateFrom} ${timeFrom}:00`,
+        date_to: `${dateTo} ${timeTo}:59`,
+        branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
+        user_id: selectedUser === 'all' ? undefined : selectedUser
+      });
+      return response.data.data || [];
     },
     enabled: activeModule === 'sales'
   });
 
-  const { data: salesReturns = [] } = useQuery({
-    queryKey: ['report-sales-returns', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
+  const { data: salesReturns = [] } = useQuery<SalesReturn[]>({
+    queryKey: ['sales-returns', dateFrom, dateTo],
     queryFn: async () => {
-      let query = supabase
-        .from('sales_returns')
-        .select('*, customers(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('return_date', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
-      const { data } = await query;
-      return data || [];
+      const response = await api.post('/sales-return/index', {
+        date_from: `${dateFrom} ${timeFrom}:00`,
+        date_to: `${dateTo} ${timeTo}:59`,
+        branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
+        user_id: selectedUser === 'all' ? undefined : selectedUser
+      });
+      return response.data.data || [];
     },
     enabled: activeModule === 'sales'
   });
 
-  const { data: products = [] } = useQuery({
-    queryKey: ['report-products'],
-    queryFn: async () => {
-      const { data } = await supabase.from('products').select('*, categories(name, name_ar)');
-      return data || [];
-    },
-    enabled: activeModule === 'inventory'
-  });
-
-  const { data: inventoryMovements = [] } = useQuery({
-    queryKey: ['report-inventory-movements', dateFrom, dateTo, timeFrom, timeTo, selectedWarehouse, selectedUser],
-    queryFn: async () => {
-      let query = supabase
-        .from('inventory_movements')
-        .select('*, products(name, name_ar, sku), warehouses(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('created_at', { ascending: false });
-      if (selectedWarehouse !== 'all') query = query.eq('warehouse_id', selectedWarehouse);
-      if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'inventory'
-  });
-
-  const { data: purchaseInvoices = [] } = useQuery({
-    queryKey: ['report-purchase-invoices', dateFrom, dateTo, timeFrom, timeTo],
+  // ==================== Purchasing Data ====================
+  const { data: purchaseInvoices = [] } = useQuery<PurchaseInvoice[]>({
+    queryKey: ['purchase-invoices', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/purchases-invoices/index', {
-        date_from: dateTimeFrom,
-        date_to: dateTimeTo
+        date_from: `${dateFrom} ${timeFrom}:00`,
+        date_to: `${dateTo} ${timeTo}:59`,
+        branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
+        user_id: selectedUser === 'all' ? undefined : selectedUser
       });
       return response.data.data || [];
     },
     enabled: activeModule === 'purchasing'
   });
 
-  const { data: purchaseReturns = [] } = useQuery({
-    queryKey: ['report-purchase-returns', dateFrom, dateTo, timeFrom, timeTo, selectedBranch],
+  const { data: purchaseReturns = [] } = useQuery<PurchaseReturn[]>({
+    queryKey: ['purchase-returns', dateFrom, dateTo],
     queryFn: async () => {
-      try {
-        const response = await api.post('/return-invoices/index', {
-          perPage: 10000,
-          paginate: false,
-        });
-        return response.data;
-      } catch (error) {
-        console.error('Error fetching returns:', error);
-        return { data: [] };
-      }
-    },
-    enabled: activeModule === 'purchasing'
-  });
-
-  const { data: suppliers = [] } = useQuery({
-    queryKey: ['report-suppliers'],
-    queryFn: async () => {
-      const response = await api.post('/suppliers/index');
+      const response = await api.post('/purchase-returns/index', {
+        date_from: `${dateFrom} ${timeFrom}:00`,
+        date_to: `${dateTo} ${timeTo}:59`,
+        branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
+        user_id: selectedUser === 'all' ? undefined : selectedUser
+      });
       return response.data.data || [];
     },
     enabled: activeModule === 'purchasing'
   });
 
-  const { data: expenses = [] } = useQuery({
-    queryKey: ['report-expenses', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
+  // ==================== Inventory Data ====================
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['products'],
     queryFn: async () => {
-      let query = supabase
-        .from('expenses')
-        .select('*, branches(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('expense_date', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/product/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: revenues = [] } = useQuery({
-    queryKey: ['report-revenues', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
+  // ==================== CRM Data ====================
+  const { data: customers = [] } = useQuery<Customer[]>({
+    queryKey: ['customers'],
     queryFn: async () => {
-      let query = supabase
-        .from('revenues')
-        .select('*, branches(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('revenue_date', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/customer/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: treasuries = [] } = useQuery({
-    queryKey: ['report-treasuries'],
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
+    queryKey: ['suppliers'],
     queryFn: async () => {
-      const { data } = await supabase.from('treasuries').select('*, branches(name, name_ar)');
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/suppliers/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: banks = [] } = useQuery({
-    queryKey: ['report-banks'],
+  // ==================== HR Data ====================
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['employees'],
     queryFn: async () => {
-      const { data } = await supabase.from('banks').select('*, branches(name, name_ar)');
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/employee/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: treasuryTransactions = [] } = useQuery({
-    queryKey: ['report-treasury-transactions', dateFrom, dateTo, timeFrom, timeTo, selectedUser],
+  const { data: salesRepresentatives = [] } = useQuery<SalesRepresentative[]>({
+    queryKey: ['sales-representatives'],
     queryFn: async () => {
-      let query = supabase
-        .from('treasury_transactions')
-        .select('*, treasuries(name, name_ar)')
-        .gte('transaction_date', dateTimeFrom)
-        .lte('transaction_date', dateTimeTo)
-        .order('transaction_date', { ascending: false });
-      if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/sales-representative/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: bankTransactions = [] } = useQuery({
-    queryKey: ['report-bank-transactions', dateFrom, dateTo, timeFrom, timeTo, selectedUser],
+  const { data: attendance = [] } = useQuery<Attendance[]>({
+    queryKey: ['attendance', dateFrom, dateTo],
     queryFn: async () => {
-      let query = supabase
-        .from('bank_transactions')
-        .select('*, banks(name, name_ar)')
-        .gte('transaction_date', dateTimeFrom)
-        .lte('transaction_date', dateTimeTo)
-        .order('transaction_date', { ascending: false });
-      if (selectedUser !== 'all') query = query.eq('created_by', selectedUser);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'finance'
+      const response = await api.post('/attendance/index', {
+        date_from: dateFrom,
+        date_to: dateTo
+      });
+      return response.data.data || [];
+    }
   });
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ['report-customers'],
+  const { data: deliveryMen = [] } = useQuery<DeliveryMan[]>({
+    queryKey: ['delivery-men'],
     queryFn: async () => {
-      const { data } = await supabase.from('customers').select('*');
-      return data || [];
-    },
-    enabled: activeModule === 'crm'
+      const response = await api.post('/delevery-man/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: employees = [] } = useQuery({
-    queryKey: ['report-employees'],
+  // ==================== Finance Data ====================
+  const { data: treasuries = [] } = useQuery<Treasury[]>({
+    queryKey: ['treasuries'],
     queryFn: async () => {
-      const { data } = await supabase.from('employees').select('*');
-      return data || [];
-    },
-    enabled: activeModule === 'hr'
+      const response = await api.post('/treasury/index');
+      return response.data.data || [];
+    }
   });
 
-  const { data: attendance = [] } = useQuery({
-    queryKey: ['report-attendance', dateFrom, dateTo, timeFrom, timeTo],
+  const { data: finances = [] } = useQuery<Finance[]>({
+    queryKey: ['finances', dateFrom, dateTo],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('attendance')
-        .select('*, employees(name, name_ar, employee_code, department)')
-        .gte('date', dateFrom)
-        .lte('date', dateTo)
-        .order('date', { ascending: false });
-      return data || [];
-    },
-    enabled: activeModule === 'hr'
+      const response = await api.post('/finance/index', {
+        date_from: dateFrom,
+        date_to: dateTo
+      });
+      return response.data.data || [];
+    }
   });
 
-  const { data: salesmen = [] } = useQuery({
-    queryKey: ['report-salesmen'],
+  // ==================== Returns Data (المرتجعات الكاملة) ====================
+  const { data: returnInvoices = [] } = useQuery<ReturnInvoice[]>({
+    queryKey: ['return-invoices', dateFrom, dateTo],
     queryFn: async () => {
-      const { data } = await supabase.from('salesmen').select('*');
-      return data || [];
-    },
-    enabled: activeModule === 'hr'
-  });
-
-  const { data: deliveryPersons = [] } = useQuery({
-    queryKey: ['report-delivery-persons'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('delivery_persons')
-        .select('*, employees(name, name_ar, employee_code)')
-        .order('created_at', { ascending: false });
-      return data || [];
-    },
-    enabled: activeModule === 'hr'
-  });
-
-  const { data: posShifts = [] } = useQuery({
-    queryKey: ['report-pos-shifts', dateFrom, dateTo, timeFrom, timeTo, selectedBranch, selectedUser],
-    queryFn: async () => {
-      let query = supabase
-        .from('pos_shifts')
-        .select('*, branches(name, name_ar)')
-        .gte('opened_at', dateTimeFrom)
-        .lte('opened_at', dateTimeTo)
-        .order('opened_at', { ascending: false });
-      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
-      if (selectedUser !== 'all') query = query.eq('cashier_id', selectedUser);
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: activeModule === 'pos'
-  });
-
-  const { data: posReturns = [] } = useQuery({
-    queryKey: ['report-pos-returns', dateFrom, dateTo, timeFrom, timeTo],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('pos_returns')
-        .select('*, customers(name, name_ar)')
-        .gte('created_at', dateTimeFrom)
-        .lte('created_at', dateTimeTo)
-        .order('return_date', { ascending: false });
-      return data || [];
-    },
-    enabled: activeModule === 'pos'
+      const response = await api.post('/return-invoices/index', {
+        date_from: dateFrom,
+        date_to: dateTo
+      });
+      return response.data.data || [];
+    }
   });
 
   const translations = {
@@ -667,9 +289,7 @@ const ReadyReports = () => {
       total: 'Total',
       selectReport: 'Select a report from the list',
 
-      // Modules
       modules: {
-        pos: 'Point of Sale',
         sales: 'Sales',
         purchasing: 'Purchasing',
         inventory: 'Inventory',
@@ -678,23 +298,14 @@ const ReadyReports = () => {
         hr: 'HR'
       },
 
-      // Reports
       reports: {
-        // POS
-        posShifts: 'Shift Reports',
-        posShiftsDesc: 'All POS shifts with totals',
-        posSales: 'POS Sales',
-        posSalesDesc: 'Point of sale transactions',
-        posReturns: 'POS Returns',
-        posReturnsDesc: 'POS return transactions',
-
         // Sales
         salesInvoices: 'Sales Invoices',
         salesInvoicesDesc: 'All sales invoices',
         salesByCustomer: 'Sales by Customer',
         salesByCustomerDesc: 'Sales grouped by customer',
-        salesBySalesman: 'Sales by Salesman',
-        salesBySalesmanDesc: 'Sales grouped by salesman',
+        salesByRepresentative: 'Sales by Representative',
+        salesByRepresentativeDesc: 'Sales grouped by sales rep',
         salesReturns: 'Sales Returns',
         salesReturnsDesc: 'All sales returns',
         unpaidInvoices: 'Unpaid Invoices',
@@ -709,6 +320,8 @@ const ReadyReports = () => {
         purchaseReturnsDesc: 'All purchase returns',
         supplierBalances: 'Supplier Balances',
         supplierBalancesDesc: 'Outstanding supplier amounts',
+        returnInvoices: 'Return Invoices',
+        returnInvoicesDesc: 'All return invoices',
 
         // Inventory
         stockReport: 'Stock Report',
@@ -717,26 +330,16 @@ const ReadyReports = () => {
         lowStockDesc: 'Products below minimum',
         outOfStock: 'Out of Stock',
         outOfStockDesc: 'Products with zero stock',
-        stockMovements: 'Stock Movements',
-        stockMovementsDesc: 'All inventory movements',
         stockValuation: 'Stock Valuation',
         stockValuationDesc: 'Inventory value report',
 
         // Finance
         expenseReport: 'Expense Report',
-        expenseReportDesc: 'All expenses by category',
-        revenueReport: 'Revenue Report',
-        revenueReportDesc: 'All revenues by category',
-        profitLoss: 'Profit & Loss',
-        profitLossDesc: 'Income vs expenses',
+        expenseReportDesc: 'All expenses',
         treasuryBalance: 'Treasury Balances',
         treasuryBalanceDesc: 'Current treasury balances',
-        bankBalance: 'Bank Balances',
-        bankBalanceDesc: 'Current bank balances',
-        treasuryTransactions: 'Treasury Transactions',
-        treasuryTransactionsDesc: 'Treasury movements',
-        bankTransactions: 'Bank Transactions',
-        bankTransactionsDesc: 'Bank movements',
+        financeReport: 'Finance Report',
+        financeReportDesc: 'All financial transactions',
 
         // CRM
         customerList: 'Customer List',
@@ -745,22 +348,22 @@ const ReadyReports = () => {
         topCustomersDesc: 'By total purchases',
         customerBalances: 'Customer Balances',
         customerBalancesDesc: 'Outstanding amounts',
+        supplierList: 'Supplier List',
+        supplierListDesc: 'All suppliers',
 
         // HR
         employeeList: 'Employee List',
         employeeListDesc: 'All employees',
-        employeeByDept: 'By Department',
-        employeeByDeptDesc: 'Employees by department',
         attendanceReport: 'Attendance Report',
         attendanceReportDesc: 'Employee attendance records',
         attendanceSummary: 'Attendance Summary',
         attendanceSummaryDesc: 'Attendance summary by employee',
-        payrollReport: 'Payroll Report',
-        payrollReportDesc: 'Employee salaries and payroll',
+        salesRepresentatives: 'Sales Representatives',
+        salesRepresentativesDesc: 'List of sales reps',
+        deliveryMen: 'Delivery Men',
+        deliveryMenDesc: 'List of delivery persons',
         salesCommissions: 'Sales Commissions',
-        salesCommissionsDesc: 'Salesman commission report',
-        deliveryReport: 'Delivery Persons Report',
-        deliveryReportDesc: 'Delivery persons list and status'
+        salesCommissionsDesc: 'Salesman commission report'
       },
 
       // Table headers
@@ -795,7 +398,16 @@ const ReadyReports = () => {
       closing: 'Closing',
       totalSales: 'Total Sales',
       movement: 'Movement',
-      warehouseCol: 'Warehouse'
+      warehouseCol: 'Warehouse',
+      invoices: 'Invoices',
+      sales: 'Sales',
+      commission: 'Commission',
+      representative: 'Representative',
+      returnNo: 'Return #',
+      reason: 'Reason',
+      method: 'Method',
+      currency: 'Currency',
+      branch: 'Branch'
     },
     ar: {
       title: 'التقارير الجاهزة',
@@ -818,9 +430,7 @@ const ReadyReports = () => {
       total: 'الإجمالي',
       selectReport: 'اختر تقريراً من القائمة',
 
-      // Modules
       modules: {
-        pos: 'نقطة البيع',
         sales: 'المبيعات',
         purchasing: 'المشتريات',
         inventory: 'المخزون',
@@ -829,23 +439,14 @@ const ReadyReports = () => {
         hr: 'الموارد البشرية'
       },
 
-      // Reports
       reports: {
-        // POS
-        posShifts: 'تقارير الورديات',
-        posShiftsDesc: 'جميع ورديات نقطة البيع',
-        posSales: 'مبيعات نقطة البيع',
-        posSalesDesc: 'معاملات نقطة البيع',
-        posReturns: 'مرتجعات نقطة البيع',
-        posReturnsDesc: 'معاملات مرتجعات نقطة البيع',
-
         // Sales
         salesInvoices: 'فواتير المبيعات',
         salesInvoicesDesc: 'جميع فواتير المبيعات',
         salesByCustomer: 'المبيعات حسب العميل',
         salesByCustomerDesc: 'المبيعات مجمعة حسب العميل',
-        salesBySalesman: 'المبيعات حسب المندوب',
-        salesBySalesmanDesc: 'المبيعات مجمعة حسب المندوب',
+        salesByRepresentative: 'المبيعات حسب المندوب',
+        salesByRepresentativeDesc: 'المبيعات مجمعة حسب المندوب',
         salesReturns: 'مرتجعات المبيعات',
         salesReturnsDesc: 'جميع مرتجعات المبيعات',
         unpaidInvoices: 'الفواتير غير المسددة',
@@ -860,6 +461,8 @@ const ReadyReports = () => {
         purchaseReturnsDesc: 'جميع مرتجعات المشتريات',
         supplierBalances: 'أرصدة الموردين',
         supplierBalancesDesc: 'المبالغ المستحقة للموردين',
+        returnInvoices: 'فواتير المرتجعات',
+        returnInvoicesDesc: 'جميع فواتير المرتجعات الكاملة',
 
         // Inventory
         stockReport: 'تقرير المخزون',
@@ -868,26 +471,16 @@ const ReadyReports = () => {
         lowStockDesc: 'المنتجات أقل من الحد الأدنى',
         outOfStock: 'نفاذ المخزون',
         outOfStockDesc: 'المنتجات بدون مخزون',
-        stockMovements: 'حركات المخزون',
-        stockMovementsDesc: 'جميع حركات المخزون',
         stockValuation: 'تقييم المخزون',
         stockValuationDesc: 'تقرير قيمة المخزون',
 
         // Finance
         expenseReport: 'تقرير المصروفات',
-        expenseReportDesc: 'المصروفات حسب الفئة',
-        revenueReport: 'تقرير الإيرادات',
-        revenueReportDesc: 'الإيرادات حسب الفئة',
-        profitLoss: 'الأرباح والخسائر',
-        profitLossDesc: 'الإيرادات مقابل المصروفات',
+        expenseReportDesc: 'جميع المصروفات',
         treasuryBalance: 'أرصدة الخزائن',
         treasuryBalanceDesc: 'أرصدة الخزائن الحالية',
-        bankBalance: 'أرصدة البنوك',
-        bankBalanceDesc: 'أرصدة البنوك الحالية',
-        treasuryTransactions: 'حركات الخزينة',
-        treasuryTransactionsDesc: 'حركات الخزائن',
-        bankTransactions: 'حركات البنوك',
-        bankTransactionsDesc: 'حركات البنوك',
+        financeReport: 'التقرير المالي',
+        financeReportDesc: 'جميع المعاملات المالية',
 
         // CRM
         customerList: 'قائمة العملاء',
@@ -896,22 +489,22 @@ const ReadyReports = () => {
         topCustomersDesc: 'حسب إجمالي المشتريات',
         customerBalances: 'أرصدة العملاء',
         customerBalancesDesc: 'المبالغ المستحقة',
+        supplierList: 'قائمة الموردين',
+        supplierListDesc: 'جميع الموردين',
 
         // HR
         employeeList: 'قائمة الموظفين',
         employeeListDesc: 'جميع الموظفين',
-        employeeByDept: 'حسب القسم',
-        employeeByDeptDesc: 'الموظفون حسب الأقسام',
         attendanceReport: 'تقرير الحضور والانصراف',
         attendanceReportDesc: 'سجلات حضور الموظفين',
         attendanceSummary: 'ملخص الحضور',
         attendanceSummaryDesc: 'ملخص الحضور لكل موظف',
-        payrollReport: 'تقرير الرواتب',
-        payrollReportDesc: 'رواتب الموظفين وكشف المرتبات',
+        salesRepresentatives: 'مندوبي المبيعات',
+        salesRepresentativesDesc: 'قائمة مندوبي المبيعات',
+        deliveryMen: 'مناديب التوصيل',
+        deliveryMenDesc: 'قائمة مناديب التوصيل',
         salesCommissions: 'عمولات المبيعات',
-        salesCommissionsDesc: 'تقرير عمولات مندوبي المبيعات',
-        deliveryReport: 'تقرير مناديب التوصيل',
-        deliveryReportDesc: 'قائمة مناديب التوصيل وحالتهم'
+        salesCommissionsDesc: 'تقرير عمولات مندوبي المبيعات'
       },
 
       // Table headers
@@ -946,7 +539,16 @@ const ReadyReports = () => {
       closing: 'الإغلاق',
       totalSales: 'إجمالي المبيعات',
       movement: 'الحركة',
-      warehouseCol: 'المخزن'
+      warehouseCol: 'المخزن',
+      invoices: 'الفواتير',
+      sales: 'المبيعات',
+      commission: 'العمولة',
+      representative: 'المندوب',
+      returnNo: 'رقم المرتجع',
+      reason: 'السبب',
+      method: 'طريقة الرد',
+      currency: 'العملة',
+      branch: 'الفرع'
     }
   };
 
@@ -954,7 +556,6 @@ const ReadyReports = () => {
 
   // Module definitions with icons
   const modules = [
-    { id: 'pos', icon: <ShoppingCart size={18} />, label: t.modules.pos },
     { id: 'sales', icon: <Receipt size={18} />, label: t.modules.sales },
     { id: 'purchasing', icon: <Truck size={18} />, label: t.modules.purchasing },
     { id: 'inventory', icon: <Package size={18} />, label: t.modules.inventory },
@@ -965,672 +566,527 @@ const ReadyReports = () => {
 
   // Reports by module
   const reportsByModule: Record<string, ReportDefinition[]> = {
-    pos: [
-      { id: 'posShifts', name: t.reports.posShifts, nameAr: t.reports.posShifts, description: t.reports.posShiftsDesc, descriptionAr: t.reports.posShiftsDesc, icon: <Clock size={20} />, module: 'pos' },
-      { id: 'posSales', name: t.reports.posSales, nameAr: t.reports.posSales, description: t.reports.posSalesDesc, descriptionAr: t.reports.posSalesDesc, icon: <ShoppingCart size={20} />, module: 'pos' },
-      { id: 'posReturns', name: t.reports.posReturns, nameAr: t.reports.posReturns, description: t.reports.posReturnsDesc, descriptionAr: t.reports.posReturnsDesc, icon: <RotateCcw size={20} />, module: 'pos' },
-    ],
     sales: [
       { id: 'salesInvoices', name: t.reports.salesInvoices, nameAr: t.reports.salesInvoices, description: t.reports.salesInvoicesDesc, descriptionAr: t.reports.salesInvoicesDesc, icon: <FileText size={20} />, module: 'sales' },
       { id: 'salesByCustomer', name: t.reports.salesByCustomer, nameAr: t.reports.salesByCustomer, description: t.reports.salesByCustomerDesc, descriptionAr: t.reports.salesByCustomerDesc, icon: <Users size={20} />, module: 'sales' },
-      { id: 'salesBySalesman', name: t.reports.salesBySalesman, nameAr: t.reports.salesBySalesman, description: t.reports.salesBySalesmanDesc, descriptionAr: t.reports.salesBySalesmanDesc, icon: <UserCheck size={20} />, module: 'sales' },
+      { id: 'salesByRepresentative', name: t.reports.salesByRepresentative, nameAr: t.reports.salesByRepresentative, description: t.reports.salesByRepresentativeDesc, descriptionAr: t.reports.salesByRepresentativeDesc, icon: <UserCheck size={20} />, module: 'sales' },
       { id: 'salesReturns', name: t.reports.salesReturns, nameAr: t.reports.salesReturns, description: t.reports.salesReturnsDesc, descriptionAr: t.reports.salesReturnsDesc, icon: <RotateCcw size={20} />, module: 'sales' },
       { id: 'unpaidInvoices', name: t.reports.unpaidInvoices, nameAr: t.reports.unpaidInvoices, description: t.reports.unpaidInvoicesDesc, descriptionAr: t.reports.unpaidInvoicesDesc, icon: <CreditCard size={20} />, module: 'sales' },
     ],
-
     purchasing: [
       { id: 'purchaseInvoices', name: t.reports.purchaseInvoices, nameAr: t.reports.purchaseInvoices, description: t.reports.purchaseInvoicesDesc, descriptionAr: t.reports.purchaseInvoicesDesc, icon: <FileText size={20} />, module: 'purchasing' },
       { id: 'purchaseBySupplier', name: t.reports.purchaseBySupplier, nameAr: t.reports.purchaseBySupplier, description: t.reports.purchaseBySupplierDesc, descriptionAr: t.reports.purchaseBySupplierDesc, icon: <Truck size={20} />, module: 'purchasing' },
       { id: 'purchaseReturns', name: t.reports.purchaseReturns, nameAr: t.reports.purchaseReturns, description: t.reports.purchaseReturnsDesc, descriptionAr: t.reports.purchaseReturnsDesc, icon: <RotateCcw size={20} />, module: 'purchasing' },
       { id: 'supplierBalances', name: t.reports.supplierBalances, nameAr: t.reports.supplierBalances, description: t.reports.supplierBalancesDesc, descriptionAr: t.reports.supplierBalancesDesc, icon: <DollarSign size={20} />, module: 'purchasing' },
+      { id: 'returnInvoices', name: t.reports.returnInvoices, nameAr: t.reports.returnInvoices, description: t.reports.returnInvoicesDesc, descriptionAr: t.reports.returnInvoicesDesc, icon: <ArrowRightLeft size={20} />, module: 'purchasing' },
     ],
-
     inventory: [
       { id: 'stockReport', name: t.reports.stockReport, nameAr: t.reports.stockReport, description: t.reports.stockReportDesc, descriptionAr: t.reports.stockReportDesc, icon: <Package size={20} />, module: 'inventory' },
       { id: 'lowStock', name: t.reports.lowStock, nameAr: t.reports.lowStock, description: t.reports.lowStockDesc, descriptionAr: t.reports.lowStockDesc, icon: <TrendingUp size={20} />, module: 'inventory' },
       { id: 'outOfStock', name: t.reports.outOfStock, nameAr: t.reports.outOfStock, description: t.reports.outOfStockDesc, descriptionAr: t.reports.outOfStockDesc, icon: <Package size={20} />, module: 'inventory' },
-      { id: 'stockMovements', name: t.reports.stockMovements, nameAr: t.reports.stockMovements, description: t.reports.stockMovementsDesc, descriptionAr: t.reports.stockMovementsDesc, icon: <ArrowLeftRight size={20} />, module: 'inventory' },
       { id: 'stockValuation', name: t.reports.stockValuation, nameAr: t.reports.stockValuation, description: t.reports.stockValuationDesc, descriptionAr: t.reports.stockValuationDesc, icon: <DollarSign size={20} />, module: 'inventory' },
     ],
     finance: [
       { id: 'expenseReport', name: t.reports.expenseReport, nameAr: t.reports.expenseReport, description: t.reports.expenseReportDesc, descriptionAr: t.reports.expenseReportDesc, icon: <CreditCard size={20} />, module: 'finance' },
-      { id: 'revenueReport', name: t.reports.revenueReport, nameAr: t.reports.revenueReport, description: t.reports.revenueReportDesc, descriptionAr: t.reports.revenueReportDesc, icon: <Banknote size={20} />, module: 'finance' },
-      { id: 'profitLoss', name: t.reports.profitLoss, nameAr: t.reports.profitLoss, description: t.reports.profitLossDesc, descriptionAr: t.reports.profitLossDesc, icon: <TrendingUp size={20} />, module: 'finance' },
       { id: 'treasuryBalance', name: t.reports.treasuryBalance, nameAr: t.reports.treasuryBalance, description: t.reports.treasuryBalanceDesc, descriptionAr: t.reports.treasuryBalanceDesc, icon: <Wallet size={20} />, module: 'finance' },
-      { id: 'bankBalance', name: t.reports.bankBalance, nameAr: t.reports.bankBalance, description: t.reports.bankBalanceDesc, descriptionAr: t.reports.bankBalanceDesc, icon: <Building2 size={20} />, module: 'finance' },
-      { id: 'treasuryTransactions', name: t.reports.treasuryTransactions, nameAr: t.reports.treasuryTransactions, description: t.reports.treasuryTransactionsDesc, descriptionAr: t.reports.treasuryTransactionsDesc, icon: <ArrowLeftRight size={20} />, module: 'finance' },
-      { id: 'bankTransactions', name: t.reports.bankTransactions, nameAr: t.reports.bankTransactions, description: t.reports.bankTransactionsDesc, descriptionAr: t.reports.bankTransactionsDesc, icon: <ArrowLeftRight size={20} />, module: 'finance' },
+      { id: 'financeReport', name: t.reports.financeReport, nameAr: t.reports.financeReport, description: t.reports.financeReportDesc, descriptionAr: t.reports.financeReportDesc, icon: <BarChart3 size={20} />, module: 'finance' },
     ],
     crm: [
       { id: 'customerList', name: t.reports.customerList, nameAr: t.reports.customerList, description: t.reports.customerListDesc, descriptionAr: t.reports.customerListDesc, icon: <Users size={20} />, module: 'crm' },
       { id: 'topCustomers', name: t.reports.topCustomers, nameAr: t.reports.topCustomers, description: t.reports.topCustomersDesc, descriptionAr: t.reports.topCustomersDesc, icon: <TrendingUp size={20} />, module: 'crm' },
       { id: 'customerBalances', name: t.reports.customerBalances, nameAr: t.reports.customerBalances, description: t.reports.customerBalancesDesc, descriptionAr: t.reports.customerBalancesDesc, icon: <DollarSign size={20} />, module: 'crm' },
+      { id: 'supplierList', name: t.reports.supplierList, nameAr: t.reports.supplierList, description: t.reports.supplierListDesc, descriptionAr: t.reports.supplierListDesc, icon: <Truck size={20} />, module: 'crm' },
     ],
     hr: [
       { id: 'employeeList', name: t.reports.employeeList, nameAr: t.reports.employeeList, description: t.reports.employeeListDesc, descriptionAr: t.reports.employeeListDesc, icon: <Users size={20} />, module: 'hr' },
-      { id: 'employeeByDept', name: t.reports.employeeByDept, nameAr: t.reports.employeeByDept, description: t.reports.employeeByDeptDesc, descriptionAr: t.reports.employeeByDeptDesc, icon: <Building2 size={20} />, module: 'hr' },
       { id: 'attendanceReport', name: t.reports.attendanceReport, nameAr: t.reports.attendanceReport, description: t.reports.attendanceReportDesc, descriptionAr: t.reports.attendanceReportDesc, icon: <Clock size={20} />, module: 'hr' },
       { id: 'attendanceSummary', name: t.reports.attendanceSummary, nameAr: t.reports.attendanceSummary, description: t.reports.attendanceSummaryDesc, descriptionAr: t.reports.attendanceSummaryDesc, icon: <Calendar size={20} />, module: 'hr' },
-      { id: 'payrollReport', name: t.reports.payrollReport, nameAr: t.reports.payrollReport, description: t.reports.payrollReportDesc, descriptionAr: t.reports.payrollReportDesc, icon: <DollarSign size={20} />, module: 'hr' },
-      { id: 'salesCommissions', name: t.reports.salesCommissions, nameAr: t.reports.salesCommissions, description: t.reports.salesCommissionsDesc, descriptionAr: t.reports.salesCommissionsDesc, icon: <TrendingUp size={20} />, module: 'hr' },
-      { id: 'deliveryReport', name: t.reports.deliveryReport, nameAr: t.reports.deliveryReport, description: t.reports.deliveryReportDesc, descriptionAr: t.reports.deliveryReportDesc, icon: <Truck size={20} />, module: 'hr' },
+      { id: 'salesRepresentatives', name: t.reports.salesRepresentatives, nameAr: t.reports.salesRepresentatives, description: t.reports.salesRepresentativesDesc, descriptionAr: t.reports.salesRepresentativesDesc, icon: <UserPlus size={20} />, module: 'hr' },
+      { id: 'deliveryMen', name: t.reports.deliveryMen, nameAr: t.reports.deliveryMen, description: t.reports.deliveryMenDesc, descriptionAr: t.reports.deliveryMenDesc, icon: <Truck size={20} />, module: 'hr' },
+      { id: 'salesCommissions', name: t.reports.salesCommissions, nameAr: t.reports.salesCommissions, description: t.reports.salesCommissionsDesc, descriptionAr: t.reports.salesCommissionsDesc, icon: <Coins size={20} />, module: 'hr' },
     ],
   };
 
   // Get report data and render table based on selected report
-  const getReportData = () => {
+  const getReportData = (): ReportData | null => {
+    if (!selectedReport) return null;
+
     switch (selectedReport) {
-      // POS Reports
-      case 'posShifts': {
-        return {
-          headers: [t.date, t.shift, t.branch, t.opening, t.closing, t.totalSales, t.status],
-          rows: (posShifts as unknown as POSShift[]).map((shift) => [
-
-            format(new Date(shift.opened_at), 'yyyy-MM-dd HH:mm'),
-            shift.shift_number,
-            language === 'ar' ? shift.branches?.name_ar || shift.branches?.name || '-' : shift.branches?.name || '-',
-            Number(shift.opening_amount || 0).toLocaleString(),
-            Number(shift.closing_amount || 0).toLocaleString(),
-            Number(shift.total_sales || 0).toLocaleString(),
-            shift.status
-          ]),
-          total: (posShifts as unknown as POSShift[]).reduce((sum, s) => sum + Number(s.total_sales || 0), 0)
-        };
-      }
-
-      case 'posSales': {
-        return {
-          headers: [t.date, t.invoiceNo, t.customer, t.amount, t.status],
-          rows: (salesData as unknown as Sale[]).map((sale) => [
-
-            format(new Date(sale.sale_date), 'yyyy-MM-dd HH:mm'),
-            sale.invoice_number,
-            language === 'ar' ? sale.customers?.name_ar || sale.customers?.name || '-' : sale.customers?.name || '-',
-            Number(sale.total_amount).toLocaleString(),
-            sale.status || 'completed'
-          ]),
-          total: (salesData as unknown as Sale[]).reduce((sum, s) => sum + Number(s.total_amount), 0)
-        };
-      }
-
-      case 'posReturns': {
-        return {
-          headers: [t.date, t.invoiceNo, t.customer, t.amount, t.status],
-          rows: (posReturns as unknown as SalesReturn[]).map((ret) => [
-
-            format(new Date(ret.return_date), 'yyyy-MM-dd'),
-            ret.return_number,
-            language === 'ar' ? ret.customers?.name_ar || ret.customers?.name || '-' : ret.customers?.name || '-',
-            Number(ret.total_amount).toLocaleString(),
-            ret.status
-          ]),
-          total: (posReturns as unknown as SalesReturn[]).reduce((sum, r) => sum + Number(r.total_amount), 0)
-        };
-      }
-
-
-      // Sales Reports
+      // ==================== Sales Reports ====================
       case 'salesInvoices': {
         return {
-          headers: [t.date, t.invoiceNo, t.customer, t.salesman, t.amount, t.paid, t.remaining, t.status],
-          rows: (salesInvoices as unknown as SalesInvoice[]).map((inv) => [
-
-            inv.invoice_date,
+          headers: [t.date, t.invoiceNo, t.customer, t.representative, t.amount, t.currency, t.branch],
+          rows: salesInvoices.map((inv) => [
+            format(new Date(inv.created_at), 'yyyy-MM-dd HH:mm'),
             inv.invoice_number,
-            language === 'ar' ? inv.customers?.name_ar || inv.customers?.name : inv.customers?.name || '-',
-            language === 'ar' ? inv.salesmen?.name_ar || inv.salesmen?.name || '-' : inv.salesmen?.name || '-',
-            Number(inv.total_amount).toLocaleString(),
-            Number(inv.paid_amount || 0).toLocaleString(),
-            Number(inv.remaining_amount || 0).toLocaleString(),
-            inv.payment_status || inv.status
+            inv.customer.name,
+            inv.sales_representative.name || '-',
+            formatCurrency(Number(inv.total_amount)),
+            inv.currency || '-',
+            inv.branch
           ]),
-          total: (salesInvoices as unknown as SalesInvoice[]).reduce((sum, i) => sum + Number(i.total_amount), 0)
+          total: salesInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
       case 'salesByCustomer': {
-        const customerSales = (salesInvoices as unknown as SalesInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-          const name = language === 'ar' ? inv.customers?.name_ar || inv.customers?.name : inv.customers?.name || 'Unknown';
-          if (!acc[name]) acc[name] = { name, count: 0, total: 0 };
-          (acc[name] as { name: string; count?: number; total?: number }).count = ((acc[name] as { name: string; count?: number; total?: number }).count || 0) + 1;
-          (acc[name] as { name: string; count?: number; total?: number }).total = ((acc[name] as { name: string; count?: number; total?: number }).total || 0) + Number(inv.total_amount);
+        const byCustomer = salesInvoices.reduce((acc: ReportAccumulator, inv) => {
+          const name = inv.customer.name;
+          if (!acc[name]) acc[name] = { name, invoices: 0, total: 0 };
+          acc[name].invoices = (acc[name].invoices || 0) + 1;
+          acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
           return acc;
         }, {});
+        
         return {
-          headers: [t.customer, language === 'ar' ? 'عدد الفواتير' : 'Invoices', t.amount],
-          rows: Object.values(customerSales).map((c) => [(c as { name: string; count?: number; total?: number }).name, (c as { name: string; count?: number; total?: number }).count, ((c as { name: string; count?: number; total?: number }).total || 0).toLocaleString()]),
-          total: (salesInvoices as unknown as SalesInvoice[]).reduce((sum, i) => sum + Number(i.total_amount), 0)
+          headers: [t.customer, t.invoices, t.amount],
+          rows: Object.values(byCustomer).map((c: any) => [
+            c.name,
+            c.invoices,
+            formatCurrency(c.total)
+          ]),
+          total: salesInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
-      case 'salesBySalesman': {
-        const salesmanSales = (salesInvoices as unknown as SalesInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-          const name = language === 'ar' ? inv.salesmen?.name_ar || inv.salesmen?.name || '-' : inv.salesmen?.name || '-';
-          if (!acc[name]) acc[name] = { name, count: 0, total: 0 };
-          (acc[name] as { name: string; count?: number; total?: number }).count = ((acc[name] as { name: string; count?: number; total?: number }).count || 0) + 1;
-          (acc[name] as { name: string; count?: number; total?: number }).total = ((acc[name] as { name: string; count?: number; total?: number }).total || 0) + Number(inv.total_amount);
+      case 'salesByRepresentative': {
+        const byRep = salesInvoices.reduce((acc: ReportAccumulator, inv) => {
+          const name = inv.sales_representative.name || (language === 'ar' ? 'بدون مندوب' : 'No Representative');
+          if (!acc[name]) acc[name] = { name, invoices: 0, total: 0 };
+          acc[name].invoices = (acc[name].invoices || 0) + 1;
+          acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
           return acc;
         }, {});
+        
         return {
-          headers: [t.salesman, language === 'ar' ? 'عدد الفواتير' : 'Invoices', t.amount],
-          rows: Object.values(salesmanSales).map((s) => [(s as { name: string; count?: number; total?: number }).name, (s as { name: string; count?: number; total?: number }).count, ((s as { name: string; count?: number; total?: number }).total || 0).toLocaleString()]),
-          total: (salesInvoices as unknown as SalesInvoice[]).reduce((sum, i) => sum + Number(i.total_amount), 0)
+          headers: [t.representative, t.invoices, t.amount],
+          rows: Object.values(byRep).map((r: any) => [
+            r.name,
+            r.invoices,
+            formatCurrency(r.total)
+          ]),
+          total: salesInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
       case 'salesReturns': {
         return {
-          headers: [t.date, t.invoiceNo, t.customer, t.amount, t.status],
-          rows: (salesReturns as unknown as SalesReturn[]).map((ret) => [
-
-            ret.return_date,
+          headers: [t.date, t.returnNo, t.invoiceNo, t.customer, t.amount, t.reason],
+          rows: salesReturns.map((ret) => [
+            format(new Date(ret.created_at), 'yyyy-MM-dd'),
             ret.return_number,
-            language === 'ar' ? ret.customers?.name_ar || ret.customers?.name || '-' : ret.customers?.name || '-',
-            Number(ret.total_amount).toLocaleString(),
-            ret.status
+            ret.invoice_number,
+            ret.customer,
+            formatCurrency(Number(ret.total_amount)),
+            ret.reason || '-'
           ]),
-          total: (salesReturns as unknown as SalesReturn[]).reduce((sum, r) => sum + Number(r.total_amount), 0)
+          total: salesReturns.reduce((sum, ret) => sum + Number(ret.total_amount), 0)
         };
       }
 
       case 'unpaidInvoices': {
-        const unpaid = (salesInvoices as unknown as SalesInvoice[]).filter((inv) => Number(inv.remaining_amount || 0) > 0);
+        // ملاحظة: API بتاعتك معندهاش paid_amount أو remaining_amount
+        // هنستخدم البيانات المتاحة من invoices API لو موجودة
         return {
-          headers: [t.date, t.invoiceNo, t.customer, t.amount, t.paid, t.remaining],
-          rows: unpaid.map((inv) => [
-
-            inv.invoice_date,
+          headers: [t.date, t.invoiceNo, t.customer, t.amount],
+          rows: salesInvoices.map((inv) => [
+            format(new Date(inv.created_at), 'yyyy-MM-dd'),
             inv.invoice_number,
-            language === 'ar' ? inv.customers?.name_ar || inv.customers?.name : inv.customers?.name || '-',
-            Number(inv.total_amount).toLocaleString(),
-            Number(inv.paid_amount || 0).toLocaleString(),
-            Number(inv.remaining_amount || 0).toLocaleString()
+            inv.customer.name,
+            formatCurrency(Number(inv.total_amount))
           ]),
-          total: unpaid.reduce((sum, i) => sum + Number(i.remaining_amount || 0), 0)
+          total: salesInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
-
-      // Purchase Reports
+      // ==================== Purchasing Reports ====================
       case 'purchaseInvoices': {
         return {
-          headers: [t.date, t.invoiceNo, t.supplier, t.amount, t.paid, t.remaining, t.status],
-          rows: (purchaseInvoices as unknown as ReportPurchaseInvoice[]).map((inv) => [
-
+          headers: [t.date, t.invoiceNo, t.supplier, t.amount, t.currency, t.warehouseCol],
+          rows: purchaseInvoices.map((inv) => [
             inv.invoice_date,
             inv.invoice_number,
-            inv.supplier?.name || '-',
-            Number(inv.total_amount).toLocaleString(),
-            Number(inv.paid_amount || 0).toLocaleString(),
-            Number(inv.remaining_amount || 0).toLocaleString(),
-            inv.payment_status || '-'
+            inv.supplier.name || '-',
+            formatCurrency(Number(inv.total_amount)),
+            inv.currency || '-',
+            inv.warehouse
           ]),
-          total: (purchaseInvoices as unknown as ReportPurchaseInvoice[]).reduce((sum, i) => sum + Number(i.total_amount), 0)
+          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
       case 'purchaseBySupplier': {
-        const supplierPurchases = (purchaseInvoices as unknown as ReportPurchaseInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-          const name = language === 'ar' ? inv.supplier?.name_ar || inv.supplier?.name : inv.supplier?.name || 'Unknown';
-          if (!acc[name]) acc[name] = { name, count: 0, total: 0 };
-          (acc[name] as { name: string; count?: number; total?: number }).count = ((acc[name] as { name: string; count?: number; total?: number }).count || 0) + 1;
-          (acc[name] as { name: string; count?: number; total?: number }).total = ((acc[name] as { name: string; count?: number; total?: number }).total || 0) + Number(inv.total_amount);
+        const bySupplier = purchaseInvoices.reduce((acc: ReportAccumulator, inv) => {
+          const name = inv.supplier.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
+          if (!acc[name]) acc[name] = { name, invoices: 0, total: 0 };
+          acc[name].invoices = (acc[name].invoices || 0) + 1;
+          acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
           return acc;
         }, {});
+        
         return {
-          headers: [t.supplier, language === 'ar' ? 'عدد الفواتير' : 'Invoices', t.amount],
-          rows: Object.values(supplierPurchases).map((s) => [(s as { name: string; count?: number; total?: number }).name, (s as { name: string; count?: number; total?: number }).count, ((s as { name: string; count?: number; total?: number }).total || 0).toLocaleString()]),
-          total: (purchaseInvoices as unknown as ReportPurchaseInvoice[]).reduce((sum, i) => sum + Number(i.total_amount), 0)
+          headers: [t.supplier, t.invoices, t.amount],
+          rows: Object.values(bySupplier).map((s: any) => [
+            s.name,
+            s.invoices,
+            formatCurrency(s.total)
+          ]),
+          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
         };
       }
 
       case 'purchaseReturns': {
         return {
-          headers: [t.date, t.invoiceNo, t.supplier, t.amount, t.status],
-          rows: (purchaseReturns as unknown as PurchaseReturn[]).map((ret) => [
-
-            ret.return_date,
+          headers: [t.date, t.returnNo, t.invoiceNo, t.amount, t.reason],
+          rows: purchaseReturns.map((ret) => [
+            format(new Date(ret.created_at), 'yyyy-MM-dd'),
             ret.return_number,
-            language === 'ar' ? ret.supplier?.name_ar || ret.supplier?.name || '-' : ret.supplier?.name || '-',
-            Number(ret.total_amount).toLocaleString(),
-            ret.status
+            ret.invoice_number,
+            formatCurrency(Number(ret.total_amount)),
+            ret.reason || '-'
           ]),
-          total: (purchaseReturns as unknown as PurchaseReturn[]).reduce((sum, r) => sum + Number(r.total_amount), 0)
+          total: purchaseReturns.reduce((sum, ret) => sum + Number(ret.total_amount), 0)
         };
       }
 
       case 'supplierBalances': {
-        const supplierBal = (purchaseInvoices as unknown as ReportPurchaseInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-
-          const name = inv.supplier?.name || 'Unknown';
-          if (!acc[name]) acc[name] = { name, total: 0, paid: 0, remaining: 0 };
-          const totalAmount = Number(inv.total_amount) || 0;
-          const paidAmount = Number(inv.paid_amount || 0);
-          (acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).total = ((acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).total || 0) + totalAmount;
-          (acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).paid = ((acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).paid || 0) + paidAmount;
-          (acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).remaining = ((acc[name] as { name: string; total?: number; paid?: number; remaining?: number }).remaining || 0) + (totalAmount - paidAmount);
+        const balances = purchaseInvoices.reduce((acc: Record<string, number>, inv) => {
+          const name = inv.supplier.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
+          acc[name] = (acc[name] || 0) + Number(inv.total_amount);
           return acc;
         }, {});
-        const supplierBalValues = Object.values(supplierBal) as { name: string; total?: number; paid?: number; remaining?: number }[];
+        
         return {
-          headers: [t.supplier, t.amount, t.paid, t.remaining],
-          rows: supplierBalValues.map((s) => [s.name, (s.total || 0).toLocaleString(), (s.paid || 0).toLocaleString(), (s.remaining || 0).toLocaleString()]),
-          total: supplierBalValues.reduce((sum: number, s) => sum + (s.total || 0), 0),
-          totals: {
-            amount: supplierBalValues.reduce((sum: number, s) => sum + (s.total || 0), 0),
-            paid: supplierBalValues.reduce((sum: number, s) => sum + (s.paid || 0), 0),
-            remaining: supplierBalValues.reduce((sum: number, s) => sum + (s.remaining || 0), 0)
-          }
+          headers: [t.supplier, t.amount],
+          rows: Object.entries(balances).map(([name, total]) => [
+            name,
+            formatCurrency(total)
+          ]),
+          total: Object.values(balances).reduce((sum, val) => sum + val, 0)
         };
-
       }
 
+      case 'returnInvoices': {
+        return {
+          headers: [t.date, t.returnNo, t.invoiceNo, t.amount, t.method, t.reason],
+          rows: returnInvoices.map((ret) => [
+            format(new Date(ret.created_at), 'yyyy-MM-dd HH:mm'),
+            ret.return_number,
+            ret.invoice.invoice_number,
+            formatCurrency(ret.total_amount),
+            ret.refund_method === 'card' ? (language === 'ar' ? 'بطاقة' : 'Card') :
+              ret.refund_method === 'cash' ? (language === 'ar' ? 'نقدي' : 'Cash') :
+              ret.refund_method === 'wallet' ? (language === 'ar' ? 'محفظة' : 'Wallet') : ret.refund_method,
+            ret.reason
+          ]),
+          total: returnInvoices.reduce((sum, ret) => sum + ret.total_amount, 0)
+        };
+      }
 
-      // Inventory Reports
+      // ==================== Inventory Reports ====================
       case 'stockReport': {
         return {
-          headers: [t.sku, t.product, t.category, t.stock, t.minStock, t.cost, t.value],
-          rows: (products as unknown as Product[]).map((p) => [
-
+          headers: [t.sku, t.product, t.category, t.stock, t.price, t.cost, t.value],
+          rows: products.map((p) => [
             p.sku,
-            language === 'ar' ? p.name_ar || p.name : p.name,
-            language === 'ar' ? p.categories?.name_ar || p.categories?.name || '-' : p.categories?.name || '-',
+            p.name,
+            p.category?.name || '-',
             p.stock,
-            p.min_stock || 5,
-            Number(p.cost || 0).toLocaleString(),
-            (p.stock * (p.cost || 0)).toLocaleString()
+            formatCurrency(Number(p.price)),
+            formatCurrency(Number(p.cost)),
+            formatCurrency(p.stock * Number(p.cost))
           ]),
-          total: (products as unknown as Product[]).reduce((sum, p) => sum + (p.stock * (p.cost || 0)), 0)
+          total: products.reduce((sum, p) => sum + (p.stock * Number(p.cost)), 0)
         };
       }
 
       case 'lowStock': {
-        const lowStockItems = (products as unknown as Product[]).filter((p) => p.stock > 0 && p.stock <= (p.min_stock || 5));
+        const lowStock = products.filter(p => p.stock > 0 && p.stock <= p.reorder_level);
         return {
           headers: [t.sku, t.product, t.stock, t.minStock],
-          rows: lowStockItems.map((p) => [
-
+          rows: lowStock.map((p) => [
             p.sku,
-            language === 'ar' ? p.name_ar || p.name : p.name,
+            p.name,
             p.stock,
-            p.min_stock || 5
+            p.reorder_level
           ]),
-          total: lowStockItems.length
+          total: lowStock.length
         };
       }
 
       case 'outOfStock': {
-        const outOfStockItems = (products as unknown as Product[]).filter((p) => p.stock === 0);
+        const outOfStock = products.filter(p => p.stock === 0);
         return {
           headers: [t.sku, t.product, t.category],
-          rows: outOfStockItems.map((p) => [
-
+          rows: outOfStock.map((p) => [
             p.sku,
-            language === 'ar' ? p.name_ar || p.name : p.name,
-            language === 'ar' ? p.categories?.name_ar || p.categories?.name || '-' : p.categories?.name || '-'
+            p.name,
+            p.category?.name || '-'
           ]),
-          total: outOfStockItems.length
-        };
-      }
-
-      case 'stockMovements': {
-        return {
-          headers: [t.date, t.product, t.movement, t.quantity, t.warehouse],
-          rows: (inventoryMovements as unknown as InventoryMovement[]).map((m) => [
-
-            format(new Date(m.created_at), 'yyyy-MM-dd HH:mm'),
-            language === 'ar' ? m.products?.name_ar || m.products?.name : m.products?.name || '-',
-            m.movement_type,
-            m.quantity,
-            language === 'ar' ? m.warehouses?.name_ar || m.warehouses?.name || '-' : m.warehouses?.name || '-'
-          ]),
-          total: inventoryMovements.length
+          total: outOfStock.length
         };
       }
 
       case 'stockValuation': {
-        const byCategory = (products as unknown as Product[]).reduce((acc: ReportAccumulator, p) => {
-          const cat = language === 'ar' ? p.categories?.name_ar || p.categories?.name || 'غير مصنف' : p.categories?.name || 'Uncategorized';
+        const byCategory = products.reduce((acc: ReportAccumulator, p) => {
+          const cat = p.category?.name || (language === 'ar' ? 'غير مصنف' : 'Uncategorized');
           if (!acc[cat]) acc[cat] = { name: cat, count: 0, stock: 0, value: 0 };
-          (acc[cat] as { name: string; count?: number; stock?: number; value?: number }).count = ((acc[cat] as { name: string; count?: number; stock?: number; value?: number }).count || 0) + 1;
-          (acc[cat] as { name: string; count?: number; stock?: number; value?: number }).stock = ((acc[cat] as { name: string; count?: number; stock?: number; value?: number }).stock || 0) + p.stock;
-          (acc[cat] as { name: string; count?: number; stock?: number; value?: number }).value = ((acc[cat] as { name: string; count?: number; stock?: number; value?: number }).value || 0) + p.stock * (p.cost || 0);
+          acc[cat].count = (acc[cat].count || 0) + 1;
+          acc[cat].stock = (acc[cat].stock || 0) + p.stock;
+          acc[cat].value = (acc[cat].value || 0) + (p.stock * Number(p.cost));
           return acc;
         }, {});
+        
         return {
-          headers: [t.category, language === 'ar' ? 'عدد المنتجات' : 'Products', t.stock, t.value],
-          rows: Object.values(byCategory).map((c) => [(c as { name: string; count?: number; stock?: number; value?: number }).name, (c as { name: string; count?: number; stock?: number; value?: number }).count, (c as { name: string; count?: number; stock?: number; value?: number }).stock, ((c as { name: string; count?: number; stock?: number; value?: number }).value || 0).toLocaleString()]),
-          total: (products as unknown as Product[]).reduce((sum, p) => sum + (p.stock * (p.cost || 0)), 0)
+          headers: [t.category, t.products, t.stock, t.value],
+          rows: Object.values(byCategory).map((c: any) => [
+            c.name,
+            c.count,
+            c.stock,
+            formatCurrency(c.value)
+          ]),
+          total: products.reduce((sum, p) => sum + (p.stock * Number(p.cost)), 0)
         };
       }
 
-
-      // Finance Reports
+      // ==================== Finance Reports ====================
       case 'expenseReport': {
+        const expenses = finances.filter(f => f.category === 'expense' || f.amount.startsWith('-'));
         return {
-          headers: [t.date, t.category, t.description, t.amount],
-          rows: (expenses as unknown as Expense[]).map((e) => [
-
-            e.expense_date,
-            e.category,
-            e.description || '-',
-            Number(e.amount).toLocaleString()
+          headers: [t.date, t.category, t.description, t.amount, t.method],
+          rows: expenses.map((f) => [
+            f.date,
+            f.category,
+            f.description,
+            f.formatted_amount,
+            f.payment_method_arabic
           ]),
-          total: (expenses as unknown as Expense[]).reduce((sum, e) => sum + Number(e.amount), 0)
+          total: expenses.reduce((sum, f) => sum + Number(f.amount), 0)
         };
       }
 
-      case 'revenueReport': {
-        return {
-          headers: [t.date, t.category, t.description, t.amount],
-          rows: (revenues as unknown as Revenue[]).map((r) => [
-            r.revenue_date,
-            r.category,
-            r.description || '-',
-            Number(r.amount).toLocaleString()
-          ]),
-          total: (revenues as unknown as Revenue[]).reduce((sum, r) => sum + Number(r.amount), 0)
-        };
-      }
-
-      case 'profitLoss': {
-        const totalRev = revenues.reduce((sum, r: Revenue) => sum + Number(r.amount), 0);
-        const totalExp = expenses.reduce((sum, e: Expense) => sum + Number(e.amount), 0);
-        const totalSalesAmount = salesData.reduce((sum, s: Sale) => sum + Number(s.total_amount), 0);
-        return {
-          headers: [language === 'ar' ? 'البند' : 'Item', t.amount],
-          rows: [
-            [language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales', totalSalesAmount.toLocaleString()],
-            [language === 'ar' ? 'إجمالي الإيرادات الأخرى' : 'Other Revenues', totalRev.toLocaleString()],
-            [language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses', `(${totalExp.toLocaleString()})`],
-            [language === 'ar' ? 'صافي الربح' : 'Net Profit', (totalSalesAmount + totalRev - totalExp).toLocaleString()]
-          ],
-          total: totalSalesAmount + totalRev - totalExp
-        };
-      }
       case 'treasuryBalance': {
         return {
-          headers: [t.name, t.branch, t.balance],
-          rows: treasuries.map((tr: Treasury) => [
-
-            language === 'ar' ? tr.name_ar || tr.name : tr.name,
-            language === 'ar' ? tr.branches?.name_ar || tr.branches?.name || '-' : tr.branches?.name || '-',
-            Number(tr.balance || 0).toLocaleString()
+          headers: [t.name, t.code, t.branch, t.balance, t.currency],
+          rows: treasuries.map((t) => [
+            t.name,
+            t.code,
+            t.branch.name,
+            formatCurrency(t.balance),
+            t.currency
           ]),
-          total: treasuries.reduce((sum, t: Treasury) => sum + Number(t.balance || 0), 0)
+          total: treasuries.reduce((sum, tr) => sum + tr.balance, 0)
         };
       }
-      case 'bankBalance': {
+
+      case 'financeReport': {
         return {
-          headers: [t.name, t.branch, t.balance],
-          rows: banks.map((b: Bank) => [
-
-            language === 'ar' ? b.name_ar || b.name : b.name,
-            language === 'ar' ? b.branches?.name_ar || b.branches?.name || '-' : b.branches?.name || '-',
-            Number(b.balance || 0).toLocaleString()
+          headers: [t.date, t.category, t.description, t.amount, t.method, t.reference],
+          rows: finances.map((f) => [
+            f.date,
+            f.category,
+            f.description,
+            f.formatted_amount,
+            f.payment_method_arabic,
+            f.reference_number
           ]),
-          total: banks.reduce((sum, b: Bank) => sum + Number(b.balance || 0), 0)
-        };
-      }
-      case 'treasuryTransactions': {
-        return {
-          headers: [t.date, t.name, t.type, t.amount, t.balance, t.description],
-          rows: treasuryTransactions.map((tx: TreasuryTransaction) => [
-
-            format(new Date(tx.transaction_date), 'yyyy-MM-dd HH:mm'),
-            language === 'ar' ? tx.treasuries?.name_ar || tx.treasuries?.name : tx.treasuries?.name || '-',
-            tx.transaction_type,
-            Number(tx.amount).toLocaleString(),
-            Number(tx.balance_after || 0).toLocaleString(),
-            tx.description || '-'
-          ]),
-          total: treasuryTransactions.length
-        };
-      }
-      case 'bankTransactions': {
-        return {
-          headers: [t.date, t.name, t.type, t.amount, t.balance, t.description],
-          rows: bankTransactions.map((tx: BankTransaction) => [
-
-            format(new Date(tx.transaction_date), 'yyyy-MM-dd HH:mm'),
-            language === 'ar' ? tx.banks?.name_ar || tx.banks?.name : tx.banks?.name || '-',
-            tx.transaction_type,
-            Number(tx.amount).toLocaleString(),
-            Number(tx.balance_after || 0).toLocaleString(),
-            tx.description || '-'
-          ]),
-          total: bankTransactions.length
+          total: finances.reduce((sum, f) => sum + Number(f.amount), 0)
         };
       }
 
-      // CRM Reports
+      // ==================== CRM Reports ====================
       case 'customerList': {
         return {
-          headers: [t.name, t.phone, t.email, language === 'ar' ? 'إجمالي المشتريات' : 'Total Purchases'],
-          rows: customers.map((c: Customer) => [
-
-            language === 'ar' ? c.name_ar || c.name : c.name,
-            c.phone || '-',
+          headers: [t.name, t.phone, t.email, 'نقاط', t.amount],
+          rows: customers.map((c) => [
+            c.name,
+            c.phone,
             c.email || '-',
-            Number(c.total_purchases || 0).toLocaleString()
+            c.point || 0,
+            formatCurrency(c.last_paid_amount || 0)
           ]),
           total: customers.length
         };
       }
-      case 'topCustomers': {
-        const sorted = [...customers].sort((a: Customer, b: Customer) => Number(b.total_purchases || 0) - Number(a.total_purchases || 0)).slice(0, 20);
-        return {
-          headers: [t.name, t.phone, language === 'ar' ? 'إجمالي المشتريات' : 'Total Purchases'],
-          rows: sorted.map((c: Customer) => [
 
-            language === 'ar' ? c.name_ar || c.name : c.name,
-            c.phone || '-',
-            Number(c.total_purchases || 0).toLocaleString()
-          ]),
-          total: sorted.reduce((sum, c: Customer) => sum + Number(c.total_purchases || 0), 0)
-        };
-      }
-      case 'customerBalances': {
-        const customerBal = (salesInvoices as unknown as SalesInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-          const name = language === 'ar' ? inv.customers?.name_ar || inv.customers?.name : inv.customers?.name || 'Unknown';
-          if (!acc[name]) acc[name] = { name, total: 0, paid: 0, remaining: 0 };
-          acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
-          acc[name].paid = (acc[name].paid || 0) + Number(inv.paid_amount || 0);
-          acc[name].remaining = (acc[name].remaining || 0) + Number(inv.remaining_amount || 0);
+      case 'topCustomers': {
+        const customerTotals = salesInvoices.reduce((acc: Record<string, number>, inv) => {
+          const name = inv.customer.name;
+          acc[name] = (acc[name] || 0) + Number(inv.total_amount);
           return acc;
         }, {});
-        const balances = Object.values(customerBal).filter((c) => (c.remaining || 0) > 0) as { name: string; total?: number; paid?: number; remaining?: number }[];
+        
+        const topCustomers = Object.entries(customerTotals)
+          .map(([name, total]) => ({ name, total }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 20);
+        
         return {
-          headers: [t.customer, t.amount, t.paid, t.remaining],
-          rows: balances.map((c) => [c.name || '', (c.total || 0).toLocaleString(), (c.paid || 0).toLocaleString(), (c.remaining || 0).toLocaleString()]),
-          total: balances.reduce((sum: number, c) => sum + (c.remaining || 0), 0)
+          headers: [t.customer, t.amount],
+          rows: topCustomers.map((c) => [
+            c.name,
+            formatCurrency(c.total)
+          ]),
+          total: topCustomers.reduce((sum, c) => sum + c.total, 0)
         };
-
       }
 
+      case 'customerBalances': {
+        // API معندهاش المتبقي، هنستخدم total amount
+        const balances = salesInvoices.reduce((acc: Record<string, number>, inv) => {
+          const name = inv.customer.name;
+          acc[name] = (acc[name] || 0) + Number(inv.total_amount);
+          return acc;
+        }, {});
+        
+        return {
+          headers: [t.customer, t.amount],
+          rows: Object.entries(balances).map(([name, total]) => [
+            name,
+            formatCurrency(total)
+          ]),
+          total: Object.values(balances).reduce((sum, val) => sum + val, 0)
+        };
+      }
 
+      case 'supplierList': {
+        return {
+          headers: [t.name, t.phone, t.email, t.amount, 'شروط الدفع'],
+          rows: suppliers.map((s) => [
+            s.name,
+            s.phone,
+            s.contact_person,
+            formatCurrency(Number(s.credit_limit)),
+            s.payment_terms
+          ]),
+          total: suppliers.length
+        };
+      }
 
-
-      // HR Reports
+      // ==================== HR Reports ====================
       case 'employeeList': {
         return {
-          headers: [language === 'ar' ? 'الكود' : 'Code', t.name, t.department, t.position, t.phone],
-          rows: employees.map((e: Employee) => [
-            e.employee_code,
-            language === 'ar' ? e.name_ar || e.name : e.name,
+          headers: [t.name, t.position, t.department, t.phone, t.email, t.salary],
+          rows: employees.map((e) => [
+            e.name,
+            e.position,
             e.department || '-',
-            e.position || '-',
-            e.phone || '-'
+            e.phone,
+            e.email,
+            formatCurrency(Number(e.salary))
           ]),
-          total: employees.length
+          total: employees.reduce((sum, e) => sum + Number(e.salary), 0)
         };
       }
-      case 'employeeByDept': {
-        const byDept = (employees as unknown as Employee[]).reduce((acc: ReportAccumulator, e) => {
-          const dept = e.department || (language === 'ar' ? 'بدون قسم' : 'No Department');
-          if (!acc[dept]) acc[dept] = { name: dept, count: 0 };
-          acc[dept].count = (acc[dept].count || 0) + 1;
-          return acc;
-        }, {});
-        return {
-          headers: [t.department, language === 'ar' ? 'عدد الموظفين' : 'Employees'],
-          rows: (Object.values(byDept) as { name: string; count?: number }[]).map((d) => [d.name, d.count]),
-          total: employees.length
-        };
-
-      }
-
 
       case 'attendanceReport': {
         return {
-          headers: [
-            language === 'ar' ? 'التاريخ' : 'Date',
-            language === 'ar' ? 'الكود' : 'Code',
-            language === 'ar' ? 'الموظف' : 'Employee',
-            language === 'ar' ? 'الحضور' : 'Check In',
-            language === 'ar' ? 'الانصراف' : 'Check Out',
-            language === 'ar' ? 'الحالة' : 'Status',
-            language === 'ar' ? 'ملاحظات' : 'Notes'
-          ],
-          rows: attendance.map((a: Attendance) => [
+          headers: [t.date, t.name, t.checkIn, t.checkOut, t.status],
+          rows: attendance.map((a) => [
             a.date,
-            a.employees?.employee_code || '-',
-            language === 'ar' ? a.employees?.name_ar || a.employees?.name : a.employees?.name || '-',
+            a.employee.name || '-',
             a.check_in || '-',
             a.check_out || '-',
             a.status === 'present' ? (language === 'ar' ? 'حاضر' : 'Present') :
               a.status === 'absent' ? (language === 'ar' ? 'غائب' : 'Absent') :
-                a.status === 'late' ? (language === 'ar' ? 'متأخر' : 'Late') :
-                  a.status === 'leave' ? (language === 'ar' ? 'إجازة' : 'Leave') : a.status,
-            a.notes || '-'
+              a.status === 'late' ? (language === 'ar' ? 'متأخر' : 'Late') :
+              a.status === 'leave' ? (language === 'ar' ? 'إجازة' : 'Leave') : a.status
           ]),
           total: attendance.length
         };
       }
 
       case 'attendanceSummary': {
-        const attendanceSummary = (attendance as unknown as Attendance[]).reduce((acc: ReportAccumulator, a) => {
-          const empName = language === 'ar' ? a.employees?.name_ar || a.employees?.name : a.employees?.name || 'Unknown';
-          const code = a.employees?.employee_code || '-';
-          const key = code;
-          if (!acc[key]) acc[key] = { name: empName, code, present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-          acc[key].total = (acc[key].total || 0) + 1;
-          if (a.status === 'present') acc[key].present = (acc[key].present || 0) + 1;
-          else if (a.status === 'absent') acc[key].absent = (acc[key].absent || 0) + 1;
-          else if (a.status === 'late') acc[key].late = (acc[key].late || 0) + 1;
-          else if (a.status === 'leave') acc[key].leave = (acc[key].leave || 0) + 1;
+        const summary = attendance.reduce((acc: Record<string, any>, a) => {
+          const name = a.employee.name || '-';
+          if (!acc[name]) {
+            acc[name] = { name, present: 0, absent: 0, late: 0, leave: 0 };
+          }
+          acc[name][a.status] = (acc[name][a.status] || 0) + 1;
           return acc;
         }, {});
+        
         return {
-          headers: [
-            language === 'ar' ? 'الكود' : 'Code',
-            language === 'ar' ? 'الموظف' : 'Employee',
-            language === 'ar' ? 'حاضر' : 'Present',
-            language === 'ar' ? 'غائب' : 'Absent',
-            language === 'ar' ? 'متأخر' : 'Late',
-            language === 'ar' ? 'إجازة' : 'Leave',
-            language === 'ar' ? 'الإجمالي' : 'Total'
-          ],
-          rows: (Object.values(attendanceSummary) as { code?: string; name: string; present?: number; absent?: number; late?: number; leave?: number; total?: number }[]).map((s) => [
-            s.code, s.name, s.present, s.absent, s.late, s.leave, s.total
+          headers: [t.name, t.present, t.absent, t.late, t.leave],
+          rows: Object.values(summary).map((s: any) => [
+            s.name,
+            s.present || 0,
+            s.absent || 0,
+            s.late || 0,
+            s.leave || 0
           ]),
-          total: Object.keys(attendanceSummary).length
+          total: attendance.length
         };
-
       }
 
-
-      case 'payrollReport': {
-        const activeEmployees = employees.filter((e: Employee) => e.is_active);
+      case 'salesRepresentatives': {
         return {
-          headers: [
-            language === 'ar' ? 'الكود' : 'Code',
-            language === 'ar' ? 'الموظف' : 'Employee',
-            language === 'ar' ? 'القسم' : 'Department',
-            language === 'ar' ? 'المنصب' : 'Position',
-            language === 'ar' ? 'الراتب' : 'Salary'
-          ],
-          rows: activeEmployees.map((e: Employee) => [
-            e.employee_code,
-            language === 'ar' ? e.name_ar || e.name : e.name,
-            e.department || '-',
-            e.position || '-',
-            Number(e.salary || 0).toLocaleString()
+          headers: [t.name, t.phone, t.email, t.commission, t.branch],
+          rows: salesRepresentatives.map((r) => [
+            r.name,
+            r.phone,
+            r.email,
+            `${r.commission_rate}%`,
+            r.branch_name
           ]),
-          total: activeEmployees.reduce((sum: number, e: Employee) => sum + Number(e.salary || 0), 0)
+          total: salesRepresentatives.length
+        };
+      }
+
+      case 'deliveryMen': {
+        return {
+          headers: [t.name, t.phone, t.type, t.number],
+          rows: deliveryMen.map((d) => [
+            d.name,
+            d.phone,
+            d.vehicle_type,
+            d.vehicle_number
+          ]),
+          total: deliveryMen.length
         };
       }
 
       case 'salesCommissions': {
-        // Calculate commissions from sales invoices by salesman
-        const commissionsByMan = (salesInvoices as unknown as SalesInvoice[]).reduce((acc: ReportAccumulator, inv) => {
-          const salesman = language === 'ar'
-            ? inv.salesmen?.name_ar || inv.salesmen?.name || (language === 'ar' ? 'بدون مندوب' : 'No Salesman')
-            : inv.salesmen?.name || 'No Salesman';
-          if (!acc[salesman]) acc[salesman] = { name: salesman, invoices: 0, sales: 0, commission: 0 };
-          acc[salesman].invoices = (acc[salesman].invoices || 0) + 1;
-          acc[salesman].sales = (acc[salesman].sales || 0) + Number(inv.total_amount || 0);
-          // Assuming 2% commission rate - this could be configurable
-          acc[salesman].commission = (acc[salesman].commission || 0) + Number(inv.total_amount || 0) * 0.02;
+        const commissions = salesInvoices.reduce((acc: ReportAccumulator, inv) => {
+          const repName = inv.sales_representative.name || (language === 'ar' ? 'بدون مندوب' : 'No Rep');
+          if (!acc[repName]) acc[repName] = { name: repName, sales: 0, commission: 0 };
+          
+          // البحث عن نسبة العمولة من قائمة المندوبين
+          const rep = salesRepresentatives.find(r => r.name === inv.sales_representative.name);
+          const rate = rep ? Number(rep.commission_rate) / 100 : 0.02; // 2% افتراضي
+          
+          acc[repName].sales = (acc[repName].sales || 0) + Number(inv.total_amount);
+          acc[repName].commission = (acc[repName].commission || 0) + (Number(inv.total_amount) * rate);
           return acc;
         }, {});
+        
         return {
-          headers: [
-            language === 'ar' ? 'المندوب' : 'Salesman',
-            language === 'ar' ? 'عدد الفواتير' : 'Invoices',
-            language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
-            language === 'ar' ? 'العمولة (2%)' : 'Commission (2%)'
-          ],
-          rows: (Object.values(commissionsByMan) as { name: string; invoices?: number; sales?: number; commission?: number }[]).map((s) => [
-            s.name,
-            s.invoices,
-            (s.sales || 0).toLocaleString(),
-            (s.commission || 0).toLocaleString()
+          headers: [t.representative, t.sales, t.commission],
+          rows: Object.values(commissions).map((c: any) => [
+            c.name,
+            formatCurrency(c.sales),
+            formatCurrency(c.commission)
           ]),
-          total: (Object.values(commissionsByMan) as { name: string; invoices?: number; sales?: number; commission?: number }[]).reduce((sum: number, s) => sum + (s.commission || 0), 0)
-        };
-
-      }
-
-
-      case 'deliveryReport': {
-        return {
-          headers: [
-            language === 'ar' ? 'الاسم' : 'Name',
-            language === 'ar' ? 'الهاتف' : 'Phone',
-            language === 'ar' ? 'نوع المركبة' : 'Vehicle Type',
-            language === 'ar' ? 'رقم المركبة' : 'Vehicle Number',
-            language === 'ar' ? 'الحالة' : 'Status',
-            language === 'ar' ? 'متاح' : 'Available'
-          ],
-          rows: deliveryPersons.map((d: DeliveryPerson) => [
-            language === 'ar' ? d.name_ar || d.name : d.name,
-            d.phone || '-',
-            d.vehicle_type || '-',
-            d.vehicle_number || '-',
-            d.is_active ? (language === 'ar' ? 'نشط' : 'Active') : (language === 'ar' ? 'غير نشط' : 'Inactive'),
-            d.is_available ? (language === 'ar' ? 'متاح' : 'Yes') : (language === 'ar' ? 'غير متاح' : 'No')
-          ]),
-          total: deliveryPersons.length
+          total: Object.values(commissions).reduce((sum: number, c: any) => sum + c.commission, 0)
         };
       }
-
 
       default:
-        return { headers: [], rows: [], total: 0 };
+        return null;
     }
   };
 
   const handlePrint = () => {
     const reportData = getReportData();
     const reportDef = reportsByModule[activeModule]?.find(r => r.id === selectedReport);
+    if (!reportData || !reportDef) return;
 
     const printWindow = window.open('', '', 'height=800,width=1000');
     if (printWindow) {
       printWindow.document.write(`
         <html>
         <head>
-          <title>${reportDef?.name || 'Report'}</title>
+          <title>${reportDef.name}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; direction: ${direction}; }
             h1 { font-size: 18px; margin-bottom: 5px; }
@@ -1643,7 +1099,7 @@ const ReadyReports = () => {
           </style>
         </head>
         <body>
-          <h1>${reportDef?.name || 'Report'}</h1>
+          <h1>${reportDef.name}</h1>
           <div class="subtitle">${t.dateFrom}: ${dateFrom} ${timeFrom} - ${t.dateTo}: ${dateTo} ${timeTo}</div>
           <table>
             <thead>
@@ -1653,7 +1109,7 @@ const ReadyReports = () => {
               ${reportData.rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}
               <tr class="total">
                 <td colspan="${reportData.headers.length - 1}">${t.total}</td>
-                <td>${typeof reportData.total === 'number' ? reportData.total.toLocaleString() : reportData.total}</td>
+                <td>${typeof reportData.total === 'number' ? formatCurrency(reportData.total) : reportData.total}</td>
               </tr>
             </tbody>
           </table>
@@ -1668,18 +1124,19 @@ const ReadyReports = () => {
   const handleExportExcel = () => {
     const reportData = getReportData();
     const reportDef = reportsByModule[activeModule]?.find(r => r.id === selectedReport);
+    if (!reportData || !reportDef) return;
 
     const ws = XLSX.utils.aoa_to_sheet([
       reportData.headers,
       ...reportData.rows,
-      [t.total, ...Array(reportData.headers.length - 2).fill(''), reportData.total]
-    ] as unknown as unknown[][]);
+      [t.total, ...Array(reportData.headers.length - 2).fill(''), 
+       typeof reportData.total === 'number' ? reportData.total : reportData.total]
+    ]);
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, reportDef?.name || 'Report');
+    XLSX.utils.book_append_sheet(wb, ws, reportDef.name);
     XLSX.writeFile(wb, `${selectedReport}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
-
 
   const currentReports = reportsByModule[activeModule] || [];
   const reportData = selectedReport ? getReportData() : null;
@@ -1731,7 +1188,7 @@ const ReadyReports = () => {
             <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
             <div className="flex items-center gap-2">
-              <Building2 size={16} className="text-muted-foreground" />
+              <Store size={16} className="text-muted-foreground" />
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                 <SelectTrigger className="w-[140px] h-9">
                   <SelectValue placeholder={t.allBranches} />
@@ -1739,9 +1196,8 @@ const ReadyReports = () => {
                 <SelectContent>
                   <SelectItem value="all">{t.allBranches}</SelectItem>
                   {branches.map((b: Branch) => (
-
-                    <SelectItem key={b.id} value={b.id}>
-                      {language === 'ar' ? b.name_ar || b.name : b.name}
+                    <SelectItem key={b.id} value={b.id.toString()}>
+                      {language === 'ar' ? b.name : b.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1756,10 +1212,9 @@ const ReadyReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allWarehouses}</SelectItem>
-                  {warehouses.map((w: Warehouse) => (
-
-                    <SelectItem key={w.id} value={w.id}>
-                      {language === 'ar' ? w.name_ar || w.name : w.name}
+                  {warehouses.map((w: WarehouseType) => (
+                    <SelectItem key={w.id} value={w.id.toString()}>
+                      {language === 'ar' ? w.name : w.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1774,8 +1229,7 @@ const ReadyReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t.allUsers}</SelectItem>
-                  {users.map((u: User) => (
-
+                  {users.map((u: UserType) => (
                     <SelectItem key={u.id} value={u.id}>
                       {language === 'ar' ? u.full_name_ar || u.full_name : u.full_name || u.email}
                     </SelectItem>
@@ -1817,10 +1271,11 @@ const ReadyReports = () => {
                   <button
                     key={report.id}
                     onClick={() => setSelectedReport(report.id)}
-                    className={`w-full p-3 rounded-lg text-start transition-colors ${selectedReport === report.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted'
-                      }`}
+                    className={`w-full p-3 rounded-lg text-start transition-colors ${
+                      selectedReport === report.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className={selectedReport === report.id ? 'text-primary-foreground' : 'text-muted-foreground'}>
@@ -1828,7 +1283,9 @@ const ReadyReports = () => {
                       </span>
                       <div>
                         <p className="font-medium text-sm">{report.name}</p>
-                        <p className={`text-xs ${selectedReport === report.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        <p className={`text-xs ${
+                          selectedReport === report.id ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                        }`}>
                           {report.description}
                         </p>
                       </div>
@@ -1853,8 +1310,11 @@ const ReadyReports = () => {
               {selectedReport && (
                 <p className="text-xs text-muted-foreground mt-1">
                   {t.dateFrom}: {dateFrom} {timeFrom} - {t.dateTo}: {dateTo} {timeTo}
-                  {selectedBranch !== 'all' && ` | ${t.branch}: ${branches.find((b: Branch) => b.id === selectedBranch)?.[language === 'ar' ? 'name_ar' : 'name'] || branches.find((b: Branch) => b.id === selectedBranch)?.name}`}
-
+                  {selectedBranch !== 'all' && ` | ${t.branch}: ${
+                    branches.find((b: Branch) => b.id.toString() === selectedBranch)?.[
+                      language === 'ar' ? 'name' : 'name'
+                    ]
+                  }`}
                 </p>
               )}
             </div>
@@ -1879,21 +1339,25 @@ const ReadyReports = () => {
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Eye size={48} className="mb-3 opacity-50" />
                 <p className="text-lg font-medium">{t.selectReport}</p>
-                <p className="text-sm mt-1">{language === 'ar' ? 'اختر تقريراً لعرضه مباشرة هنا' : 'Choose a report to preview it here'}</p>
+                <p className="text-sm mt-1">
+                  {language === 'ar' ? 'اختر تقريراً لعرضه مباشرة هنا' : 'Choose a report to preview it here'}
+                </p>
               </div>
-            ) : reportData && reportData.rows.length === 0 ? (
+            ) : !reportData || reportData.rows.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Package size={48} className="mb-3 opacity-50" />
                 <p>{t.noData}</p>
-                <p className="text-sm mt-1">{language === 'ar' ? 'جرب تغيير الفترة الزمنية أو الفلاتر' : 'Try changing the date range or filters'}</p>
+                <p className="text-sm mt-1">
+                  {language === 'ar' ? 'جرب تغيير الفترة الزمنية أو الفلاتر' : 'Try changing the date range or filters'}
+                </p>
               </div>
-            ) : reportData && (
+            ) : (
               <div className="space-y-3">
                 {/* Company Header - shown for print */}
                 <div className="print:block hidden">
                   <CompanyHeader
                     variant="print"
-                    branchId={selectedBranch !== 'all' ? selectedBranch : undefined}
+                    branchId={selectedBranch !== 'all' ? parseInt(selectedBranch) : undefined}
                     showBranch={selectedBranch !== 'all'}
                   />
                   <div className="text-center mb-4">
@@ -1915,7 +1379,9 @@ const ReadyReports = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-sm">{t.total}:</span>
                     <Badge variant="default">
-                      {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
+                      {typeof reportData.total === 'number' 
+                        ? formatCurrency(reportData.total)
+                        : String(reportData.total ?? '')}
                     </Badge>
                   </div>
                 </div>
@@ -1926,7 +1392,7 @@ const ReadyReports = () => {
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow className="bg-muted/50">
                         {reportData.headers.map((header, i) => (
-                          <TableHead key={i} className="font-semibold">{header}</TableHead>
+                          <TableHead key={i} className="font-semibold whitespace-nowrap">{header}</TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
@@ -1934,14 +1400,16 @@ const ReadyReports = () => {
                       {reportData.rows.map((row, i) => (
                         <TableRow key={i} className="hover:bg-muted/30">
                           {row.map((cell, j) => (
-                            <TableCell key={j}>{String(cell ?? '')}</TableCell>
+                            <TableCell key={j} className="whitespace-nowrap">{String(cell ?? '')}</TableCell>
                           ))}
                         </TableRow>
                       ))}
                       <TableRow className="bg-primary/5 font-semibold sticky bottom-0">
                         <TableCell colSpan={reportData.headers.length - 1}>{t.total}</TableCell>
-                        <TableCell className="text-primary font-bold">
-                          {typeof reportData.total === 'number' ? reportData.total.toLocaleString() : String(reportData.total ?? '')}
+                        <TableCell className="text-primary font-bold whitespace-nowrap">
+                          {typeof reportData.total === 'number' 
+                            ? formatCurrency(reportData.total)
+                            : String(reportData.total ?? '')}
                         </TableCell>
                       </TableRow>
                     </TableBody>

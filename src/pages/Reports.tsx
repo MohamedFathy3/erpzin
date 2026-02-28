@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,17 +13,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { 
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
+  BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  RadialBarChart, RadialBar, ComposedChart
+  RadialBarChart, RadialBar
 } from 'recharts';
 import { 
   Download, 
   Printer, 
   FileSpreadsheet, 
-  FileText,
   TrendingUp,
   TrendingDown,
   Package,
@@ -40,27 +39,264 @@ import {
   ShoppingCart,
   CreditCard,
   Landmark,
-  RefreshCw,
   ClipboardList,
   Target,
   Zap,
-  Award,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   Filter,
-  Search,
-  Eye,
   LayoutGrid,
   List,
-  ChevronRight
+  ChevronRight,
+  Receipt,
+  Truck
 } from 'lucide-react';
-import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import ReadyReports from '@/components/reports/ReadyReports';
 import ProfitLossReport from '@/components/reports/ProfitLossReport';
 import SalesAnalysisReport from '@/components/reports/SalesAnalysisReport';
 import CustomerSupplierMovement from '@/components/reports/CustomerSupplierMovement';
+
+// ==================== Types ====================
+interface Branch {
+  id: number;
+  name: string;
+  code: string;
+  phone: string;
+  address: string;
+  manager: string;
+  active: boolean;
+  main_branch: boolean;
+  image: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface BranchResponse {
+  data: Branch[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface SalesInvoice {
+  id: number;
+  invoice_number: string;
+  customer: {
+    id: number;
+    name: string;
+  };
+  sales_representative: {
+    id: number | null;
+    name: string | null;
+  };
+  branch: string;
+  warehouse: string;
+  currency: string | null;
+  tax: string | null;
+  payment_method: string;
+  due_date: string | null;
+  note: string | null;
+  total_amount: string;
+  items: any[];
+  created_at: string;
+}
+
+interface SalesInvoiceResponse {
+  data: SalesInvoice[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface PurchaseInvoice {
+  id: number;
+  invoice_number: string;
+  supplier: {
+    id: number | null;
+    name: string | null;
+  };
+  branch: string;
+  warehouse: string;
+  currency: string | null;
+  tax: string | null;
+  invoice_date: string;
+  due_date: string | null;
+  payment_method: string;
+  note: string | null;
+  subtotal: string;
+  discount_total: string;
+  tax_total: string;
+  total_amount: string;
+  items: any[];
+  created_at: string;
+}
+
+interface PurchaseInvoiceResponse {
+  data: PurchaseInvoice[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Customer {
+  id: number;
+  name: string;
+  address: string;
+  email: string | null;
+  phone: string;
+  point: number | null;
+  last_paid_amount: number | null;
+}
+
+interface CustomerResponse {
+  data: Customer[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Product {
+  id: number;
+  name: string;
+  description: string;
+  sku: string;
+  barcode: string;
+  stock: number;
+  reorder_level: number;
+  price: string;
+  cost: string;
+  active: boolean;
+  category: {
+    id: number;
+    name: string;
+  } | null;
+  units: any[];
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProductResponse {
+  data: Product[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Finance {
+  id: number;
+  category: string;
+  amount: string;
+  description: string;
+  date: string;
+  payment_method: string;
+  payment_method_arabic: string;
+}
+
+interface FinanceResponse {
+  data: Finance[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Treasury {
+  id: number;
+  name: string;
+  code: string;
+  branch_id: number;
+  branch: Branch;
+  balance: number;
+  currency: string;
+  is_main: boolean;
+  notes: string;
+  created_at: string;
+}
+
+interface TreasuryResponse {
+  data: Treasury[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Bank {
+  id: number;
+  name: string;
+  code: string;
+  branch_id: number;
+  branch: Branch;
+  balance: number;
+  currency: string;
+  is_main: boolean;
+  notes: string;
+  created_at: string;
+}
+
+interface BankResponse {
+  data: Bank[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Shift {
+  id: number;
+  shift_number: string;
+  branch_id: number;
+  user_id: number;
+  opened_at: string;
+  closed_at: string | null;
+  opening_amount: number;
+  closing_amount: number | null;
+  total_sales: number;
+  status: string;
+}
+
+interface ShiftResponse {
+  data: Shift[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface ChartDataPoint {
+  date: string;
+  sales: number;
+  orders: number;
+}
+
+interface CategoryStock {
+  name: string;
+  stock: number;
+  value: number;
+}
+
+interface ExpenseCategory {
+  name: string;
+  value: number;
+}
 
 const Reports = () => {
   const { language, direction } = useLanguage();
@@ -73,255 +309,498 @@ const Reports = () => {
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const getDateRange = () => {
+  // ==================== Date Range Helper ====================
+  const getDateRange = useMemo(() => {
     const now = new Date();
     switch (dateRange) {
-      case 'today': return { start: startOfDay(now), end: endOfDay(now) };
-      case 'week': return { start: subWeeks(now, 1), end: now };
-      case 'month': return { start: subMonths(now, 1), end: now };
-      case 'quarter': return { start: subQuarters(now, 1), end: now };
-      case 'year': return { start: subYears(now, 1), end: now };
-      case 'custom': return { start: new Date(startDate), end: new Date(endDate) };
-      default: return { start: subMonths(now, 1), end: now };
+      case 'today': 
+        return { 
+          start: startOfDay(now), 
+          end: endOfDay(now) 
+        };
+      case 'week': 
+        return { 
+          start: subDays(now, 7), 
+          end: now 
+        };
+      case 'month': 
+        return { 
+          start: subMonths(now, 1), 
+          end: now 
+        };
+      case 'quarter': 
+        return { 
+          start: subQuarters(now, 1), 
+          end: now 
+        };
+      case 'year': 
+        return { 
+          start: subYears(now, 1), 
+          end: now 
+        };
+      case 'custom': 
+        return { 
+          start: new Date(startDate), 
+          end: new Date(endDate) 
+        };
+      default: 
+        return { 
+          start: subMonths(now, 1), 
+          end: now 
+        };
     }
-  };
+  }, [dateRange, startDate, endDate]);
 
-  const range = getDateRange();
+  const range = getDateRange;
 
-  // Fetch all data
-  const { data: branches = [] } = useQuery({
-    queryKey: ['reports-branches'],
+  // ==================== Format Dates for API ====================
+  const dateFrom = format(range.start, 'yyyy-MM-dd');
+  const dateTo = format(range.end, 'yyyy-MM-dd');
+  const dateTimeFrom = `${dateFrom} 00:00:00`;
+  const dateTimeTo = `${dateTo} 23:59:59`;
+
+  // ==================== Fetch Branches ====================
+  const { data: branches = [], isLoading: loadingBranches } = useQuery<Branch[]>({
+    queryKey: ['branches'],
     queryFn: async () => {
-      const { data } = await supabase.from('branches').select('*').eq('is_active', true);
-      return data || [];
+      try {
+        const response = await api.post<BranchResponse>('/branch/index');
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        return [];
+      }
     }
   });
 
-  const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ['reports-sales', dateRange, startDate, endDate],
+  // ==================== Fetch Sales Invoices ====================
+  const { data: salesInvoices = [], isLoading: loadingSales } = useQuery<SalesInvoice[]>({
+    queryKey: ['sales-invoices', dateFrom, dateTo, selectedBranch],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('sales')
-        .select('*, customers(name, name_ar)')
-        .gte('sale_date', range.start.toISOString())
-        .lte('sale_date', range.end.toISOString())
-        .order('sale_date', { ascending: true });
-      return data || [];
+      try {
+        const params: any = {
+          date_from: dateTimeFrom,
+          date_to: dateTimeTo,
+          paginate: false
+        };
+        
+        if (selectedBranch !== 'all') {
+          params.branch_id = selectedBranch;
+        }
+
+        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', params);
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching sales invoices:', error);
+        toast.error(language === 'ar' ? 'حدث خطأ في جلب بيانات المبيعات' : 'Error fetching sales data');
+        return [];
+      }
     }
   });
 
-  const { data: salesInvoices = [] } = useQuery({
-    queryKey: ['reports-sales-invoices', dateRange, startDate, endDate],
+  // ==================== Fetch Purchase Invoices ====================
+  const { data: purchaseInvoices = [] } = useQuery<PurchaseInvoice[]>({
+    queryKey: ['purchase-invoices', dateFrom, dateTo],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('sales_invoices')
-        .select('*, customers(name, name_ar)')
-        .gte('invoice_date', format(range.start, 'yyyy-MM-dd'))
-        .lte('invoice_date', format(range.end, 'yyyy-MM-dd'));
-      return data || [];
+      try {
+        const response = await api.post<PurchaseInvoiceResponse>('/purchases-invoices/index', {
+          date_from: dateTimeFrom,
+          date_to: dateTimeTo,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching purchase invoices:', error);
+        return [];
+      }
     }
   });
 
-  const { data: products = [] } = useQuery({
-    queryKey: ['reports-products'],
+  // ==================== Fetch Customers ====================
+  const { data: customers = [] } = useQuery<Customer[]>({
+    queryKey: ['customers'],
     queryFn: async () => {
-      const { data } = await supabase.from('products').select('*, categories(name, name_ar)');
-      return data || [];
+      try {
+        const response = await api.post<CustomerResponse>('/customer/index');
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+        return [];
+      }
     }
   });
 
-  const { data: expenses = [] } = useQuery({
-    queryKey: ['reports-expenses', dateRange, startDate, endDate],
+  // ==================== Fetch Products ====================
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['products'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('expense_date', format(range.start, 'yyyy-MM-dd'))
-        .lte('expense_date', format(range.end, 'yyyy-MM-dd'));
-      return data || [];
+      try {
+        const response = await api.post<ProductResponse>('/product/index');
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        return [];
+      }
     }
   });
 
-  const { data: revenues = [] } = useQuery({
-    queryKey: ['reports-revenues', dateRange, startDate, endDate],
+  // ==================== Fetch Finances ====================
+  const { data: finances = [] } = useQuery<Finance[]>({
+    queryKey: ['finances', dateFrom, dateTo],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('revenues')
-        .select('*')
-        .gte('revenue_date', format(range.start, 'yyyy-MM-dd'))
-        .lte('revenue_date', format(range.end, 'yyyy-MM-dd'));
-      return data || [];
+      try {
+        const response = await api.post<FinanceResponse>('/finance/index', {
+          date_from: dateFrom,
+          date_to: dateTo
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching finances:', error);
+        return [];
+      }
     }
   });
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ['reports-customers'],
+  // ==================== Fetch Treasuries ====================
+  const { data: treasuries = [] } = useQuery<Treasury[]>({
+    queryKey: ['treasuries'],
     queryFn: async () => {
-      const { data } = await supabase.from('customers').select('*');
-      return data || [];
+      try {
+        const response = await api.post<TreasuryResponse>('/treasury/index');
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching treasuries:', error);
+        return [];
+      }
     }
   });
 
-  const { data: treasuries = [] } = useQuery({
-    queryKey: ['reports-treasuries'],
+  // ==================== Fetch Banks ====================
+  const { data: banks = [] } = useQuery<Bank[]>({
+    queryKey: ['banks'],
     queryFn: async () => {
-      const { data } = await supabase.from('treasuries').select('*, branches(name, name_ar)');
-      return data || [];
+      try {
+        const response = await api.post<BankResponse>('/bank/index');
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching banks:', error);
+        return [];
+      }
     }
   });
 
-  const { data: banks = [] } = useQuery({
-    queryKey: ['reports-banks'],
+  // ==================== Fetch Shifts ====================
+  const { data: shifts = [] } = useQuery<Shift[]>({
+    queryKey: ['shifts', dateFrom, dateTo],
     queryFn: async () => {
-      const { data } = await supabase.from('banks').select('*, branches(name, name_ar)');
-      return data || [];
+      try {
+        const response = await api.post<ShiftResponse>('/shifts/index', {
+          date_from: dateFrom,
+          date_to: dateTo
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching shifts:', error);
+        return [];
+      }
     }
   });
 
-  const { data: purchaseInvoices = [] } = useQuery({
-    queryKey: ['reports-purchases', dateRange, startDate, endDate],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('purchase_invoices')
-        .select('*, suppliers(name, name_ar)')
-        .gte('invoice_date', format(range.start, 'yyyy-MM-dd'))
-        .lte('invoice_date', format(range.end, 'yyyy-MM-dd'));
-      return data || [];
-    }
-  });
+  // ==================== Calculate Stats with useMemo ====================
+  const stats = useMemo(() => {
+    // Sales totals
+    const totalSales = salesInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const totalOrders = salesInvoices.length;
+    const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-  const { data: posShifts = [] } = useQuery({
-    queryKey: ['reports-pos-shifts', dateRange, startDate, endDate],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('pos_shifts')
-        .select('*')
-        .gte('opened_at', range.start.toISOString())
-        .lte('opened_at', range.end.toISOString());
-      return data || [];
-    }
-  });
+    // Purchases
+    const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
 
-  const translations = {
-    en: {
-      title: 'Reports & Analytics',
-      subtitle: 'Comprehensive business intelligence dashboard',
-      dashboard: 'Dashboard',
-      readyReports: 'Ready Reports',
-      salesAnalysis: 'Sales Analysis',
-      inventoryAnalysis: 'Inventory',
-      financeAnalysis: 'Finance',
-      performance: 'Performance',
-      print: 'Print',
-      exportExcel: 'Export',
-      today: 'Today',
-      week: 'This Week',
-      month: 'This Month',
-      quarter: 'Quarter',
-      year: 'Year',
-      custom: 'Custom',
-      from: 'From',
-      to: 'To',
-      allBranches: 'All Branches',
-      // KPIs
-      totalRevenue: 'Total Revenue',
-      totalSales: 'Total Sales',
-      netProfit: 'Net Profit',
-      profitMargin: 'Profit Margin',
-      totalOrders: 'Total Orders',
-      avgOrderValue: 'Avg Order Value',
-      totalExpenses: 'Total Expenses',
-      totalPurchases: 'Purchases',
-      // Inventory
-      totalProducts: 'Total Products',
-      lowStock: 'Low Stock',
-      outOfStock: 'Out of Stock',
-      stockValue: 'Stock Value',
-      // Finance
-      treasuryBalance: 'Treasury',
-      bankBalance: 'Banks',
-      totalLiquidity: 'Liquidity',
-      accountsReceivable: 'Receivables',
-      accountsPayable: 'Payables',
-      // Performance
-      growthRate: 'Growth Rate',
-      targetAchievement: 'Target Achievement',
-      efficiency: 'Efficiency Score',
-      // Charts
-      salesTrend: 'Sales Trend',
-      revenueVsExpenses: 'Revenue vs Expenses',
-      topProducts: 'Top Products',
-      salesByCategory: 'Sales by Category',
-      stockDistribution: 'Stock Distribution',
-      paymentMethods: 'Payment Methods',
-      // Other
-      comparedToPrevious: 'vs previous period',
-      noData: 'No data available',
-      viewDetails: 'View Details',
-      refresh: 'Refresh',
-      filter: 'Filter'
+    // Finances
+    const totalExpenses = finances
+      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
+      .reduce((sum, f) => sum + Math.abs(Number(f.amount)), 0);
+    
+    const totalRevenues = finances
+      .filter(f => f.category === 'revenue' || Number(f.amount) > 0)
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+
+    // Calculate derived values
+    const totalRevenue = totalSales + totalRevenues;
+    const netProfit = totalRevenue - totalExpenses - totalPurchases;
+    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    // Treasury & Bank
+    const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + (t.balance || 0), 0);
+    const totalBankBalance = banks.reduce((sum, b) => sum + (b.balance || 0), 0);
+    const totalLiquidity = totalTreasuryBalance + totalBankBalance;
+
+    // Inventory
+    const totalProducts = products.length;
+    const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5));
+    const outOfStockProducts = products.filter(p => p.stock === 0);
+    const stockValue = products.reduce((sum, p) => sum + (p.stock * Number(p.cost || 0)), 0);
+
+    // Customers
+    const newCustomers = customers.filter(c => {
+      const created = new Date(c.created_at);
+      return created >= range.start && created <= range.end;
+    }).length;
+
+    // POS
+    const totalPOSSales = shifts.reduce((sum, s) => sum + (s.total_sales || 0), 0);
+
+    return {
+      totalSales,
+      totalOrders,
+      avgOrderValue,
+      totalPurchases,
+      totalExpenses,
+      totalRevenues,
+      totalRevenue,
+      netProfit,
+      profitMargin,
+      totalTreasuryBalance,
+      totalBankBalance,
+      totalLiquidity,
+      totalProducts,
+      lowStockProducts: lowStockProducts.length,
+      outOfStockProducts: outOfStockProducts.length,
+      stockValue,
+      newCustomers,
+      totalPOSSales
+    };
+  }, [salesInvoices, purchaseInvoices, finances, treasuries, banks, products, customers, shifts, range]);
+
+  // ==================== Prepare Chart Data ====================
+  const salesTrendData = useMemo<ChartDataPoint[]>(() => {
+    const salesMap = new Map<string, { sales: number; orders: number }>();
+
+    salesInvoices.forEach(inv => {
+      const date = inv.created_at.split(' ')[0];
+      const amount = Number(inv.total_amount);
+      
+      const existing = salesMap.get(date);
+      if (existing) {
+        existing.sales += amount;
+        existing.orders += 1;
+      } else {
+        salesMap.set(date, { sales: amount, orders: 1 });
+      }
+    });
+
+    // Generate last 14 days
+    const result: ChartDataPoint[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const displayDate = format(date, 'MM/dd');
+      const dayData = salesMap.get(dateStr) || { sales: 0, orders: 0 };
+      
+      result.push({
+        date: displayDate,
+        sales: dayData.sales,
+        orders: dayData.orders
+      });
+    }
+
+    return result;
+  }, [salesInvoices]);
+
+  const revenueVsExpensesData = useMemo(() => [
+    { 
+      name: language === 'ar' ? 'الإيرادات' : 'Revenue', 
+      value: stats.totalRevenue, 
+      fill: 'hsl(var(--accent))' 
     },
-    ar: {
-      title: 'التقارير والتحليلات',
-      subtitle: 'لوحة تحكم ذكاء الأعمال الشاملة',
-      dashboard: 'لوحة التحكم',
-      readyReports: 'التقارير الجاهزة',
-      salesAnalysis: 'تحليل المبيعات',
-      inventoryAnalysis: 'المخزون',
-      financeAnalysis: 'المالية',
-      performance: 'الأداء',
-      print: 'طباعة',
-      exportExcel: 'تصدير',
-      today: 'اليوم',
-      week: 'هذا الأسبوع',
-      month: 'هذا الشهر',
-      quarter: 'ربع سنة',
-      year: 'سنة',
-      custom: 'مخصص',
-      from: 'من',
-      to: 'إلى',
-      allBranches: 'كل الفروع',
-      // KPIs
-      totalRevenue: 'إجمالي الإيرادات',
-      totalSales: 'إجمالي المبيعات',
-      netProfit: 'صافي الربح',
-      profitMargin: 'هامش الربح',
-      totalOrders: 'إجمالي الطلبات',
-      avgOrderValue: 'متوسط قيمة الطلب',
-      totalExpenses: 'إجمالي المصروفات',
-      totalPurchases: 'المشتريات',
-      // Inventory
-      totalProducts: 'إجمالي المنتجات',
-      lowStock: 'مخزون منخفض',
-      outOfStock: 'نفذ المخزون',
-      stockValue: 'قيمة المخزون',
-      // Finance
-      treasuryBalance: 'الخزائن',
-      bankBalance: 'البنوك',
-      totalLiquidity: 'السيولة',
-      accountsReceivable: 'المستحقات',
-      accountsPayable: 'الالتزامات',
-      // Performance
-      growthRate: 'معدل النمو',
-      targetAchievement: 'تحقيق الهدف',
-      efficiency: 'نقاط الكفاءة',
-      // Charts
-      salesTrend: 'اتجاه المبيعات',
-      revenueVsExpenses: 'الإيرادات مقابل المصروفات',
-      topProducts: 'أفضل المنتجات',
-      salesByCategory: 'المبيعات حسب الفئة',
-      stockDistribution: 'توزيع المخزون',
-      paymentMethods: 'طرق الدفع',
-      // Other
-      comparedToPrevious: 'مقارنة بالفترة السابقة',
-      noData: 'لا توجد بيانات',
-      viewDetails: 'عرض التفاصيل',
-      refresh: 'تحديث',
-      filter: 'فلتر'
+    { 
+      name: language === 'ar' ? 'المصروفات' : 'Expenses', 
+      value: stats.totalExpenses, 
+      fill: 'hsl(var(--destructive))' 
+    },
+    { 
+      name: language === 'ar' ? 'الربح' : 'Profit', 
+      value: Math.max(0, stats.netProfit), 
+      fill: 'hsl(var(--primary))' 
+    }
+  ], [stats, language]);
+
+  const stockByCategory = useMemo<CategoryStock[]>(() => {
+    const categoryMap = new Map<string, { stock: number; value: number }>();
+
+    products.forEach(product => {
+      const categoryName = product.category?.name || (language === 'ar' ? 'غير مصنف' : 'Uncategorized');
+      const stock = product.stock;
+      const value = stock * Number(product.cost || 0);
+      
+      const existing = categoryMap.get(categoryName);
+      if (existing) {
+        existing.stock += stock;
+        existing.value += value;
+      } else {
+        categoryMap.set(categoryName, { stock, value });
+      }
+    });
+
+    return Array.from(categoryMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [products, language]);
+
+  const expensesByCategory = useMemo<ExpenseCategory[]>(() => {
+    const categoryMap = new Map<string, number>();
+
+    finances
+      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
+      .forEach(f => {
+        const category = f.category;
+        const amount = Math.abs(Number(f.amount));
+        categoryMap.set(category, (categoryMap.get(category) || 0) + amount);
+      });
+
+    return Array.from(categoryMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [finances]);
+
+  const performanceData = useMemo(() => [
+    { 
+      name: language === 'ar' ? 'المبيعات' : 'Sales', 
+      value: 85, 
+      fill: 'hsl(var(--primary))' 
+    },
+    { 
+      name: language === 'ar' ? 'الأرباح' : 'Profits', 
+      value: 72, 
+      fill: 'hsl(var(--accent))' 
+    },
+    { 
+      name: language === 'ar' ? 'الكفاءة' : 'Efficiency', 
+      value: 90, 
+      fill: 'hsl(var(--warning))' 
+    }
+  ], [language]);
+
+  // ==================== Export Functions ====================
+  const handleExportExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // Summary Sheet
+      const summaryData = [
+        ['تقرير شامل', 'Comprehensive Report'],
+        ['الفترة من', dateFrom, 'إلى', dateTo],
+        [''],
+        ['المؤشر', 'القيمة'],
+        ['إجمالي المبيعات', stats.totalSales],
+        ['إجمالي الطلبات', stats.totalOrders],
+        ['صافي الربح', stats.netProfit],
+        ['قيمة المخزون', stats.stockValue],
+        ['سيولة الخزائن', stats.totalTreasuryBalance],
+        ['سيولة البنوك', stats.totalBankBalance]
+      ];
+      const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+      // Sales Sheet
+      if (activeTab === 'salesAnalysis' || activeTab === 'dashboard') {
+        const salesData = [
+          ['التاريخ', 'رقم الفاتورة', 'العميل', 'المبلغ', 'طريقة الدفع'],
+          ...salesInvoices.map(inv => [
+            inv.created_at.split(' ')[0],
+            inv.invoice_number,
+            inv.customer.name,
+            inv.total_amount,
+            inv.payment_method
+          ])
+        ];
+        const salesWs = XLSX.utils.aoa_to_sheet(salesData);
+        XLSX.utils.book_append_sheet(wb, salesWs, 'Sales');
+      }
+
+      // Products Sheet
+      if (activeTab === 'inventoryAnalysis') {
+        const productsData = [
+          ['SKU', 'المنتج', 'المخزون', 'السعر', 'التكلفة', 'القيمة'],
+          ...products.map(p => [
+            p.sku,
+            p.name,
+            p.stock,
+            p.price,
+            p.cost,
+            p.stock * Number(p.cost)
+          ])
+        ];
+        const productsWs = XLSX.utils.aoa_to_sheet(productsData);
+        XLSX.utils.book_append_sheet(wb, productsWs, 'Products');
+      }
+
+      XLSX.writeFile(wb, `report_${activeTab}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      
+      toast.success(language === 'ar' ? 'تم التصدير بنجاح' : 'Exported successfully');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(language === 'ar' ? 'حدث خطأ في التصدير' : 'Export failed');
     }
   };
 
-  const t = translations[language];
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // ==================== Translations ====================
+  const t = {
+    title: language === 'ar' ? 'التقارير والتحليلات' : 'Reports & Analytics',
+    subtitle: language === 'ar' ? 'لوحة تحكم ذكاء الأعمال الشاملة' : 'Comprehensive business intelligence dashboard',
+    dashboard: language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
+    readyReports: language === 'ar' ? 'التقارير الجاهزة' : 'Ready Reports',
+    salesAnalysis: language === 'ar' ? 'تحليل المبيعات' : 'Sales Analysis',
+    inventoryAnalysis: language === 'ar' ? 'المخزون' : 'Inventory',
+    financeAnalysis: language === 'ar' ? 'المالية' : 'Finance',
+    performance: language === 'ar' ? 'الأداء' : 'Performance',
+    print: language === 'ar' ? 'طباعة' : 'Print',
+    exportExcel: language === 'ar' ? 'تصدير' : 'Export',
+    today: language === 'ar' ? 'اليوم' : 'Today',
+    week: language === 'ar' ? 'أسبوع' : 'Week',
+    month: language === 'ar' ? 'شهر' : 'Month',
+    quarter: language === 'ar' ? 'ربع سنة' : 'Quarter',
+    year: language === 'ar' ? 'سنة' : 'Year',
+    custom: language === 'ar' ? 'مخصص' : 'Custom',
+    from: language === 'ar' ? 'من' : 'From',
+    to: language === 'ar' ? 'إلى' : 'To',
+    allBranches: language === 'ar' ? 'كل الفروع' : 'All Branches',
+    // KPIs
+    totalRevenue: language === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue',
+    totalSales: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
+    netProfit: language === 'ar' ? 'صافي الربح' : 'Net Profit',
+    profitMargin: language === 'ar' ? 'هامش الربح' : 'Profit Margin',
+    totalOrders: language === 'ar' ? 'إجمالي الطلبات' : 'Total Orders',
+    avgOrderValue: language === 'ar' ? 'متوسط قيمة الطلب' : 'Avg Order Value',
+    totalExpenses: language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses',
+    totalPurchases: language === 'ar' ? 'المشتريات' : 'Purchases',
+    // Inventory
+    totalProducts: language === 'ar' ? 'إجمالي المنتجات' : 'Total Products',
+    lowStock: language === 'ar' ? 'مخزون منخفض' : 'Low Stock',
+    outOfStock: language === 'ar' ? 'نفذ المخزون' : 'Out of Stock',
+    stockValue: language === 'ar' ? 'قيمة المخزون' : 'Stock Value',
+    // Finance
+    treasuryBalance: language === 'ar' ? 'الخزائن' : 'Treasury',
+    bankBalance: language === 'ar' ? 'البنوك' : 'Banks',
+    totalLiquidity: language === 'ar' ? 'السيولة' : 'Liquidity',
+    // Charts
+    salesTrend: language === 'ar' ? 'اتجاه المبيعات' : 'Sales Trend',
+    revenueVsExpenses: language === 'ar' ? 'الإيرادات مقابل المصروفات' : 'Revenue vs Expenses',
+    stockDistribution: language === 'ar' ? 'توزيع المخزون' : 'Stock Distribution',
+    paymentMethods: language === 'ar' ? 'طرق الدفع' : 'Payment Methods',
+    // Other
+    comparedToPrevious: language === 'ar' ? 'مقارنة بالفترة السابقة' : 'vs previous period',
+    noData: language === 'ar' ? 'لا توجد بيانات' : 'No data available',
+    filter: language === 'ar' ? 'فلتر' : 'Filter',
+    refresh: language === 'ar' ? 'تحديث' : 'Refresh',
+    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...'
+  };
 
   const COLORS = [
     'hsl(var(--primary))',
@@ -334,131 +813,6 @@ const Reports = () => {
     'hsl(45, 90%, 50%)'
   ];
 
-  // Calculate comprehensive stats
-  const totalSalesAmount = sales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const totalInvoicesAmount = salesInvoices.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const totalRevenue = totalSalesAmount + totalInvoicesAmount + revenues.reduce((sum, r) => sum + Number(r.amount), 0);
-  const totalExpensesAmount = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const totalPurchasesAmount = purchaseInvoices.reduce((sum, p) => sum + Number(p.total_amount), 0);
-  const netProfit = totalRevenue - totalExpensesAmount - totalPurchasesAmount;
-  const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0;
-  const totalOrders = sales.length + salesInvoices.length;
-  const avgOrderValue = totalOrders > 0 ? (totalSalesAmount + totalInvoicesAmount) / totalOrders : 0;
-
-  // Treasury & Bank stats
-  const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + Number(t.balance || 0), 0);
-  const totalBankBalance = banks.reduce((sum, b) => sum + Number(b.balance || 0), 0);
-  const totalLiquidity = totalTreasuryBalance + totalBankBalance;
-
-  // Inventory stats
-  const totalProducts = products.length;
-  const lowStockProducts = products.filter(p => p.stock <= (p.min_stock || 5) && p.stock > 0);
-  const outOfStockProducts = products.filter(p => p.stock === 0);
-  const stockValue = products.reduce((sum, p) => sum + (p.stock * (p.cost || 0)), 0);
-
-  // Customers
-  const newCustomers = customers.filter(c => new Date(c.created_at) >= range.start).length;
-
-  // POS Performance
-  const totalPOSSales = posShifts.reduce((sum, s) => sum + Number(s.total_sales || 0), 0);
-
-  // Prepare chart data
-  const salesTrendData = sales.reduce((acc: any[], sale) => {
-    const date = format(new Date(sale.sale_date), 'MM/dd');
-    const existing = acc.find(d => d.date === date);
-    if (existing) {
-      existing.sales += Number(sale.total_amount);
-      existing.orders += 1;
-    } else {
-      acc.push({ date, sales: Number(sale.total_amount), orders: 1 });
-    }
-    return acc;
-  }, []).slice(-14);
-
-  const revenueVsExpensesData = [
-    { name: language === 'ar' ? 'الإيرادات' : 'Revenue', value: totalRevenue, fill: 'hsl(var(--accent))' },
-    { name: language === 'ar' ? 'المصروفات' : 'Expenses', value: totalExpensesAmount, fill: 'hsl(var(--destructive))' },
-    { name: language === 'ar' ? 'الربح' : 'Profit', value: Math.max(0, netProfit), fill: 'hsl(var(--primary))' }
-  ];
-
-  const stockByCategory = products.reduce((acc: any[], product) => {
-    const categoryName = language === 'ar' 
-      ? product.categories?.name_ar || product.categories?.name || 'غير مصنف'
-      : product.categories?.name || 'Uncategorized';
-    const existing = acc.find(c => c.name === categoryName);
-    if (existing) {
-      existing.stock += product.stock;
-      existing.value += product.stock * (product.cost || 0);
-    } else {
-      acc.push({ name: categoryName, stock: product.stock, value: product.stock * (product.cost || 0) });
-    }
-    return acc;
-  }, []).sort((a, b) => b.value - a.value).slice(0, 6);
-
-  const expensesByCategory = expenses.reduce((acc: any[], expense) => {
-    const existing = acc.find(e => e.name === expense.category);
-    if (existing) {
-      existing.value += Number(expense.amount);
-    } else {
-      acc.push({ name: expense.category, value: Number(expense.amount) });
-    }
-    return acc;
-  }, []).sort((a, b) => b.value - a.value).slice(0, 6);
-
-  // Performance metrics
-  const performanceData = [
-    { name: language === 'ar' ? 'المبيعات' : 'Sales', value: 85, fill: 'hsl(var(--primary))' },
-    { name: language === 'ar' ? 'الأرباح' : 'Profits', value: 72, fill: 'hsl(var(--accent))' },
-    { name: language === 'ar' ? 'الكفاءة' : 'Efficiency', value: 90, fill: 'hsl(var(--warning))' }
-  ];
-
-  // Export functions
-  const handlePrint = () => window.print();
-
-  const handleExportExcel = () => {
-    let headers: string[] = [];
-    let rows: any[][] = [];
-
-    if (activeTab === 'salesAnalysis' || activeTab === 'dashboard') {
-      headers = ['Date', 'Invoice', 'Customer', 'Amount', 'Status'];
-      rows = sales.map(s => [
-        format(new Date(s.sale_date), 'yyyy-MM-dd'),
-        s.invoice_number,
-        s.customers?.name || '-',
-        s.total_amount,
-        s.status || 'completed'
-      ]);
-    } else if (activeTab === 'inventoryAnalysis') {
-      headers = ['SKU', 'Product', 'Category', 'Stock', 'Cost', 'Value'];
-      rows = products.map(p => [
-        p.sku,
-        language === 'ar' ? p.name_ar || p.name : p.name,
-        p.categories?.name || '-',
-        p.stock,
-        p.cost || 0,
-        p.stock * (p.cost || 0)
-      ]);
-    } else if (activeTab === 'financeAnalysis') {
-      headers = ['Type', 'Date', 'Category', 'Amount'];
-      const allTransactions = [
-        ...expenses.map(e => ({ type: 'Expense', date: e.expense_date, category: e.category, amount: -e.amount })),
-        ...revenues.map(r => ({ type: 'Revenue', date: r.revenue_date, category: r.category, amount: r.amount }))
-      ];
-      rows = allTransactions.map(tx => [tx.type, tx.date, tx.category, tx.amount]);
-    }
-    
-    let csvContent = headers.join(',') + '\n';
-    rows.forEach(row => {
-      csvContent += row.join(',') + '\n';
-    });
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `report_${activeTab}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    link.click();
-  };
-
   const dateRangeOptions = [
     { value: 'today', label: t.today },
     { value: 'week', label: t.week },
@@ -468,7 +822,9 @@ const Reports = () => {
     { value: 'custom', label: t.custom }
   ];
 
-  // Enhanced KPI Card Component
+  const isLoading = loadingSales || loadingBranches;
+
+  // ==================== KPI Card Component ====================
   const KPICard = ({ 
     title, 
     value, 
@@ -531,7 +887,7 @@ const Reports = () => {
     );
   };
 
-  // Mini stat card
+  // ==================== Mini Stat Card ====================
   const MiniStatCard = ({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: any; color: string }) => (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
       <div className={`p-2 rounded-lg ${color}`}>
@@ -545,17 +901,25 @@ const Reports = () => {
   );
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
-      style: 'currency',
-      currency: 'SAR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
+    return formatRegionalCurrency(value);
   };
 
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat(language === 'ar' ? 'ar-SA' : 'en-US').format(value);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout activeItem="reports">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">{t.loading}</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout activeItem="reports">
@@ -636,8 +1000,8 @@ const Reports = () => {
                   <SelectContent>
                     <SelectItem value="all">{t.allBranches}</SelectItem>
                     {branches.map(branch => (
-                      <SelectItem key={branch.id} value={branch.id}>
-                        {language === 'ar' ? branch.name_ar || branch.name : branch.name}
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -720,7 +1084,7 @@ const Reports = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
                 title={t.totalRevenue}
-                value={formatCurrency(totalRevenue)}
+                value={formatCurrency(stats.totalRevenue)}
                 icon={DollarSign}
                 trend="up"
                 trendValue="+12.5%"
@@ -728,7 +1092,7 @@ const Reports = () => {
               />
               <KPICard
                 title={t.totalSales}
-                value={formatCurrency(totalSalesAmount + totalInvoicesAmount)}
+                value={formatCurrency(stats.totalSales)}
                 icon={ShoppingCart}
                 trend="up"
                 trendValue="+8.2%"
@@ -736,18 +1100,18 @@ const Reports = () => {
               />
               <KPICard
                 title={t.netProfit}
-                value={formatCurrency(netProfit)}
+                value={formatCurrency(stats.netProfit)}
                 icon={TrendingUp}
-                trend={netProfit >= 0 ? 'up' : 'down'}
-                trendValue={`${profitMargin.toFixed(1)}%`}
-                color={netProfit >= 0 ? 'accent' : 'destructive'}
+                trend={stats.netProfit >= 0 ? 'up' : 'down'}
+                trendValue={`${stats.profitMargin.toFixed(1)}%`}
+                color={stats.netProfit >= 0 ? 'accent' : 'destructive'}
               />
               <KPICard
                 title={t.totalLiquidity}
-                value={formatCurrency(totalLiquidity)}
+                value={formatCurrency(stats.totalLiquidity)}
                 icon={Wallet}
                 color="warning"
-                subtitle={`${t.treasuryBalance}: ${formatCurrency(totalTreasuryBalance)}`}
+                subtitle={`${t.treasuryBalance}: ${formatCurrency(stats.totalTreasuryBalance)}`}
               />
             </div>
 
@@ -755,37 +1119,37 @@ const Reports = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               <MiniStatCard
                 label={t.totalOrders}
-                value={formatNumber(totalOrders)}
+                value={formatNumber(stats.totalOrders)}
                 icon={ClipboardList}
                 color="bg-blue-500/10 text-blue-500"
               />
               <MiniStatCard
                 label={t.avgOrderValue}
-                value={formatCurrency(avgOrderValue)}
+                value={formatCurrency(stats.avgOrderValue)}
                 icon={CreditCard}
                 color="bg-purple-500/10 text-purple-500"
               />
               <MiniStatCard
                 label={t.totalProducts}
-                value={formatNumber(totalProducts)}
+                value={formatNumber(stats.totalProducts)}
                 icon={Package}
                 color="bg-cyan-500/10 text-cyan-500"
               />
               <MiniStatCard
                 label={t.lowStock}
-                value={formatNumber(lowStockProducts.length)}
+                value={formatNumber(stats.lowStockProducts)}
                 icon={AlertTriangle}
                 color="bg-warning/10 text-warning"
               />
               <MiniStatCard
                 label={t.stockValue}
-                value={formatCurrency(stockValue)}
+                value={formatCurrency(stats.stockValue)}
                 icon={Landmark}
                 color="bg-emerald-500/10 text-emerald-500"
               />
               <MiniStatCard
                 label={t.totalExpenses}
-                value={formatCurrency(totalExpensesAmount)}
+                value={formatCurrency(stats.totalExpenses)}
                 icon={TrendingDown}
                 color="bg-destructive/10 text-destructive"
               />
@@ -814,6 +1178,7 @@ const Reports = () => {
                       <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
                         contentStyle={{ 
                           background: 'hsl(var(--card))', 
                           border: '1px solid hsl(var(--border))',
@@ -945,7 +1310,7 @@ const Reports = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
                 title={t.totalSales}
-                value={formatCurrency(totalSalesAmount + totalInvoicesAmount)}
+                value={formatCurrency(stats.totalSales)}
                 icon={ShoppingCart}
                 trend="up"
                 trendValue="+15.3%"
@@ -953,7 +1318,7 @@ const Reports = () => {
               />
               <KPICard
                 title={t.totalOrders}
-                value={formatNumber(totalOrders)}
+                value={formatNumber(stats.totalOrders)}
                 icon={ClipboardList}
                 trend="up"
                 trendValue="+8"
@@ -961,13 +1326,13 @@ const Reports = () => {
               />
               <KPICard
                 title={t.avgOrderValue}
-                value={formatCurrency(avgOrderValue)}
+                value={formatCurrency(stats.avgOrderValue)}
                 icon={CreditCard}
                 color="warning"
               />
               <KPICard
                 title={language === 'ar' ? 'عملاء جدد' : 'New Customers'}
-                value={formatNumber(newCustomers)}
+                value={formatNumber(stats.newCustomers)}
                 icon={Users}
                 color="primary"
               />
@@ -986,19 +1351,22 @@ const Reports = () => {
                         <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                         <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                        <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sales.slice(0, 20).map((sale) => (
-                        <TableRow key={sale.id}>
-                          <TableCell>{format(new Date(sale.sale_date), 'dd/MM/yyyy')}</TableCell>
-                          <TableCell className="font-mono text-sm">{sale.invoice_number}</TableCell>
-                          <TableCell>{sale.customers?.name || '-'}</TableCell>
-                          <TableCell className="font-semibold">{formatCurrency(sale.total_amount)}</TableCell>
+                      {salesInvoices.slice(0, 20).map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell>{format(new Date(inv.created_at), 'dd/MM/yyyy')}</TableCell>
+                          <TableCell className="font-mono text-sm">{inv.invoice_number}</TableCell>
+                          <TableCell>{inv.customer.name}</TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(Number(inv.total_amount))}</TableCell>
                           <TableCell>
-                            <Badge variant={sale.status === 'completed' ? 'default' : 'secondary'}>
-                              {sale.status || 'completed'}
+                            <Badge variant="outline">
+                              {inv.payment_method === 'cash' ? (language === 'ar' ? 'نقدي' : 'Cash') :
+                               inv.payment_method === 'card' ? (language === 'ar' ? 'بطاقة' : 'Card') :
+                               inv.payment_method === 'wallet' ? (language === 'ar' ? 'محفظة' : 'Wallet') :
+                               inv.payment_method}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -1015,25 +1383,25 @@ const Reports = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
                 title={t.totalProducts}
-                value={formatNumber(totalProducts)}
+                value={formatNumber(stats.totalProducts)}
                 icon={Package}
                 color="primary"
               />
               <KPICard
                 title={t.stockValue}
-                value={formatCurrency(stockValue)}
+                value={formatCurrency(stats.stockValue)}
                 icon={Landmark}
                 color="accent"
               />
               <KPICard
                 title={t.lowStock}
-                value={formatNumber(lowStockProducts.length)}
+                value={formatNumber(stats.lowStockProducts)}
                 icon={AlertTriangle}
                 color="warning"
               />
               <KPICard
                 title={t.outOfStock}
-                value={formatNumber(outOfStockProducts.length)}
+                value={formatNumber(stats.outOfStockProducts)}
                 icon={Package}
                 color="destructive"
               />
@@ -1050,20 +1418,22 @@ const Reports = () => {
                 <CardContent>
                   <ScrollArea className="h-[300px]">
                     <div className="space-y-2">
-                      {lowStockProducts.map((product) => (
-                        <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-warning/5 border border-warning/20">
-                          <div>
-                            <p className="font-medium">{language === 'ar' ? product.name_ar || product.name : product.name}</p>
-                            <p className="text-xs text-muted-foreground">{product.sku}</p>
+                      {products
+                        .filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5))
+                        .map((product) => (
+                          <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-warning/5 border border-warning/20">
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              <p className="text-xs text-muted-foreground">{product.sku}</p>
+                            </div>
+                            <div className="text-end">
+                              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">
+                                {product.stock} / {product.reorder_level || 5}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="text-end">
-                            <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">
-                              {product.stock} / {product.min_stock || 5}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                      {lowStockProducts.length === 0 && (
+                        ))}
+                      {stats.lowStockProducts === 0 && (
                         <p className="text-center text-muted-foreground py-8">{t.noData}</p>
                       )}
                     </div>
@@ -1082,13 +1452,14 @@ const Reports = () => {
                       <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
                         contentStyle={{ 
                           background: 'hsl(var(--card))', 
                           border: '1px solid hsl(var(--border))',
                           borderRadius: '8px'
                         }} 
                       />
-                      <Bar dataKey="stock" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -1101,7 +1472,7 @@ const Reports = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
                 title={t.totalRevenue}
-                value={formatCurrency(totalRevenue)}
+                value={formatCurrency(stats.totalRevenue)}
                 icon={TrendingUp}
                 trend="up"
                 trendValue="+18.5%"
@@ -1109,23 +1480,23 @@ const Reports = () => {
               />
               <KPICard
                 title={t.totalExpenses}
-                value={formatCurrency(totalExpensesAmount)}
+                value={formatCurrency(stats.totalExpenses)}
                 icon={TrendingDown}
                 color="destructive"
               />
               <KPICard
                 title={t.netProfit}
-                value={formatCurrency(netProfit)}
+                value={formatCurrency(stats.netProfit)}
                 icon={DollarSign}
-                trend={netProfit >= 0 ? 'up' : 'down'}
-                color={netProfit >= 0 ? 'primary' : 'destructive'}
+                trend={stats.netProfit >= 0 ? 'up' : 'down'}
+                color={stats.netProfit >= 0 ? 'primary' : 'destructive'}
               />
               <KPICard
                 title={t.profitMargin}
-                value={`${profitMargin.toFixed(1)}%`}
+                value={`${stats.profitMargin.toFixed(1)}%`}
                 icon={Target}
                 color="warning"
-                progress={Math.min(100, Math.max(0, profitMargin))}
+                progress={Math.min(100, Math.max(0, stats.profitMargin))}
               />
             </div>
 
@@ -1143,9 +1514,7 @@ const Reports = () => {
                       <div key={treasury.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-2">
                           <Wallet size={16} className="text-primary" />
-                          <span className="font-medium">
-                            {language === 'ar' ? treasury.name_ar || treasury.name : treasury.name}
-                          </span>
+                          <span className="font-medium">{treasury.name}</span>
                         </div>
                         <span className="font-bold">{formatCurrency(treasury.balance || 0)}</span>
                       </div>
@@ -1153,7 +1522,7 @@ const Reports = () => {
                     <Separator />
                     <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10">
                       <span className="font-semibold">{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                      <span className="font-bold text-primary">{formatCurrency(totalTreasuryBalance)}</span>
+                      <span className="font-bold text-primary">{formatCurrency(stats.totalTreasuryBalance)}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1172,9 +1541,7 @@ const Reports = () => {
                       <div key={bank.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-2">
                           <Landmark size={16} className="text-accent" />
-                          <span className="font-medium">
-                            {language === 'ar' ? bank.name_ar || bank.name : bank.name}
-                          </span>
+                          <span className="font-medium">{bank.name}</span>
                         </div>
                         <span className="font-bold">{formatCurrency(bank.balance || 0)}</span>
                       </div>
@@ -1182,7 +1549,7 @@ const Reports = () => {
                     <Separator />
                     <div className="flex items-center justify-between p-3 rounded-lg bg-accent/10">
                       <span className="font-semibold">{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                      <span className="font-bold text-accent">{formatCurrency(totalBankBalance)}</span>
+                      <span className="font-bold text-accent">{formatCurrency(stats.totalBankBalance)}</span>
                     </div>
                   </div>
                 </CardContent>

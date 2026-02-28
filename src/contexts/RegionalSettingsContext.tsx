@@ -1,20 +1,14 @@
+// contexts/RegionalSettingsContext.tsx
 /**
  * RegionalSettingsContext - Global Regional Settings Management
- * 
- * Simplified version - No Supabase, Just Yemen 🇾🇪
+ * Dynamic version - Uses API for currency data
  */
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ar, enUS, type Locale } from 'date-fns/locale';
 import { useLanguage } from './LanguageContext';
-
-interface Currency {
-  code: string;
-  name: string;
-  nameAr: string;
-  symbol: string;
-}
+import { currencyService, type Currency } from '@/lib/currency.service';
 
 interface RegionalSettings {
   country: string;
@@ -26,10 +20,15 @@ interface RegionalSettings {
 
 interface RegionalSettingsContextType {
   settings: RegionalSettings;
+  currencies: Currency[];
+  isLoading: boolean;
+  refreshCurrencies: () => Promise<void>;
   
   // Currency utilities
-  formatCurrency: (amount: number, showSymbol?: boolean) => string;
-  getCurrencySymbol: () => string;
+  formatCurrency: (amount: number, showSymbol?: boolean, currencyCode?: string) => string;
+  getCurrencySymbol: (currencyCode?: string) => string;
+  convertAmount: (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => number;
+  getCurrencyByCode: (code: string) => Currency | undefined;
   
   // Date utilities
   formatDate: (date: Date | string, formatStr?: string) => string;
@@ -37,25 +36,21 @@ interface RegionalSettingsContextType {
   getCalendarLocale: () => Locale;
 }
 
-// ✅ العملة الوحيدة - ريال يمني
-const yemeniRial: Currency = {
+const defaultCurrency: Currency = {
+  id: 2,
+  name: 'YER',
   code: 'YER',
-  name: 'Yemeni Rial',
-  nameAr: 'ريال يمني',
-  symbol: '﷼'
-};
-
-// ✅ اليمن فقط
-const yemen = {
-  name: 'Yemen',
-  nameAr: 'اليمن'
+  symbol: 'YER',
+  exchange_rate: '1',
+  active: true,
+  default: true
 };
 
 const defaultSettings: RegionalSettings = {
   country: 'YE',
-  countryName: yemen.name,
-  countryNameAr: yemen.nameAr,
-  currency: yemeniRial,
+  countryName: 'Yemen',
+  countryNameAr: 'اليمن',
+  currency: defaultCurrency,
   dateFormat: 'dd/MM/yyyy',
 };
 
@@ -71,35 +66,83 @@ export const useRegionalSettings = () => {
 
 export const RegionalSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language } = useLanguage();
-  const [settings] = useState<RegionalSettings>(defaultSettings);
+  const [settings, setSettings] = useState<RegionalSettings>(defaultSettings);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ✅ تبسيط تنسيق العملة - ريال يمني فقط
-  const formatCurrency = (amount: number, showSymbol = true): string => {
-    // التأكد من أن المبلغ رقم
+  // Load currencies on mount
+  useEffect(() => {
+    loadCurrencies();
+  }, []);
+
+  const loadCurrencies = async (forceRefresh = false) => {
+    try {
+      setIsLoading(true);
+      const currenciesData = await currencyService.getActiveCurrencies(forceRefresh);
+      setCurrencies(currenciesData);
+      
+      const defaultCurr = await currencyService.getDefaultCurrency(forceRefresh);
+      if (defaultCurr) {
+        setSettings(prev => ({
+          ...prev,
+          currency: defaultCurr
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading currencies:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshCurrencies = async () => {
+    await loadCurrencies(true);
+  };
+
+  const getCurrencyByCode = (code: string): Currency | undefined => {
+    return currencies.find(c => c.code === code) || settings.currency;
+  };
+
+  const convertAmount = (amount: number, fromCurrencyCode: string, toCurrencyCode: string): number => {
+    const fromCurrency = getCurrencyByCode(fromCurrencyCode);
+    const toCurrency = getCurrencyByCode(toCurrencyCode);
+    
+    if (!fromCurrency || !toCurrency) return amount;
+    
+    return currencyService.convertAmount(amount, fromCurrency, toCurrency);
+  };
+
+  const formatCurrency = (amount: number, showSymbol = true, currencyCode?: string): string => {
+    const targetCurrency = currencyCode ? getCurrencyByCode(currencyCode) : settings.currency;
+    
+    if (!targetCurrency) {
+      return amount.toString();
+    }
+
     const numAmount = Number(amount) || 0;
     
     const formattedNumber = new Intl.NumberFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(numAmount);
 
     if (showSymbol) {
       return language === 'ar' 
-        ? `${formattedNumber} ${settings.currency.symbol}`
-        : `${settings.currency.symbol} ${formattedNumber}`;
+        ? `${formattedNumber} ${targetCurrency.symbol}`
+        : `${targetCurrency.symbol} ${formattedNumber}`;
     }
     return formattedNumber;
   };
 
-  const getCurrencySymbol = (): string => {
-    return settings.currency.symbol;
+  const getCurrencySymbol = (currencyCode?: string): string => {
+    const currency = currencyCode ? getCurrencyByCode(currencyCode) : settings.currency;
+    return currency?.symbol || settings.currency.symbol;
   };
 
   const getCalendarLocale = (): Locale => {
     return language === 'ar' ? ar : enUS;
   };
 
-  // ✅ تبسيط تنسيق التاريخ
   const formatDate = (date: Date | string, formatStr?: string): string => {
     try {
       if (!date) return '';
@@ -131,8 +174,13 @@ export const RegionalSettingsProvider: React.FC<{ children: React.ReactNode }> =
     <RegionalSettingsContext.Provider
       value={{
         settings,
+        currencies,
+        isLoading,
+        refreshCurrencies,
         formatCurrency,
         getCurrencySymbol,
+        convertAmount,
+        getCurrencyByCode,
         formatDate,
         formatDateTime,
         getCalendarLocale,
