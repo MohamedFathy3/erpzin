@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,11 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Plus, ChevronRight, ChevronDown, FolderOpen, FileText, Edit, Trash2, Search, Layers } from 'lucide-react';
+import { 
+  Plus, ChevronRight, ChevronDown, FolderOpen, FileText, 
+  Edit, Trash2, Search, Layers, FolderTree, Users, 
+  Wallet, Building2, Truck, Receipt, Landmark 
+} from 'lucide-react';
 import api from '@/lib/api';
 
 interface ChartOfAccountsProps {
@@ -84,7 +86,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [showChildrenDetails, setShowChildrenDetails] = useState(false);
 
   const [formData, setFormData] = useState({
     code: '',
@@ -93,30 +96,11 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     level: 0
   });
 
-  // حساب أنواع الحسابات بناءً على الكود
-  const getAccountTypeFromCode = (code: string) => {
-    if (code.startsWith('1')) return { value: 'asset', label: language === 'ar' ? 'أصول' : 'Assets', color: 'bg-blue-500' };
-    if (code.startsWith('2')) return { value: 'liability', label: language === 'ar' ? 'التزامات' : 'Liabilities', color: 'bg-red-500' };
-    if (code.startsWith('3')) return { value: 'expense', label: language === 'ar' ? 'مصروفات' : 'Expenses', color: 'bg-orange-500' };
-    if (code.startsWith('4')) return { value: 'revenue', label: language === 'ar' ? 'إيرادات' : 'Revenue', color: 'bg-green-500' };
-    return { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other', color: 'bg-gray-500' };
-  };
-
-  const accountTypes = [
-    { value: 'asset', label: language === 'ar' ? 'أصول' : 'Assets', color: 'bg-blue-500' },
-    { value: 'liability', label: language === 'ar' ? 'التزامات' : 'Liabilities', color: 'bg-red-500' },
-    { value: 'expense', label: language === 'ar' ? 'مصروفات' : 'Expenses', color: 'bg-orange-500' },
-    { value: 'revenue', label: language === 'ar' ? 'إيرادات' : 'Revenue', color: 'bg-green-500' },
-    { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other', color: 'bg-gray-500' }
-  ];
-
   // Fetch accounts tree
   const { data: accountsData, isLoading } = useQuery({
     queryKey: ['chart-of-accounts'],
     queryFn: async () => {
-      const response = await api.get('/chart-of-accounts', {
-      
-      });
+      const response = await api.get('/chart-of-accounts');
       return response.data as AccountsResponse;
     }
   });
@@ -151,42 +135,22 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     tree_levels: 0
   };
 
-  // Fetch single account details when selected
-  const { data: accountDetail } = useQuery({
-    queryKey: ['account', selectedAccountId],
-    queryFn: async () => {
-      if (!selectedAccountId) return null;
-      const response = await api.get(`/accounts/${selectedAccountId}`);
-      return response.data as AccountDetailResponse;
-    },
-    enabled: !!selectedAccountId
-  });
-
-  // Build tree function
-  const buildTree = (accounts: Account[]): Account[] => {
-    const map = new Map<number, Account>();
-    const roots: Account[] = [];
-
-    accounts.forEach(acc => map.set(acc.id, { ...acc, children: [] }));
-
-    accounts.forEach(acc => {
-      const node = map.get(acc.id)!;
-      // Find parent by checking if any account has this account as child in hierarchy
-      const parent = accounts.find(a => 
-        a.children?.some(child => child.id === acc.id)
-      );
-      
-      if (parent && map.has(parent.id)) {
-        map.get(parent.id)!.children!.push(node);
-      } else {
-        roots.push(node);
-      }
-    });
-
-    return roots;
+  // حساب أنواع الحسابات بناءً على الكود
+  const getAccountTypeFromCode = (code: string) => {
+    if (code.startsWith('1')) return { value: 'asset', label: language === 'ar' ? 'أصول' : 'Assets', color: 'bg-blue-500', icon: Wallet };
+    if (code.startsWith('2')) return { value: 'liability', label: language === 'ar' ? 'التزامات' : 'Liabilities', color: 'bg-red-500', icon: Receipt };
+    if (code.startsWith('3')) return { value: 'expense', label: language === 'ar' ? 'مصروفات' : 'Expenses', color: 'bg-orange-500', icon: Truck };
+    if (code.startsWith('4')) return { value: 'revenue', label: language === 'ar' ? 'إيرادات' : 'Revenue', color: 'bg-green-500', icon: Landmark };
+    return { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other', color: 'bg-gray-500', icon: Building2 };
   };
 
-  const accountTree = buildTree(accounts);
+  const accountTypes = [
+    { value: 'asset', label: language === 'ar' ? 'أصول' : 'Assets', color: 'bg-blue-500' },
+    { value: 'liability', label: language === 'ar' ? 'التزامات' : 'Liabilities', color: 'bg-red-500' },
+    { value: 'expense', label: language === 'ar' ? 'مصروفات' : 'Expenses', color: 'bg-orange-500' },
+    { value: 'revenue', label: language === 'ar' ? 'إيرادات' : 'Revenue', color: 'bg-green-500' },
+    { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other', color: 'bg-gray-500' }
+  ];
 
   // Create mutation
   const createMutation = useMutation({
@@ -231,9 +195,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await api.delete('/chart-of-accounts/delete', {
-        data: { items: [id] }
-      });
+      const response = await api.delete(`/chart-of-accounts/delete/${id}`);
       return response.data;
     },
     onSuccess: () => {
@@ -248,7 +210,6 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingAccount(null);
-    setSelectedAccountId(null);
     setFormData({
       code: '',
       name: '',
@@ -259,7 +220,6 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
 
   const handleEdit = (account: Account) => {
     setEditingAccount(account);
-    setSelectedAccountId(account.id);
     setFormData({
       code: account.code,
       name: account.name,
@@ -269,8 +229,14 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     setShowForm(true);
   };
 
-  const handleViewDetails = (id: number) => {
-    setSelectedAccountId(id);
+  const handleAccountClick = (account: Account) => {
+    setSelectedAccount(account);
+    setShowChildrenDetails(true);
+    
+    // Auto expand this node
+    const newExpanded = new Set(expandedNodes);
+    newExpanded.add(account.id.toString());
+    setExpandedNodes(newExpanded);
   };
 
   const handleSubmit = () => {
@@ -286,7 +252,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     }
   };
 
-  const toggleNode = (id: number) => {
+  const toggleNode = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
     const newExpanded = new Set(expandedNodes);
     const idStr = id.toString();
     if (newExpanded.has(idStr)) {
@@ -299,18 +266,138 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
 
   const getAccountTypeBadge = (code: string) => {
     const type = getAccountTypeFromCode(code);
+    const Icon = type.icon;
     return (
       <Badge variant="outline" className="gap-1 text-xs">
-        <span className={`w-2 h-2 rounded-full ${type.color}`} />
+        <Icon size={12} />
+        <span className={`w-1.5 h-1.5 rounded-full ${type.color}`} />
         {type.label}
       </Badge>
     );
   };
 
+  const getAllChildren = (account: Account): Account[] => {
+    let children: Account[] = [];
+    if (account.children && account.children.length > 0) {
+      children = [...account.children];
+      account.children.forEach(child => {
+        children = [...children, ...getAllChildren(child)];
+      });
+    }
+    return children;
+  };
+
+  const renderChildrenDetails = (account: Account) => {
+    const allChildren = getAllChildren(account);
+    const directChildren = account.children || [];
+    
+    if (allChildren.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <FileText size={40} className="mx-auto mb-2 opacity-50" />
+          <p>{language === 'ar' ? 'لا يوجد أبناء لهذا الحساب' : 'No children for this account'}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Direct Children */}
+        {directChildren.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <FolderOpen size={16} className="text-amber-500" />
+              {language === 'ar' ? 'الأبناء المباشرين' : 'Direct Children'} ({directChildren.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {directChildren.map(child => {
+                const childType = getAccountTypeFromCode(child.code);
+                const ChildIcon = childType.icon;
+                return (
+                  <Card 
+                    key={child.id} 
+                    className="hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => handleAccountClick(child)}
+                  >
+                    <CardContent className="py-2 px-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ChildIcon size={14} className={childType.color.replace('bg-', 'text-')} />
+                          <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
+                          <span className="text-sm font-medium">{child.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {child.has_children && (
+                            <Badge variant="secondary" className="text-xs">
+                              {language === 'ar' ? 'له أبناء' : 'Has children'}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-xs">
+                            {Number(child.balance || 0).toLocaleString()}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* All Children (including nested) */}
+        {allChildren.length > directChildren.length && (
+          <div>
+            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <FolderTree size={16} className="text-blue-500" />
+              {language === 'ar' ? 'جميع الأبناء (بما فيهم الأحفاد)' : 'All Children (including nested)'} ({allChildren.length})
+            </h3>
+            <ScrollArea className="h-[200px]">
+              <div className="space-y-1">
+                {allChildren.map(child => {
+                  const childType = getAccountTypeFromCode(child.code);
+                  const ChildIcon = childType.icon;
+                  const level = child.level - account.level;
+                  return (
+                    <div 
+                      key={child.id}
+                      className="flex items-center justify-between py-1 px-2 hover:bg-muted/50 rounded cursor-pointer text-sm"
+                      style={{ paddingInlineStart: `${level * 20 + 8}px` }}
+                      onClick={() => handleAccountClick(child)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <ChildIcon size={12} className={childType.color.replace('bg-', 'text-')} />
+                        <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
+                        <span>{child.name}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {Number(child.balance || 0).toLocaleString()}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const parentOptions = useMemo(() => {
+    if (!editingAccount) return flatAccounts;
+    const currentCode = editingAccount.code;
+    return flatAccounts.filter(acc => 
+      !acc.code.startsWith(currentCode) && acc.code !== currentCode
+    );
+  }, [editingAccount, flatAccounts]);
+
   const renderAccountNode = (account: Account, level: number = 0) => {
-    const hasChildren = account.children && account.children.length > 0;
+    const hasChildren = account.has_children && account.children && account.children.length > 0;
     const isExpanded = expandedNodes.has(account.id.toString());
     const accountType = getAccountTypeFromCode(account.code);
+    const isSelected = selectedAccount?.id === account.id;
+    const Icon = accountType.icon;
     
     const matchesSearch = searchQuery === '' || 
       account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -321,9 +408,10 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     return (
       <div key={account.id}>
         <div
-          className={`flex items-center justify-between py-2 px-3 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer`}
+          className={`flex items-center justify-between py-2 px-3 rounded-lg transition-all cursor-pointer
+            ${isSelected ? 'bg-primary/10 border-primary/20 shadow-sm' : 'hover:bg-muted/50'}`}
           style={{ paddingInlineStart: `${level * 24 + 12}px` }}
-          onClick={() => handleViewDetails(account.id)}
+          onClick={() => handleAccountClick(account)}
         >
           <div className="flex items-center gap-2 flex-1">
             {hasChildren ? (
@@ -331,21 +419,14 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleNode(account.id);
-                }}
+                onClick={(e) => toggleNode(account.id, e)}
               >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </Button>
             ) : (
               <span className="w-6" />
             )}
-            {hasChildren ? (
-              <FolderOpen size={16} className="text-amber-500" />
-            ) : (
-              <FileText size={16} className="text-muted-foreground" />
-            )}
+            <Icon size={16} className={accountType.color.replace('bg-', 'text-')} />
             <span className="font-mono text-sm text-muted-foreground">{account.code}</span>
             <span className="font-medium">
               {account.name}
@@ -361,7 +442,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
             <span className="text-sm font-medium">
               {Number(account.balance || 0).toLocaleString()}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -395,17 +476,6 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
           </div>
         )}
       </div>
-    );
-  };
-
-  // Get all possible parent accounts (excluding the current account and its children)
-  const getParentOptions = () => {
-    if (!editingAccount) return flatAccounts;
-    
-    // Filter out the current account and its potential children
-    const currentCode = editingAccount.code;
-    return flatAccounts.filter(acc => 
-      !acc.code.startsWith(currentCode) && acc.code !== currentCode
     );
   };
 
@@ -481,7 +551,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
         <Card className="bg-gradient-to-r from-cyan-500/10 to-sky-500/10 border-cyan-200 dark:border-cyan-800">
           <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <Layers className="h-5 w-5 text-cyan-600" />
+              <Users className="h-5 w-5 text-cyan-600" />
               <div>
                 <p className="text-xs text-muted-foreground">{language === 'ar' ? 'مستويات الشجرة' : 'Tree Levels'}</p>
                 <p className="text-lg font-bold text-cyan-600">{stats.tree_levels}</p>
@@ -509,64 +579,98 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
         })}
       </div>
 
-      {/* Account Details if selected */}
-      {selectedAccountId && accountDetail && (
-        <Card className="bg-muted/30">
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'كود الحساب' : 'Account Code'}</p>
-                  <p className="font-mono font-bold">{accountDetail.data.code}</p>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Accounts Tree - Takes 2/3 of the space */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="py-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FolderOpen size={20} />
+              {language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[600px]">
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'اسم الحساب' : 'Account Name'}</p>
-                  <p className="font-medium">{accountDetail.data.name}</p>
+              ) : accounts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FolderTree size={40} className="mx-auto mb-2 opacity-50" />
+                  <p>{language === 'ar' ? 'لا توجد حسابات' : 'No accounts found'}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'المستوى' : 'Level'}</p>
-                  <p className="font-medium">{accountDetail.data.level}</p>
+              ) : (
+                <div className="p-2">
+                  {accounts.map(account => renderAccountNode(account))}
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{language === 'ar' ? 'الرصيد' : 'Balance'}</p>
-                  <p className="font-bold">{Number(accountDetail.data.balance || 0).toLocaleString()}</p>
-                </div>
-              </div>
-              <Badge variant="outline" className="gap-1">
-                <span className={`w-2 h-2 rounded-full ${getAccountTypeFromCode(accountDetail.data.code).color}`} />
-                {getAccountTypeFromCode(accountDetail.data.code).label}
-              </Badge>
-            </div>
+              )}
+            </ScrollArea>
           </CardContent>
         </Card>
-      )}
 
-      {/* Accounts Tree */}
-      <Card>
-        <CardHeader className="py-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FolderOpen size={20} />
-            {language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[500px]">
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-              </div>
-            ) : accountTree.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {language === 'ar' ? 'لا توجد حسابات' : 'No accounts found'}
+        {/* Children Details Panel - Takes 1/3 of the space */}
+        <Card className="lg:col-span-1">
+          <CardHeader className="py-3 border-b">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FolderTree size={20} className="text-blue-500" />
+              {language === 'ar' ? 'تفاصيل الحساب' : 'Account Details'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4">
+            {selectedAccount ? (
+              <div className="space-y-4">
+                {/* Selected Account Info */}
+                <div className="bg-muted/30 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    {(() => {
+                      const Icon = getAccountTypeFromCode(selectedAccount.code).icon;
+                      return <Icon size={20} className={getAccountTypeFromCode(selectedAccount.code).color.replace('bg-', 'text-')} />;
+                    })()}
+                    <span className="font-mono text-sm text-muted-foreground">{selectedAccount.code}</span>
+                    <span className="font-bold">{selectedAccount.name}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">{language === 'ar' ? 'المستوى' : 'Level'}</p>
+                      <p className="font-medium">{selectedAccount.level}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{language === 'ar' ? 'الرصيد' : 'Balance'}</p>
+                      <p className="font-bold">{Number(selectedAccount.balance || 0).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{language === 'ar' ? 'المدين' : 'Debit'}</p>
+                      <p className="font-medium">{Number(selectedAccount.debit || 0).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{language === 'ar' ? 'الدائن' : 'Credit'}</p>
+                      <p className="font-medium">{Number(selectedAccount.credit || 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    {getAccountTypeBadge(selectedAccount.code)}
+                  </div>
+                </div>
+
+                {/* Children Details */}
+                <div>
+                  <h3 className="text-md font-medium mb-3 flex items-center gap-2">
+                    <Users size={16} />
+                    {language === 'ar' ? 'الأبناء' : 'Children'}
+                  </h3>
+                  {renderChildrenDetails(selectedAccount)}
+                </div>
               </div>
             ) : (
-              <div className="p-2">
-                {accountTree.map(account => renderAccountNode(account))}
+              <div className="text-center py-12 text-muted-foreground">
+                <FolderTree size={48} className="mx-auto mb-3 opacity-30" />
+                <p>{language === 'ar' ? 'اختر حساباً لعرض التفاصيل' : 'Select an account to view details'}</p>
               </div>
             )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Account Form Dialog */}
       <Dialog open={showForm} onOpenChange={handleCloseForm}>
@@ -614,7 +718,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
-                  {getParentOptions().map(acc => (
+                  {parentOptions.map(acc => (
                     <SelectItem key={acc.id} value={acc.code}>
                       {acc.full_path || `${acc.code} - ${acc.name}`}
                     </SelectItem>
