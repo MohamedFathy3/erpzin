@@ -67,9 +67,11 @@ const KPICard: React.FC<KPICardProps> = ({
       )}
 
       {change !== undefined && (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center  gap-1.5">
+
           <div className={cn(
-            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
+          
+          'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium',
             isPositive && 'bg-success/10 text-success',
             isNegative && 'bg-destructive/10 text-destructive',
             isNeutral && 'bg-muted text-muted-foreground'
