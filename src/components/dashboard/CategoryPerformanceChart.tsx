@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import {
   PieChart,
   Pie,
@@ -12,6 +12,22 @@ import {
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface RevenueReport {
+  top_categories: Array<{
+    category_id: number;
+    category_name: string;
+    total_quantity: number;
+  }>;
+}
+
+interface CategoryPerformanceChartProps {
+  categories?: Array<{
+    category_id: number;
+    category_name: string;
+    total_quantity: number;
+  }>;
+}
+
 const COLORS = [
   'hsl(217, 47%, 19%)',
   'hsl(134, 61%, 41%)',
@@ -21,46 +37,30 @@ const COLORS = [
   'hsl(280, 65%, 60%)',
 ];
 
-const CategoryPerformanceChart: React.FC = () => {
+const CategoryPerformanceChart: React.FC<CategoryPerformanceChartProps> = ({ categories: propCategories }) => {
   const { t, language } = useLanguage();
 
   const { data: categoryData, isLoading } = useQuery({
     queryKey: ['category-performance-chart'],
     queryFn: async () => {
-      // Get categories
-      const { data: categories } = await supabase
-        .from('categories')
-        .select('id, name, name_ar')
-        .is('parent_id', null);
-      
-      if (!categories || categories.length === 0) {
-        // Return mock data if no categories exist
-        return [
-          { name: language === 'ar' ? 'أولاد' : 'Boys', value: 32, color: COLORS[0] },
-          { name: language === 'ar' ? 'بنات' : 'Girls', value: 28, color: COLORS[1] },
-          { name: language === 'ar' ? 'نساء' : 'Women', value: 22, color: COLORS[2] },
-          { name: language === 'ar' ? 'رجال' : 'Men', value: 12, color: COLORS[3] },
-          { name: language === 'ar' ? 'أطفال' : 'Kids', value: 6, color: COLORS[4] },
-        ];
+      // إذا كان عندنا categories من الـ props، استخدمها
+      if (propCategories && propCategories.length > 0) {
+        return propCategories.map((cat, index) => ({
+          name: cat.category_name,
+          value: cat.total_quantity,
+          color: COLORS[index % COLORS.length],
+        }));
       }
       
-      // Get products count per category as a simple performance metric
-      const categoryPerformance = await Promise.all(
-        categories.slice(0, 5).map(async (cat, index) => {
-          const { count } = await supabase
-            .from('products')
-            .select('*', { count: 'exact', head: true })
-            .eq('category_id', cat.id);
-          
-          return {
-            name: language === 'ar' && cat.name_ar ? cat.name_ar : cat.name,
-            value: count || Math.floor(Math.random() * 30) + 5,
-            color: COLORS[index % COLORS.length],
-          };
-        })
-      );
+      // وإلا جيبها من API
+      const response = await api.get<RevenueReport>('/reports/revenue');
+      const topCategories = response.data?.top_categories || [];
       
-      return categoryPerformance;
+      return topCategories.map((cat, index) => ({
+        name: cat.category_name,
+        value: cat.total_quantity,
+        color: COLORS[index % COLORS.length],
+      }));
     },
   });
 

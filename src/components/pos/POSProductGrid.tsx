@@ -67,37 +67,41 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
   };
 
   // ✅ فلترة المنتجات - بسيطة وصحيحة
-  const filteredProducts = useMemo(() => {
-    // لو مفيش منتجات، ارجع array فاضي
-    if (!products || products.length === 0) {
-      return [];
-    }
+// ✅ فلترة المنتجات - بسيطة وصحيحة
+const filteredProducts = useMemo(() => {
+  // لو مفيش منتجات، ارجع array فاضي
+  if (!products || products.length === 0) {
+    return [];
+  }
 
-    // فلترة حسب البحث
-    let filtered = products;
+  console.log('All products:', products);
+  console.log('Selected category:', selectedCategory);
 
-    // فلترة حسب البحث
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(product => 
-        product.name?.toLowerCase().includes(query) ||
-        product.nameAr?.includes(query) ||
-        product.barcode?.includes(query) ||
-        product.sku?.toLowerCase().includes(query)
-      );
-    }
+  // فلترة حسب البحث
+  let filtered = products;
 
-    // فلترة حسب الفئة
-    if (selectedCategory && selectedCategory !== 'all') {
-      filtered = filtered.filter(product => {
-        // product.category_id ممكن يكون null أو string
-        const productCatId = product.category_id?.toString() || '';
-        return productCatId === selectedCategory;
-      });
-    }
+  // فلترة حسب البحث
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    filtered = filtered.filter(product => 
+      product.name?.toLowerCase().includes(query) ||
+      product.nameAr?.includes(query) ||
+      product.barcode?.includes(query) ||
+      product.sku?.toLowerCase().includes(query)
+    );
+  }
 
-    return filtered;
-  }, [products, searchQuery, selectedCategory]);
+  // فلترة حسب الفئة
+  if (selectedCategory && selectedCategory !== 'all') {
+    filtered = filtered.filter(product => {
+      const productCatId = product.category_id?.toString() || '';
+      console.log(`Product ${product.id} category_id:`, productCatId, 'vs selected:', selectedCategory);
+      return productCatId === selectedCategory;
+    });
+  }
+
+  return filtered;
+}, [products, searchQuery, selectedCategory]);
 
   return (
     <div className="w-full h-full">

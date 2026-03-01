@@ -4,7 +4,6 @@ import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,15 +42,14 @@ import {
   Target,
   Zap,
   AlertTriangle,
-  Clock,
   Filter,
   LayoutGrid,
   List,
-  ChevronRight,
   Receipt,
-  Truck
+  Truck,
+  Minus
 } from 'lucide-react';
-import { format, subDays, subWeeks, subMonths, subQuarters, subYears, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, subMonths, subQuarters, subYears, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -156,6 +154,7 @@ interface Customer {
   phone: string;
   point: number | null;
   last_paid_amount: number | null;
+  created_at: string;
 }
 
 interface CustomerResponse {
@@ -196,7 +195,7 @@ interface ProductResponse {
   status: number;
 }
 
-interface Finance {
+interface Expense {
   id: number;
   category: string;
   amount: string;
@@ -206,8 +205,27 @@ interface Finance {
   payment_method_arabic: string;
 }
 
-interface FinanceResponse {
-  data: Finance[];
+interface ExpenseResponse {
+  data: Expense[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Revenue {
+  id: number;
+  category: string;
+  amount: string;
+  description: string;
+  date: string;
+  payment_method: string;
+  payment_method_arabic: string;
+}
+
+interface RevenueResponse {
+  data: Revenue[];
   links: any;
   meta: any;
   result: string;
@@ -444,18 +462,35 @@ const Reports = () => {
     }
   });
 
-  // ==================== Fetch Finances ====================
-  const { data: finances = [] } = useQuery<Finance[]>({
-    queryKey: ['finances', dateFrom, dateTo],
+  // ==================== Fetch Expenses ====================
+  const { data: expenses = [] } = useQuery<Expense[]>({
+    queryKey: ['expenses', dateFrom, dateTo],
     queryFn: async () => {
       try {
-        const response = await api.post<FinanceResponse>('/finance/index', {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
           date_from: dateFrom,
           date_to: dateTo
         });
         return response.data.data || [];
       } catch (error) {
-        console.error('Error fetching finances:', error);
+        console.error('Error fetching expenses:', error);
+        return [];
+      }
+    }
+  });
+
+  // ==================== Fetch Revenues ====================
+  const { data: revenues = [] } = useQuery<Revenue[]>({
+    queryKey: ['revenues', dateFrom, dateTo],
+    queryFn: async () => {
+      try {
+        const response = await api.post<RevenueResponse>('/revenue/index', {
+          date_from: dateFrom,
+          date_to: dateTo
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching revenues:', error);
         return [];
       }
     }
@@ -494,10 +529,7 @@ const Reports = () => {
     queryKey: ['shifts', dateFrom, dateTo],
     queryFn: async () => {
       try {
-        const response = await api.post<ShiftResponse>('/shifts/index', {
-          date_from: dateFrom,
-          date_to: dateTo
-        });
+        const response = await api.get<ShiftResponse>('/shifts', {});
         return response.data.data || [];
       } catch (error) {
         console.error('Error fetching shifts:', error);
@@ -516,14 +548,11 @@ const Reports = () => {
     // Purchases
     const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
 
-    // Finances
-    const totalExpenses = finances
-      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
-      .reduce((sum, f) => sum + Math.abs(Number(f.amount)), 0);
+    // Expenses
+    const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
     
-    const totalRevenues = finances
-      .filter(f => f.category === 'revenue' || Number(f.amount) > 0)
-      .reduce((sum, f) => sum + Number(f.amount), 0);
+    // Revenues
+    const totalRevenues = revenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 
     // Calculate derived values
     const totalRevenue = totalSales + totalRevenues;
@@ -533,12 +562,9 @@ const Reports = () => {
     // Treasury & Bank
     const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + (t.balance || 0), 0);
     const totalBankBalance = banks.reduce((sum, b) => sum + (b.balance || 0), 0);
-    const totalLiquidity = totalTreasuryBalance + totalBankBalance;
 
     // Inventory
     const totalProducts = products.length;
-    const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5));
-    const outOfStockProducts = products.filter(p => p.stock === 0);
     const stockValue = products.reduce((sum, p) => sum + (p.stock * Number(p.cost || 0)), 0);
 
     // Customers
@@ -562,15 +588,12 @@ const Reports = () => {
       profitMargin,
       totalTreasuryBalance,
       totalBankBalance,
-      totalLiquidity,
       totalProducts,
-      lowStockProducts: lowStockProducts.length,
-      outOfStockProducts: outOfStockProducts.length,
       stockValue,
       newCustomers,
       totalPOSSales
     };
-  }, [salesInvoices, purchaseInvoices, finances, treasuries, banks, products, customers, shifts, range]);
+  }, [salesInvoices, purchaseInvoices, expenses, revenues, treasuries, banks, products, customers, shifts, range]);
 
   // ==================== Prepare Chart Data ====================
   const salesTrendData = useMemo<ChartDataPoint[]>(() => {
@@ -651,19 +674,17 @@ const Reports = () => {
   const expensesByCategory = useMemo<ExpenseCategory[]>(() => {
     const categoryMap = new Map<string, number>();
 
-    finances
-      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
-      .forEach(f => {
-        const category = f.category;
-        const amount = Math.abs(Number(f.amount));
-        categoryMap.set(category, (categoryMap.get(category) || 0) + amount);
-      });
+    expenses.forEach(exp => {
+      const category = exp.category;
+      const amount = Number(exp.amount);
+      categoryMap.set(category, (categoryMap.get(category) || 0) + amount);
+    });
 
     return Array.from(categoryMap.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [finances]);
+  }, [expenses]);
 
   const performanceData = useMemo(() => [
     { 
@@ -698,8 +719,8 @@ const Reports = () => {
         ['إجمالي الطلبات', stats.totalOrders],
         ['صافي الربح', stats.netProfit],
         ['قيمة المخزون', stats.stockValue],
-        ['سيولة الخزائن', stats.totalTreasuryBalance],
-        ['سيولة البنوك', stats.totalBankBalance]
+        ['أرصدة الخزائن', stats.totalTreasuryBalance],
+        ['أرصدة البنوك', stats.totalBankBalance]
       ];
       const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
@@ -782,24 +803,24 @@ const Reports = () => {
     totalPurchases: language === 'ar' ? 'المشتريات' : 'Purchases',
     // Inventory
     totalProducts: language === 'ar' ? 'إجمالي المنتجات' : 'Total Products',
-    lowStock: language === 'ar' ? 'مخزون منخفض' : 'Low Stock',
-    outOfStock: language === 'ar' ? 'نفذ المخزون' : 'Out of Stock',
     stockValue: language === 'ar' ? 'قيمة المخزون' : 'Stock Value',
     // Finance
     treasuryBalance: language === 'ar' ? 'الخزائن' : 'Treasury',
     bankBalance: language === 'ar' ? 'البنوك' : 'Banks',
-    totalLiquidity: language === 'ar' ? 'السيولة' : 'Liquidity',
     // Charts
     salesTrend: language === 'ar' ? 'اتجاه المبيعات' : 'Sales Trend',
     revenueVsExpenses: language === 'ar' ? 'الإيرادات مقابل المصروفات' : 'Revenue vs Expenses',
     stockDistribution: language === 'ar' ? 'توزيع المخزون' : 'Stock Distribution',
-    paymentMethods: language === 'ar' ? 'طرق الدفع' : 'Payment Methods',
+    expenseBreakdown: language === 'ar' ? 'تفصيل المصروفات' : 'Expense Breakdown',
     // Other
     comparedToPrevious: language === 'ar' ? 'مقارنة بالفترة السابقة' : 'vs previous period',
     noData: language === 'ar' ? 'لا توجد بيانات' : 'No data available',
     filter: language === 'ar' ? 'فلتر' : 'Filter',
     refresh: language === 'ar' ? 'تحديث' : 'Refresh',
-    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...'
+    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...',
+    targetAchievement: language === 'ar' ? 'تحقيق الهدف' : 'Target Achievement',
+    growthRate: language === 'ar' ? 'معدل النمو' : 'Growth Rate',
+    efficiency: language === 'ar' ? 'الكفاءة' : 'Efficiency'
   };
 
   const COLORS = [
@@ -866,7 +887,7 @@ const Reports = () => {
             <div className="space-y-2 flex-1">
               <p className="text-sm font-medium text-muted-foreground">{title}</p>
               <p className="text-2xl font-bold tracking-tight">{value}</p>
-              {trendValue && (
+              {trend && trendValue && (
                 <div className={`flex items-center gap-1 text-xs font-medium ${trend === 'up' ? 'text-accent' : 'text-destructive'}`}>
                   {trend === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                   <span>{trendValue}</span>
@@ -924,7 +945,7 @@ const Reports = () => {
   return (
     <MainLayout activeItem="reports">
       <div className="space-y-6 print:p-4" dir={direction} ref={printRef}>
-        {/* Enhanced Header */}
+        {/* Header - بدون فلتر */}
         <div className="flex flex-col gap-4 print:hidden">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="space-y-1">
@@ -940,6 +961,18 @@ const Reports = () => {
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="w-[140px] h-9">
+                  <Calendar size={14} className="me-2 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {dateRangeOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
                 <Printer size={16} />
                 {t.print}
@@ -950,91 +983,6 @@ const Reports = () => {
               </Button>
             </div>
           </div>
-
-          {/* Filters Bar */}
-          <Card className="border-0 bg-gradient-to-r from-muted/30 to-muted/10">
-            <CardContent className="p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Filter size={16} className="text-muted-foreground" />
-                  <span className="text-sm font-medium">{t.filter}:</span>
-                </div>
-                
-                <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger className="w-[140px] h-9 bg-background">
-                    <Calendar size={14} className="me-2 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dateRangeOptions.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                {dateRange === 'custom' && (
-                  <>
-                    <Input 
-                      type="date" 
-                      value={startDate} 
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-[140px] h-9"
-                    />
-                    <ChevronRight size={16} className="text-muted-foreground" />
-                    <Input 
-                      type="date" 
-                      value={endDate} 
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-[140px] h-9"
-                    />
-                  </>
-                )}
-
-                <Separator orientation="vertical" className="h-6" />
-                
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-[160px] h-9 bg-background">
-                    <Building2 size={14} className="me-2 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t.allBranches}</SelectItem>
-                    {branches.map(branch => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <div className="flex items-center gap-1 ms-auto border rounded-lg p-0.5 bg-muted/50">
-                  <Button
-                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    <LayoutGrid size={14} />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <List size={14} />
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-                <Clock size={12} />
-                <span>
-                  {format(range.start, 'dd MMM yyyy', { locale: language === 'ar' ? ar : undefined })} - {format(range.end, 'dd MMM yyyy', { locale: language === 'ar' ? ar : undefined })}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Main Tabs */}
@@ -1080,8 +1028,8 @@ const Reports = () => {
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6 mt-6">
-            {/* Primary KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Primary KPIs - الأربعة الكبار */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <KPICard
                 title={t.totalRevenue}
                 value={formatCurrency(stats.totalRevenue)}
@@ -1106,17 +1054,10 @@ const Reports = () => {
                 trendValue={`${stats.profitMargin.toFixed(1)}%`}
                 color={stats.netProfit >= 0 ? 'accent' : 'destructive'}
               />
-              <KPICard
-                title={t.totalLiquidity}
-                value={formatCurrency(stats.totalLiquidity)}
-                icon={Wallet}
-                color="warning"
-                subtitle={`${t.treasuryBalance}: ${formatCurrency(stats.totalTreasuryBalance)}`}
-              />
             </div>
 
-            {/* Secondary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {/* Secondary Stats - الإحصائيات الصغيرة */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
               <MiniStatCard
                 label={t.totalOrders}
                 value={formatNumber(stats.totalOrders)}
@@ -1131,33 +1072,21 @@ const Reports = () => {
               />
               <MiniStatCard
                 label={t.totalProducts}
-                value={formatNumber(stats.totalProducts)}
+                value={stats.totalProducts}
                 icon={Package}
                 color="bg-cyan-500/10 text-cyan-500"
-              />
-              <MiniStatCard
-                label={t.lowStock}
-                value={formatNumber(stats.lowStockProducts)}
-                icon={AlertTriangle}
-                color="bg-warning/10 text-warning"
-              />
-              <MiniStatCard
-                label={t.stockValue}
-                value={formatCurrency(stats.stockValue)}
-                icon={Landmark}
-                color="bg-emerald-500/10 text-emerald-500"
               />
               <MiniStatCard
                 label={t.totalExpenses}
                 value={formatCurrency(stats.totalExpenses)}
                 icon={TrendingDown}
-                color="bg-destructive/10 text-destructive"
+                color="bg-red-500/10 text-red-500"
               />
             </div>
 
-            {/* Charts Grid */}
+            {/* Charts Grid - 4 رسوم بيانية */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Sales Trend */}
+              {/* Sales Trend Chart */}
               <Card className="card-elevated">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1197,7 +1126,7 @@ const Reports = () => {
                 </CardContent>
               </Card>
 
-              {/* Revenue vs Expenses */}
+              {/* Revenue vs Expenses Chart */}
               <Card className="card-elevated">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1214,6 +1143,7 @@ const Reports = () => {
                         outerRadius={100}
                         paddingAngle={2}
                         dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                       >
                         {revenueVsExpensesData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -1233,7 +1163,7 @@ const Reports = () => {
                 </CardContent>
               </Card>
 
-              {/* Stock Distribution */}
+              {/* Stock Distribution Chart */}
               <Card className="card-elevated">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1261,12 +1191,12 @@ const Reports = () => {
                 </CardContent>
               </Card>
 
-              {/* Expenses by Category */}
+              {/* Expenses by Category Chart */}
               <Card className="card-elevated">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <TrendingDown size={18} className="text-destructive" />
-                    {language === 'ar' ? 'المصروفات حسب الفئة' : 'Expenses by Category'}
+                    {t.expenseBreakdown}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1380,10 +1310,10 @@ const Reports = () => {
 
           {/* Inventory Analysis Tab */}
           <TabsContent value="inventoryAnalysis" className="space-y-6 mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
               <KPICard
                 title={t.totalProducts}
-                value={formatNumber(stats.totalProducts)}
+                value={stats.totalProducts}
                 icon={Package}
                 color="primary"
               />
@@ -1393,60 +1323,15 @@ const Reports = () => {
                 icon={Landmark}
                 color="accent"
               />
-              <KPICard
-                title={t.lowStock}
-                value={formatNumber(stats.lowStockProducts)}
-                icon={AlertTriangle}
-                color="warning"
-              />
-              <KPICard
-                title={t.outOfStock}
-                value={formatNumber(stats.outOfStockProducts)}
-                icon={Package}
-                color="destructive"
-              />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="card-elevated">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="text-warning" size={18} />
-                    {t.lowStock}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    <div className="space-y-2">
-                      {products
-                        .filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5))
-                        .map((product) => (
-                          <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-warning/5 border border-warning/20">
-                            <div>
-                              <p className="font-medium">{product.name}</p>
-                              <p className="text-xs text-muted-foreground">{product.sku}</p>
-                            </div>
-                            <div className="text-end">
-                              <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30">
-                                {product.stock} / {product.reorder_level || 5}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      {stats.lowStockProducts === 0 && (
-                        <p className="text-center text-muted-foreground py-8">{t.noData}</p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
+            <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
               <Card className="card-elevated">
                 <CardHeader>
                   <CardTitle>{t.stockDistribution}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={stockByCategory}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} />

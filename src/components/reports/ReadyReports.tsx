@@ -794,7 +794,7 @@ const ReadyReports = () => {
             p.stock,
             formatCurrency(Number(p.price)),
             formatCurrency(Number(p.cost)),
-            formatCurrency(p.stock * Number(p.cost))
+            p.stock * Number(p.cost)
           ]),
           total: products.reduce((sum, p) => sum + (p.stock * Number(p.cost)), 0)
         };
@@ -1187,56 +1187,9 @@ const ReadyReports = () => {
 
             <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
-            <div className="flex items-center gap-2">
-              <Store size={16} className="text-muted-foreground" />
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue placeholder={t.allBranches} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.allBranches}</SelectItem>
-                  {branches.map((b: Branch) => (
-                    <SelectItem key={b.id} value={b.id.toString()}>
-                      {language === 'ar' ? b.name : b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+         
 
-            <div className="flex items-center gap-2">
-              <Warehouse size={16} className="text-muted-foreground" />
-              <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue placeholder={t.allWarehouses} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.allWarehouses}</SelectItem>
-                  {warehouses.map((w: WarehouseType) => (
-                    <SelectItem key={w.id} value={w.id.toString()}>
-                      {language === 'ar' ? w.name : w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <User size={16} className="text-muted-foreground" />
-              <Select value={selectedUser} onValueChange={setSelectedUser}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue placeholder={t.allUsers} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.allUsers}</SelectItem>
-                  {users.map((u: UserType) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {language === 'ar' ? u.full_name_ar || u.full_name : u.full_name || u.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          
           </div>
         </CardContent>
       </Card>

@@ -9,7 +9,10 @@ interface KPICardProps {
   changeLabel?: string;
   icon?: React.ReactNode;
   currency?: string;
-  variant?: 'default' | 'success' | 'primary';
+ variant?: 'default' | 'success' | 'primary' | 'warning' | 'danger'; // إضافة المزيد
+  precision?: number; // عدد الأرقام العشرية
+  compact?: boolean; // نسخة مصغرة
+  subtitle?: string; // نص فرعي تحت القيمة الرئيسية
 }
 
 const KPICard: React.FC<KPICardProps> = ({
@@ -19,6 +22,7 @@ const KPICard: React.FC<KPICardProps> = ({
   changeLabel = 'vs last period',
   icon,
   currency,
+  subtitle,
   variant = 'default',
 }) => {
   const isPositive = change !== undefined && change > 0;
@@ -55,9 +59,12 @@ const KPICard: React.FC<KPICardProps> = ({
           variant === 'primary' && 'text-primary',
           variant === 'default' && 'text-foreground'
         )}>
-          {typeof value === 'number' ? value.toLocaleString() : value}
+          {typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value}
         </span>
       </div>
+      {subtitle && (
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      )}
 
       {change !== undefined && (
         <div className="flex items-center gap-1.5">

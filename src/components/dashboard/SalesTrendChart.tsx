@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import {
   AreaChart,
   Area,
@@ -12,51 +12,88 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+
+interface SalesTrendChartProps {
+  branchId?: number;
+  data?: any;  // 👈 أضف هذا
+}
+
+interface SalesInvoice {
+  id: number;
+  total_amount: string;
+  created_at: string;
+}
+
+interface SalesInvoiceResponse {
+  data: SalesInvoice[];
+}
 
 const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
-const SalesTrendChart: React.FC = () => {
+const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propData }) => {
   const { t, language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
+  // استخدم propData لو موجود، وإلا جيب من API
   const { data: salesData, isLoading } = useQuery({
-    queryKey: ['sales-trend-chart'],
+    queryKey: ['sales-trend-chart', branchId],
     queryFn: async () => {
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth();
       const months = language === 'ar' ? monthsAr : monthsEn;
       
+      // جلب كل مبيعات السنة الحالية
+      const startOfYear = `${currentYear}-01-01 00:00:00`;
+      const endOfYear = `${currentYear}-12-31 23:59:59`;
+      
+      const params: any = {
+        date_from: startOfYear,
+        date_to: endOfYear,
+        paginate: false
+      };
+      
+      if (branchId) {
+        params.branch_id = branchId;
+      }
+
+      const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', params);
+      const allSales = response.data.data || [];
+      
       // Generate data for each month
-      const monthlyData = await Promise.all(
-        months.map(async (month, index) => {
-          const startDate = new Date(currentYear, index, 1).toISOString().split('T')[0];
-          const endDate = new Date(currentYear, index + 1, 0).toISOString().split('T')[0];
-          
-          const { data: sales } = await supabase
-            .from('sales')
-            .select('total_amount')
-            .gte('sale_date', startDate)
-            .lte('sale_date', endDate);
-          
-          const actual = index <= currentMonth 
-            ? sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0
-            : null;
-          
-          // Simple prediction based on trend
-          const baseValue = 100000 + (index * 15000);
-          const predicted = Math.round(baseValue + (Math.random() * 20000 - 10000));
-          
-          return {
-            month,
-            actual,
-            predicted,
-          };
-        })
-      );
+      const monthlyData = months.map((month, index) => {
+        const monthStart = new Date(currentYear, index, 1);
+        const monthEnd = new Date(currentYear, index + 1, 0);
+        
+        // فلترة مبيعات هذا الشهر
+        const monthSales = allSales.filter(sale => {
+          const saleDate = new Date(sale.created_at);
+          return saleDate >= monthStart && saleDate <= monthEnd;
+        });
+        
+        const actual = index <= currentMonth 
+          ? monthSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
+          : null;
+        
+        // Simple prediction based on trend
+        const baseValue = 100000 + (index * 15000);
+        const predicted = Math.round(baseValue + (Math.random() * 20000 - 10000));
+        
+        return {
+          month,
+          actual,
+          predicted,
+        };
+      });
       
       return monthlyData;
     },
+    enabled: !propData,  // 👈 شغال بس لو مفيش propData
   });
+
+  // استخدم propData لو موجود، وإلا استخدم salesData
+  const chartData = propData ? propData.salesData : salesData;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -71,7 +108,7 @@ const SalesTrendChart: React.FC = () => {
               />
               <span className="text-muted-foreground">{entry.name}:</span>
               <span className="font-medium">
-                {entry.value ? `${(entry.value / 1000).toFixed(0)}K ${t('common.currency')}` : '-'}
+                {entry.value ? formatCurrency(entry.value) : '-'}
               </span>
             </div>
           ))}
@@ -81,7 +118,7 @@ const SalesTrendChart: React.FC = () => {
     return null;
   };
 
-  if (isLoading) {
+  if (isLoading && !propData) {
     return (
       <div className="card-elevated p-5">
         <div className="flex items-center justify-between mb-6">
@@ -116,7 +153,7 @@ const SalesTrendChart: React.FC = () => {
 
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -136,7 +173,7 @@ const SalesTrendChart: React.FC = () => {
             <YAxis 
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               axisLine={{ stroke: 'hsl(var(--border))' }}
-              tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+              tickFormatter={(value) => formatCurrency(value)}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area

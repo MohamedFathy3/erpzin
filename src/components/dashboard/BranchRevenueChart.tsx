@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import {
   BarChart,
   Bar,
@@ -13,43 +13,47 @@ import {
   Cell,
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
-const BranchRevenueChart: React.FC = () => {
+interface RevenueReport {
+  branch_revenues: Array<{
+    branch_name: string;
+    revenue: number;
+  }>;
+}
+
+interface BranchRevenueChartProps {
+  branches?: Array<{
+    branch_name: string;
+    revenue: number;
+  }>;
+}
+
+const BranchRevenueChart: React.FC<BranchRevenueChartProps> = ({ branches: propBranches }) => {
   const { t, language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
   const { data: branchData, isLoading } = useQuery({
     queryKey: ['branch-revenue-chart'],
     queryFn: async () => {
-      const startOfMonth = new Date(new Date().setDate(1)).toISOString().split('T')[0];
+      // إذا كان عندنا branches من الـ props، استخدمها
+      if (propBranches && propBranches.length > 0) {
+        return propBranches.map(branch => ({
+          name: branch.branch_name,
+          revenue: branch.revenue,
+          growth: Math.random() * 20 - 5, // Placeholder - would need historical data
+        }));
+      }
       
-      // Get branches
-      const { data: branches } = await supabase
-        .from('branches')
-        .select('id, name, name_ar')
-        .eq('is_active', true);
+      // وإلا جيبها من API
+      const response = await api.get<RevenueReport>('/reports/revenue');
+      const branchRevenues = response.data?.branch_revenues || [];
       
-      if (!branches) return [];
-      
-      // Get sales by branch
-      const branchRevenue = await Promise.all(
-        branches.map(async (branch) => {
-          const { data: sales } = await supabase
-            .from('sales')
-            .select('total_amount')
-            .eq('branch', branch.name)
-            .gte('sale_date', startOfMonth);
-          
-          const revenue = sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
-          
-          return {
-            name: language === 'ar' && branch.name_ar ? branch.name_ar : branch.name,
-            revenue,
-            growth: Math.random() * 20 - 5, // Placeholder - would need historical data for real growth
-          };
-        })
-      );
-      
-      return branchRevenue.sort((a, b) => b.revenue - a.revenue);
+      return branchRevenues.map(branch => ({
+        name: branch.branch_name,
+        revenue: branch.revenue,
+        growth: Math.random() * 20 - 5, // Placeholder
+      }));
     },
   });
 
@@ -68,7 +72,7 @@ const BranchRevenueChart: React.FC = () => {
           <div className="space-y-1 text-sm">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">{t('dashboard.revenue')}:</span>
-              <span className="font-medium">{(data.revenue / 1000).toFixed(0)}K {t('common.currency')}</span>
+              <span className="font-medium">{formatCurrency(data.revenue)}</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">{t('dashboard.growth')}:</span>
@@ -115,7 +119,7 @@ const BranchRevenueChart: React.FC = () => {
                 type="number"
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 axisLine={{ stroke: 'hsl(var(--border))' }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                tickFormatter={(value) => formatCurrency(value)}
               />
               <YAxis 
                 type="category"

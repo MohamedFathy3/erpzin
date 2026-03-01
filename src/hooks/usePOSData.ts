@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
+import { useApp } from '@/contexts/AppContext';
 
 // ========== أنواع البيانات المتقدمة ==========
 
@@ -120,75 +121,92 @@ export const useCategories = () => {
   });
 };
 
-// ========== Products Hook with Category Filter ==========
-
+// ========== Products Hook with Branch and Category Filter ==========
 export const useProducts = (categoryId?: string | null) => {
+  const { userBranch, currentBranch } = useApp();
+  
   return useQuery({
-    queryKey: ['pos-products', categoryId],
+    queryKey: ['pos-products', categoryId, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
-      const payload: any = {
-        orderBy: "id",
-        orderByDirection: "asc",
-        perPage: 50,
-        paginate: true,
-        delete: false
-      };
+      try {
+        // ✅ تجهيز الـ payload - نبدأه فاضي
+        const payload: any = {};
 
-      // إضافة فلتر category_id لو موجود وليس 'all'
-      if (categoryId && categoryId !== 'all' && categoryId !== '') {
-        payload.filters = {
-          category_id: parseInt(categoryId)
-        };
+        // ✅ نضيف branch_id فقط إذا كان موجود (اختياري)
+        const branchId = userBranch?.id || currentBranch?.id;
+        if (branchId) {
+          payload.branch_id = branchId;
+        }
+
+        // ✅ نضيف category_id فقط إذا كان موجود وليس 'all'
+        if (categoryId && categoryId !== 'all' && categoryId !== '') {
+          payload.category_id = parseInt(categoryId);
+        }
+
+        // ✅ دايماً نطلب API حتى لو payload فاضي
+        console.log('Sending payload:', payload);
+        const response = await api.post('/products/by-branch', payload);
+        
+        const products = response.data?.data || response.data || [];
+        
+        return products.map((prod: any) => ({
+          id: prod.id?.toString() || '',
+          name: prod.name || '',
+          name_ar: prod.name_ar || prod.name || '',
+          description: prod.description || null,
+          sku: prod.sku || '',
+          barcode: prod.barcode || null,
+          price: parseFloat(prod.price || '0'),
+          cost: prod.cost || null,
+          stock: prod.stock || 0,
+          reorder_level: prod.reorder_level || null,
+          category_id: prod.category?.id?.toString() || null,
+          image_url: prod.image_url || null,
+          imageUrl: prod.imageUrl || prod.image_url || null,
+          is_active: prod.active ?? prod.is_active ?? true,
+          has_variants: (prod.units && prod.units.length > 0) || false,
+          units: prod.units || [],
+          image: prod.image || null,
+          category: prod.category || null,
+          created_at: prod.created_at || null,
+          updated_at: prod.updated_at || null
+        }));
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: 'خطأ في جلب المنتجات',
+          variant: 'destructive'
+        });
+        return [];
       }
-
-      const response = await api.post('/product/index', payload);
-      
-      const products = response.data?.data || response.data || [];
-      
-      return products.map((prod: any) => ({
-        id: prod.id?.toString() || '',
-        name: prod.name || '',
-        name_ar: prod.name_ar || prod.name || '',
-        description: prod.description || null,
-        sku: prod.sku || '',
-        barcode: prod.barcode || null,
-        price: parseFloat(prod.price || '0'),
-        cost: prod.cost || null,
-        stock: prod.stock || 0,
-        reorder_level: prod.reorder_level || null,
-        // 👈 مهم: نحتفظ بـ null لو مفيش category_id
-        category_id: prod.category_id?.toString() || null,
-        image_url: prod.image_url || null,
-        imageUrl: prod.imageUrl || prod.image_url || null,
-        is_active: prod.active ?? prod.is_active ?? true,
-        has_variants: (prod.units && prod.units.length > 0) || false,
-        units: prod.units || [],
-        image: prod.image || null,
-        category: prod.category || null,
-        created_at: prod.created_at || null,
-        updated_at: prod.updated_at || null
-      }));
     },
   });
 };
-
 // ========== باقي الـ hooks زي ما هي ==========
 
+// ========== Product by Barcode Hook - مع API الجديد ==========
+
 export const useProductByBarcode = (barcode: string) => {
+  const { userBranch, currentBranch } = useApp();
+  
   return useQuery({
-    queryKey: ['product-barcode', barcode],
+    queryKey: ['product-barcode', barcode, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
       try {
-        const payload = {
-          filters: { barcode: barcode },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1,
-          paginate: false,
-          delete: false
-        };
+        // ✅ تجهيز الـ payload - نبدأه فاضي
+        const payload: any = {};
 
-        const response = await api.post('/product/index', payload);
+        // ✅ نضيف branch_id فقط إذا كان موجود (اختياري)
+        const branchId = userBranch?.id || currentBranch?.id;
+        if (branchId) {
+          payload.branch_id = branchId;
+        }
+
+        // ✅ نضيف barcode دائمًا
+        payload.barcode = barcode;
+
+        console.log('Sending payload:', payload);
+        const response = await api.post('/products/by-branch', payload);
         
         const product = response.data?.data?.[0] || null;
         
@@ -204,7 +222,7 @@ export const useProductByBarcode = (barcode: string) => {
             cost: product.cost || null,
             stock: product.stock || 0,
             reorder_level: product.reorder_level || null,
-            category_id: product.category_id?.toString() || null,
+            category_id: product.category?.id?.toString() || null,
             image_url: product.image_url || null,
             imageUrl: product.imageUrl || product.image_url || null,
             is_active: product.active ?? product.is_active ?? true,
@@ -290,4 +308,9 @@ export const getAvailableVariants = (product: Product): Array<{
   });
   
   return variants;
+};
+
+// ✅ دالة مساعدة لجلب صورة المنتج
+export const getProductImageUrl = (product: Product): string => {
+  return product.imageUrl || product.image_url || product.image?.fullUrl || '';
 };

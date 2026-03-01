@@ -69,18 +69,49 @@ interface PurchaseInvoiceResponse {
   status: number;
 }
 
-interface Finance {
+// ==================== Expense Type (من /finance/index) ====================
+interface Expense {
   id: number;
   category: string;
   amount: string;
+  formatted_amount: string;
   description: string;
   date: string;
+  date_formatted: string;
   payment_method: string;
   payment_method_arabic: string;
+  reference_number: string;
+  created_at: string;
+  updated_at: string;
 }
 
-interface FinanceResponse {
-  data: Finance[];
+interface ExpenseResponse {
+  data: Expense[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+// ==================== Revenue Type (من /revenue/index) ====================
+interface Revenue {
+  id: number;
+  category: string;
+  amount: string;
+  formatted_amount: string;
+  description: string;
+  date: string;
+  date_formatted: string;
+  payment_method: string;
+  payment_method_arabic: string;
+  reference_number: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RevenueResponse {
+  data: Revenue[];
   links: any;
   meta: any;
   result: string;
@@ -98,7 +129,6 @@ const ProfitLossReport: React.FC = () => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const [period, setPeriod] = useState('month');
-  const [compareWith, setCompareWith] = useState('previous');
 
   // ==================== Date Range Functions ====================
   const getPeriodRange = (periodType: string, offset: number = 0) => {
@@ -204,35 +234,69 @@ const ProfitLossReport: React.FC = () => {
     }
   });
 
-  // ==================== Fetch Current Period Finances ====================
-  const { data: currentFinances = [] } = useQuery<Finance[]>({
-    queryKey: ['current-finances', period],
+  // ==================== Fetch Current Period Expenses (من /finance/index) ====================
+  const { data: currentExpenses = [] } = useQuery<Expense[]>({
+    queryKey: ['current-expenses', period],
     queryFn: async () => {
       try {
-        const response = await api.post<FinanceResponse>('/finance/index', {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
           date_from: currentPeriod.start,
           date_to: currentPeriod.end
         });
         return response.data.data || [];
       } catch (error) {
-        console.error('Error fetching current finances:', error);
+        console.error('Error fetching current expenses:', error);
         return [];
       }
     }
   });
 
-  // ==================== Fetch Previous Period Finances ====================
-  const { data: previousFinances = [] } = useQuery<Finance[]>({
-    queryKey: ['previous-finances', period],
+  // ==================== Fetch Previous Period Expenses ====================
+  const { data: previousExpenses = [] } = useQuery<Expense[]>({
+    queryKey: ['previous-expenses', period],
     queryFn: async () => {
       try {
-        const response = await api.post<FinanceResponse>('/finance/index', {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
           date_from: previousPeriod.start,
           date_to: previousPeriod.end
         });
         return response.data.data || [];
       } catch (error) {
-        console.error('Error fetching previous finances:', error);
+        console.error('Error fetching previous expenses:', error);
+        return [];
+      }
+    }
+  });
+
+  // ==================== Fetch Current Period Revenues (من /revenue/index) ====================
+  const { data: currentRevenues = [] } = useQuery<Revenue[]>({
+    queryKey: ['current-revenues', period],
+    queryFn: async () => {
+      try {
+        const response = await api.post<RevenueResponse>('/revenue/index', {
+          date_from: currentPeriod.start,
+          date_to: currentPeriod.end
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching current revenues:', error);
+        return [];
+      }
+    }
+  });
+
+  // ==================== Fetch Previous Period Revenues ====================
+  const { data: previousRevenues = [] } = useQuery<Revenue[]>({
+    queryKey: ['previous-revenues', period],
+    queryFn: async () => {
+      try {
+        const response = await api.post<RevenueResponse>('/revenue/index', {
+          date_from: previousPeriod.start,
+          date_to: previousPeriod.end
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching previous revenues:', error);
         return [];
       }
     }
@@ -246,14 +310,11 @@ const ProfitLossReport: React.FC = () => {
     // Purchases (Cost of Goods Sold)
     const totalPurchases = currentPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     
-    // Expenses and Revenues from Finance
-    const totalExpenses = currentFinances
-      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
-      .reduce((sum, f) => sum + Math.abs(Number(f.amount)), 0);
+    // Expenses from /finance/index
+    const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
     
-    const totalRevenues = currentFinances
-      .filter(f => f.category === 'revenue' || Number(f.amount) > 0)
-      .reduce((sum, f) => sum + Number(f.amount), 0);
+    // Revenues from /revenue/index
+    const totalRevenues = currentRevenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 
     // Calculate derived values
     const grossProfit = totalSales - totalPurchases;
@@ -278,18 +339,14 @@ const ProfitLossReport: React.FC = () => {
       grossProfitMargin,
       netProfitMargin
     };
-  }, [currentSales, currentPurchases, currentFinances]);
+  }, [currentSales, currentPurchases, currentExpenses, currentRevenues]);
 
   // ==================== Calculate Previous Period Totals ====================
   const previousTotals = useMemo(() => {
     const prevSales = previousSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     const prevPurchases = previousPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-    const prevExpenses = previousFinances
-      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
-      .reduce((sum, f) => sum + Math.abs(Number(f.amount)), 0);
-    const prevRevenues = previousFinances
-      .filter(f => f.category === 'revenue' || Number(f.amount) > 0)
-      .reduce((sum, f) => sum + Number(f.amount), 0);
+    const prevExpenses = previousExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
+    const prevRevenues = previousRevenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 
     const prevNetIncome = (prevSales - prevPurchases) - prevExpenses + prevRevenues;
 
@@ -297,7 +354,7 @@ const ProfitLossReport: React.FC = () => {
       sales: prevSales,
       netIncome: prevNetIncome
     };
-  }, [previousSales, previousPurchases, previousFinances]);
+  }, [previousSales, previousPurchases, previousExpenses, previousRevenues]);
 
   // ==================== Calculate Changes ====================
   const changes = useMemo(() => {
@@ -316,25 +373,23 @@ const ProfitLossReport: React.FC = () => {
   const expensesByCategory = useMemo<ExpenseCategory[]>(() => {
     const categoryMap = new Map<string, { value: number; count: number }>();
 
-    currentFinances
-      .filter(f => f.category === 'expense' || Number(f.amount) < 0)
-      .forEach(f => {
-        const category = f.category;
-        const amount = Math.abs(Number(f.amount));
-        
-        const existing = categoryMap.get(category);
-        if (existing) {
-          existing.value += amount;
-          existing.count += 1;
-        } else {
-          categoryMap.set(category, { value: amount, count: 1 });
-        }
-      });
+    currentExpenses.forEach(exp => {
+      const category = exp.category;
+      const amount = Number(exp.amount);
+      
+      const existing = categoryMap.get(category);
+      if (existing) {
+        existing.value += amount;
+        existing.count += 1;
+      } else {
+        categoryMap.set(category, { value: amount, count: 1 });
+      }
+    });
 
     return Array.from(categoryMap.entries())
       .map(([name, data]) => ({ name, value: data.value, count: data.count }))
       .sort((a, b) => b.value - a.value);
-  }, [currentFinances]);
+  }, [currentExpenses]);
 
   // ==================== Export to Excel ====================
   const handleExport = () => {

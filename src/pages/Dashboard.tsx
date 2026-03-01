@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
@@ -13,7 +14,7 @@ import RecentTransactions from '@/components/dashboard/RecentTransactions';
 import QuickAccessGrid from '@/components/dashboard/QuickAccessGrid';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { formatDateLong } from '@/lib/utils';
 import {
   Wallet,
@@ -24,114 +25,201 @@ import {
   DollarSign,
 } from 'lucide-react';
 
+// ==================== Types ====================
+interface RevenueReport {
+  today_revenue: number;
+  month_revenue: number;
+  three_months_revenue: number;
+  top_categories: Array<{
+    category_id: number;
+    category_name: string;
+    total_quantity: number;
+  }>;
+  branch_revenues: Array<{
+    branch_name: string;
+    revenue: number;
+  }>;
+}
+
+interface SalesInvoice {
+  id: number;
+  invoice_number: string;
+  customer: {
+    id: number;
+    name: string;
+  };
+  branch: string;
+  total_amount: string;
+  created_at: string;
+  payment_method: string;
+}
+
+interface SalesInvoiceResponse {
+  data: SalesInvoice[];
+}
+
+interface PurchaseInvoice {
+  id: number;
+  invoice_number: string;
+  supplier: {
+    id: number | null;
+    name: string | null;
+  };
+  branch: string;
+  total_amount: string;
+  invoice_date: string;
+}
+
+interface PurchaseInvoiceResponse {
+  data: PurchaseInvoice[];
+}
+
+interface Product {
+  id: number;
+  name: string;
+  name_ar?: string;
+  stock: number;
+  reorder_level: number;
+}
+
+interface ProductResponse {
+  data: Product[];
+}
+
 const Dashboard: React.FC = () => {
   const { language, t } = useLanguage();
   const { currentBranch } = useApp();
   const { user } = useAuth();
-  const { formatCurrency, getCurrencySymbol } = useRegionalSettings();
+  const { formatCurrency } = useRegionalSettings();
 
-  // Fetch aggregated dashboard data
-  const { data: dashboardData, isLoading } = useQuery({
-    queryKey: ['dashboard-summary', currentBranch?.id],
+  // ==================== Fetch Revenue Report (المصدر الرئيسي) ====================
+  const { data: revenueReport, isLoading: loadingRevenue } = useQuery<RevenueReport>({
+    queryKey: ['revenue-report', currentBranch?.id],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const startOfMonth = new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-      // Today's sales
-      let todaySalesQuery = supabase
-        .from('sales')
-        .select('total_amount')
-        .gte('sale_date', today);
-      
-      if (currentBranch) {
-        todaySalesQuery = todaySalesQuery.eq('branch', currentBranch.name);
+      try {
+        const params: any = {};
+        if (currentBranch?.id) {
+          params.branch_id = currentBranch.id;
+        }
+        
+        const response = await api.get('/reports/revenue', { params });
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching revenue report:', error);
+        return {
+          today_revenue: 0,
+          month_revenue: 0,
+          three_months_revenue: 0,
+          top_categories: [],
+          branch_revenues: []
+        };
       }
-      
-      const { data: todaySalesData } = await todaySalesQuery;
-      const todaySales = todaySalesData?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
-
-      // Yesterday's sales for comparison
-      let yesterdaySalesQuery = supabase
-        .from('sales')
-        .select('total_amount')
-        .gte('sale_date', yesterday)
-        .lt('sale_date', today);
-      
-      if (currentBranch) {
-        yesterdaySalesQuery = yesterdaySalesQuery.eq('branch', currentBranch.name);
-      }
-      
-      const { data: yesterdaySalesData } = await yesterdaySalesQuery;
-      const yesterdaySales = yesterdaySalesData?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
-
-      // Monthly revenue
-      let revenueQuery = supabase
-        .from('revenues')
-        .select('amount')
-        .gte('revenue_date', startOfMonth);
-      
-      if (currentBranch) {
-        revenueQuery = revenueQuery.eq('branch_id', currentBranch.id);
-      }
-      
-      const { data: revenueData } = await revenueQuery;
-      const totalRevenue = revenueData?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0;
-
-      // Monthly expenses
-      let expenseQuery = supabase
-        .from('expenses')
-        .select('amount')
-        .gte('expense_date', startOfMonth);
-      
-      if (currentBranch) {
-        expenseQuery = expenseQuery.eq('branch_id', currentBranch.id);
-      }
-      
-      const { data: expenseData } = await expenseQuery;
-      const totalExpenses = expenseData?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
-
-      // Monthly orders count
-      let ordersQuery = supabase
-        .from('sales')
-        .select('id')
-        .gte('sale_date', startOfMonth);
-      
-      if (currentBranch) {
-        ordersQuery = ordersQuery.eq('branch', currentBranch.name);
-      }
-      
-      const { data: ordersData } = await ordersQuery;
-      const totalOrders = ordersData?.length || 0;
-
-      // Low stock alerts
-      const { data: lowStockData } = await supabase
-        .from('low_stock_alerts')
-        .select('id')
-        .eq('is_resolved', false);
-      
-      const lowStockCount = lowStockData?.length || 0;
-
-      // Net profit
-      const netProfit = totalRevenue - totalExpenses;
-
-      // Calculate change percentages
-      const salesChange = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : 0;
-
-      return {
-        todaySales,
-        salesChange,
-        totalRevenue,
-        totalExpenses,
-        netProfit,
-        totalOrders,
-        lowStockCount,
-        avgOrderValue: totalOrders > 0 ? todaySales / totalOrders : 0,
-      };
     },
     refetchInterval: 60000, // Refresh every minute
   });
 
+  // ==================== Fetch Recent Sales (لآخر المعاملات) ====================
+  const { data: recentSales = [] } = useQuery<SalesInvoice[]>({
+    queryKey: ['recent-sales'],
+    queryFn: async () => {
+      const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
+        orderBy: 'id',
+        orderByDirection: 'desc',
+        perPage: 5,
+        paginate: false
+      });
+      return response.data.data || [];
+    },
+  });
+
+  // ==================== Fetch Recent Purchases (لآخر المشتريات) ====================
+  const { data: recentPurchases = [] } = useQuery<PurchaseInvoice[]>({
+    queryKey: ['recent-purchases'],
+    queryFn: async () => {
+      const response = await api.post<PurchaseInvoiceResponse>('/purchases-invoices/index', {
+        orderBy: 'id',
+        orderByDirection: 'desc',
+        perPage: 3,
+        paginate: false
+      });
+      return response.data.data || [];
+    },
+  });
+
+  // ==================== Fetch Products for Low Stock ====================
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const response = await api.post<ProductResponse>('/product/index', {
+        paginate: false
+      });
+      return response.data.data || [];
+    },
+  });
+
+  // ==================== Calculate Dashboard Metrics from Revenue Report ====================
+  const dashboardData = useMemo(() => {
+    // استخدم البيانات من revenue report
+    const todayRevenue = revenueReport?.today_revenue || 0;
+    const monthRevenue = revenueReport?.month_revenue || 0;
+    const threeMonthsRevenue = revenueReport?.three_months_revenue || 0;
+    
+    // Low stock products
+    const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5));
+    const lowStockCount = lowStockProducts.length;
+
+    // عدد الطلبات من recent sales
+    const totalOrders = recentSales.length;
+
+    // حساب التغير في المبيعات (تقريبي)
+    // ملاحظة: لو عاوز تغير دقيق، محتاج بيانات من الشهر الماضي
+    const salesChange = 0; // مؤقتاً
+
+    return {
+      todaySales: todayRevenue,
+      salesChange,
+      totalRevenue: monthRevenue,
+      threeMonthsRevenue,
+      totalExpenses: 0, // مش موجود في revenue report
+      netProfit: monthRevenue, // مؤقتاً (صافي الربح = الإيرادات)
+      totalOrders,
+      lowStockCount,
+      avgOrderValue: totalOrders > 0 ? todayRevenue / totalOrders : 0,
+    };
+  }, [revenueReport, products, recentSales]);
+
+  // ==================== Prepare Recent Transactions ====================
+  const recentTransactions = useMemo(() => {
+    // تحويل المبيعات لصيغة موحدة
+    const sales = recentSales.map(inv => ({
+      id: `sale-${inv.id}`,
+      type: 'sale' as const,
+      reference: inv.invoice_number,
+      amount: Number(inv.total_amount),
+      date: inv.created_at,
+      customer: inv.customer.name,
+      branch: inv.branch,
+      payment_method: inv.payment_method
+    }));
+
+    // تحويل المشتريات لصيغة موحدة
+    const purchases = recentPurchases.map(inv => ({
+      id: `purchase-${inv.id}`,
+      type: 'purchase' as const,
+      reference: inv.invoice_number,
+      amount: Number(inv.total_amount),
+      date: inv.invoice_date,
+      supplier: inv.supplier.name || 'Unknown',
+      branch: inv.branch
+    }));
+
+    // دمج وترتيب
+    return [...sales, ...purchases]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 8);
+  }, [recentSales, recentPurchases]);
+
+  const isLoading = loadingRevenue;
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -166,7 +254,7 @@ const Dashboard: React.FC = () => {
         {/* Quick Access */}
         <QuickAccessGrid />
 
-        {/* KPI Cards */}
+        {/* KPI Cards - من revenue report */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {isLoading ? (
             <>
@@ -182,34 +270,32 @@ const Dashboard: React.FC = () => {
             <>
               <KPICard
                 title={t('dashboard.todaySales')}
-                value={formatCurrency(dashboardData?.todaySales || 0)}
+                value={formatCurrency(dashboardData.todaySales)}
                 currency={t('common.currency')}
-                change={dashboardData?.salesChange || 0}
+                change={dashboardData.salesChange}
                 changeLabel={t('dashboard.vsYesterday')}
                 icon={<Wallet size={20} />}
                 variant="success"
               />
               <KPICard
                 title={t('dashboard.totalRevenue')}
-                value={formatCurrency(dashboardData?.totalRevenue || 0)}
+                value={formatCurrency(dashboardData.totalRevenue)}
                 currency={t('common.currency')}
-                change={0}
-                changeLabel={t('dashboard.thisMonth')}
+                subtitle={language === 'ar' ? 'هذا الشهر' : 'This month'}
                 icon={<TrendingUp size={20} />}
                 variant="primary"
               />
               <KPICard
-                title={t('dashboard.netProfit')}
-                value={formatCurrency(dashboardData?.netProfit || 0)}
+                title={language === 'ar' ? 'إيرادات ٣ شهور' : '3 Months Revenue'}
+                value={formatCurrency(dashboardData.threeMonthsRevenue)}
                 currency={t('common.currency')}
-                change={0}
-                changeLabel={t('dashboard.revenueMinusExpenses')}
-                icon={(dashboardData?.netProfit || 0) >= 0 ? <DollarSign size={20} /> : <TrendingDown size={20} />}
-                variant={(dashboardData?.netProfit || 0) >= 0 ? 'success' : 'default'}
+                subtitle={language === 'ar' ? 'آخر ٣ شهور' : 'Last 3 months'}
+                icon={<DollarSign size={20} />}
+                variant="default"
               />
               <KPICard
                 title={t('dashboard.totalOrders')}
-                value={dashboardData?.totalOrders || 0}
+                value={dashboardData.totalOrders}
                 change={0}
                 changeLabel={t('dashboard.thisMonth')}
                 icon={<ShoppingCart size={20} />}
@@ -219,8 +305,8 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Alert Cards */}
-        {(dashboardData?.lowStockCount || 0) > 0 && (
+        {/* Alert Cards - Low Stock */}
+        {dashboardData.lowStockCount > 0 && (
           <Card className="border-warning/50 bg-warning/5">
             <CardContent className="flex items-center gap-4 py-4">
               <div className="h-12 w-12 rounded-full bg-warning/20 flex items-center justify-center">
@@ -231,33 +317,39 @@ const Dashboard: React.FC = () => {
                   {t('dashboard.lowStock')}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {dashboardData?.lowStockCount} {language === 'ar' ? 'منتج يحتاج إعادة طلب' : 'products need reordering'}
+                  {dashboardData.lowStockCount} {language === 'ar' ? 'منتج يحتاج إعادة طلب' : 'products need reordering'}
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Charts Row */}
+        {/* Charts Row - باستخدام revenue report */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
-            <SalesTrendChart />
+            <SalesTrendChart 
+              branchId={currentBranch?.id ? Number(currentBranch.id) : undefined}
+              reportData={revenueReport}  // 👈 تمرير التقرير كامل
+            />
           </div>
           <div>
-            <CategoryPerformanceChart />
+            <CategoryPerformanceChart 
+              categories={revenueReport?.top_categories || []}
+            />
           </div>
         </div>
 
         {/* Second Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
-            <BranchRevenueChart />
+            <BranchRevenueChart 
+              branches={revenueReport?.branch_revenues || []}
+            />
           </div>
           <div>
-            <LowStockAlerts />
-          </div>
-          <div>
-            <RecentTransactions />
+            <RecentTransactions 
+              transactions={recentTransactions}
+            />
           </div>
         </div>
       </div>

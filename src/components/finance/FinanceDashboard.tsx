@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -35,128 +35,233 @@ import {
   Bar,
   Legend
 } from 'recharts';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 interface FinanceDashboardProps {
   language: string;
 }
 
+// ==================== Types ====================
+interface SalesInvoice {
+  id: number;
+  invoice_number: string;
+  customer: {
+    id: number;
+    name: string;
+  };
+  total_amount: string;
+  payment_method: string;
+  created_at: string;
+}
+
+interface SalesInvoiceResponse {
+  data: SalesInvoice[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface Expense {
+  id: number;
+  category: string;
+  amount: string;
+  description: string;
+  date: string;
+  payment_method: string;
+  payment_method_arabic: string;
+}
+
+interface ExpenseResponse {
+  data: Expense[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface PurchaseInvoice {
+  id: number;
+  invoice_number: string;
+  supplier: {
+    id: number | null;
+    name: string | null;
+  };
+  total_amount: string;
+  paid_amount?: string;
+  remaining_amount?: string;
+  payment_status: string;
+  invoice_date: string;
+}
+
+interface PurchaseInvoiceResponse {
+  data: PurchaseInvoice[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
+  const { formatCurrency } = useRegionalSettings();
+  
   const currentDate = new Date();
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const lastMonthStart = startOfMonth(subMonths(currentDate, 1));
   const lastMonthEnd = endOfMonth(subMonths(currentDate, 1));
 
-  // Fetch current month sales
-  const { data: currentSales = [] } = useQuery({
-    queryKey: ['finance-sales-current'],
+  // Format dates for API
+  const currentMonthStart = format(monthStart, 'yyyy-MM-dd');
+  const currentMonthEnd = format(monthEnd, 'yyyy-MM-dd');
+  const lastMonthStartStr = format(lastMonthStart, 'yyyy-MM-dd');
+  const lastMonthEndStr = format(lastMonthEnd, 'yyyy-MM-dd');
+
+  // ==================== Fetch Current Month Sales ====================
+  const { data: currentSales = [] } = useQuery<SalesInvoice[]>({
+    queryKey: ['finance-sales-current', currentMonthStart, currentMonthEnd],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('*')
-        .gte('sale_date', monthStart.toISOString())
-        .lte('sale_date', monthEnd.toISOString())
-        .eq('status', 'completed');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
+          date_from: `${currentMonthStart} 00:00:00`,
+          date_to: `${currentMonthEnd} 23:59:59`,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching current sales:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch last month sales for comparison
-  const { data: lastMonthSales = [] } = useQuery({
-    queryKey: ['finance-sales-last'],
+  // ==================== Fetch Last Month Sales ====================
+  const { data: lastMonthSales = [] } = useQuery<SalesInvoice[]>({
+    queryKey: ['finance-sales-last', lastMonthStartStr, lastMonthEndStr],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('*')
-        .gte('sale_date', lastMonthStart.toISOString())
-        .lte('sale_date', lastMonthEnd.toISOString())
-        .eq('status', 'completed');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
+          date_from: `${lastMonthStartStr} 00:00:00`,
+          date_to: `${lastMonthEndStr} 23:59:59`,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching last month sales:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch current month expenses
-  const { data: currentExpenses = [] } = useQuery({
-    queryKey: ['finance-expenses-current'],
+  // ==================== Fetch Current Month Expenses ====================
+  const { data: currentExpenses = [] } = useQuery<Expense[]>({
+    queryKey: ['finance-expenses-current', currentMonthStart, currentMonthEnd],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('expense_date', monthStart.toISOString().split('T')[0])
-        .lte('expense_date', monthEnd.toISOString().split('T')[0]);
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
+          date_from: currentMonthStart,
+          date_to: currentMonthEnd
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching current expenses:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch last month expenses
-  const { data: lastMonthExpenses = [] } = useQuery({
-    queryKey: ['finance-expenses-last'],
+  // ==================== Fetch Last Month Expenses ====================
+  const { data: lastMonthExpenses = [] } = useQuery<Expense[]>({
+    queryKey: ['finance-expenses-last', lastMonthStartStr, lastMonthEndStr],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .gte('expense_date', lastMonthStart.toISOString().split('T')[0])
-        .lte('expense_date', lastMonthEnd.toISOString().split('T')[0]);
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
+          date_from: lastMonthStartStr,
+          date_to: lastMonthEndStr
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching last month expenses:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch purchase invoices (payables)
-  const { data: purchaseInvoices = [] } = useQuery({
+  // ==================== Fetch Purchase Invoices (Payables) ====================
+  const { data: purchaseInvoices = [] } = useQuery<PurchaseInvoice[]>({
     queryKey: ['finance-purchase-invoices'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('purchase_invoices')
-        .select('*')
-        .eq('payment_status', 'unpaid');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.post<PurchaseInvoiceResponse>('/purchases-invoices/index', {
+          paginate: false,
+          filters: {
+            payment_status: 'unpaid'
+          }
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching purchase invoices:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch supplier payments
-  const { data: supplierPayments = [] } = useQuery({
-    queryKey: ['finance-supplier-payments'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('supplier_payments')
-        .select('*')
-        .gte('payment_date', monthStart.toISOString())
-        .lte('payment_date', monthEnd.toISOString());
-      if (error) throw error;
-      return data;
-    }
-  });
+  // ==================== Calculate Metrics with useMemo ====================
+  const metrics = useMemo(() => {
+    // Current month totals
+    const totalSalesAmount = currentSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
+    const lastMonthSalesAmount = lastMonthSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
+    
+    const totalExpensesAmount = currentExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const lastMonthExpensesAmount = lastMonthExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-  // Calculate metrics
-  const totalSalesAmount = currentSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const lastMonthSalesAmount = lastMonthSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-  const salesGrowth = lastMonthSalesAmount > 0 
-    ? ((totalSalesAmount - lastMonthSalesAmount) / lastMonthSalesAmount * 100).toFixed(1)
-    : 0;
+    // Calculate growth
+    const salesGrowth = lastMonthSalesAmount > 0 
+      ? ((totalSalesAmount - lastMonthSalesAmount) / lastMonthSalesAmount * 100)
+      : 0;
 
-  const totalExpensesAmount = currentExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const lastMonthExpensesAmount = lastMonthExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const expensesChange = lastMonthExpensesAmount > 0
-    ? ((totalExpensesAmount - lastMonthExpensesAmount) / lastMonthExpensesAmount * 100).toFixed(1)
-    : 0;
+    const expensesChange = lastMonthExpensesAmount > 0
+      ? ((totalExpensesAmount - lastMonthExpensesAmount) / lastMonthExpensesAmount * 100)
+      : 0;
 
-  const netProfit = totalSalesAmount - totalExpensesAmount;
-  const profitMargin = totalSalesAmount > 0 ? ((netProfit / totalSalesAmount) * 100).toFixed(1) : 0;
+    // Profit calculations
+    const netProfit = totalSalesAmount - totalExpensesAmount;
+    const profitMargin = totalSalesAmount > 0 ? (netProfit / totalSalesAmount) * 100 : 0;
 
-  const totalPayables = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.remaining_amount || 0), 0);
-  const totalPaymentsThisMonth = supplierPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+    // Payables
+    const totalPayables = purchaseInvoices.reduce((sum, inv) => {
+      const remaining = inv.remaining_amount ? Number(inv.remaining_amount) : 
+                       (Number(inv.total_amount) - Number(inv.paid_amount || 0));
+      return sum + remaining;
+    }, 0);
 
-  // Expense breakdown by category
-  const expensesByCategory = currentExpenses.reduce((acc: Record<string, number>, exp) => {
-    const cat = exp.category || 'other';
-    acc[cat] = (acc[cat] || 0) + Number(exp.amount);
-    return acc;
-  }, {});
+    return {
+      totalSalesAmount,
+      lastMonthSalesAmount,
+      totalExpensesAmount,
+      lastMonthExpensesAmount,
+      salesGrowth,
+      expensesChange,
+      netProfit,
+      profitMargin,
+      totalPayables
+    };
+  }, [currentSales, lastMonthSales, currentExpenses, lastMonthExpenses, purchaseInvoices]);
+
+  // ==================== Expense Breakdown by Category ====================
+  const expensesByCategory = useMemo(() => {
+    const categoryMap: Record<string, number> = {};
+    
+    currentExpenses.forEach(exp => {
+      const cat = exp.category || 'other';
+      categoryMap[cat] = (categoryMap[cat] || 0) + Number(exp.amount);
+    });
+
+    return categoryMap;
+  }, [currentExpenses]);
 
   const categoryLabels: Record<string, { en: string; ar: string; color: string }> = {
     rent: { en: 'Rent', ar: 'إيجار', color: '#3b82f6' },
@@ -168,52 +273,60 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     other: { en: 'Other', ar: 'أخرى', color: '#6b7280' }
   };
 
-  const pieData = Object.entries(expensesByCategory).map(([key, value]) => ({
-    name: language === 'ar' ? categoryLabels[key]?.ar || key : categoryLabels[key]?.en || key,
-    value,
-    color: categoryLabels[key]?.color || '#6b7280'
-  }));
+  const pieData = useMemo(() => {
+    return Object.entries(expensesByCategory).map(([key, value]) => ({
+      name: language === 'ar' ? categoryLabels[key]?.ar || key : categoryLabels[key]?.en || key,
+      value,
+      color: categoryLabels[key]?.color || '#6b7280'
+    }));
+  }, [expensesByCategory, language]);
 
-  // Daily sales trend
-  const getDailySalesData = () => {
+  // ==================== Daily Sales Trend ====================
+  const dailySalesData = useMemo(() => {
     const dailyData: Record<string, number> = {};
+    
     currentSales.forEach(sale => {
-      const day = format(new Date(sale.sale_date), 'MM/dd');
+      const day = format(new Date(sale.created_at), 'MM/dd');
       dailyData[day] = (dailyData[day] || 0) + Number(sale.total_amount);
     });
+
     return Object.entries(dailyData)
       .map(([date, amount]) => ({ date, amount }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  };
+  }, [currentSales]);
 
-  // Payment methods breakdown
-  const paymentMethodsData = () => {
+  // ==================== Payment Methods Breakdown ====================
+  const paymentMethodsData = useMemo(() => {
     const methods: Record<string, number> = {};
+    
     currentSales.forEach(sale => {
       const method = sale.payment_method || 'cash';
       methods[method] = (methods[method] || 0) + Number(sale.total_amount);
     });
+
     return Object.entries(methods).map(([method, amount]) => ({
       name: method === 'cash' ? (language === 'ar' ? 'نقدي' : 'Cash') 
            : method === 'card' ? (language === 'ar' ? 'بطاقة' : 'Card')
+           : method === 'wallet' ? (language === 'ar' ? 'محفظة' : 'Wallet')
+           : method === 'bank_transfer' ? (language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer')
            : method,
       amount
     }));
-  };
+  }, [currentSales, language]);
 
   const stats = [
     {
       title: language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales',
-      value: totalSalesAmount,
-      change: Number(salesGrowth),
+      value: metrics.totalSalesAmount,
+      change: metrics.salesGrowth,
       icon: TrendingUp,
       color: 'text-green-600',
       bgColor: 'bg-green-100 dark:bg-green-900/30'
     },
     {
       title: language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses',
-      value: totalExpensesAmount,
-      change: Number(expensesChange),
+      value: metrics.totalExpensesAmount,
+      change: metrics.expensesChange,
       icon: TrendingDown,
       color: 'text-red-600',
       bgColor: 'bg-red-100 dark:bg-red-900/30',
@@ -221,15 +334,15 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     },
     {
       title: language === 'ar' ? 'صافي الربح' : 'Net Profit',
-      value: netProfit,
-      subtitle: `${profitMargin}% ${language === 'ar' ? 'هامش الربح' : 'margin'}`,
+      value: metrics.netProfit,
+      subtitle: `${metrics.profitMargin.toFixed(1)}% ${language === 'ar' ? 'هامش الربح' : 'margin'}`,
       icon: DollarSign,
-      color: netProfit >= 0 ? 'text-primary' : 'text-red-600',
-      bgColor: netProfit >= 0 ? 'bg-primary/10' : 'bg-red-100 dark:bg-red-900/30'
+      color: metrics.netProfit >= 0 ? 'text-primary' : 'text-red-600',
+      bgColor: metrics.netProfit >= 0 ? 'bg-primary/10' : 'bg-red-100 dark:bg-red-900/30'
     },
     {
       title: language === 'ar' ? 'المستحقات للموردين' : 'Accounts Payable',
-      value: totalPayables,
+      value: metrics.totalPayables,
       subtitle: language === 'ar' ? 'فواتير غير مدفوعة' : 'Unpaid invoices',
       icon: Building2,
       color: 'text-orange-600',
@@ -248,7 +361,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">{stat.title}</p>
                   <p className="text-2xl font-bold">
-                    {stat.value.toLocaleString()} <span className="text-sm font-normal">ر.ي</span>
+                    {formatCurrency(stat.value)}
                   </p>
                   {stat.change !== undefined && (
                     <div className={`flex items-center gap-1 text-sm ${
@@ -257,7 +370,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                     }`}>
                       {(stat.invertChange ? stat.change <= 0 : stat.change >= 0) 
                         ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      <span>{Math.abs(stat.change)}%</span>
+                      <span>{Math.abs(stat.change).toFixed(1)}%</span>
                       <span className="text-muted-foreground">
                         {language === 'ar' ? 'من الشهر السابق' : 'vs last month'}
                       </span>
@@ -289,7 +402,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={getDailySalesData()}>
+                <AreaChart data={dailySalesData}>
                   <defs>
                     <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
@@ -300,7 +413,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                   <XAxis dataKey="date" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip 
-                    formatter={(value: number) => [`${value.toLocaleString()} ر.ي`, language === 'ar' ? 'المبيعات' : 'Sales']}
+                    formatter={(value: number) => [formatCurrency(value), language === 'ar' ? 'المبيعات' : 'Sales']}
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--popover))', 
                       border: '1px solid hsl(var(--border))',
@@ -346,7 +459,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => [`${value.toLocaleString()} ر.ي`]}
+                    formatter={(value: number) => [formatCurrency(value)]}
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--popover))', 
                       border: '1px solid hsl(var(--border))',
@@ -363,7 +476,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                     <span>{item.name}</span>
                   </div>
-                  <span className="font-medium">{item.value.toLocaleString()}</span>
+                  <span className="font-medium">{formatCurrency(item.value)}</span>
                 </div>
               ))}
             </div>
@@ -384,12 +497,12 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
           <CardContent>
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={paymentMethodsData()} layout="vertical">
+                <BarChart data={paymentMethodsData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis type="number" className="text-xs" />
                   <YAxis dataKey="name" type="category" className="text-xs" width={60} />
                   <Tooltip 
-                    formatter={(value: number) => [`${value.toLocaleString()} ر.ي`]}
+                    formatter={(value: number) => [formatCurrency(value)]}
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--popover))', 
                       border: '1px solid hsl(var(--border))',
@@ -417,9 +530,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                 <span className="text-muted-foreground">
                   {language === 'ar' ? 'هامش الربح' : 'Profit Margin'}
                 </span>
-                <span className="font-medium">{profitMargin}%</span>
+                <span className="font-medium">{metrics.profitMargin.toFixed(1)}%</span>
               </div>
-              <Progress value={Number(profitMargin)} className="h-2" />
+              <Progress value={Math.min(100, Math.max(0, metrics.profitMargin))} className="h-2" />
             </div>
 
             <div className="space-y-2">
@@ -428,11 +541,11 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
                   {language === 'ar' ? 'نسبة المصروفات' : 'Expense Ratio'}
                 </span>
                 <span className="font-medium">
-                  {totalSalesAmount > 0 ? ((totalExpensesAmount / totalSalesAmount) * 100).toFixed(1) : 0}%
+                  {metrics.totalSalesAmount > 0 ? ((metrics.totalExpensesAmount / metrics.totalSalesAmount) * 100).toFixed(1) : 0}%
                 </span>
               </div>
               <Progress 
-                value={totalSalesAmount > 0 ? (totalExpensesAmount / totalSalesAmount) * 100 : 0} 
+                value={metrics.totalSalesAmount > 0 ? (metrics.totalExpensesAmount / metrics.totalSalesAmount) * 100 : 0} 
                 className="h-2" 
               />
             </div>
@@ -446,7 +559,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
               </div>
               <div className="text-center p-3 rounded-lg bg-muted/50">
                 <p className="text-2xl font-bold text-primary">
-                  {currentSales.length > 0 ? Math.round(totalSalesAmount / currentSales.length).toLocaleString() : 0}
+                  {currentSales.length > 0 
+                    ? formatCurrency(Math.round(metrics.totalSalesAmount / currentSales.length))
+                    : formatCurrency(0)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {language === 'ar' ? 'متوسط الفاتورة' : 'Avg. Order'}

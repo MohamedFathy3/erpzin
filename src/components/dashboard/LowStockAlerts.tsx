@@ -1,31 +1,44 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 
+interface Product {
+  id: number;
+  name: string;
+  name_ar?: string;
+  sku: string;
+  stock: number;
+  reorder_level: number;
+}
+
+interface ProductResponse {
+  data: Product[];
+}
+
 const LowStockAlerts: React.FC = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
 
-  const { data: lowStockItems, isLoading } = useQuery({
+  const { data: products, isLoading } = useQuery({
     queryKey: ['low-stock-dashboard'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, name_ar, sku, stock, min_stock')
-        .not('min_stock', 'is', null)
-        .order('stock', { ascending: true })
-        .limit(5);
+      const response = await api.post<ProductResponse>('/product/index', {
+        paginate: false
+      });
       
-      if (error) throw error;
+      const allProducts = response.data.data || [];
       
-      // Filter products where stock is below min_stock
-      return data?.filter(p => (p.stock || 0) <= (p.min_stock || 0)) || [];
+      // Filter products where stock is below reorder_level
+      return allProducts
+        .filter(p => p.stock > 0 && p.stock <= (p.reorder_level || 5))
+        .sort((a, b) => a.stock - b.stock)
+        .slice(0, 5);
     },
   });
 
@@ -60,6 +73,8 @@ const LowStockAlerts: React.FC = () => {
     );
   }
 
+  const lowStockItems = products || [];
+
   return (
     <div className="card-elevated p-5">
       <div className="flex items-center justify-between mb-4">
@@ -70,14 +85,14 @@ const LowStockAlerts: React.FC = () => {
           </h3>
         </div>
         <Badge variant="outline" className="text-warning border-warning">
-          {lowStockItems?.length || 0} {t('dashboard.items')}
+          {lowStockItems.length} {t('dashboard.items')}
         </Badge>
       </div>
 
       <div className="space-y-3">
-        {lowStockItems && lowStockItems.length > 0 ? (
-          lowStockItems.map((item: any) => {
-            const level = getStockLevel(item.stock || 0, item.min_stock || 10);
+        {lowStockItems.length > 0 ? (
+          lowStockItems.map((item: Product) => {
+            const level = getStockLevel(item.stock || 0, item.reorder_level || 10);
             const productName = language === 'ar' && item.name_ar ? item.name_ar : item.name;
             
             return (
@@ -115,7 +130,7 @@ const LowStockAlerts: React.FC = () => {
                     {item.stock || 0}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    / {item.min_stock || 0}
+                    / {item.reorder_level || 5}
                   </p>
                 </div>
               </div>

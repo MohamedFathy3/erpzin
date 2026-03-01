@@ -311,35 +311,37 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   });
 
   // Fetch product counts per category
-  const { data: productCounts = {} } = useQuery({
-    queryKey: ['category-product-counts'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/product/index', {
-          filters: {},
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false
-        });
-        
-        const products = response.data.data || [];
-        const counts: Record<string, number> = {};
-        
-        products.forEach((p: any) => {
-          if (p.category_id) {
-            const catId = p.category_id.toString();
-            counts[catId] = (counts[catId] || 0) + 1;
-          }
-        });
-        
-        return counts;
-      } catch (error) {
-        console.error('Error fetching product counts:', error);
-        return {};
-      }
-    },
-  });
+// Fetch product counts per category
+const { data: productCounts = {} } = useQuery({
+  queryKey: ['category-product-counts'],
+  queryFn: async () => {
+    try {
+      const response = await api.post('/product/index', {
+        filters: {},
+        orderBy: 'id',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false
+      });
+      
+      const products = response.data.data || [];
+      const counts: Record<string, number> = {};
+      
+      products.forEach((p: any) => {
+        // ✅ استخدام category.id بدل category_id
+        if (p.category?.id) {
+          const catId = p.category.id.toString();
+          counts[catId] = (counts[catId] || 0) + 1;
+        }
+      });
+      
+      return counts;
+    } catch (error) {
+      console.error('Error fetching product counts:', error);
+      return {};
+    }
+  },
+});
 
   // Build category tree
   const buildTree = (cats: DbCategory[]): CategoryWithCount[] => {

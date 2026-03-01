@@ -129,8 +129,7 @@ const transformedProducts = useMemo(() => {
     sku: prod.sku,
     barcode: prod.barcode || '',
     stock: prod.stock || 0,
-    // 👈 مهم: نحتفظ بـ null لو مفيش category_id
-    category_id: prod.category_id,  // ممكن يكون null أو string
+    category_id: prod.category_id,  // ✅ هذا موجود
     image_url: prod.image_url,
     imageUrl: prod.imageUrl,
     image: prod.image,
