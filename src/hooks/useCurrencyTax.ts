@@ -1,85 +1,152 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import api from "@/lib/api";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useMemo } from "react";
 
+// ==================== Types from APIs ====================
 export interface Currency {
-  id: string;
+  id: number;
+  name: string;
   code: string;
-  name: string;
-  name_ar: string;
   symbol: string;
-  exchange_rate: number | null;
-  is_active: boolean | null;
-  is_default: boolean | null;
-  decimal_places: number | null;
+  exchange_rate: string;
+  active: boolean;
+  default: boolean;
 }
 
-export interface TaxRate {
-  id: string;
+export interface CurrencyResponse {
+  data: Currency[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+export interface Tax {
+  id: number;
   name: string;
-  name_ar: string | null;
-  rate: number;
-  is_active: boolean | null;
-  is_default: boolean | null;
+  rate: string;
+  active: boolean;
+  default: boolean;
 }
 
+export interface TaxResponse {
+  data: Tax[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+// ==================== Hook مع تحسينات ====================
 export function useCurrencyTax() {
   const { language } = useLanguage();
 
-  // Fetch active currencies
-  const { data: currencies = [], isLoading: currenciesLoading } = useQuery({
-    queryKey: ['currencies-active'],
+  // ==================== Fetch all currencies (بدون فلتر) ====================
+  const { data: currencies = [], isLoading: currenciesLoading } = useQuery<Currency[]>({
+    queryKey: ['currencies-all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('currencies')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return data as Currency[];
+      try {
+        const response = await api.post<CurrencyResponse>('/currency/index', {
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching currencies:', error);
+        return [];
+      }
     }
   });
 
-  // Fetch active tax rates
-  const { data: taxRates = [], isLoading: taxRatesLoading } = useQuery({
-    queryKey: ['tax-rates-active'],
+  // ==================== Fetch all taxes (بدون فلتر) ====================
+  const { data: taxRates = [], isLoading: taxRatesLoading } = useQuery<Tax[]>({
+    queryKey: ['tax-rates-all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tax_rates')
-        .select('*')
-        .eq('is_active', true)
-        .order('rate', { ascending: true });
-      if (error) throw error;
-      return data as TaxRate[];
+      try {
+        const response = await api.post<TaxResponse>('/tax/index', {
+          orderBy: 'rate',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching tax rates:', error);
+        return [];
+      }
     }
   });
 
-  // Get default currency
-  const defaultCurrency = currencies.find(c => c.is_default) || currencies[0];
+  // ==================== استخدام useMemo للتحسين ====================
+  
+  // العملات النشطة فقط
+  const activeCurrencies = useMemo(() => {
+    return currencies.filter(c => c.active === true);
+  }, [currencies]);
 
-  // Get default tax rate
-  const defaultTaxRate = taxRates.find(t => t.is_default) || taxRates.find(t => t.rate > 0) || taxRates[0];
+  // الضرائب النشطة فقط
+  const activeTaxRates = useMemo(() => {
+    return taxRates.filter(t => t.active === true);
+  }, [taxRates]);
+
+  // العملة الافتراضية (اللي عليها default: true)
+  const defaultCurrency = useMemo(() => {
+    return currencies.find(c => c.default === true) || currencies[0];
+  }, [currencies]);
+
+  // الضريبة الافتراضية (اللي عليها default: true)
+  const defaultTaxRate = useMemo(() => {
+    return taxRates.find(t => t.default === true) || 
+           taxRates.find(t => parseFloat(t.rate) > 0) || 
+           taxRates[0];
+  }, [taxRates]);
+
+  // ==================== Helper Functions ====================
 
   // Get currency display name
   const getCurrencyName = (currency: Currency) => {
-    return language === 'ar' ? currency.name_ar || currency.name : currency.name;
+    return currency.name;
   };
 
   // Get tax rate display name
-  const getTaxRateName = (taxRate: TaxRate) => {
-    return language === 'ar' ? taxRate.name_ar || taxRate.name : taxRate.name;
+  const getTaxRateName = (taxRate: Tax) => {
+    return taxRate.name;
   };
 
   // Format amount with currency
-  const formatAmount = (amount: number, currencyCode?: string) => {
+  const formatAmount = (amount: number, currencyCode?: string, options?: { 
+    showSymbol?: boolean;
+    decimals?: number;
+  }) => {
     const currency = currencyCode 
       ? currencies.find(c => c.code === currencyCode) 
       : defaultCurrency;
     
     if (!currency) return amount.toLocaleString();
     
-    const decimals = currency.decimal_places ?? 2;
-    return `${amount.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${currency.symbol}`;
+    const decimals = options?.decimals ?? 2;
+    const showSymbol = options?.showSymbol ?? true;
+    
+    const formattedAmount = amount.toLocaleString(undefined, { 
+      minimumFractionDigits: decimals, 
+      maximumFractionDigits: decimals 
+    });
+    
+    if (!showSymbol) return formattedAmount;
+    
+    // تنسيق حسب اللغة (الرمز قبل أو بعد المبلغ)
+    if (language === 'ar') {
+      return `${formattedAmount} ${currency.symbol}`;
+    } else {
+      return `${currency.symbol} ${formattedAmount}`;
+    }
   };
 
   // Convert amount between currencies
@@ -89,35 +156,99 @@ export function useCurrencyTax() {
     
     if (!fromCurrency || !toCurrency) return amount;
     
-    const fromRate = fromCurrency.exchange_rate || 1;
-    const toRate = toCurrency.exchange_rate || 1;
+    const fromRate = parseFloat(fromCurrency.exchange_rate) || 1;
+    const toRate = parseFloat(toCurrency.exchange_rate) || 1;
     
     // Convert to base currency first, then to target
     return (amount / fromRate) * toRate;
   };
 
+  // Convert amount to default currency
+  const convertToDefault = (amount: number, fromCurrencyCode: string) => {
+    if (!defaultCurrency) return amount;
+    return convertAmount(amount, fromCurrencyCode, defaultCurrency.code);
+  };
+
   // Calculate tax amount
-  const calculateTax = (amount: number, taxRateId?: string) => {
+  const calculateTax = (amount: number, taxRateId?: string | number) => {
     const taxRate = taxRateId 
-      ? taxRates.find(t => t.id === taxRateId) 
+      ? taxRates.find(t => t.id.toString() === taxRateId.toString()) 
       : defaultTaxRate;
     
     if (!taxRate) return 0;
     
-    return (amount * taxRate.rate) / 100;
+    const rate = parseFloat(taxRate.rate);
+    return (amount * rate) / 100;
+  };
+
+  // Calculate total with tax
+  const calculateTotalWithTax = (amount: number, taxRateId?: string | number) => {
+    const tax = calculateTax(amount, taxRateId);
+    return amount + tax;
+  };
+
+  // Get tax rate by ID
+  const getTaxRateById = (id: string | number) => {
+    return taxRates.find(t => t.id.toString() === id.toString());
+  };
+
+  // Get currency by code
+  const getCurrencyByCode = (code: string) => {
+    return currencies.find(c => c.code === code);
+  };
+
+  // Get currency by ID
+  const getCurrencyById = (id: string | number) => {
+    return currencies.find(c => c.id.toString() === id.toString());
+  };
+
+  // Check if currency is default
+  const isDefaultCurrency = (currencyCode: string) => {
+    return defaultCurrency?.code === currencyCode;
+  };
+
+  // Check if tax rate is default
+  const isDefaultTaxRate = (taxRateId: string | number) => {
+    return defaultTaxRate?.id.toString() === taxRateId.toString();
   };
 
   return {
+    // البيانات الخام
     currencies,
     taxRates,
+    
+    // البيانات المفلترة
+    activeCurrencies,
+    activeTaxRates,
+    
+    // القيم الافتراضية
     defaultCurrency,
     defaultTaxRate,
+    
+    // حالات التحميل
     currenciesLoading,
     taxRatesLoading,
+    
+    // دوال التنسيق
     getCurrencyName,
     getTaxRateName,
     formatAmount,
+    
+    // دوال التحويل
     convertAmount,
-    calculateTax
+    convertToDefault,
+    
+    // دوال الضرائب
+    calculateTax,
+    calculateTotalWithTax,
+    
+    // دوال البحث
+    getTaxRateById,
+    getCurrencyByCode,
+    getCurrencyById,
+    
+    // دوال التحقق
+    isDefaultCurrency,
+    isDefaultTaxRate
   };
 }
