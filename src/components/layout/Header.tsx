@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
@@ -31,15 +31,14 @@ import { useQuery } from '@tanstack/react-query';
 import  api  from '@/lib/api';
 
 interface Branch {
-  id: string;
+  id: number;
   name: string;
-  name_ar: string | null;
-  code: string | null;
-  is_main: boolean | null;
+  name_ar?: string;
+  code: string;
   phone?: string;
   address?: string;
   manager?: string;
-  active?: boolean;
+  active: boolean;
   main_branch?: boolean;
   image?: string;
 }
@@ -98,7 +97,53 @@ const Header: React.FC = () => {
     staleTime: 5 * 60 * 1000, // 5 دقائق
   });
 
- 
+  // ✅ جلب المخازن بناءً على الفرع المحدد
+  const { data: warehouses = [], isLoading: loadingWarehouses, refetch: refetchWarehouses } = useQuery({
+    queryKey: ['warehouses-header', currentBranch?.id], // ✅ يتغير مع تغير الفرع
+    queryFn: async () => {
+      try {
+        // بناء الفلاتر
+        const filters: any = { active: true };
+        
+        // ✅ إضافة فلتر الفرع إذا كان موجود
+        if (currentBranch?.id) {
+          filters.branch_id = currentBranch.id;
+        } else if (userBranch?.id) {
+          filters.branch_id = userBranch.id;
+        }
+
+        const response = await api.post('/warehouse/index', {
+          filters: filters,
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 دقائق
+  });
+
+  // ✅ تأثير: لما يتغير الفرع، نعيد تعيين المخزن المختار إذا لم يعد موجوداً
+  useEffect(() => {
+    if (warehouses.length > 0) {
+      // لو المخزن الحالي مش موجود في القائمة الجديدة، نختار أول مخزن أو null
+      const warehouseExists = warehouses.some(w => w.id === currentWarehouse?.id);
+      if (!warehouseExists) {
+        setCurrentWarehouse(null); // أو يمكن اختيار أول مخزن: setCurrentWarehouse(warehouses[0])
+      }
+    } else {
+      setCurrentWarehouse(null);
+    }
+  }, [warehouses, currentWarehouse?.id, setCurrentWarehouse]);
 
   const getUserInitials = () => {
     if (user?.email) {
@@ -128,6 +173,11 @@ const Header: React.FC = () => {
 
   const handleSettingsClick = () => {
     navigate('/settings');
+  };
+
+  // ✅ دالة مساعدة لاختيار المخزن
+  const handleSelectWarehouse = (warehouse: Warehouse | null) => {
+    setCurrentWarehouse(warehouse);
   };
 
   // Helper function for localized names
@@ -202,7 +252,11 @@ const Header: React.FC = () => {
               
               {/* All Branches Option */}
               <DropdownMenuItem 
-                onClick={() => setCurrentBranch(null)}
+                onClick={() => {
+                  setCurrentBranch(null);
+                  // ✅ عند اختيار كل الفروع، نجيب كل المخازن
+                  refetchWarehouses();
+                }}
                 className="flex items-center justify-between cursor-pointer"
               >
                 <span className="font-medium">
@@ -218,7 +272,10 @@ const Header: React.FC = () => {
                 branches.map((branch: Branch) => (
                   <DropdownMenuItem 
                     key={branch.id}
-                    onClick={() => setCurrentBranch(branch)}
+                    onClick={() => {
+                      setCurrentBranch(branch);
+                      // ✅ المخازن هتتجيب تلقائياً لأن queryKey اتغير
+                    }}
                     className="flex items-center justify-between cursor-pointer"
                   >
                     <div className="flex flex-col">
@@ -239,7 +296,94 @@ const Header: React.FC = () => {
           </DropdownMenu>
         )}
 
-  
+        {/* Warehouse Display/Selector - Now right next to branch */}
+        {hasRestrictedWarehouse ? (
+          // User has assigned warehouse - show as badge (not selectable)
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border rounded-lg">
+            <Warehouse size={16} className="text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {getLocalizedName(userWarehouse, '')}
+            </span>
+          </div>
+        ) : warehouses.length > 0 ? (
+          // Admin/All access - show dropdown
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Warehouse size={16} />
+                {loadingWarehouses ? (
+                  <Skeleton className="w-20 h-4" />
+                ) : (
+                  <span className="max-w-[100px] truncate">
+                    {getLocalizedName(currentWarehouse, language === 'ar' ? 'كل المخازن' : 'All Warehouses')}
+                  </span>
+                )}
+                <ChevronDown size={14} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>
+                {language === 'ar' ? 'اختر المخزن' : 'Select Warehouse'}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              
+              {/* All Warehouses Option - يظهر فقط لو مختار كل الفروع أو مفيش فرع محدد */}
+              {!currentBranch && (
+                <>
+                  <DropdownMenuItem 
+                    onClick={() => handleSelectWarehouse(null)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="font-medium">
+                      {language === 'ar' ? 'كل المخازن' : 'All Warehouses'}
+                    </span>
+                    {currentWarehouse === null && <Check size={16} className="text-primary" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              
+              {/* Warehouses List - فلترة حسب الفرع */}
+              {warehouses.length > 0 ? (
+                warehouses.map((warehouse: Warehouse) => {
+                  const branchName = getWarehouseBranchName(warehouse);
+                  
+                  return (
+                    <DropdownMenuItem 
+                      key={warehouse.id}
+                      onClick={() => handleSelectWarehouse(warehouse)}
+                      className="flex items-center justify-between cursor-pointer"
+                    >
+                      <div className="flex flex-col">
+                        <span>{getLocalizedName(warehouse, warehouse.name)}</span>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          {warehouse.code && <span>كود: {warehouse.code}</span>}
+                          {branchName && (
+                            <>
+                              <span>•</span>
+                              <span>{branchName}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {currentWarehouse?.id === warehouse.id && <Check size={16} className="text-primary shrink-0" />}
+                    </DropdownMenuItem>
+                  );
+                })
+              ) : (
+                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                  {language === 'ar' 
+                    ? currentBranch 
+                      ? 'لا توجد مخازن لهذا الفرع' 
+                      : 'لا توجد مخازن'
+                    : currentBranch 
+                      ? 'No warehouses for this branch' 
+                      : 'No warehouses found'}
+                </div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
 
         {/* Language Toggle */}
         <Button
