@@ -33,6 +33,7 @@ interface Account {
   parent_code?: string | null;
   parent_name?: string | null;
   full_path?: string;
+  name_ar?: string | null;
 }
 
 interface AccountFlat {
@@ -324,7 +325,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                         <div className="flex items-center gap-2">
                           <ChildIcon size={14} className={childType.color.replace('bg-', 'text-')} />
                           <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
-                          <span className="text-sm font-medium">{child.name}</span>
+                          <span className="text-sm font-medium">{language === 'ar' && child.name_ar ? child.name_ar : child.name}</span>
+             
                         </div>
                         <div className="flex items-center gap-2">
                           {child.has_children && (
@@ -368,7 +370,9 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                       <div className="flex items-center gap-2">
                         <ChildIcon size={12} className={childType.color.replace('bg-', 'text-')} />
                         <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
-                        <span>{child.name}</span>
+                        <span>{language === 'ar' && child.name_ar ? child.name_ar : child.name}</span>
+                    
+                        
                       </div>
                       <Badge variant="outline" className="text-xs">
                         {Number(child.balance || 0).toLocaleString()}
@@ -418,7 +422,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
+                className="h-6 w-6"   
                 onClick={(e) => toggleNode(account.id, e)}
               >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -429,7 +433,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
             <Icon size={16} className={accountType.color.replace('bg-', 'text-')} />
             <span className="font-mono text-sm text-muted-foreground">{account.code}</span>
             <span className="font-medium">
-              {account.name}
+              {language === 'ar' && account.name_ar ? account.name_ar : account.name}
             </span>
             {getAccountTypeBadge(account.code)}
             {account.level === 0 && (
@@ -628,7 +632,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                       return <Icon size={20} className={getAccountTypeFromCode(selectedAccount.code).color.replace('bg-', 'text-')} />;
                     })()}
                     <span className="font-mono text-sm text-muted-foreground">{selectedAccount.code}</span>
-                    <span className="font-bold">{selectedAccount.name}</span>
+                    <span className="font-bold">{language === 'ar' && selectedAccount.name_ar ? selectedAccount.name_ar : selectedAccount.name}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>

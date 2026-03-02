@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Search, UserPlus, User, Phone, MapPin, Check } from 'lucide-react';
+import { X, Search, UserPlus, User, Phone, MapPin, Check, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import api from '@/lib/api';
+import { offlineDB, saveCustomersOffline, getCustomersOffline, searchCustomersOffline } from '@/lib/offlineDB';
 
 interface Customer {
   id: string;
@@ -35,6 +36,9 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [offlineCustomers, setOfflineCustomers] = useState<Customer[]>([]);
+  const [isOfflineLoading, setIsOfflineLoading] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     name_ar: '',
@@ -42,31 +46,55 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
     address: ''
   });
 
-  // دالة debounce مخصصة
+  // ==================== Online/Offline Detection ====================
+  useEffect(() => {
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // ==================== Load offline customers when in offline mode ====================
+  useEffect(() => {
+    if (isOfflineMode && isOpen) {
+      setIsOfflineLoading(true);
+      getCustomersOffline()
+        .then(customers => {
+          setOfflineCustomers(customers as Customer[]);
+        })
+        .catch(error => {
+          console.error('Error loading offline customers:', error);
+        })
+        .finally(() => {
+          setIsOfflineLoading(false);
+        });
+    }
+  }, [isOfflineMode, isOpen]);
+
+  // ==================== Debounced Search ====================
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-    }, 500); // تأخير 500 مللي ثانية
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // جلب العملاء مع البحث
-  const { data: customers, isLoading } = useQuery({
+  // ==================== Online Query for Customers ====================
+  const { data: onlineCustomers, isLoading: onlineLoading } = useQuery({
     queryKey: ['customers-pos', debouncedSearchQuery],
     queryFn: async () => {
       try {
-        // إعداد الفلاتر بناءً على البحث
         const filters: any = {};
         
         if (debouncedSearchQuery.trim()) {
-          // يمكنك البحث في الاسم ورقم الهاتف
-          // ملاحظة: يجب أن يدعم السيرفر هذا المنطق
-          filters.name = debouncedSearchQuery;
-          // إذا أردت البحث في الاسم العربي أيضاً:
-          // filters.name_ar = debouncedSearchQuery;
-          // إذا أردت البحث في رقم الهاتف أيضاً:
-          // filters.phone = debouncedSearchQuery;
+          filters.search = debouncedSearchQuery;
         }
 
         const response = await api.post('/customer/index', {
@@ -78,9 +106,23 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
           delete: false
         });
         
-        return response.data.data || [];
+        const customers = response.data.data || [];
+        
+        // Save to offline DB for future use
+        await saveCustomersOffline(customers);
+        
+        return customers;
       } catch (error) {
         console.error('Error fetching customers:', error);
+        
+        // If offline, try to get from offline DB
+        if (!navigator.onLine) {
+          setIsOfflineMode(true);
+          const offline = await getCustomersOffline();
+          setOfflineCustomers(offline as Customer[]);
+          return offline;
+        }
+        
         toast({
           title: language === 'ar' ? 'خطأ في جلب العملاء' : 'Error fetching customers',
           variant: 'destructive'
@@ -88,25 +130,28 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
         return [];
       }
     },
-    enabled: isOpen
+    enabled: isOpen && !isOfflineMode,
   });
 
-  // تصفية العملاء محلياً إذا كان السيرفر لا يدعم البحث المتقدم
-  const filteredCustomers = React.useMemo(() => {
-    if (!customers) return [];
+  // ==================== Filter customers (online or offline) ====================
+  const filteredCustomers = useMemo(() => {
+    const source = isOfflineMode ? offlineCustomers : (onlineCustomers || []);
     
-    if (!searchQuery.trim()) return customers;
+    if (!source.length) return [];
+    
+    if (!searchQuery.trim()) return source;
     
     const query = searchQuery.toLowerCase();
-    return customers.filter((customer: Customer) => {
+    return source.filter((customer: Customer) => {
       return (
         (customer.name && customer.name.toLowerCase().includes(query)) ||
         (customer.name_ar && customer.name_ar.toLowerCase().includes(query)) ||
         (customer.phone && customer.phone.includes(query))
       );
     });
-  }, [customers, searchQuery]);
+  }, [isOfflineMode, onlineCustomers, offlineCustomers, searchQuery]);
 
+  // ==================== Add Customer Mutation ====================
   const addCustomerMutation = useMutation({
     mutationFn: async (customer: typeof newCustomer) => {
       const response = await api.post('/customer', customer);
@@ -123,11 +168,47 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
       onClose();
     },
     onError: (error: any) => {
-      toast({
-        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: error?.response?.data?.message || (language === 'ar' ? 'تعذر إضافة العميل' : 'Failed to add customer'),
-        variant: 'destructive'
-      });
+      // If offline, we could save to offline DB
+      if (!navigator.onLine) {
+        // Create offline customer
+        const offlineCustomer: Customer = {
+          id: `OFFLINE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: newCustomer.name,
+          name_ar: newCustomer.name_ar || newCustomer.name,
+          phone: newCustomer.phone || null,
+          address: newCustomer.address || null,
+          loyalty_points: 0
+        };
+        
+        // Add to offline DB
+        offlineDB.customers.add({
+          ...offlineCustomer,
+          lastUpdated: Date.now(),
+          synced: false
+        }).then(() => {
+          onSelectCustomer(offlineCustomer);
+          setShowAddForm(false);
+          setNewCustomer({ name: '', name_ar: '', phone: '', address: '' });
+          toast({
+            title: language === 'ar' ? 'تم إضافة العميل محلياً' : 'Customer added locally',
+            description: language === 'ar' ? 'سيتم مزامنته لاحقاً' : 'Will be synced later',
+          });
+          onClose();
+        }).catch(err => {
+          console.error('Error saving offline customer:', err);
+          toast({
+            title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+            description: language === 'ar' ? 'تعذر إضافة العميل' : 'Failed to add customer',
+            variant: 'destructive'
+          });
+        });
+      } else {
+        toast({
+          title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+          description: error?.response?.data?.message || (language === 'ar' ? 'تعذر إضافة العميل' : 'Failed to add customer'),
+          variant: 'destructive'
+        });
+      }
     }
   });
 
@@ -140,7 +221,6 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
       return;
     }
     
-    // إذا كان الاسم العربي فارغاً، استخدم الاسم الإنجليزي
     const customerData = {
       ...newCustomer,
       name_ar: newCustomer.name_ar.trim() || newCustomer.name
@@ -157,6 +237,8 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
     setSearchQuery('');
   };
 
+  const isLoading = isOfflineMode ? isOfflineLoading : onlineLoading;
+
   if (!isOpen) return null;
 
   return (
@@ -169,12 +251,21 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
       <div className="relative w-full max-w-lg mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
-          <h2 className="text-lg font-bold text-foreground">
-            {showAddForm 
-              ? (language === 'ar' ? 'إضافة عميل جديد' : 'Add New Customer')
-              : (language === 'ar' ? 'اختر العميل' : 'Select Customer')
-            }
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-foreground">
+              {showAddForm 
+                ? (language === 'ar' ? 'إضافة عميل جديد' : 'Add New Customer')
+                : (language === 'ar' ? 'اختر العميل' : 'Select Customer')
+              }
+            </h2>
+            {/* Offline indicator */}
+            {isOfflineMode && !showAddForm && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-xs">
+                <WifiOff size={12} />
+                <span>{language === 'ar' ? 'بدون نت' : 'Offline'}</span>
+              </div>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-muted rounded-lg transition-colors"
@@ -186,6 +277,18 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
 
         {showAddForm ? (
           <div className="p-4 space-y-4 overflow-y-auto">
+            {/* Offline warning in add form */}
+            {isOfflineMode && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2 text-amber-600 text-sm">
+                <WifiOff size={16} />
+                <span>
+                  {language === 'ar' 
+                    ? 'أنت في وضع عدم الاتصال. سيتم حفظ العميل محلياً.' 
+                    : 'You are offline. Customer will be saved locally.'}
+                </span>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
                 {language === 'ar' ? 'الاسم (English) *' : 'Name (English) *'}
@@ -285,6 +388,12 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                   </button>
                 )}
               </div>
+              {isOfflineMode && (
+                <div className="mt-2 flex items-center gap-1 text-xs text-amber-500">
+                  <WifiOff size={12} />
+                  <span>{language === 'ar' ? 'العملاء من الذاكرة المحلية' : 'Customers from offline storage'}</span>
+                </div>
+              )}
             </div>
 
             {/* Customers List */}
@@ -339,6 +448,17 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                           {language === 'ar' ? 'حاول البحث باسم أو رقم هاتف مختلف' : 'Try searching with a different name or phone number'}
                         </p>
                       )}
+                      {isOfflineMode && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAddForm(true)}
+                          className="mt-4"
+                        >
+                          <UserPlus size={16} className="me-2" />
+                          {language === 'ar' ? 'إضافة عميل محلي' : 'Add Local Customer'}
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     filteredCustomers.map((customer: Customer) => (
@@ -372,6 +492,13 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                             <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
                               <MapPin size={12} />
                               {customer.address}
+                            </p>
+                          )}
+                          {/* Offline indicator for locally added customers */}
+                          {customer.id.startsWith('OFFLINE-') && (
+                            <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+                              <WifiOff size={10} />
+                              {language === 'ar' ? 'محلي' : 'Local'}
                             </p>
                           )}
                         </div>

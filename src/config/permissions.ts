@@ -17,7 +17,7 @@ export const PAGES: PagePermission[] = [
     label: 'Dashboard',
     labelAr: 'لوحة التحكم',
     icon: 'LayoutDashboard',
-    allowedRoles: ['admin', 'Cashier', 'manager', 'accountant', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
+    allowedRoles: ['admin',  'manager', 'accountant', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
   },
   {
     id: 'pos',
@@ -81,7 +81,7 @@ export const PAGES: PagePermission[] = [
     label: 'Reports',
     labelAr: 'التقارير',
     icon: 'FileBarChart',
-    allowedRoles: ['admin', 'manager', 'accountant', 'Cashier', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
+    allowedRoles: ['admin', 'manager', 'accountant', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
   },
   {
     id: 'settings',

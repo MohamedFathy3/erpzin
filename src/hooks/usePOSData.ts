@@ -1,10 +1,20 @@
+// hooks/usePOSData.ts
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { useApp } from '@/contexts/AppContext';
+import { useEffect, useState } from 'react';
+import { 
+  saveProductsOffline, 
+  getProductsOffline, 
+  getProductByBarcodeOffline,
+  searchProductsOffline,
+  getNetworkStatus,
+  saveCategoriesOffline,
+  getCategoriesOffline
+} from '@/lib/offlineDB';
 
 // ========== أنواع البيانات المتقدمة ==========
-
 export interface ProductColor {
   id: number;
   color_id: number;
@@ -70,25 +80,39 @@ export interface Product {
   cost: string | null;
   stock: number;
   reorder_level: number | null;
-  category_id: string | null;  // 👈 مهم: null لو مفيش فئة
+  category_id: string | null;
   image_url: string | null;
   imageUrl?: string | null;
   is_active: boolean | null;
   has_variants: boolean;
-  
-  // الحقول الجديدة من API
   units?: ProductUnit[];
   image?: ProductImage;
   category?: ProductCategory;
-  
   created_at?: string;
   updated_at?: string;
 }
 
-// ========== Categories Hook - مع /index-sub-account ==========
-
+// ========== Categories Hook مع Offline Support ==========
 export const useCategories = () => {
-  return useQuery({
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [offlineCategories, setOfflineCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Online query
+  const { data: onlineCategories, isLoading: onlineLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => {
       try {
@@ -103,14 +127,25 @@ export const useCategories = () => {
         
         const categories = response.data?.data || response.data || [];
         
-        return categories.map((cat: any) => ({
+        const formatted = categories.map((cat: any) => ({
           id: cat.id?.toString() || '',
           name: cat.name || '',
           name_ar: cat.name_ar || cat.name || '',
           icon: cat.icon || null
         }));
+
+        // Save to offline DB
+        await saveCategoriesOffline(formatted);
+        
+        return formatted;
       } catch (error) {
         console.error('Error fetching categories:', error);
+        if (!navigator.onLine) {
+          setIsOfflineMode(true);
+          const offline = await getCategoriesOffline();
+          setOfflineCategories(offline);
+          return offline;
+        }
         toast({
           title: 'خطأ في جلب الفئات',
           variant: 'destructive'
@@ -118,38 +153,87 @@ export const useCategories = () => {
         return [];
       }
     },
+    enabled: !isOfflineMode,
   });
+
+  useEffect(() => {
+    if (isOfflineMode) {
+      setIsLoading(true);
+      getCategoriesOffline().then(cats => {
+        setOfflineCategories(cats);
+        setIsLoading(false);
+      });
+    }
+  }, [isOfflineMode]);
+
+  if (isOfflineMode) {
+    return {
+      data: offlineCategories,
+      isLoading,
+      isOffline: true
+    };
+  }
+
+  return {
+    data: onlineCategories,
+    isLoading: onlineLoading,
+    isOffline: false
+  };
 };
 
-// ========== Products Hook with Branch and Category Filter ==========
+// ========== Products Hook with Offline Support ==========
 export const useProducts = (categoryId?: string | null) => {
   const { userBranch, currentBranch } = useApp();
-  
-  return useQuery({
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+  const [offlineProducts, setOfflineProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Load offline products when in offline mode
+  useEffect(() => {
+    if (isOfflineMode) {
+      setIsLoading(true);
+      getProductsOffline(categoryId).then(products => {
+        setOfflineProducts(products);
+        setIsLoading(false);
+      });
+    }
+  }, [isOfflineMode, categoryId]);
+
+  // Online query
+  const { data: onlineProducts, isLoading: onlineLoading } = useQuery<Product[]>({
     queryKey: ['pos-products', categoryId, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
       try {
-        // ✅ تجهيز الـ payload - نبدأه فاضي
         const payload: any = {};
 
-        // ✅ نضيف branch_id فقط إذا كان موجود (اختياري)
         const branchId = userBranch?.id || currentBranch?.id;
         if (branchId) {
           payload.branch_id = branchId;
         }
 
-        // ✅ نضيف category_id فقط إذا كان موجود وليس 'all'
         if (categoryId && categoryId !== 'all' && categoryId !== '') {
           payload.category_id = parseInt(categoryId);
         }
 
-        // ✅ دايماً نطلب API حتى لو payload فاضي
-        console.log('Sending payload:', payload);
+        console.log('📦 Fetching products with payload:', payload);
         const response = await api.post('/products/by-branch', payload);
         
         const products = response.data?.data || response.data || [];
         
-        return products.map((prod: any) => ({
+        const formatted = products.map((prod: any) => ({
           id: prod.id?.toString() || '',
           name: prod.name || '',
           name_ar: prod.name_ar || prod.name || '',
@@ -171,8 +255,22 @@ export const useProducts = (categoryId?: string | null) => {
           created_at: prod.created_at || null,
           updated_at: prod.updated_at || null
         }));
+
+        // Save to offline DB for future use
+        await saveProductsOffline(formatted);
+        
+        return formatted;
       } catch (error) {
         console.error('Error fetching products:', error);
+        
+        // If online fetch fails and we're actually offline, switch to offline mode
+        if (!navigator.onLine) {
+          setIsOfflineMode(true);
+          const offline = await getProductsOffline(categoryId);
+          setOfflineProducts(offline);
+          return offline;
+        }
+        
         toast({
           title: 'خطأ في جلب المنتجات',
           variant: 'destructive'
@@ -180,32 +278,63 @@ export const useProducts = (categoryId?: string | null) => {
         return [];
       }
     },
+    enabled: !isOfflineMode,
   });
+
+  if (isOfflineMode) {
+    return {
+      data: offlineProducts,
+      isLoading,
+      isOffline: true
+    };
+  }
+
+  return {
+    data: onlineProducts,
+    isLoading: onlineLoading,
+    isOffline: false
+  };
 };
-// ========== باقي الـ hooks زي ما هي ==========
 
-// ========== Product by Barcode Hook - مع API الجديد ==========
-
+// ========== Product by Barcode with Offline Support ==========
 export const useProductByBarcode = (barcode: string) => {
   const { userBranch, currentBranch } = useApp();
-  
+  const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOfflineMode(false);
+    const handleOffline = () => setIsOfflineMode(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   return useQuery({
     queryKey: ['product-barcode', barcode, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
+      // Offline mode - search in local DB
+      if (isOfflineMode || !navigator.onLine) {
+        console.log('🔍 Searching offline for barcode:', barcode);
+        return await getProductByBarcodeOffline(barcode);
+      }
+
+      // Online mode
       try {
-        // ✅ تجهيز الـ payload - نبدأه فاضي
         const payload: any = {};
 
-        // ✅ نضيف branch_id فقط إذا كان موجود (اختياري)
         const branchId = userBranch?.id || currentBranch?.id;
         if (branchId) {
           payload.branch_id = branchId;
         }
 
-        // ✅ نضيف barcode دائمًا
         payload.barcode = barcode;
 
-        console.log('Sending payload:', payload);
+        console.log('📦 Fetching product by barcode:', payload);
         const response = await api.post('/products/by-branch', payload);
         
         const product = response.data?.data?.[0] || null;
@@ -236,6 +365,12 @@ export const useProductByBarcode = (barcode: string) => {
         return null;
       } catch (error) {
         console.error('Error fetching product by barcode:', error);
+        
+        // If online fetch fails and we're offline, try offline
+        if (!navigator.onLine) {
+          return await getProductByBarcodeOffline(barcode);
+        }
+        
         toast({
           title: 'خطأ في البحث عن المنتج',
           variant: 'destructive'
@@ -247,8 +382,7 @@ export const useProductByBarcode = (barcode: string) => {
   });
 };
 
-// ========== Helper Functions ==========
-
+// ========== Helper Functions (بدون تغيير) ==========
 export const getProductColors = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];
   
@@ -310,7 +444,6 @@ export const getAvailableVariants = (product: Product): Array<{
   return variants;
 };
 
-// ✅ دالة مساعدة لجلب صورة المنتج
 export const getProductImageUrl = (product: Product): string => {
   return product.imageUrl || product.image_url || product.image?.fullUrl || '';
 };

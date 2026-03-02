@@ -31,14 +31,15 @@ import { useQuery } from '@tanstack/react-query';
 import  api  from '@/lib/api';
 
 interface Branch {
-  id: number;
+  id: string;
   name: string;
-  name_ar?: string;
-  code: string;
+  name_ar: string | null;
+  code: string | null;
+  is_main: boolean | null;
   phone?: string;
   address?: string;
   manager?: string;
-  active: boolean;
+  active?: boolean;
   main_branch?: boolean;
   image?: string;
 }
@@ -97,30 +98,7 @@ const Header: React.FC = () => {
     staleTime: 5 * 60 * 1000, // 5 دقائق
   });
 
-  // جلب المخازن
-  const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
-    queryKey: ['warehouses-header'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/warehouse/index', {
-          filters: { active: true },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false
-        });
-        
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching warehouses:', error);
-        return [];
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 دقائق
-  });
+ 
 
   const getUserInitials = () => {
     if (user?.email) {
@@ -261,79 +239,7 @@ const Header: React.FC = () => {
           </DropdownMenu>
         )}
 
-        {/* Warehouse Display/Selector - Now right next to branch */}
-        {hasRestrictedWarehouse ? (
-          // User has assigned warehouse - show as badge (not selectable)
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary border border-border rounded-lg">
-            <Warehouse size={16} className="text-muted-foreground" />
-            <span className="text-sm font-medium">
-              {getLocalizedName(userWarehouse, '')}
-            </span>
-          </div>
-        ) : warehouses.length > 0 ? (
-          // Admin/All access - show dropdown
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Warehouse size={16} />
-                {loadingWarehouses ? (
-                  <Skeleton className="w-20 h-4" />
-                ) : (
-                  <span className="max-w-[100px] truncate">
-                    {getLocalizedName(currentWarehouse, language === 'ar' ? 'كل المخازن' : 'All Warehouses')}
-                  </span>
-                )}
-                <ChevronDown size={14} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto">
-              <DropdownMenuLabel>
-                {language === 'ar' ? 'اختر المخزن' : 'Select Warehouse'}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              
-              {/* All Warehouses Option */}
-              <DropdownMenuItem 
-                onClick={() => setCurrentWarehouse(null)}
-                className="flex items-center justify-between cursor-pointer"
-              >
-                <span className="font-medium">
-                  {language === 'ar' ? 'كل المخازن' : 'All Warehouses'}
-                </span>
-                {currentWarehouse === null && <Check size={16} className="text-primary" />}
-              </DropdownMenuItem>
-              
-              <DropdownMenuSeparator />
-              
-              {/* Warehouses List */}
-              {warehouses.map((warehouse: Warehouse) => {
-                const branchName = getWarehouseBranchName(warehouse);
-                
-                return (
-                  <DropdownMenuItem 
-                    key={warehouse.id}
-                    onClick={() => setCurrentWarehouse(warehouse)}
-                    className="flex items-center justify-between cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span>{getLocalizedName(warehouse, warehouse.name)}</span>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        {warehouse.code && <span>كود: {warehouse.code}</span>}
-                        {branchName && (
-                          <>
-                            <span>•</span>
-                            <span>{branchName}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {currentWarehouse?.id === warehouse.id && <Check size={16} className="text-primary shrink-0" />}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+  
 
         {/* Language Toggle */}
         <Button

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import { X, Banknote, CreditCard, Check, Wallet, Crown, Star, Split } from 'lucide-react';
+import { X, Banknote, CreditCard, Check, Wallet, Crown, Star, Split, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePOSKeyboardShortcuts, getPaymentShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { saveOrderOffline, getNetworkStatus } from '@/lib/offlineDB';
+
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
 interface PaymentMethod {
@@ -74,82 +74,24 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     wallet: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-  // Fetch payment methods from settings
-  const { data: dbPaymentMethods = [] } = useQuery({
-    queryKey: ['payment-methods-active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payment_methods')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order');
-      if (error) throw error;
-      return data;
-    }
-  });
+  // متابعة حالة النت
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
 
-  // Map database payment methods to component format - only cash, card, wallet
-  const paymentMethods: PaymentMethod[] = React.useMemo(() => {
-    const methods: PaymentMethod[] = [];
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
-    // Find cash method
-    const cashMethod = dbPaymentMethods.find(m => m.code === 'cash' || m.type === 'cash');
-    if (cashMethod) {
-      methods.push({
-        id: 'cash',
-        icon: <Banknote size={20} />,
-        label: cashMethod.name,
-        labelAr: cashMethod.name_ar,
-        color: 'bg-success',
-        shortcut: 'F1'
-      });
-    } else {
-      methods.push(defaultPaymentMethods[0]);
-    }
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
-    // Find card method
-    const cardMethod = dbPaymentMethods.find(m => m.code === 'card' || m.type === 'card');
-    if (cardMethod) {
-      methods.push({
-        id: 'card',
-        icon: <CreditCard size={20} />,
-        label: cardMethod.name,
-        labelAr: cardMethod.name_ar,
-        color: 'bg-blue-500',
-        shortcut: 'F2'
-      });
-    } else {
-      methods.push(defaultPaymentMethods[1]);
-    }
-
-    // Find wallet method
-    const walletMethod = dbPaymentMethods.find(m => m.code === 'wallet' || m.type === 'wallet' || m.code === 'mobile_wallet');
-    if (walletMethod) {
-      methods.push({
-        id: 'wallet',
-        icon: <Wallet size={20} />,
-        label: walletMethod.name,
-        labelAr: walletMethod.name_ar,
-        color: 'bg-purple-500',
-        shortcut: 'F3'
-      });
-    } else {
-      methods.push(defaultPaymentMethods[2]);
-    }
-
-    // Add split option
-    methods.push({
-      id: 'split',
-      icon: <Split size={20} />,
-      label: 'Split',
-      labelAr: 'تقسيم',
-      color: 'bg-primary',
-      shortcut: 'F4'
-    });
-
-    return methods;
-  }, [dbPaymentMethods]);
+  // Payment methods (ثابتة بدون API)
+  const paymentMethods: PaymentMethod[] = defaultPaymentMethods;
 
   const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
@@ -191,18 +133,17 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleComplete = async () => {
     // Check if customer is selected
-   let customerId;
+    let customerId;
 
-if (!customer?.id) {
-  customerId = 1;
-} else {
-  customerId = customer.id;
-}
+    if (!customer?.id) {
+      customerId = 1;
+    } else {
+      customerId = customer.id;
+    }
 
-
+    let payments: { method: string; amount: number }[] = [];
     setIsProcessing(true);
     try {
-      let payments: { method: string; amount: number }[] = [];
 
       if (paymentMethod === 'split') {
         Object.entries(splitAmounts).forEach(([method, amount]) => {
@@ -220,9 +161,9 @@ if (!customer?.id) {
       // Filter out payments with zero amounts
       payments = payments.filter(payment => payment.amount > 0);
 
-      // Prepare invoice data according to the required format
+      // Prepare invoice data
       const invoiceData = {
-        customer_id: parseInt(customer?.id) || 1, // Default to 1 if no customer selected
+        customer_id: parseInt(customer?.id) || 1,
         items: cartItems.map(item => ({
           product_id: parseInt(item.id),
           quantity: item.quantity,
@@ -230,31 +171,91 @@ if (!customer?.id) {
           color: item.colorName || null,
           size: item.sizeName || null
         })),
-        payments: payments
+        payments: payments,
+        subtotal,
+        tax,
+        total,
+        shift_id: shiftId,
+        branch_id: branchId,
+        delivery_id: deliveryPerson?.id
       };
 
-      // Send invoice to API
-      const response = await fetch('/api/invoice/store', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(invoiceData)
-      });
+      // إذا كان في وضع Offline
+      if (isOffline) {
+        const offlineId = await saveOrderOffline({
+          items: cartItems,
+          subtotal,
+          tax,
+          total,
+          customer_id: customer?.id,
+          delivery_id: deliveryPerson?.id,
+          payment_method: paymentMethod,
+          payments
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create invoice');
+        if (offlineId) {
+          toast.success(
+            language === 'ar' 
+              ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً' 
+              : 'Invoice saved locally. Will sync later'
+          );
+          onComplete(payments);
+        } else {
+          throw new Error('Failed to save offline');
+        }
+      } else {
+        // وضع Online - إرسال للـ API
+        const response = await fetch('/api/invoice/store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(invoiceData)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create invoice');
+        }
+
+        const result = await response.json();
+        toast.success(language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully');
+        onComplete(payments);
       }
-
-      const result = await response.json();
-
-      toast.success(language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully');
-      onComplete(payments);
     } catch (error) {
       console.error('Error saving invoice:', error);
-      toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
+      
+      // محاولة حفظ في Offline إذا فشل الـ API
+      if (!isOffline) {
+        try {
+          const offlineId = await saveOrderOffline({
+            items: cartItems,
+            subtotal,
+            tax,
+            total,
+            customer_id: customer?.id,
+            delivery_id: deliveryPerson?.id,
+            payment_method: paymentMethod,
+            payments: payments
+          });
+
+          if (offlineId) {
+            toast.warning(
+              language === 'ar'
+                ? 'تم حفظ الفاتورة محلياً بسبب خطأ في الاتصال'
+                : 'Invoice saved locally due to connection error'
+            );
+            onComplete(payments);
+          } else {
+            toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
+          }
+        } catch (offlineError) {
+          toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
+        }
+      } else {
+        toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -460,9 +461,18 @@ if (!customer?.id) {
       <div className="relative w-full max-w-2xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
-          <h2 className="text-xl font-bold text-foreground">
-            {language === 'ar' ? 'الدفع' : 'Payment'}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-foreground">
+              {language === 'ar' ? 'الدفع' : 'Payment'}
+            </h2>
+            {/* Offline indicator */}
+            {isOffline && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-xs">
+                <WifiOff size={12} />
+                <span>{language === 'ar' ? 'بدون نت' : 'Offline'}</span>
+              </div>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-muted rounded-lg transition-colors"
@@ -502,6 +512,18 @@ if (!customer?.id) {
             </div>
           )}
 
+          {/* Offline warning */}
+          {isOffline && (
+            <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+              <WifiOff className="h-4 w-4 text-amber-600" />
+              <p className="text-sm text-amber-600">
+                {language === 'ar'
+                  ? 'أنت في وضع عدم الاتصال. سيتم حفظ الفاتورة محلياً ومزامنتها لاحقاً.'
+                  : 'You are offline. The invoice will be saved locally and synced later.'}
+              </p>
+            </div>
+          )}
+
           {/* Total Display */}
           <div className="text-center mb-6">
             <p className="text-muted-foreground text-sm mb-1">
@@ -512,7 +534,7 @@ if (!customer?.id) {
             </p>
           </div>
 
-          {/* Payment Method Tabs - Only 3 methods + split */}
+          {/* Payment Method Tabs */}
           <div className="flex gap-2 mb-6 justify-center">
             {paymentMethods.map((method) => (
               <button
@@ -557,8 +579,11 @@ if (!customer?.id) {
             onClick={handleComplete}
             disabled={!canComplete() || isProcessing}
             className={cn(
-              'w-full h-14 text-lg font-bold',
-              'bg-gradient-to-r from-success to-success-light hover:opacity-90 text-white'
+              'w-full h-14 text-lg font-bold relative overflow-hidden',
+              isOffline 
+                ? 'bg-amber-600 hover:bg-amber-700' 
+                : 'bg-gradient-to-r from-success to-success-light hover:opacity-90',
+              'text-white transition-all duration-300'
             )}
           >
             {isProcessing ? (
@@ -568,8 +593,11 @@ if (!customer?.id) {
               </span>
             ) : (
               <span className="flex items-center gap-2">
-                <Check size={24} />
-                {language === 'ar' ? 'إتمام الدفع' : 'Complete Payment'}
+                {isOffline ? <WifiOff size={24} /> : <Check size={24} />}
+                {isOffline 
+                  ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
+                  : (language === 'ar' ? 'إتمام الدفع' : 'Complete Payment')
+                }
                 <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Enter</kbd>
               </span>
             )}

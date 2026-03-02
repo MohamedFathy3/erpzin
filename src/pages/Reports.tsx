@@ -1389,7 +1389,7 @@
                   value={stats.totalProducts}
                   icon={Package}
                   color="bg-cyan-500/10 text-cyan-500"
-                  tooltip={language === 'ar' ? 'إجمالي عدد المنتجات' : 'Total number of products'}
+                  tooltip={language === 'ar' ? 'إجمالي عدد ' : 'Total number of products'}
                 />
                 <MiniStatCard
                   label={t.totalExpenses}
