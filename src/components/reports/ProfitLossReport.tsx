@@ -23,7 +23,9 @@ import {
   ArrowDownRight,
   Minus,
   Receipt,
-  Landmark
+  Landmark,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 import { format, subMonths, subQuarters, subYears, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -35,6 +37,7 @@ import {
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // ==================== Types ====================
 interface SalesInvoice {
@@ -62,6 +65,25 @@ interface PurchaseInvoice {
 
 interface PurchaseInvoiceResponse {
   data: PurchaseInvoice[];
+  links: any;
+  meta: any;
+  result: string;
+  message: string;
+  status: number;
+}
+
+// ==================== POS Invoice Type ====================
+interface POSInvoice {
+  id: number;
+  invoice_number: string;
+  amounts: {
+    total: string;
+  };
+  created_at: string;
+}
+
+interface POSInvoiceResponse {
+  data: POSInvoice[];
   links: any;
   meta: any;
   result: string;
@@ -123,6 +145,7 @@ interface ExpenseCategory {
   name: string;
   value: number;
   count: number;
+  percentage: number;
 }
 
 const ProfitLossReport: React.FC = () => {
@@ -175,6 +198,24 @@ const ProfitLossReport: React.FC = () => {
         return response.data.data || [];
       } catch (error) {
         console.error('Error fetching current sales:', error);
+        return [];
+      }
+    }
+  });
+
+  // ==================== Fetch POS Invoices ====================
+  const { data: currentPOS = [] } = useQuery<POSInvoice[]>({
+    queryKey: ['current-pos', period],
+    queryFn: async () => {
+      try {
+        const response = await api.post<POSInvoiceResponse>('/invoices/index', {
+          date_from: `${currentPeriod.start} 00:00:00`,
+          date_to: `${currentPeriod.end} 23:59:59`,
+          paginate: false
+        });
+        return response.data.data || [];
+      } catch (error) {
+        console.error('Error fetching POS invoices:', error);
         return [];
       }
     }
@@ -304,8 +345,14 @@ const ProfitLossReport: React.FC = () => {
 
   // ==================== Calculate Current Period Totals ====================
   const totals = useMemo(() => {
-    // Sales
-    const totalSales = currentSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    // Regular Sales
+    const regularSales = currentSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    
+    // POS Sales
+    const posSales = currentPOS.reduce((sum, inv) => sum + Number(inv.amounts?.total || 0), 0);
+    
+    // Total Sales
+    const totalSales = regularSales + posSales;
     
     // Purchases (Cost of Goods Sold)
     const totalPurchases = currentPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
@@ -325,9 +372,13 @@ const ProfitLossReport: React.FC = () => {
     
     const grossProfitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
     const netProfitMargin = totalSales > 0 ? (netIncome / totalSales) * 100 : 0;
+    const operatingExpenseRatio = totalSales > 0 ? (totalExpenses / totalSales) * 100 : 0;
+    const breakEvenPoint = grossProfit > 0 ? totalExpenses / (grossProfit / totalSales) : 0;
 
     return {
       totalSales,
+      regularSales,
+      posSales,
       totalPurchases,
       totalExpenses,
       totalRevenues,
@@ -337,21 +388,23 @@ const ProfitLossReport: React.FC = () => {
       otherIncome,
       netIncome,
       grossProfitMargin,
-      netProfitMargin
+      netProfitMargin,
+      operatingExpenseRatio,
+      breakEvenPoint
     };
-  }, [currentSales, currentPurchases, currentExpenses, currentRevenues]);
+  }, [currentSales, currentPOS, currentPurchases, currentExpenses, currentRevenues]);
 
   // ==================== Calculate Previous Period Totals ====================
   const previousTotals = useMemo(() => {
-    const prevSales = previousSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const prevRegularSales = previousSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     const prevPurchases = previousPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     const prevExpenses = previousExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
     const prevRevenues = previousRevenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 
-    const prevNetIncome = (prevSales - prevPurchases) - prevExpenses + prevRevenues;
+    const prevNetIncome = (prevRegularSales - prevPurchases) - prevExpenses + prevRevenues;
 
     return {
-      sales: prevSales,
+      sales: prevRegularSales,
       netIncome: prevNetIncome
     };
   }, [previousSales, previousPurchases, previousExpenses, previousRevenues]);
@@ -369,9 +422,10 @@ const ProfitLossReport: React.FC = () => {
     return { salesChange, profitChange };
   }, [totals, previousTotals]);
 
-  // ==================== Expenses by Category ====================
+  // ==================== Expenses by Category with Percentages ====================
   const expensesByCategory = useMemo<ExpenseCategory[]>(() => {
     const categoryMap = new Map<string, { value: number; count: number }>();
+    const totalExpenseAmount = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
 
     currentExpenses.forEach(exp => {
       const category = exp.category;
@@ -387,7 +441,12 @@ const ProfitLossReport: React.FC = () => {
     });
 
     return Array.from(categoryMap.entries())
-      .map(([name, data]) => ({ name, value: data.value, count: data.count }))
+      .map(([name, data]) => ({ 
+        name, 
+        value: data.value, 
+        count: data.count,
+        percentage: totalExpenseAmount > 0 ? (data.value / totalExpenseAmount) * 100 : 0
+      }))
       .sort((a, b) => b.value - a.value);
   }, [currentExpenses]);
 
@@ -402,27 +461,60 @@ const ProfitLossReport: React.FC = () => {
         ['الفترة', `${currentPeriod.start} إلى ${currentPeriod.end}`],
         [''],
         ['البند', 'القيمة', 'مقارنة بالفترة السابقة'],
-        ['المبيعات', totals.totalSales, `${changes.salesChange.toFixed(1)}%`],
+        ['المبيعات (فواتير عادية)', totals.regularSales, ''],
+        ['المبيعات (نقطة بيع)', totals.posSales, ''],
+        ['إجمالي المبيعات', totals.totalSales, `${changes.salesChange.toFixed(1)}%`],
         ['تكلفة البضاعة المباعة', totals.totalPurchases, ''],
         ['مجمل الربح', totals.grossProfit, ''],
         ['المصروفات التشغيلية', totals.operatingExpenses, ''],
         ['الدخل التشغيلي', totals.operatingIncome, ''],
         ['إيرادات أخرى', totals.otherIncome, ''],
         ['صافي الدخل', totals.netIncome, `${changes.profitChange.toFixed(1)}%`],
+        ['هامش الربح الإجمالي', `${totals.grossProfitMargin.toFixed(1)}%`, ''],
+        ['هامش صافي الربح', `${totals.netProfitMargin.toFixed(1)}%`, ''],
       ];
       const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
 
       // Expenses Breakdown Sheet
       const expensesData = [
-        ['الفئة', 'المبلغ', 'عدد المعاملات'],
-        ...expensesByCategory.map(e => [e.name, e.value, e.count])
+        ['الفئة', 'المبلغ', 'عدد المعاملات', 'النسبة'],
+        ...expensesByCategory.map(e => [e.name, e.value, e.count, `${e.percentage.toFixed(1)}%`])
       ];
       const expensesWs = XLSX.utils.aoa_to_sheet(expensesData);
       XLSX.utils.book_append_sheet(wb, expensesWs, 'Expenses');
 
       XLSX.writeFile(wb, `profit_loss_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
       
+      toast.success(language === 'ar' ? 'تم التصدير بنجاح' : 'Exported successfully');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(language === 'ar' ? 'حدث خطأ في التصدير' : 'Export failed');
+    }
+  };
+
+  // ==================== Export to CSV ====================
+  const handleExportCSV = () => {
+    try {
+      const data = [
+        ['البند', 'القيمة', 'التغير'],
+        ['المبيعات (فواتير عادية)', totals.regularSales.toString(), ''],
+        ['المبيعات (نقطة بيع)', totals.posSales.toString(), ''],
+        ['إجمالي المبيعات', totals.totalSales.toString(), `${changes.salesChange.toFixed(1)}%`],
+        ['تكلفة البضاعة المباعة', totals.totalPurchases.toString(), ''],
+        ['مجمل الربح', totals.grossProfit.toString(), ''],
+        ['المصروفات', totals.operatingExpenses.toString(), ''],
+        ['إيرادات أخرى', totals.otherIncome.toString(), ''],
+        ['صافي الدخل', totals.netIncome.toString(), `${changes.profitChange.toFixed(1)}%`],
+      ];
+      
+      const csvContent = data.map(row => row.join(',')).join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `profit_loss_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      link.click();
+
       toast.success(language === 'ar' ? 'تم التصدير بنجاح' : 'Exported successfully');
     } catch (error) {
       console.error('Export error:', error);
@@ -499,9 +591,13 @@ const ProfitLossReport: React.FC = () => {
             <tr class="total"><td>${t.grossProfit}</td><td>${formatCurrency(totals.grossProfit)}</td></tr>
             
             <tr><td colspan="2"><strong>${t.operatingExpenses}</strong></td></tr>
-            ${expensesByCategory.map(e => `
+            ${expensesByCategory.slice(0, 5).map(e => `
               <tr><td style="padding-left: 30px;">${e.name}</td><td>${formatCurrency(e.value)}</td></tr>
             `).join('')}
+            ${expensesByCategory.length > 5 ? `
+              <tr><td style="padding-left: 30px;">${language === 'ar' ? 'مصروفات أخرى' : 'Other Expenses'}</td>
+              <td>${formatCurrency(expensesByCategory.slice(5).reduce((sum, e) => sum + e.value, 0))}</td></tr>
+            ` : ''}
             <tr class="total"><td>${t.operatingExpenses} ${language === 'ar' ? 'الإجمالي' : 'Total'}</td><td>${formatCurrency(totals.operatingExpenses)}</td></tr>
             
             <tr class="total"><td>${t.netIncome}</td><td class="${totals.netIncome >= 0 ? 'profit' : 'loss'}">${formatCurrency(totals.netIncome)}</td></tr>
@@ -536,6 +632,7 @@ const ProfitLossReport: React.FC = () => {
     expenseBreakdown: language === 'ar' ? 'تفصيل المصروفات' : 'Expense Breakdown',
     print: language === 'ar' ? 'طباعة' : 'Print',
     export: language === 'ar' ? 'تصدير' : 'Export',
+    exportCSV: language === 'ar' ? 'تصدير CSV' : 'Export CSV',
     loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...',
     noData: language === 'ar' ? 'لا توجد بيانات' : 'No data',
   };
@@ -557,7 +654,8 @@ const ProfitLossReport: React.FC = () => {
     indent = 0, 
     isBold = false, 
     isTotal = false,
-    change
+    change,
+    tooltip
   }: { 
     label: string; 
     value: number; 
@@ -565,21 +663,36 @@ const ProfitLossReport: React.FC = () => {
     isBold?: boolean;
     isTotal?: boolean;
     change?: number;
+    tooltip?: string;
   }) => (
     <div className={cn(
       "flex items-center justify-between py-2",
       isTotal && "border-t-2 border-border pt-3 mt-2"
     )}>
-      <span 
-        className={cn(
-          "text-sm",
-          isBold && "font-semibold",
-          !isBold && !isTotal && "text-muted-foreground"
+      <div className="flex items-center gap-2">
+        <span 
+          className={cn(
+            "text-sm",
+            isBold && "font-semibold",
+            !isBold && !isTotal && "text-muted-foreground"
+          )}
+          style={{ marginInlineStart: `${indent * 16}px` }}
+        >
+          {label}
+        </span>
+        {tooltip && (
+          <TooltipProvider>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <Info size={14} className="text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs max-w-xs">{tooltip}</p>
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
         )}
-        style={{ marginInlineStart: `${indent * 16}px` }}
-      >
-        {label}
-      </span>
+      </div>
       <div className="flex items-center gap-3">
         {change !== undefined && (
           <Badge 
@@ -612,6 +725,24 @@ const ProfitLossReport: React.FC = () => {
     );
   }
 
+  const hasData = totals.totalSales > 0 || totals.totalExpenses > 0 || totals.totalRevenues > 0;
+
+  if (!hasData && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <Package size={48} className="text-muted-foreground mb-4 opacity-50" />
+        <h3 className="text-lg font-medium text-foreground mb-2">
+          {language === 'ar' ? 'لا توجد بيانات' : 'No data available'}
+        </h3>
+        <p className="text-sm text-muted-foreground text-center max-w-md">
+          {language === 'ar' 
+            ? 'لا توجد معاملات في الفترة المحددة'
+            : 'No transactions in the selected period'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -639,6 +770,10 @@ const ProfitLossReport: React.FC = () => {
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download size={16} className="me-2" />
             {t.export}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download size={16} className="me-2" />
+            CSV
           </Button>
         </div>
       </div>
@@ -670,6 +805,10 @@ const ProfitLossReport: React.FC = () => {
               )}
               <span className="text-xs text-muted-foreground">{t.vsLastPeriod}</span>
             </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              {language === 'ar' ? 'فواتير عادية' : 'Regular'}: {formatCurrency(totals.regularSales)} | 
+              {language === 'ar' ? 'نقطة بيع' : 'POS'}: {formatCurrency(totals.posSales)}
+            </div>
           </CardContent>
         </Card>
 
@@ -685,8 +824,11 @@ const ProfitLossReport: React.FC = () => {
               </div>
             </div>
             <div className="mt-3">
-              <Progress value={totals.grossProfitMargin} className="h-2" />
-              <p className="text-xs text-muted-foreground mt-1">{t.grossMargin}: {totals.grossProfitMargin.toFixed(1)}%</p>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-muted-foreground">{t.grossMargin}</span>
+                <span className="font-medium">{totals.grossProfitMargin.toFixed(1)}%</span>
+              </div>
+              <Progress value={Math.min(100, Math.max(0, totals.grossProfitMargin))} className="h-1.5" />
             </div>
           </CardContent>
         </Card>
@@ -701,6 +843,15 @@ const ProfitLossReport: React.FC = () => {
               <div className="p-3 bg-warning/20 rounded-full">
                 <CreditCard className="h-6 w-6 text-warning" />
               </div>
+            </div>
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-muted-foreground">
+                  {language === 'ar' ? 'نسبة المصروفات' : 'Expense Ratio'}
+                </span>
+                <span className="font-medium">{totals.operatingExpenseRatio.toFixed(1)}%</span>
+              </div>
+              <Progress value={Math.min(100, Math.max(0, totals.operatingExpenseRatio))} className="h-1.5" />
             </div>
           </CardContent>
         </Card>
@@ -744,6 +895,30 @@ const ProfitLossReport: React.FC = () => {
         </Card>
       </div>
 
+      {/* Previous Period Comparison */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="p-4 bg-muted/30 rounded-lg">
+          <p className="text-xs text-muted-foreground mb-1">
+            {language === 'ar' ? 'الفترة السابقة' : 'Previous Period'}
+          </p>
+          <p className="text-lg font-bold">{formatCurrency(previousTotals.sales)}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {language === 'ar' ? 'المبيعات' : 'Sales'}
+          </p>
+        </div>
+        <div className="p-4 bg-muted/30 rounded-lg">
+          <p className="text-xs text-muted-foreground mb-1">
+            {language === 'ar' ? 'التغير' : 'Change'}
+          </p>
+          <p className={`text-lg font-bold ${changes.salesChange >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {changes.salesChange >= 0 ? '+' : ''}{changes.salesChange.toFixed(1)}%
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {language === 'ar' ? 'نسبة التغير' : 'Change %'}
+          </p>
+        </div>
+      </div>
+
       {/* Detailed Statement */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
@@ -755,23 +930,79 @@ const ProfitLossReport: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-1">
             {/* Revenue Section */}
-            <div className="font-semibold text-lg mb-2">{t.revenue}</div>
-            <LineItem label={t.sales} value={totals.totalSales} indent={1} change={changes.salesChange} />
-            <LineItem label={t.otherIncome} value={totals.otherIncome} indent={1} />
-            <LineItem label={`${t.revenue} ${language === 'ar' ? 'الإجمالي' : 'Total'}`} value={totals.totalSales + totals.otherIncome} isBold isTotal />
+            <div className="font-semibold text-lg mb-2 flex items-center gap-2">
+              {t.revenue}
+              <TooltipProvider>
+                <UITooltip>
+                  <TooltipTrigger asChild>
+                    <Info size={14} className="text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs max-w-xs">
+                      {language === 'ar' 
+                        ? 'إجمالي الإيرادات من المبيعات والإيرادات الأخرى'
+                        : 'Total revenue from sales and other income'}
+                    </p>
+                  </TooltipContent>
+                </UITooltip>
+              </TooltipProvider>
+            </div>
+            <LineItem 
+              label={t.sales} 
+              value={totals.totalSales} 
+              indent={1} 
+              change={changes.salesChange}
+              tooltip={language === 'ar' 
+                ? 'مبيعات الفواتير العادية ونقطة البيع'
+                : 'Sales from regular invoices and POS'}
+            />
+            <LineItem 
+              label={t.otherIncome} 
+              value={totals.otherIncome} 
+              indent={1} 
+              tooltip={language === 'ar'
+                ? 'إيرادات أخرى غير المبيعات'
+                : 'Other income excluding sales'}
+            />
+            <LineItem 
+              label={`${t.revenue} ${language === 'ar' ? 'الإجمالي' : 'Total'}`} 
+              value={totals.totalSales + totals.otherIncome} 
+              isBold isTotal 
+            />
 
             <Separator className="my-4" />
 
             {/* Cost of Goods Sold */}
-            <LineItem label={t.costOfGoods} value={-totals.totalPurchases} />
-            <LineItem label={t.grossProfit} value={totals.grossProfit} isBold isTotal />
+            <LineItem 
+              label={t.costOfGoods} 
+              value={-totals.totalPurchases} 
+              tooltip={language === 'ar'
+                ? 'تكلفة المشتريات خلال الفترة'
+                : 'Cost of purchases during the period'}
+            />
+            <LineItem 
+              label={t.grossProfit} 
+              value={totals.grossProfit} 
+              isBold isTotal 
+              tooltip={language === 'ar'
+                ? 'مجمل الربح = المبيعات - تكلفة البضاعة المباعة'
+                : 'Gross Profit = Sales - Cost of Goods Sold'}
+            />
 
             <Separator className="my-4" />
 
             {/* Operating Expenses */}
             <div className="font-semibold text-lg mb-2">{t.operatingExpenses}</div>
             {expensesByCategory.slice(0, 5).map((expense, index) => (
-              <LineItem key={index} label={expense.name} value={-expense.value} indent={1} />
+              <LineItem 
+                key={index} 
+                label={expense.name} 
+                value={-expense.value} 
+                indent={1} 
+                tooltip={language === 'ar'
+                  ? `${expense.count} معاملة | ${expense.percentage.toFixed(1)}% من المصروفات`
+                  : `${expense.count} transactions | ${expense.percentage.toFixed(1)}% of expenses`}
+              />
             ))}
             {expensesByCategory.length > 5 && (
               <LineItem 
@@ -780,12 +1011,24 @@ const ProfitLossReport: React.FC = () => {
                 indent={1} 
               />
             )}
-            <LineItem label={`${t.operatingExpenses} ${language === 'ar' ? 'الإجمالي' : 'Total'}`} value={-totals.operatingExpenses} isBold isTotal />
+            <LineItem 
+              label={`${t.operatingExpenses} ${language === 'ar' ? 'الإجمالي' : 'Total'}`} 
+              value={-totals.operatingExpenses} 
+              isBold isTotal 
+            />
 
             <Separator className="my-4" />
 
             {/* Net Income */}
-            <LineItem label={t.netIncome} value={totals.netIncome} isBold isTotal change={changes.profitChange} />
+            <LineItem 
+              label={t.netIncome} 
+              value={totals.netIncome} 
+              isBold isTotal 
+              change={changes.profitChange}
+              tooltip={language === 'ar'
+                ? 'صافي الدخل = مجمل الربح - المصروفات + الإيرادات الأخرى'
+                : 'Net Income = Gross Profit - Expenses + Other Income'}
+            />
           </CardContent>
         </Card>
 
@@ -815,7 +1058,14 @@ const ProfitLossReport: React.FC = () => {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))', 
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -829,7 +1079,12 @@ const ProfitLossReport: React.FC = () => {
                         />
                         <span className="truncate max-w-[150px]">{expense.name}</span>
                       </div>
-                      <span className="font-mono text-xs">{formatCurrency(expense.value)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {expense.percentage.toFixed(1)}%
+                        </span>
+                        <span className="font-mono text-xs">{formatCurrency(expense.value)}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
