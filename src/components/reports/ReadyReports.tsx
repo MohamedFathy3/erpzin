@@ -322,7 +322,7 @@ const ReadyReports = () => {
         supplierBalancesDesc: 'Outstanding supplier amounts',
         returnInvoices: 'Return Invoices',
         returnInvoicesDesc: 'All return invoices',
-
+checkOut: 'Check Out',
         // Inventory
         stockReport: 'Stock Report',
         stockReportDesc: 'Current stock levels',
@@ -391,6 +391,7 @@ const ReadyReports = () => {
       department: 'Department',
       position: 'Position',
       type: 'Type',
+      number: 'Number',
       description: 'Description',
       balance: 'Balance',
       shift: 'Shift',
@@ -407,7 +408,8 @@ const ReadyReports = () => {
       reason: 'Reason',
       method: 'Method',
       currency: 'Currency',
-      branch: 'Branch'
+      checkIn: 'Check In',
+      salary: 'Salary',
     },
     ar: {
       title: 'التقارير الجاهزة',
@@ -491,7 +493,7 @@ const ReadyReports = () => {
         customerBalancesDesc: 'المبالغ المستحقة',
         supplierList: 'قائمة الموردين',
         supplierListDesc: 'جميع الموردين',
-
+checkOut: 'تسجيل الخروج',
         // HR
         employeeList: 'قائمة الموظفين',
         employeeListDesc: 'جميع الموظفين',
@@ -548,7 +550,12 @@ const ReadyReports = () => {
       reason: 'السبب',
       method: 'طريقة الرد',
       currency: 'العملة',
-      branch: 'الفرع'
+      reference: 'المرجع',
+      referenceNo: 'رقم المرجع',
+      checkIn: 'تسجيل الدخول',
+      salary: 'الراتب',
+      checkOut: 'تسجيل الخروج',
+      number: 'الرقم',
     }
   };
 

@@ -35,7 +35,7 @@ interface Account {
 
 interface JournalEntry {
   id: number;
-  date: string;
+  entry_date: string;
   description_ar: string | null;
   description_en: string | null;
   notes: string | null;
@@ -47,7 +47,6 @@ interface JournalEntry {
   reference_type?: string;
   reference_id?: number;
   entry_number?: string;
-  entry_date?: string;
 }
 
 interface JournalEntryLine {
@@ -93,6 +92,20 @@ interface JournalEntryLineResponse {
   data: JournalEntryLine[];
   result: string;
   message: string;
+  status: number;
+}
+
+interface JournalEntryDetailResponse {
+  result: string;
+  data: JournalEntry;
+  message: string;
+  status: number;
+}
+
+interface JournalEntryPostResponse {
+  result: string;
+  message: string;
+  data: JournalEntry;
   status: number;
 }
 
@@ -280,7 +293,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   
   const [formData, setFormData] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
+    entry_date: format(new Date(), 'yyyy-MM-dd'),
     description_en: '',
     description_ar: '',
     notes: ''
@@ -355,14 +368,11 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
   }, [formData, lines, showForm]);
 
   // ==================== Queries ====================
-  // Fetch accounts
+  // Fetch accounts from chart-of-accounts
   const { data: accountsData, isLoading: accountsLoading } = useQuery<AccountsResponse>({
     queryKey: ['chart-of-accounts-for-entries'],
     queryFn: async () => {
-      const response = await api.get('/chart-of-accounts', {
-      
-     
-      });
+      const response = await api.get('/chart-of-accounts');
       return response.data;
     }
   });
@@ -370,7 +380,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
 
   // Fetch journal entries
   const { data: entriesResponse, isLoading: entriesLoading, refetch } = useQuery<JournalEntryResponse>({
-    queryKey: ['journal-entries', currentPage, perPage, statusFilter, dateFrom, dateTo],
+    queryKey: ['journal-entries', currentPage, perPage, statusFilter, dateFrom, dateTo, debouncedSearch],
     queryFn: async () => {
       const filters: any = {};
       
@@ -386,6 +396,10 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
         filters.date_to = dateTo;
       }
 
+      if (debouncedSearch) {
+        filters.search = debouncedSearch;
+      }
+
       const response = await api.post('/journal-entries/index', {
         filters,
         orderBy: 'journal_entries.id',
@@ -396,7 +410,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
       return response.data;
     }
   });
-  
+
   const entries = entriesResponse?.data || [];
   const meta = entriesResponse?.meta || {
     current_page: 1,
@@ -442,28 +456,30 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
       }
 
       const response = await api.get('/journal-entries/reports', {
-      
+        params: {
+          date_from: fromDate,
+          date_to: toDate
+        }
       });
       return response.data;
     }
   });
 
-  // Fetch entry lines for selected entry
+  // Fetch entry lines for selected entry - باستخدام API جديد
   const { data: linesResponse, isLoading: linesLoading } = useQuery<JournalEntryLineResponse>({
     queryKey: ['journal-entry-lines', selectedEntry?.id],
-    enabled: !!selectedEntry?.id,
+    enabled: !!selectedEntry?.id && showDetails,
     queryFn: async () => {
-      const response = await api.post('/journal-entry-lines/index', {
-        filters: { journal_entry_id: selectedEntry!.id },
-        orderBy: 'id',
-        orderByDirection: 'asc',
-        perPage: 100,
-        paginate: true
-      });
+      const response = await api.get(`/journal-entries/${selectedEntry!.id}`);
       return response.data;
     }
   });
-  const entryLines = linesResponse?.data || [];
+  
+  // ملاحظة: API /journal-entries/{id} بيرجع تفاصيل القيد مع البنود
+  // هنفترض أن البنود موجودة في response.data.lines
+  const entryLines = linesResponse?.data && 'lines' in linesResponse.data 
+    ? (linesResponse.data as any).lines || [] 
+    : [];
 
   // ==================== Mutations ====================
   const createMutation = useMutation({
@@ -472,7 +488,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
       const totalCredit = lines.reduce((sum, l) => sum + Number(l.credit), 0);
 
       const entryResponse = await api.post('/journal-entries', {
-        date: formData.date,
+        entry_date: formData.entry_date,
         description_en: formData.description_en || null,
         description_ar: formData.description_ar || null,
         notes: formData.notes || null,
@@ -501,15 +517,16 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
   });
 
+  // Post mutation - باستخدام API جديد
   const postMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await api.post('/journal-entries/post', { id });
+      const response = await api.patch<JournalEntryPostResponse>(`/journal-entries/${id}/post`);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries-report'] });
-      toast.success(t('تم ترحيل القيد بنجاح', 'Entry posted successfully'));
+      toast.success(data.message || t('تم ترحيل القيد بنجاح', 'Entry posted successfully'));
       setShowDetails(false);
     },
     onError: (error: any) => {
@@ -517,6 +534,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
   });
 
+  // Mark as paid mutation
   const markAsPaidMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await api.post('/journal-entries/mark-as-paid', { id });
@@ -533,22 +551,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await api.post('/journal-entries/cancel', { id });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
-      queryClient.invalidateQueries({ queryKey: ['journal-entries-report'] });
-      toast.success(t('تم إلغاء القيد بنجاح', 'Entry cancelled successfully'));
-      setShowDetails(false);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message);
-    }
-  });
-
+  // Reverse mutation
   const reverseMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await api.post('/journal-entries/reverse', { id });
@@ -565,6 +568,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
   });
 
+  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await api.delete('/journal-entries/delete', {
@@ -586,7 +590,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
   const validateForm = useCallback((): FormErrors => {
     const errors: FormErrors = {};
     
-    if (!formData.date) {
+    if (!formData.entry_date) {
       errors.date = translate('messages', 'required');
     }
     
@@ -608,7 +612,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
     
     return errors;
-  }, [formData.date, lines, t, translate]);
+  }, [formData.entry_date, lines, t, translate]);
 
   // ==================== Computed Values ====================
   const totalDebit = useMemo(() => 
@@ -620,16 +624,15 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
   const isBalanced = useMemo(() => 
     Math.abs(totalDebit - totalCredit) < 0.01, [totalDebit, totalCredit]);
 
-  // 🔥 FilteredEntries - في مكانها الصح قبل أي useCallback يستخدمها
+  // FilteredEntries
   const filteredEntries = useMemo(() => {
     if (!debouncedSearch) return entries;
     
     const query = debouncedSearch.toLowerCase();
     return entries.filter(e =>
-      e.entry_number?.toLowerCase().includes(query) ||
+      e.id.toString().includes(query) ||
       e.description_en?.toLowerCase().includes(query) ||
-      e.description_ar?.toLowerCase().includes(query) ||
-      e.id.toString().includes(query)
+      e.description_ar?.toLowerCase().includes(query)
     );
   }, [entries, debouncedSearch]);
 
@@ -641,7 +644,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
       paid: entries.filter(e => e.status === 'paid').length
     };
 
-    const amounts = entries.map(e => parseFloat(e.total_debit));
+    const amounts = entries.map(e => parseFloat(e.total_debit || '0'));
     const totalAmount = amounts.reduce((sum, val) => sum + val, 0);
 
     return {
@@ -696,7 +699,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     setShowForm(false);
     setFormErrors({});
     setFormData({
-      date: format(new Date(), 'yyyy-MM-dd'),
+      entry_date: format(new Date(), 'yyyy-MM-dd'),
       description_en: '',
       description_ar: '',
       notes: ''
@@ -768,16 +771,15 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     toast.success(t('تم تحديث البيانات', 'Data refreshed'));
   }, [queryClient, t]);
 
-  // ✅ Now filteredEntries is defined before being used here
   const handleExport = useCallback(() => {
     try {
       const headers = ['ID', 'Date', 'Description', 'Debit', 'Credit', 'Status'];
       const data = filteredEntries.map(e => [
-        e.entry_number || e.id,
-        formatDate(e.date),
+        e.id,
+        formatDate(e.entry_date || e.created_at),
         getDescription(e),
-        e.total_debit,
-        e.total_credit,
+        e.total_debit || '0',
+        e.total_credit || '0',
         e.status
       ]);
       
@@ -1013,17 +1015,17 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                         filteredEntries.map((entry) => (
                           <TableRow key={entry.id} className="hover:bg-muted/50">
                             <TableCell className="font-mono font-medium">
-                              {entry.entry_number || String(entry.id).padStart(4, '0')}
+                              {String(entry.id).padStart(4, '0')}
                             </TableCell>
-                            <TableCell>{formatDate(entry.entry_date)}</TableCell>
+                            <TableCell>{formatDate(entry.entry_date || entry.created_at)}</TableCell>
                             <TableCell className="max-w-xs truncate">
                               {getDescription(entry)}
                             </TableCell>
                             <TableCell className="text-right font-medium">
-                              {formatAmount(entry.total_debit)}
+                              {formatAmount(entry.total_debit || '0')}
                             </TableCell>
                             <TableCell className="text-right font-medium">
-                              {formatAmount(entry.total_credit)}
+                              {formatAmount(entry.total_credit || '0')}
                             </TableCell>
                             <TableCell className="text-center">{getStatusBadge(entry.status)}</TableCell>
                             <TableCell>
@@ -1236,11 +1238,11 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                     <TableBody>
                       {filteredEntries.slice(0, 10).map((entry) => (
                         <TableRow key={entry.id}>
-                          <TableCell>{formatDate(entry.date)}</TableCell>
-                          <TableCell className="font-mono">{entry.entry_number || entry.id}</TableCell>
+                          <TableCell>{formatDate(entry.entry_date || entry.created_at)}</TableCell>
+                          <TableCell className="font-mono">{String(entry.id).padStart(4, '0')}</TableCell>
                           <TableCell className="max-w-xs truncate">{getDescription(entry)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(entry.total_debit)}</TableCell>
-                          <TableCell className="text-right">{formatAmount(entry.total_credit)}</TableCell>
+                          <TableCell className="text-right">{formatAmount(entry.total_debit || '0')}</TableCell>
+                          <TableCell className="text-right">{formatAmount(entry.total_credit || '0')}</TableCell>
                           <TableCell className="text-center">{getStatusBadge(entry.status)}</TableCell>
                         </TableRow>
                       ))}
@@ -1346,8 +1348,8 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                   </Label>
                   <Input
                     type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    value={formData.entry_date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, entry_date: e.target.value }))}
                     className={formErrors.date ? 'border-red-500' : ''}
                   />
                   {formErrors.date && (
@@ -1547,7 +1549,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileText size={20} />
-              {t('تفاصيل القيد', 'Entry Details')} - {selectedEntry && (selectedEntry.entry_number || String(selectedEntry.id).padStart(4, '0'))}
+              {t('تفاصيل القيد', 'Entry Details')} - {selectedEntry && String(selectedEntry.id).padStart(4, '0')}
               {linesLoading && <Loader2 size={16} className="animate-spin" />}
             </DialogTitle>
           </DialogHeader>
@@ -1555,14 +1557,14 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
           {selectedEntry && (
             <div className="flex-1 overflow-y-auto min-h-0 px-1">
               <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
                   <div>
                     <p className="text-sm text-muted-foreground">{t('رقم القيد', 'Entry #')}</p>
-                    <p className="font-mono font-medium">{selectedEntry.entry_number || String(selectedEntry.id).padStart(4, '0')}</p>
+                    <p className="font-mono font-medium">{String(selectedEntry.id).padStart(4, '0')}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">{t('التاريخ', 'Date')}</p>
-                    <p className="font-medium">{formatDate(selectedEntry.entry_date)}</p>
+                    <p className="font-medium">{formatDate(selectedEntry.entry_date || selectedEntry.created_at)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">{t('الحالة', 'Status')}</p>
@@ -1571,10 +1573,6 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                   <div>
                     <p className="text-sm text-muted-foreground">{t('تاريخ الإنشاء', 'Created')}</p>
                     <p className="text-sm">{formatDateTime(selectedEntry.created_at)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">{t('آخر تحديث', 'Updated')}</p>
-                    <p className="text-sm">{formatDateTime(selectedEntry.updated_at)}</p>
                   </div>
                 </div>
 
@@ -1611,8 +1609,8 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        entryLines.map((line: any) => (
-                          <TableRow key={line.id}>
+                        entryLines.map((line: any, index: number) => (
+                          <TableRow key={line.id || index}>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-sm text-muted-foreground">
@@ -1636,10 +1634,10 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                       <TableRow className="bg-muted/30 font-bold">
                         <TableCell>{t('الإجمالي', 'Total')}</TableCell>
                         <TableCell className="text-right">
-                          {formatAmount(selectedEntry.total_debit)}
+                          {formatAmount(selectedEntry.total_debit || '0')}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatAmount(selectedEntry.total_credit)}
+                          {formatAmount(selectedEntry.total_credit || '0')}
                         </TableCell>
                         <TableCell></TableCell>
                       </TableRow>
@@ -1660,15 +1658,6 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
           <DialogFooter className="flex-shrink-0 border-t pt-4 gap-2">
             {selectedEntry?.status === 'draft' && (
               <>
-                <Button
-                  variant="destructive"
-                  onClick={() => cancelMutation.mutate(selectedEntry.id)}
-                  disabled={cancelMutation.isPending}
-                >
-                  {cancelMutation.isPending && <Loader2 size={16} className="animate-spin me-2" />}
-                  <X size={16} className="me-2" />
-                  {translate('actions', 'cancel')}
-                </Button>
                 <Button
                   onClick={() => postMutation.mutate(selectedEntry.id)}
                   disabled={postMutation.isPending}

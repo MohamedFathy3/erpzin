@@ -516,10 +516,7 @@ const Purchasing = () => {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setShowPaymentForm(true)}>
-              <Wallet size={16} className="me-2" />
-              {language === 'ar' ? 'تسجيل دفعة' : 'Record Payment'}
-            </Button>
+           
             <Button
               onClick={() => {
                 console.log('🟢 Button clicked - opening invoice form');
@@ -1120,11 +1117,7 @@ const Purchasing = () => {
         onClose={() => setShowInvoiceForm(false)}
         onSave={refetchAll}
       />
-      <SupplierPaymentForm
-        isOpen={showPaymentForm}
-        onClose={() => setShowPaymentForm(false)}
-        onSave={refetchAll}
-      />
+     
     </MainLayout>
   );
 };
