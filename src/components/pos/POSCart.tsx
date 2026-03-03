@@ -194,3 +194,6 @@ const POSCart: React.FC<POSCartProps> = ({
 };
 
 export default POSCart;
+
+
+

@@ -95,17 +95,29 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
       id: color.color_id,
       name: color.color,
       stock: color.stock,
-      hexCode: getColorHex(color.color) // يمكنك إضافة دالة لتحديد الهيكس
+      hexCode: getColorHex(color.color)
     }));
   }, [product.units, selectedSize]);
 
-  // الحصول على تفاصيل الـ variant المحدد
+  // ✅ الحصول على تفاصيل الـ variant المحدد (مع أو بدون لون)
   const selectedVariantDetails = useMemo(() => {
-    if (!selectedSize || !selectedColor || !product.units) return null;
+    if (!selectedSize || !product.units) return null;
     
     const unit = product.units.find(u => u.unit_name === selectedSize);
     if (!unit) return null;
     
+    // ✅ لو مختارش لون، نستخدم أول لون (أو نستخدم بيانات بدون لون)
+    if (!selectedColor) {
+      return {
+        unitId: unit.unit_id,
+        colorId: unit.colors[0]?.color_id || 0,
+        price: parseFloat(unit.sell_price || '0'),
+        stock: unit.colors.reduce((sum, color) => sum + color.stock, 0), // مجموع المخزون لكل الألوان
+        sku: unit.barcode || product.sku
+      };
+    }
+    
+    // ✅ لو مختار لون محدد
     const color = unit.colors.find(c => c.color === selectedColor);
     if (!color) return null;
     
@@ -125,7 +137,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
         unitId: selectedVariantDetails.unitId,
         colorId: selectedVariantDetails.colorId,
         size: selectedSize,
-        color: selectedColor,
+        color: selectedColor || '', // ✅ لو مفيش لون، نرسل string فاضي
         price: selectedVariantDetails.price,
         sku: selectedVariantDetails.sku,
         stock: selectedVariantDetails.stock
@@ -147,30 +159,32 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     en: {
       selectVariants: 'Select Variants',
       size: 'Size',
-      colors: 'Colors',
+      colors: 'Colors (Optional)',
       addToCart: 'Add to Cart',
       items: 'items',
       total: 'Total',
       selectedItems: 'Selected Items',
-      noSelection: 'Select size and color',
-      tapToSelect: 'Choose size and color',
+      noSelection: 'Select size',
+      tapToSelect: 'Choose size',
       noVariants: 'No variants available',
       noVariantsDesc: 'This product has no configured variants.',
-      outOfStock: 'Out of Stock'
+      outOfStock: 'Out of Stock',
+      optional: 'Optional'
     },
     ar: {
       selectVariants: 'اختر المتغيرات',
       size: 'المقاس',
-      colors: 'الألوان',
+      colors: 'الألوان (اختياري)',
       addToCart: 'إضافة للسلة',
       items: 'عناصر',
       total: 'المجموع',
       selectedItems: 'العناصر المحددة',
-      noSelection: 'اختر المقاس واللون',
-      tapToSelect: 'اختر المقاس واللون',
+      noSelection: 'اختر المقاس',
+      tapToSelect: 'اختر المقاس',
       noVariants: 'لا توجد متغيرات متاحة',
       noVariantsDesc: 'هذا المنتج ليس له متغيرات',
-      outOfStock: 'غير متوفر'
+      outOfStock: 'غير متوفر',
+      optional: 'اختياري'
     }
   }[language];
 
@@ -238,11 +252,11 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
 
         {/* Content */}
         <ScrollArea className="flex-1 p-4">
-          {/* Size Selection */}
+          {/* Size Selection - إجباري */}
           <div className="mb-6">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <span className="w-1.5 h-5 bg-primary rounded-full" />
-              {t.size}
+              {t.size} <span className="text-xs text-destructive">*</span>
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {availableSizes.map((size) => (
@@ -250,7 +264,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                   key={size.id}
                   onClick={() => {
                     setSelectedSize(size.name);
-                    setSelectedColor('');
+                    setSelectedColor(''); // ✅ مسح اللون المحدد عند تغيير المقاس
                   }}
                   className={cn(
                     'p-3 rounded-lg border-2 transition-all text-center',
@@ -267,13 +281,32 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
             </div>
           </div>
 
-          {/* Color Selection - يظهر فقط لو اختار مقاس */}
+          {/* Color Selection - اختياري - يظهر فقط لو اختار مقاس */}
           {selectedSize && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-5 bg-primary rounded-full" />
-                {t.colors}
+                {t.colors} <span className="text-xs text-muted-foreground">({t.optional})</span>
               </h3>
+              
+              {/* خيار "بدون لون" */}
+              <div className="mb-3">
+                <button
+                  onClick={() => setSelectedColor('')}
+                  className={cn(
+                    'p-2 rounded-lg border-2 transition-all text-center w-full',
+                    selectedColor === ''
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:border-primary/50'
+                  )}
+                >
+                  <span className="font-medium text-sm">
+                    {language === 'ar' ? 'بدون لون' : 'No Color'}
+                  </span>
+                </button>
+              </div>
+
+              {/* ألوان المنتج */}
               <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
                 {availableColors.map((color) => (
                   <button
@@ -302,16 +335,6 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                     <span className="text-xs font-medium truncate w-full text-center">
                       {color.name}
                     </span>
-                    {/* {color.stock === 0 && (
-                      <span className="text-[10px] text-destructive">
-                        {t.outOfStock}
-                      </span>
-                    )}
-                    {color.stock > 0 && color.stock <= 5 && (
-                      <span className="text-[10px] text-warning">
-                        {t.items}: {color.stock}
-                      </span>
-                    )} */}
                   </button>
                 ))}
               </div>
@@ -319,14 +342,14 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
           )}
 
           {/* Selected Variant Summary */}
-          {selectedVariantDetails && selectedColor && (
+          {selectedVariantDetails && selectedSize && (
             <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-foreground">
                   {language === 'ar' ? 'التفاصيل' : 'Details'}
                 </span>
                 <Badge variant="outline" className="bg-background">
-                  {selectedSize} - {selectedColor}
+                  {selectedSize} {selectedColor && `- ${selectedColor}`}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
@@ -353,15 +376,15 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-border bg-background flex-shrink-0">
-          {selectedVariantDetails && selectedColor ? (
+          {selectedSize ? (
             <Button 
               onClick={handleAddToCart}
-              // disabled={selectedVariantDetails.stock === 0}
+              // disabled={selectedVariantDetails?.stock === 0}
               className="w-full h-12 text-base gap-2"
             >
               <ShoppingCart size={20} />
               {t.addToCart}
-              {selectedVariantDetails.price > 0 && (
+              {selectedVariantDetails && selectedVariantDetails.price > 0 && (
                 <span className="ms-2 opacity-90">
                   {formatCurrency(selectedVariantDetails.price)}
                 </span>
@@ -369,7 +392,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
             </Button>
           ) : (
             <p className="text-center text-sm text-muted-foreground">
-              {selectedSize ? t.selectVariants : t.tapToSelect}
+              {t.tapToSelect}
             </p>
           )}
         </div>
@@ -392,7 +415,7 @@ function getColorHex(colorName: string): string {
     'رمادي': '#808080',
     'بني': '#8B4513',
     'برتقالي': '#FFA500',
-    'name': '#666666' // اللون الافتراضي في بياناتك
+    'name': '#666666'
   };
   
   return colorMap[colorName] || '#CCCCCC';

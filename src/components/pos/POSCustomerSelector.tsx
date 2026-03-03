@@ -461,60 +461,60 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                       )}
                     </div>
                   ) : (
-                    filteredCustomers.map((customer: Customer) => (
-                      <button
-                        key={customer.id}
-                        onClick={() => {
-                          onSelectCustomer(customer);
-                          onClose();
-                        }}
-                        className={cn(
-                          'w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent',
-                          selectedCustomer?.id === customer.id
-                            ? 'bg-primary/10 border-primary'
-                            : 'bg-background border-border hover:border-primary'
-                        )}
-                      >
-                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                          <User size={20} className="text-primary" />
-                        </div>
-                        <div className="flex-1 text-start min-w-0">
-                          <p className="font-medium text-foreground truncate">
-                            {language === 'ar' && customer.name_ar ? customer.name_ar : customer.name}
-                          </p>
-                          {customer.phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                              <Phone size={12} />
-                              {customer.phone}
-                            </p>
-                          )}
-                          {customer.address && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                              <MapPin size={12} />
-                              {customer.address}
-                            </p>
-                          )}
-                          {/* Offline indicator for locally added customers */}
-                          {customer.id.startsWith('OFFLINE-') && (
-                            <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
-                              <WifiOff size={10} />
-                              {language === 'ar' ? 'محلي' : 'Local'}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {customer.loyalty_points && customer.loyalty_points > 0 && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full whitespace-nowrap">
-                              {customer.loyalty_points} {language === 'ar' ? 'نقطة' : 'pts'}
-                            </span>
-                          )}
-                          {selectedCustomer?.id === customer.id && (
-                            <Check size={20} className="text-primary" />
-                          )}
-                        </div>
-                      </button>
-                    ))
-                  )}
+                     filteredCustomers.map((customer: Customer) => (
+    <button
+      key={customer.id}
+      onClick={() => {
+        onSelectCustomer(customer);
+        onClose();
+      }}
+      className={cn(
+        'w-full flex items-center gap-3 p-3 rounded-lg border transition-all hover:bg-accent',
+        selectedCustomer?.id === customer.id
+          ? 'bg-primary/10 border-primary'
+          : 'bg-background border-border hover:border-primary'
+      )}
+    >
+      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+        <User size={20} className="text-primary" />
+      </div>
+      <div className="flex-1 text-start min-w-0">
+        <p className="font-medium text-foreground truncate">
+          {language === 'ar' && customer.name_ar ? customer.name_ar : customer.name}
+        </p>
+        {customer.phone && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+            <Phone size={12} />
+            {customer.phone}
+          </p>
+        )}
+        {customer.address && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+            <MapPin size={12} />
+            {customer.address}
+          </p>
+        )}
+        {/* ✅ التعديل هنا: تحويل id إلى string قبل استخدام startsWith */}
+        {customer.id && String(customer.id).startsWith('OFFLINE-') && (
+          <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+            <WifiOff size={10} />
+            {language === 'ar' ? 'محلي' : 'Local'}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {customer.loyalty_points && customer.loyalty_points > 0 && (
+          <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full whitespace-nowrap">
+            {customer.loyalty_points} {language === 'ar' ? 'نقطة' : 'pts'}
+          </span>
+        )}
+        {selectedCustomer?.id === customer.id && (
+          <Check size={20} className="text-primary" />
+        )}
+      </div>
+    </button>
+  ))
+)}
                 </div>
               )}
             </div>

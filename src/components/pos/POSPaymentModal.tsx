@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // ✅ أضف useRef
+import { useReactToPrint } from 'react-to-print'; // ✅ أضف الاستيراد
+import InvoiceTemplate from './InvoiceTemplate'; // ✅ استيراد القالب
+import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { saveOrderOffline } from '@/lib/offlineDB';
+import { toast } from '@/hooks/use-toast';
+import { getPaymentShortcuts, usePOSKeyboardShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
+import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
-import { X, Banknote, CreditCard, Check, Wallet, Crown, Star, Split, WifiOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { usePOSKeyboardShortcuts, getPaymentShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
-import { toast } from 'sonner';
-import { saveOrderOffline, getNetworkStatus } from '@/lib/offlineDB';
+import { Button } from '../ui/button';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
 
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
@@ -50,7 +53,10 @@ interface PaymentModalProps {
   deliveryPerson?: { id: string; name: string } | null;
   shiftId?: string | null;
   branchId?: string | null;
+    salesRepresentative?: { id: string | number; name: string; commission_rate?: string } | null;
+
 }
+
 
 const POSPaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -63,9 +69,11 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   customer,
   deliveryPerson,
   shiftId,
-  branchId
+  branchId,
+  salesRepresentative,
 }) => {
   const { language } = useLanguage();
+  const { user } = useAuth(); 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
   const [cashAmount, setCashAmount] = useState<string>(total.toString());
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({
@@ -75,6 +83,21 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showPrintOptions, setShowPrintOptions] = useState(false); // ✅ للتحكم في عرض خيارات الطباعة
+  const [completedInvoice, setCompletedInvoice] = useState<any>(null); // ✅ لحفظ بيانات الفاتورة بعد الإتمام
+  
+  const invoiceRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
+
+  // ✅ دالة الطباعة
+  const handlePrint = useReactToPrint({
+    contentRef: invoiceRef,
+    documentTitle: `فاتورة-${Date.now()}`,
+    onAfterPrint: () => {
+      setShowPrintOptions(false);
+      setCompletedInvoice(null);
+      onComplete(completedInvoice?.payments || []);
+    },
+  });
 
   // متابعة حالة النت
   useEffect(() => {
@@ -131,39 +154,32 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     return true; // For electronic payments
   };
 
-  const handleComplete = async () => {
-    // Check if customer is selected
-    let customerId;
-
-    if (!customer?.id) {
-      customerId = 1;
+  // ✅ دالة حفظ وطباعة الفاتورة
+  const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
+    let payments: { method: string; amount: number }[] = [];
+    
+    if (paymentMethod === 'split') {
+      Object.entries(splitAmounts).forEach(([method, amount]) => {
+        const numAmount = parseFloat(amount) || 0;
+        if (numAmount > 0) {
+          payments.push({ method, amount: numAmount });
+        }
+      });
+    } else if (paymentMethod === 'cash') {
+      payments = [{ method: 'cash', amount: parseFloat(cashAmount) || total }];
     } else {
-      customerId = customer.id;
+      payments = [{ method: paymentMethod, amount: total }];
     }
 
-    let payments: { method: string; amount: number }[] = [];
+    // Filter out payments with zero amounts
+    payments = payments.filter(payment => payment.amount > 0);
+
     setIsProcessing(true);
     try {
-
-      if (paymentMethod === 'split') {
-        Object.entries(splitAmounts).forEach(([method, amount]) => {
-          const numAmount = parseFloat(amount) || 0;
-          if (numAmount > 0) {
-            payments.push({ method, amount: numAmount });
-          }
-        });
-      } else if (paymentMethod === 'cash') {
-        payments = [{ method: 'cash', amount: parseFloat(cashAmount) || total }];
-      } else {
-        payments = [{ method: paymentMethod, amount: total }];
-      }
-
-      // Filter out payments with zero amounts
-      payments = payments.filter(payment => payment.amount > 0);
-
       // Prepare invoice data
       const invoiceData = {
-        customer_id: parseInt(customer?.id) || 1,
+        customer_id: parseInt(String(customer?.id)) || 1,
+        sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
         items: cartItems.map(item => ({
           product_id: parseInt(item.id),
           quantity: item.quantity,
@@ -180,6 +196,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         delivery_id: deliveryPerson?.id
       };
 
+      let invoiceId = '';
+      let success = false;
+
       // إذا كان في وضع Offline
       if (isOffline) {
         const offlineId = await saveOrderOffline({
@@ -194,12 +213,14 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         });
 
         if (offlineId) {
-          toast.success(
-            language === 'ar' 
+          invoiceId = offlineId;
+          success = true;
+          toast({
+            title: language === 'ar' ? 'نجاح' : 'Success',
+            description: language === 'ar' 
               ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً' 
-              : 'Invoice saved locally. Will sync later'
-          );
-          onComplete(payments);
+              : 'Invoice saved locally. Will sync later',
+          });
         } else {
           throw new Error('Failed to save offline');
         }
@@ -220,46 +241,76 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         }
 
         const result = await response.json();
-        toast.success(language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully');
-        onComplete(payments);
+        invoiceId = result.data?.id || `INV-${Date.now()}`;
+        success = true;
+        toast({
+          title: language === 'ar' ? 'نجاح' : 'Success',
+          description: language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully',
+        });
+      }
+
+      if (success) {
+        // تحضير بيانات الفاتورة للطباعة
+        // تحضير بيانات الفاتورة للطباعة
+const printData = {
+  id: invoiceId,
+  date: new Date().toISOString(),
+  customer: customer ? { 
+    name: customer.name,
+    nameAr: customer.name_ar || customer.name, // ✅ الاسم العربي
+    phone: customer.phone 
+  } : null,
+  salesRep: salesRepresentative ? { 
+    name: salesRepresentative.name,
+    nameAr: salesRepresentative.name // لو الـ API بترجع اسم عربي
+  } : null,
+  items: cartItems.map(item => ({
+    name: item.name,
+    nameAr: item.nameAr || item.name,
+    quantity: item.quantity,
+    price: item.price,
+    sizeName: item.sizeName,
+    sizeNameAr: item.sizeName, // لو المقاس له اسم عربي
+    colorName: item.colorName,
+    colorNameAr: item.colorName // لو اللون له اسم عربي
+  })),
+  subtotal,
+  tax,
+  total,
+  payments,
+  change: calculateChange()
+};
+
+        setCompletedInvoice({ payments, printData });
+
+        if (type === 'save') {
+          // حفظ فقط
+          onComplete(payments);
+        } else if (type === 'print') {
+          // طباعة فقط (للفاتورة المحفوظة مسبقاً)
+          handlePrint();
+        } else if (type === 'both') {
+          // حفظ وطباعة
+          setShowPrintOptions(true);
+          setTimeout(() => {
+            handlePrint();
+          }, 100);
+        }
       }
     } catch (error) {
       console.error('Error saving invoice:', error);
-      
-      // محاولة حفظ في Offline إذا فشل الـ API
-      if (!isOffline) {
-        try {
-          const offlineId = await saveOrderOffline({
-            items: cartItems,
-            subtotal,
-            tax,
-            total,
-            customer_id: customer?.id,
-            delivery_id: deliveryPerson?.id,
-            payment_method: paymentMethod,
-            payments: payments
-          });
-
-          if (offlineId) {
-            toast.warning(
-              language === 'ar'
-                ? 'تم حفظ الفاتورة محلياً بسبب خطأ في الاتصال'
-                : 'Invoice saved locally due to connection error'
-            );
-            onComplete(payments);
-          } else {
-            toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
-          }
-        } catch (offlineError) {
-          toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
-        }
-      } else {
-        toast.error(language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
-      }
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice',
+        variant: 'destructive',
+      });
     } finally {
       setIsProcessing(false);
     }
   };
+
+  const handleComplete = () => handleSaveAndPrint('save'); // حفظ فقط
+  const handleSaveAndPrintNow = () => handleSaveAndPrint('both'); // حفظ وطباعة
 
   // Payment modal keyboard shortcuts
   const paymentShortcuts = getPaymentShortcuts({
@@ -573,16 +624,15 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border bg-muted/30">
+        {/* Footer - مع زرين */}
+        <div className="p-4 border-t border-border bg-muted/30 space-y-2">
+          {/* ✅ زر الحفظ والطباعة معاً */}
           <Button
-            onClick={handleComplete}
+            onClick={handleSaveAndPrintNow}
             disabled={!canComplete() || isProcessing}
             className={cn(
               'w-full h-14 text-lg font-bold relative overflow-hidden',
-              isOffline 
-                ? 'bg-amber-600 hover:bg-amber-700' 
-                : 'bg-gradient-to-r from-success to-success-light hover:opacity-90',
+              'bg-gradient-to-r from-primary to-primary-light hover:opacity-90',
               'text-white transition-all duration-300'
             )}
           >
@@ -592,18 +642,69 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
                 {language === 'ar' ? 'جاري المعالجة...' : 'Processing...'}
               </span>
             ) : (
-              <span className="flex items-center gap-2">
-                {isOffline ? <WifiOff size={24} /> : <Check size={24} />}
-                {isOffline 
-                  ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
-                  : (language === 'ar' ? 'إتمام الدفع' : 'Complete Payment')
-                }
-                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Enter</kbd>
+              <span className="flex items-center justify-center gap-3">
+                <span>📄</span>
+                {language === 'ar' ? 'حفظ وطباعة الفاتورة' : 'Save & Print Invoice'}
+                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+P</kbd>
               </span>
             )}
           </Button>
+
+          {/* ✅ زر الحفظ فقط */}
+          <div className="flex gap-2">
+            <Button
+              onClick={handleComplete}
+              disabled={!canComplete() || isProcessing}
+              variant="outline"
+              className={cn(
+                'flex-1 h-12',
+                isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
+              )}
+            >
+              {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
+              {isOffline 
+                ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
+                : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
+              }
+            </Button>
+            
+            {/* ✅ زر إلغاء */}
+            <Button
+              onClick={onClose}
+              variant="ghost"
+              className="h-12 px-6"
+            >
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* ✅ نافذة الطباعة المخفية */}
+     {/* ✅ نافذة الطباعة المخفية - مع companyInfo */}
+{showPrintOptions && completedInvoice && (
+  <div style={{ display: 'none' }}>
+    <InvoiceTemplate 
+      ref={invoiceRef} 
+      invoiceData={completedInvoice.printData}
+
+      companyInfo={{  // ✅ أضف companyInfo هنا
+        name: user?.name || 'متجرك',
+        nameAr: user?.name,
+        logo: user?.logoUrl , 
+        address: user?.address,
+        addressAr: user?.address,
+        phone: user?.phone,
+        email: user?.email,
+        tax_id: user?.tax_id,
+        commercial_register: user?.commercial_register,
+        website: user?.website,
+        currency: user?.currency || 'YER'
+      }}
+      
+    />
+  </div>
+)}
     </div>
   );
 };

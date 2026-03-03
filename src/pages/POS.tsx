@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import { 
   Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, 
   Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
-  ShoppingBag, AlertCircle, CheckCircle2
+  ShoppingBag, AlertCircle, CheckCircle2,
+  UserCheck
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,6 @@ import POSHeldOrders from '@/components/pos/POSHeldOrders';
 import POSCategories from '@/components/pos/POSCategories';
 import POSVariantSelector from '@/components/pos/POSVariantSelector';
 import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
-import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
 import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { format } from 'date-fns';
+import POSSalesRepSelector from '@/components/pos/POSSalesRepSelector'; // ✅ التصحيح هنا
 
 interface CartItem {
   id: string;
@@ -56,6 +57,19 @@ interface CartItem {
   colorId?: number;
   stock?: number;
 }
+interface SalesRepresentative {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  commission_rate: string;
+  active: boolean;
+  branch_id: number;
+  branch_name: string;
+  employee_id: number;
+  employee_name: string;
+}
+
 
 interface HeldOrder {
   id: string;
@@ -105,9 +119,11 @@ const POS: React.FC = () => {
   const [showVariantSelector, setShowVariantSelector] = useState(false);
   const [showCustomerSelector, setShowCustomerSelector] = useState(false);
   const [showDeliverySelector, setShowDeliverySelector] = useState(false);
+  const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
+  const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
@@ -131,7 +147,7 @@ const POS: React.FC = () => {
       });
       checkUnsyncedOrders();
       loadOfflineStats();
-      syncOfflineOrders(); // ✅ Auto-sync when coming back online
+      syncOfflineOrders();
     };
 
     const handleOffline = () => {
@@ -149,7 +165,6 @@ const POS: React.FC = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Check for unsynced orders on mount
     checkUnsyncedOrders();
     loadOfflineStats();
 
@@ -159,7 +174,6 @@ const POS: React.FC = () => {
     };
   }, [language]);
 
-  // Load offline stats
   const loadOfflineStats = async () => {
     try {
       const stats = await getOfflineStats();
@@ -169,7 +183,6 @@ const POS: React.FC = () => {
     }
   };
 
-  // Check for unsynced orders
   const checkUnsyncedOrders = async () => {
     try {
       const orders = await getUnsyncedOrders();
@@ -181,7 +194,6 @@ const POS: React.FC = () => {
     }
   };
 
-  // Sync offline orders - مع إزالة shift_id و branch_id
   const syncOfflineOrders = async () => {
     if (!navigator.onLine) {
       toast({
@@ -207,7 +219,6 @@ const POS: React.FC = () => {
 
       for (const order of unsyncedOrders) {
         try {
-          // ✅ إرسال الطلب للـ API الحقيقي بدون shift_id و branch_id
           const response = await fetch('/api/invoice/store', {
             method: 'POST',
             headers: {
@@ -227,7 +238,6 @@ const POS: React.FC = () => {
               subtotal: order.subtotal,
               tax: order.tax,
               total: order.total,
-              // ✅ مش بنبعت shift_id و branch_id دلوقتي
             })
           });
 
@@ -267,7 +277,6 @@ const POS: React.FC = () => {
     }
   };
 
-  // Clear all offline data
   const clearAllOfflineData = async () => {
     if (!window.confirm(language === 'ar' 
       ? 'هل أنت متأكد من حذف جميع البيانات المحلية؟' 
@@ -292,14 +301,11 @@ const POS: React.FC = () => {
     }
   };
 
-  // جلب الفئات والمنتجات (مع دعم Offline)
   const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
   const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(selectedCategory);
   
-  // البحث بالباركود
   const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
-  // إضافة المنتج عند المسح بالباركود
   useEffect(() => {
     if (barcodeProduct) {
       addToCart(barcodeProduct as Product);
@@ -307,7 +313,6 @@ const POS: React.FC = () => {
     }
   }, [barcodeProduct]);
 
-  // Transform categories
   const transformedCategories = useMemo(() => [
     { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
     ...(categories?.map(cat => ({
@@ -318,7 +323,6 @@ const POS: React.FC = () => {
     })) || [])
   ], [categories]);
 
-  // Transform products
   const transformedProducts = useMemo(() => {
     if (!products) return [];
     
@@ -339,12 +343,10 @@ const POS: React.FC = () => {
     }));
   }, [products]);
 
-  // Reset search when category changes
   useEffect(() => {
     setSearchQuery('');
   }, [selectedCategory]);
 
-  // ==================== Cart Functions ====================
   const addToCart = (product: Product) => {
     if (product.units && product.units.length > 0) {
       setSelectedProductForVariant(product);
@@ -477,9 +479,7 @@ const POS: React.FC = () => {
   const calculateTax = () => calculateSubtotal() * 0.05;
   const calculateTotal = () => calculateSubtotal() + calculateTax();
 
-  // ==================== Payment with Offline Support ====================
   const handlePaymentComplete = async (payments: { method: string; amount: number }[]) => {
-    // Save order offline if no internet
     if (!navigator.onLine || isOffline) {
       try {
         const orderId = await saveOrderOffline({
@@ -514,8 +514,6 @@ const POS: React.FC = () => {
         });
       }
     } else {
-      // Online mode - send to API
-      // TODO: إرسال للـ API
       toast({
         title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
         description: language === 'ar'
@@ -535,7 +533,6 @@ const POS: React.FC = () => {
     navigate('/auth');
   };
 
-  // Keyboard shortcuts handlers
   const handleFocusSearch = useCallback(() => {
     searchInputRef.current?.focus();
   }, []);
@@ -657,7 +654,7 @@ const POS: React.FC = () => {
           <div className="flex items-center gap-1">
             {/* Quick Action Buttons */}
             <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
-              {/* Sync Button - يظهر فقط لو في طلبات غير متزامنة */}
+              {/* Sync Button */}
               {unsyncedCount > 0 && (
                 <Button 
                   variant="ghost" 
@@ -708,20 +705,23 @@ const POS: React.FC = () => {
                 <span className="text-xs font-medium">{language === 'ar' ? 'العميل' : 'Customer'}</span>
               </Button>
 
-              {/* Delivery */}
+              {/* Sales Rep - مش Delivery */}
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setShowDeliverySelector(true)}
+                onClick={() => setShowSalesRepSelector(true)}
                 className={cn(
                   "gap-1.5 px-2",
-                  selectedDelivery 
+                  selectedSalesRep 
                     ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20" 
                     : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
                 )}
               >
-                <Truck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
+                <UserCheck size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'المبيعات' : 'Sales'}</span>
+                {selectedSalesRep && (
+                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
+                )}
               </Button>
 
               {/* Returns */}
@@ -773,6 +773,20 @@ const POS: React.FC = () => {
                 <span className="text-white/90 text-sm">
                   {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
                 </span>
+              </div>
+            )}
+
+            {/* Selected Sales Rep Display */}
+            {selectedSalesRep && (
+              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+                <span className="text-white/90 text-sm">
+                  {selectedSalesRep.name}
+                </span>
+                {selectedSalesRep.commission_rate && (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
+                    {selectedSalesRep.commission_rate}%
+                  </span>
+                )}
               </div>
             )}
 
@@ -978,8 +992,20 @@ const POS: React.FC = () => {
           tax={calculateTax()}
           cartItems={cartItems}
           onComplete={handlePaymentComplete}
-          customer={selectedCustomer ? { id: selectedCustomer.id, name: selectedCustomer.name, loyalty_points: selectedCustomer.loyalty_points } : null}
-          deliveryPerson={selectedDelivery ? { id: selectedDelivery.id, name: selectedDelivery.name } : null}
+          customer={selectedCustomer ? { 
+            id: selectedCustomer.id, 
+            name: selectedCustomer.name, 
+            loyalty_points: selectedCustomer.loyalty_points 
+          } : null}
+          deliveryPerson={selectedDelivery ? { 
+            id: selectedDelivery.id, 
+            name: selectedDelivery.name 
+          } : null}
+          salesRepresentative={selectedSalesRep ? { 
+            id: selectedSalesRep.id, 
+            name: selectedSalesRep.name,
+            commission_rate: selectedSalesRep.commission_rate 
+          } : null}
           shiftId={currentShift?.id || null}
           branchId={userBranch?.id || currentBranch?.id || null}
         />
@@ -1011,12 +1037,18 @@ const POS: React.FC = () => {
           selectedCustomer={selectedCustomer}
         />
 
-        <POSDeliverySelector
-          isOpen={showDeliverySelector}
-          onClose={() => setShowDeliverySelector(false)}
-          onSelectDelivery={setSelectedDelivery}
-          selectedDelivery={selectedDelivery}
-        />
+        
+
+        {/* ✅ مودال مندوب المبيعات */}
+        {showSalesRepSelector && (
+          <POSSalesRepSelector
+            isOpen={showSalesRepSelector}
+            onClose={() => setShowSalesRepSelector(false)}
+            onSelectRep={setSelectedSalesRep}
+            selectedRep={selectedSalesRep}
+            branchId={userBranch?.id || currentBranch?.id}
+          />
+        )}
 
         <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
           <DialogContent className="sm:max-w-md">

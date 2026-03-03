@@ -83,6 +83,15 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
                      apiProduct.category_id?.toString() || 
                      '';
 
+  // معالجة المتغيرات
+  let variants = [];
+  
+  if (apiProduct.variants && apiProduct.variants.length > 0) {
+    variants = apiProduct.variants;
+  } else if (apiProduct.units && apiProduct.units.length > 0) {
+    variants = apiProduct.units;
+  }
+
   const result = {
     id: apiProduct.id?.toString(),
     name: apiProduct.name || '',
@@ -95,7 +104,7 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     price: Number(apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
-    variants: apiProduct.variants || apiProduct.units || [],
+    variants: variants,
     selectedSizes: [],
     selectedColors: [],
     stock: Number(apiProduct.stock) || 0,
@@ -115,15 +124,18 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
   return result;
 };
 
+// ✅ أضف هذه الدالة في نفس الملف (في الأعلى أو الأسفل)
+const generateBarcode = (): string => {
+  return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
+};
+
 const generateSKU = (): string => {
   const prefix = 'PROD';
   const randomNum = Math.floor(Math.random() * 9000) + 1000;
   return `${prefix}-${randomNum}`;
 };
 
-const generateBarcode = (): string => {
-  return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
-};
+
 
 interface DbCategory {
   id: string | number;

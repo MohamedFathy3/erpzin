@@ -80,10 +80,12 @@ interface Sale {
   invoice_number: string;
   status: 'paid' | 'pending' | 'cancelled' | 'partial';
   customer: Customer | null;
+  salesRepresentative: { id: number; name: string } | null;
   amounts: Amounts;
   items: SaleItem[];
   payments: Payment[];
   created_at: string;
+  
 }
 
 interface ReturnItem {
@@ -207,6 +209,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     invoiceNumber: language === 'ar' ? 'رقم الفاتورة' : 'Invoice #',
     returnNumber: language === 'ar' ? 'رقم المرتجع' : 'Return #',
     date: language === 'ar' ? 'التاريخ' : 'Date',
+    salesRepresentative: language === 'ar' ? 'المندوب' : 'Sales Representative',
     customer: language === 'ar' ? 'العميل' : 'Customer',
     total: language === 'ar' ? 'الإجمالي' : 'Total',
     paid: language === 'ar' ? 'المدفوع' : 'Paid',
@@ -905,6 +908,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                         <TableHead className="min-w-[150px]">{t.invoiceNumber}</TableHead>
                         <TableHead className="min-w-[150px]">{t.date}</TableHead>
                         <TableHead className="min-w-[200px]">{t.customer}</TableHead>
+                        <TableHead className="min-w-[200px]">{t.salesRepresentative}</TableHead>
                         <TableHead className="min-w-[250px]">{t.paymentMethod}</TableHead>
                         <TableHead className="min-w-[200px] text-right">{t.total}</TableHead>
                         <TableHead className="min-w-[120px]">{t.status}</TableHead>
@@ -952,6 +956,8 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                                 </span>
                               </div>
                             </TableCell>
+                            <TableCell>{sale.salesRepresentative?.name || '-'}</TableCell>
+
                             <TableCell>
                               {renderPaymentMethods(sale.payments)}
                             </TableCell>
@@ -1134,6 +1140,15 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   <p className="text-sm font-medium">
                     {selectedSale.customer 
                       ? (language === 'ar' ? selectedSale.customer.name_ar || selectedSale.customer.name : selectedSale.customer.name)
+                      : '-'
+                    }
+                  </p>
+                </div>
+                 <div>
+                  <p className="text-xs text-muted-foreground">{t.salesRepresentative}</p>
+                  <p className="text-sm font-medium">
+                    {selectedSale.salesRepresentative 
+                      ? (language === 'ar' ? selectedSale.salesRepresentative.name || selectedSale.salesRepresentative.name : selectedSale.salesRepresentative.name)
                       : '-'
                     }
                   </p>

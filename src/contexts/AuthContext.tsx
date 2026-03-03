@@ -1,5 +1,5 @@
 // contexts/AuthContext.tsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import api from '@/lib/api';
 
@@ -24,6 +24,8 @@ interface User {
   updated_at: string;
   website?: string | null;
   role: string;
+  name_ar?: string | null; // ✅ اسم الشركة بالعربي
+  address_ar?: string | null; // ✅ العنوان بالعربي
 }
 
 interface LoginResponse {
@@ -64,12 +66,16 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+  
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+
+
 
   // دالة لتحميل المستخدم من الـ API
   const fetchCurrentUser = async (token?: string): Promise<User | null> => {

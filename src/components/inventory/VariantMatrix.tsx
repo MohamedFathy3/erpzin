@@ -4,8 +4,9 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, ChevronDown, Check, X, Plus, Barcode } from 'lucide-react';
+import { RefreshCw, ChevronDown, Check, X, Plus, Barcode, Package, Circle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 
@@ -19,7 +20,7 @@ export interface VariantOption {
 export interface ProductVariant {
   id: string;
   colorId: string;
-  unitId: string; // تم التغيير من sizeId إلى unitId
+  unitId: string;
   sku: string;
   barcode: string;
   customBarcode: boolean;
@@ -27,6 +28,8 @@ export interface ProductVariant {
   cost: number;
   price: number;
   enabled: boolean;
+  isSimpleVariant?: boolean; // للتمييز
+  noColor?: boolean; // ✅ وحدة بدون لون
 }
 interface UnitPricing {
   unitId: string;
@@ -49,6 +52,10 @@ interface VariantMatrixProps {
 
 const generateSKU = (baseSku: string, colorCode: string, unitCode: string): string => {
   return `${baseSku}-${colorCode.substring(0, 3).toUpperCase()}-${unitCode.toUpperCase()}`;
+};
+
+const generateSKUWithoutColor = (baseSku: string, unitCode: string): string => {
+  return `${baseSku}-${unitCode.toUpperCase()}`;
 };
 
 const generateBarcode = (): string => {
@@ -150,6 +157,11 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     return variants.find(v => v.colorId === colorId && v.unitId === unitId);
   };
 
+  // ✅ دالة للبحث عن وحدة بدون لون
+  const getUnitWithoutColor = (unitId: string): ProductVariant | undefined => {
+    return variants.find(v => v.unitId === unitId && v.noColor === true);
+  };
+
   // Get or create unit pricing
   const getUnitPricing = (unitId: string): UnitPricing => {
     const existing = unitPricing.find(up => up.unitId === unitId);
@@ -191,6 +203,57 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
     updateUnitPricing(unitId, 'barcode', generateBarcode());
   };
 
+  // ✅ إضافة وحدة بدون لون
+  const addUnitWithoutColor = () => {
+    if (!activeUnitId) return;
+    
+    const pricing = getUnitPricing(activeUnitId);
+    const unit = sizes.find(s => s.id === activeUnitId);
+    
+    // شوف إذا كانت الوحدة موجودة بالفعل بدون لون
+    const existing = getUnitWithoutColor(activeUnitId);
+    
+    if (!existing) {
+      const newVariant: ProductVariant = {
+        id: `${activeUnitId}-nocolor`,
+        colorId: '',
+        unitId: activeUnitId,
+        sku: generateSKUWithoutColor(baseSku, unit?.value || ''),
+        barcode: pricing.barcode,
+        customBarcode: false,
+        stock: 0,
+        cost: pricing.cost,
+        price: pricing.price,
+        enabled: true,
+        noColor: true
+      };
+      
+      onVariantChange([...variants, newVariant]);
+      
+      toast({
+        title: language === 'ar' ? 'تمت الإضافة' : 'Added',
+        description: language === 'ar' ? 'تم إضافة الوحدة بدون لون' : 'Unit added without color',
+      });
+    } else if (!existing.enabled) {
+      onVariantChange(variants.map(v => 
+        v.unitId === activeUnitId && v.noColor
+          ? { ...v, enabled: true, cost: pricing.cost, price: pricing.price }
+          : v
+      ));
+    }
+  };
+
+  // ✅ إزالة وحدة بدون لون
+  const removeUnitWithoutColor = () => {
+    if (!activeUnitId) return;
+    
+    onVariantChange(variants.map(v => 
+      v.unitId === activeUnitId && v.noColor
+        ? { ...v, enabled: false }
+        : v
+    ));
+  };
+
   // Add color for current unit
   const addColorForUnit = (colorId: string) => {
     if (!activeUnitId) return;
@@ -211,7 +274,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
       const newVariant: ProductVariant = {
         id: `${colorId}-${activeUnitId}`,
         colorId,
-        unitId: activeUnitId, // استخدام unitId هنا
+        unitId: activeUnitId,
         sku: generateSKU(baseSku, color?.value || '', unit?.value || ''),
         barcode: pricing.barcode,
         customBarcode: false,
@@ -255,7 +318,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
           newVariants.push({
             id: `${color.id}-${unitId}`,
             colorId: color.id,
-            unitId, // استخدام unitId هنا
+            unitId,
             sku: generateSKU(baseSku, color.value, unit?.value || ''),
             barcode: pricing.barcode,
             customBarcode: false,
@@ -308,13 +371,18 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
 
   // Get colors count for a specific unit
   const getColorsCountForUnit = (unitId: string) => {
-    return variants.filter(v => v.unitId === unitId && v.enabled).length;
+    return variants.filter(v => v.unitId === unitId && v.enabled && !v.noColor).length;
+  };
+
+  // ✅ هل الوحدة عندها نسخة بدون لون؟
+  const hasUnitWithoutColor = (unitId: string) => {
+    return variants.some(v => v.unitId === unitId && v.noColor && v.enabled);
   };
 
   // Get enabled colors for active unit
   const getEnabledColorsForActiveUnit = () => {
     if (!activeUnitId) return [];
-    return variants.filter(v => v.unitId === activeUnitId && v.enabled).map(v => v.colorId);
+    return variants.filter(v => v.unitId === activeUnitId && v.enabled && !v.noColor).map(v => v.colorId);
   };
 
   const enabledColorsForActiveUnit = getEnabledColorsForActiveUnit();
@@ -348,6 +416,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
             const isSelected = selectedSizes.includes(size.id);
             const isActive = activeUnitId === size.id;
             const colorsCount = getColorsCountForUnit(size.id);
+            const hasNoColor = hasUnitWithoutColor(size.id);
             
             return (
               <button
@@ -374,14 +443,22 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
                 )}>
                   {size.value}
                 </span>
-                {isSelected && colorsCount > 0 && (
-                  <span className={cn(
-                    'text-[9px] block mt-0.5',
-                    isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                  )}>
-                    {colorsCount} {language === 'ar' ? 'لون' : 'clr'}
-                  </span>
-                )}
+                <div className="flex items-center justify-center gap-1 mt-0.5">
+                  {colorsCount > 0 && (
+                    <span className={cn(
+                      'text-[9px]',
+                      isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                    )}>
+                      {colorsCount} {language === 'ar' ? 'لون' : 'clr'}
+                    </span>
+                  )}
+                  {hasNoColor && (
+                    <Circle size={8} className={cn(
+                      'fill-current',
+                      isActive ? 'text-primary-foreground' : 'text-primary'
+                    )} />
+                  )}
+                </div>
                 {isActive && (
                   <ChevronDown size={10} className="absolute bottom-0.5 left-1/2 -translate-x-1/2" />
                 )}
@@ -462,8 +539,8 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex items-center gap-1.5">
+          {/* ✅ Quick Actions - مع خيار إضافة بدون لون */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               type="button"
               variant="outline"
@@ -474,6 +551,25 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
               <Plus size={12} className="me-1" />
               {language === 'ar' ? 'كل الألوان' : 'All Colors'}
             </Button>
+            
+            {/* ✅ زر إضافة وحدة بدون لون */}
+            <Button
+              type="button"
+              variant={hasUnitWithoutColor(activeUnitId) ? "secondary" : "outline"}
+              size="sm"
+              onClick={hasUnitWithoutColor(activeUnitId) ? removeUnitWithoutColor : addUnitWithoutColor}
+              className={cn(
+                "flex-1 h-7 text-xs",
+                hasUnitWithoutColor(activeUnitId) && "bg-primary/10 border-primary text-primary"
+              )}
+            >
+              <Circle size={12} className={cn(
+                "me-1",
+                hasUnitWithoutColor(activeUnitId) && "fill-primary"
+              )} />
+              {language === 'ar' ? 'بدون لون' : 'No Color'}
+            </Button>
+
             <Button
               type="button"
               variant="ghost"
@@ -486,45 +582,47 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
             </Button>
           </div>
 
-          {/* Color Selection - Compact Grid */}
-          <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1">
-            {colors.map((color) => {
-              const isEnabled = enabledColorsForActiveUnit.includes(color.id);
-              
-              return (
-                <button
-                  key={color.id}
-                  type="button"
-                  onClick={() => isEnabled ? removeColorForUnit(color.id) : addColorForUnit(color.id)}
-                  className={cn(
-                    'flex flex-col items-center gap-0.5 p-1 rounded border transition-all',
-                    isEnabled
-                      ? 'border-primary bg-primary/10'
-                      : 'border-transparent bg-background hover:border-border'
-                  )}
-                  title={language === 'ar' ? color.valueAr : color.value}
-                >
-                  <div
+          {/* Color Selection - يظهر فقط لو الوحدة مش بدون لون */}
+          {!hasUnitWithoutColor(activeUnitId) && (
+            <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1">
+              {colors.map((color) => {
+                const isEnabled = enabledColorsForActiveUnit.includes(color.id);
+                
+                return (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => isEnabled ? removeColorForUnit(color.id) : addColorForUnit(color.id)}
                     className={cn(
-                      'w-5 h-5 rounded-full border flex items-center justify-center',
-                      isEnabled ? 'border-primary border-2' : 'border-border'
+                      'flex flex-col items-center gap-0.5 p-1 rounded border transition-all',
+                      isEnabled
+                        ? 'border-primary bg-primary/10'
+                        : 'border-transparent bg-background hover:border-border'
                     )}
-                    style={{ backgroundColor: color.hexCode || '#888' }}
+                    title={language === 'ar' ? color.valueAr : color.value}
                   >
-                    {isEnabled && (
-                      <Check size={10} className="text-white drop-shadow-md" />
-                    )}
-                  </div>
-                  <span className={cn(
-                    'text-[8px] truncate w-full text-center leading-none',
-                    isEnabled ? 'text-primary font-medium' : 'text-muted-foreground'
-                  )}>
-                    {(language === 'ar' ? color.valueAr : color.value).slice(0, 4)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                    <div
+                      className={cn(
+                        'w-5 h-5 rounded-full border flex items-center justify-center',
+                        isEnabled ? 'border-primary border-2' : 'border-border'
+                      )}
+                      style={{ backgroundColor: color.hexCode || '#888' }}
+                    >
+                      {isEnabled && (
+                        <Check size={10} className="text-white drop-shadow-md" />
+                      )}
+                    </div>
+                    <span className={cn(
+                      'text-[8px] truncate w-full text-center leading-none',
+                      isEnabled ? 'text-primary font-medium' : 'text-muted-foreground'
+                    )}>
+                      {(language === 'ar' ? color.valueAr : color.value).slice(0, 4)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -565,42 +663,74 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
               </thead>
               <tbody>
                 {activeSizes.map((size, idx) => {
-                  const sizeVariants = variants.filter(v => v.unitId === size.id && v.enabled);
-                  if (sizeVariants.length === 0) return null;
+                  // ✅ عرض الوحدة بدون لون
+                  const noColorVariant = variants.find(v => v.unitId === size.id && v.noColor && v.enabled);
+                  
+                  // ✅ عرض المتغيرات بالألوان
+                  const colorVariants = variants.filter(v => v.unitId === size.id && v.enabled && !v.noColor);
+                  
+                  if (!noColorVariant && colorVariants.length === 0) return null;
                   
                   const pricing = getUnitPricing(size.id);
-                  const unitColors = sizeVariants.map(v => {
-                    const color = colors.find(c => c.id === v.colorId);
-                    return color;
-                  }).filter(Boolean);
-
+                  
                   return (
-                    <tr key={size.id} className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
-                      <td className="p-2 font-medium text-foreground">
-                        <Badge variant="secondary" className="text-xs">{size.value}</Badge>
-                      </td>
-                      <td className="p-2">
-                        <div className="flex flex-wrap gap-0.5">
-                          {unitColors.map((color) => color && (
-                            <div
-                              key={color.id}
-                              className="w-4 h-4 rounded-full border border-border"
-                              style={{ backgroundColor: color.hexCode || '#888' }}
-                              title={language === 'ar' ? color.valueAr : color.value}
-                            />
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-2 text-center font-mono text-[10px] text-muted-foreground">
-                        {pricing.barcode}
-                      </td>
-                      <td className="p-2 text-center font-medium">
-                        {pricing.cost.toLocaleString()}
-                      </td>
-                      <td className="p-2 text-center font-medium text-primary">
-                        {pricing.price.toLocaleString()}
-                      </td>
-                    </tr>
+                    <React.Fragment key={size.id}>
+                      {/* ✅ صف الوحدة بدون لون */}
+                      {noColorVariant && (
+                        <tr className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                          <td className="p-2 font-medium text-foreground">
+                            <Badge variant="secondary" className="text-xs">{size.value}</Badge>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-1">
+                              <Circle size={14} className="fill-primary text-primary" />
+                              <span className="text-xs text-muted-foreground">
+                                {language === 'ar' ? 'بدون لون' : 'No Color'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center font-mono text-[10px] text-muted-foreground">
+                            {noColorVariant.barcode || pricing.barcode}
+                          </td>
+                          <td className="p-2 text-center font-medium">
+                            {noColorVariant.cost.toLocaleString()}
+                          </td>
+                          <td className="p-2 text-center font-medium text-primary">
+                            {noColorVariant.price.toLocaleString()}
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* ✅ صف الألوان */}
+                      {colorVariants.map((variant, vIdx) => {
+                        const color = colors.find(c => c.id === variant.colorId);
+                        return (
+                          <tr key={variant.id} className={vIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}>
+                            <td className="p-2 font-medium text-foreground">
+                              <Badge variant="secondary" className="text-xs">{size.value}</Badge>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-1">
+                                <div
+                                  className="w-4 h-4 rounded-full border border-border"
+                                  style={{ backgroundColor: color?.hexCode || '#888' }}
+                                />
+                                <span className="text-xs">{color?.value}</span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-center font-mono text-[10px] text-muted-foreground">
+                              {variant.barcode}
+                            </td>
+                            <td className="p-2 text-center font-medium">
+                              {variant.cost.toLocaleString()}
+                            </td>
+                            <td className="p-2 text-center font-medium text-primary">
+                              {variant.price.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -611,7 +741,7 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
 
       {enabledCount === 0 && (
         <div className="text-center py-4 text-muted-foreground border border-dashed border-border rounded-lg text-xs">
-          {language === 'ar' ? 'اضغط على وحدة لتحديد الألوان' : 'Click a unit to select colors'}
+          {language === 'ar' ? 'اضغط على وحدة لإضافة ألوان أو إضافة بدون لون' : 'Click a unit to add colors or add without color'}
         </div>
       )}
     </div>

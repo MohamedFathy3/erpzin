@@ -68,6 +68,7 @@ interface PurchaseInvoice {
   payment_method: string;
   note: string | null;
   subtotal: string;
+  paid_amount: string;
   discount_total: string;
   tax_total: string;
   total_amount: string;
@@ -143,6 +144,7 @@ interface InvoiceTableRow {
   invoice_date: string;
   due_date: string;
   items_count: number;
+  paid_amount?: string;
 }
 
 const Purchasing = () => {
@@ -263,6 +265,7 @@ const Purchasing = () => {
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,
     items_count: invoice.items.length,
+    paid_amount: invoice.paid_amount,
   }));
 
   const paginationMeta = invoicesResponse?.meta;
@@ -594,75 +597,85 @@ const Purchasing = () => {
                         <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المورد' : 'Supplier'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
                         <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                         <TableHead>{language === 'ar' ? 'عدد الأصناف' : 'Items'}</TableHead>
                         <TableHead>{language === 'ar' ? 'تاريخ الفاتورة' : 'Invoice Date'}</TableHead>
                         <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {invoicesLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
-                            <div className="flex justify-center">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : invoicesList.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                            {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        invoicesList.map((inv: InvoiceTableRow, index: number) => (
-                          <TableRow key={inv.id}>
-                            <TableCell className="font-mono text-muted-foreground">
-                              {paginationMeta?.from ? paginationMeta.from + index : index + 1}
-                            </TableCell>
-                            <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
-                            <TableCell>{inv.supplier}</TableCell>
-                            <TableCell className="font-semibold">{inv.total_amount.toLocaleString()} YER</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {getPaymentMethodLabel(inv.payment_method)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-center">{inv.items_count}</TableCell>
-                            <TableCell>{formatDate(inv.invoice_date)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    console.log('👁️ Opening invoice details for ID:', inv.id);
-                                    setSelectedInvoiceId(inv.id);
-                                    setShowInvoiceDetails(true);
-                                  }}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    console.log('🔄 Opening return form for invoice ID:', inv.id);
-                                    setSelectedInvoiceId(inv.id);
-                                    setShowReturnForm(true);
-                                  }}
-                                  className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                >
-                                  <RotateCcw className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
+                  <TableBody>
+  {invoicesLoading ? (
+    <TableRow>
+      <TableCell colSpan={9} className="text-center py-8">
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </TableCell>
+    </TableRow>
+  ) : invoicesList.length === 0 ? (
+    <TableRow>
+      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+        {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
+      </TableCell>
+    </TableRow>
+  ) : (
+    invoicesList.map((inv: InvoiceTableRow, index: number) => (
+      <TableRow key={inv.id}>
+        <TableCell className="font-mono text-muted-foreground">
+          {paginationMeta?.from ? paginationMeta.from + index : index + 1}
+        </TableCell>
+        <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
+        <TableCell>{inv.supplier}</TableCell>
+        <TableCell className="font-semibold">{inv.total_amount.toLocaleString()} YER</TableCell>
+        <TableCell>
+          {inv.paid_amount ? (
+            <span className="font-medium text-success">
+              {parseFloat(inv.paid_amount).toLocaleString()} YER
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <Badge variant="outline">
+            {getPaymentMethodLabel(inv.payment_method)}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-center">{inv.items_count}</TableCell>
+        <TableCell>{formatDate(inv.invoice_date)}</TableCell>
+        <TableCell>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                console.log('👁️ Opening invoice details for ID:', inv.id);
+                setSelectedInvoiceId(inv.id);
+                setShowInvoiceDetails(true);
+              }}
+              className="h-8 w-8 p-0"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                console.log('🔄 Opening return form for invoice ID:', inv.id);
+                setSelectedInvoiceId(inv.id);
+                setShowReturnForm(true);
+              }}
+              className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    ))
+  )}
+</TableBody>
                   </Table>
                 </div>
 
