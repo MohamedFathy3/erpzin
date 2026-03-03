@@ -31,10 +31,11 @@ jobs:
       - name: Deploy to Server
         uses: appleboy/scp-action@v0.1.4
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_HOST: 76.13.50.208
-          REMOTE_USER: ubuntu
-          REMOTE_PORT: 22
-          SOURCE: dist       # ✅ مسار مجلد البناء الصحيح لـ Vite
-          TARGET: /www/wwwroot/erpzin
-          ARGS: -avz --delete
+          host: 76.13.50.208
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "dist/*"
+          target: "/www/wwwroot/erpzin"
+          strip_components: 1
+          rm: true  # هذا يقوم بحذف الملفات القديمة (مثل --delete في rsync)
