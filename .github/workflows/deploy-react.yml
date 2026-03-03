@@ -1,4 +1,4 @@
-name: CI/CD React App to Server
+name: CI/CD React/Vite App to Server
 
 on:
   push:
@@ -7,28 +7,34 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
+      # 1️⃣ جلب الكود من GitHub
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2️⃣ تثبيت Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '22'
 
+      # 3️⃣ تثبيت الاعتمادات
       - name: Install dependencies
         run: npm install
 
-      - name: Build React App
+      # 4️⃣ بناء المشروع
+      - name: Build React/Vite App
         run: npm run build
 
+      # 5️⃣ نشر المشروع على السيرفر
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@v2
         with:
-            SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-            REMOTE_HOST: 76.13.50.208
-            REMOTE_USER: ubuntu
-            REMOTE_PORT: 22
-            SOURCE: build
-            TARGET: /www/wwwroot/erpzin
-            ARGS: -avz --delete 
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: 76.13.50.208
+          REMOTE_USER: ubuntu
+          REMOTE_PORT: 22
+          SOURCE: dist       # ✅ مسار مجلد البناء الصحيح لـ Vite
+          TARGET: /www/wwwroot/erpzin
+          ARGS: -avz --delete
