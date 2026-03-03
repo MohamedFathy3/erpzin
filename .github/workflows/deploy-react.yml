@@ -1,0 +1,37 @@
+name: CI/CD React App to Server
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1️⃣ Checkout الكود من Git
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2️⃣ إعداد Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+
+      # 3️⃣ تثبيت الحزم
+      - name: Install dependencies
+        run: npm install
+
+      # 4️⃣ Build المشروع
+      - name: Build React App
+        run: npm run build
+
+      # 5️⃣ رفع الملفات على السيرفر عبر SSH
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@v2
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote-user: ubuntu
+          server-ip: 76.13.50.208
+          remote-path: /www/wwwroot/erpzin
+          local-path: build
