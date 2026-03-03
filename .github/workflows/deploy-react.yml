@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted 
+    runs-on: self-hosted
 
     steps:
       # 1️⃣ جلب الكود من GitHub
@@ -27,15 +27,9 @@ jobs:
       - name: Build React/Vite App
         run: npm run build
 
-      # 5️⃣ نشر المشروع على السيرفر
+      # 5️⃣ نشر المشروع على السيرفر (بدون Docker)
       - name: Deploy to Server
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: 76.13.50.208
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "dist/*"
-          target: "/www/wwwroot/erpzin"
-          strip_components: 1
-          rm: true  # هذا يقوم بحذف الملفات القديمة (مثل --delete في rsync)
+        run: |
+          # نسخ الملفات مباشرة إلى المجلد
+          rsync -avz --delete dist/ /www/wwwroot/erpzin/
+        shell: bash
