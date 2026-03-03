@@ -8,25 +8,20 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '22'
 
-      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # 4️⃣ Build React App
       - name: Build React App
         run: npm run build
 
-      # 5️⃣ Deploy to server
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@v2
         with:
