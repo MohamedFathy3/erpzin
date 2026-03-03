@@ -8,30 +8,31 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Checkout الكود من Git
+      # 1️⃣ Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2️⃣ إعداد Node.js
+      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '22'
 
-      # 3️⃣ تثبيت الحزم
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # 4️⃣ Build المشروع
+      # 4️⃣ Build React App
       - name: Build React App
         run: npm run build
 
-      # 5️⃣ رفع الملفات على السيرفر عبر SSH
+      # 5️⃣ Deploy to server
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@v2
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote-user: ubuntu
-          server-ip: 76.13.50.208
-          remote-path: /www/wwwroot/erpzin
-          local-path: build
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: 76.13.50.208
+          REMOTE_USER: ubuntu
+          REMOTE_PORT: 22
+          SOURCE: build
+          TARGET: /www/wwwroot/erpzin
