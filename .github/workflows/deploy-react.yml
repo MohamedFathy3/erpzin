@@ -25,9 +25,9 @@ jobs:
       - name: Deploy to Server
         uses: easingthemes/ssh-deploy@v2
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          REMOTE_HOST: 76.13.50.208
-          REMOTE_USER: ubuntu
-          REMOTE_PORT: 22
-          SOURCE: build
-          TARGET: /www/wwwroot/erpzin
+            SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+            REMOTE_HOST: 76.13.50.208
+            REMOTE_USER: ubuntu
+            REMOTE_PORT: 22
+            SOURCE: build
+            TARGET: /www/wwwroot/erpzin
