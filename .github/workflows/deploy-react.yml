@@ -27,9 +27,31 @@ jobs:
       - name: Build React/Vite App
         run: npm run build
 
-      # 5️⃣ نشر المشروع على السيرفر (بدون Docker)
+      # 5️⃣ عرض محتوى dist (للتأكد)
+      - name: Show build output
+        run: |
+          echo "✅ Build completed. Files in dist:"
+          ls -la dist/
+          echo "Total files: $(find dist/ -type f | wc -l)"
+
+      # 6️⃣ نشر المشروع على السيرفر
       - name: Deploy to Server
         run: |
-          # نسخ الملفات مباشرة إلى المجلد
-          rsync -avz --delete dist/ /www/wwwroot/erpzin/
-        shell: bash
+          echo "📁 Copying files to /www/wwwroot/erpzin/"
+          
+          # إنشاء المجلد إذا مش موجود
+          sudo mkdir -p /www/wwwroot/erpzin
+          
+          # نسخ كل الملفات (بما فيها المخفية)
+          sudo rsync -av --delete dist/ /www/wwwroot/erpzin/
+          
+          # تأكيد الصلاحيات
+          sudo chown -R ubuntu:ubuntu /www/wwwroot/erpzin
+          
+          echo "✅ Deployment completed. Files in target:"
+          ls -la /www/wwwroot/erpzin/
+
+      # 7️⃣ اختبار الموقع (اختياري)
+      - name: Test website
+        run: |
+          curl -I http://76.13.50.208 || echo "Website might need configuration"
