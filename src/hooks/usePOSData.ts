@@ -13,6 +13,7 @@ import {
   saveCategoriesOffline,
   getCategoriesOffline
 } from '@/lib/offlineDB';
+import { clearAllOfflineData } from '@/lib/offlineDB';
 
 // ========== أنواع البيانات المتقدمة ==========
 export interface ProductColor {
@@ -136,7 +137,8 @@ export const useCategories = () => {
 
         // Save to offline DB
         await saveCategoriesOffline(formatted);
-        
+          // await clearAllOfflineData();
+
         return formatted;
       } catch (error) {
         console.error('Error fetching categories:', error);

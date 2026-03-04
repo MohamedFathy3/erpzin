@@ -139,33 +139,8 @@ const Settings = () => {
       descriptionAr: 'الإعدادات المالية',
       category: 'business'
     },
-    { 
-      id: 'payment', 
-      icon: CreditCard, 
-      label: 'Payment Methods', 
-      labelAr: 'طرق الدفع',
-      description: 'Configure payment options',
-      descriptionAr: 'تهيئة خيارات الدفع',
-      category: 'business'
-    },
-    { 
-      id: 'modules', 
-      icon: Cog, 
-      label: 'Module Settings', 
-      labelAr: 'إعدادات الموديولات',
-      description: 'Configure system modules',
-      descriptionAr: 'تهيئة وحدات النظام',
-      category: 'business'
-    },
-    { 
-      id: 'printing', 
-      icon: Printer, 
-      label: 'Printing & Documents', 
-      labelAr: 'الطباعة والمستندات',
-      description: 'Invoice design and printers',
-      descriptionAr: 'تصميم الفواتير والطابعات',
-      category: 'business'
-    },
+   
+
     { 
       id: 'import-export', 
       icon: Download, 
