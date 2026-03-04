@@ -413,7 +413,6 @@ const WarehouseTransfer = () => {
                   <TableHead>{t.product}</TableHead>
                   <TableHead>{t.warehouse}</TableHead>
                   <TableHead className="text-center">{t.stock}</TableHead>
-                  <TableHead className="text-right">{t.cost}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -440,9 +439,7 @@ const WarehouseTransfer = () => {
                           {item.stock}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {Number(item.cost).toLocaleString()} ﷼
-                      </TableCell>
+                    
                     </TableRow>
                   ))
                 )}
