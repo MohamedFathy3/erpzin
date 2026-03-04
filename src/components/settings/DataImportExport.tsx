@@ -23,8 +23,8 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
+import api from '@/lib/api';
 import OpeningBalances from '@/components/inventory/OpeningBalances';
 
 interface CustomerImportRow {
@@ -46,6 +46,30 @@ interface SupplierImportRow {
   tax_number?: string;
 }
 
+interface Customer {
+  id: number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  loyalty_points?: number;
+  total_purchases?: number;
+  notes?: string;
+}
+
+interface Supplier {
+  id: number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  contact_person?: string;
+  tax_number?: string;
+  balance?: number;
+}
+
 const DataImportExport: React.FC = () => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
@@ -54,6 +78,7 @@ const DataImportExport: React.FC = () => {
 
   // Customer import state
   const customerFileRef = useRef<HTMLInputElement>(null);
+  const [selectedCustomerFile, setSelectedCustomerFile] = useState<File | null>(null);
   const [customerImportData, setCustomerImportData] = useState<CustomerImportRow[]>([]);
   const [customerImportErrors, setCustomerImportErrors] = useState<string[]>([]);
   const [showCustomerImportDialog, setShowCustomerImportDialog] = useState(false);
@@ -62,6 +87,7 @@ const DataImportExport: React.FC = () => {
 
   // Supplier import state
   const supplierFileRef = useRef<HTMLInputElement>(null);
+  const [selectedSupplierFile, setSelectedSupplierFile] = useState<File | null>(null);
   const [supplierImportData, setSupplierImportData] = useState<SupplierImportRow[]>([]);
   const [supplierImportErrors, setSupplierImportErrors] = useState<string[]>([]);
   const [showSupplierImportDialog, setShowSupplierImportDialog] = useState(false);
@@ -69,36 +95,33 @@ const DataImportExport: React.FC = () => {
   const [isImportingSuppliers, setIsImportingSuppliers] = useState(false);
 
   // Fetch data for export
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ['customers-export'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('customers').select('*').order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get('/customers');
+        return response.data?.data || [];
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+        return [];
+      }
     }
   });
 
-  const { data: suppliers = [] } = useQuery({
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
     queryKey: ['suppliers-export'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('suppliers').select('*').order('name');
-      if (error) throw error;
-      return data;
+      try {
+        const response = await api.get('/suppliers');
+        return response.data?.data || [];
+      } catch (error) {
+        console.error('Error fetching suppliers:', error);
+        return [];
+      }
     }
   });
 
-  const { data: openingBalances = [] } = useQuery({
-    queryKey: ['opening-balances-export'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('opening_balances')
-        .select('*, products(name, name_ar, sku), warehouses(name, name_ar)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    }
-  });
-
+  // Export functions
   const exportToExcel = (data: any[], fileName: string, sheetName: string) => {
     setIsExporting(fileName);
     try {
@@ -149,25 +172,12 @@ const DataImportExport: React.FC = () => {
     exportToExcel(exportData, 'suppliers', language === 'ar' ? 'الموردين' : 'Suppliers');
   };
 
-  const exportOpeningBalances = () => {
-    const exportData = openingBalances.map(ob => ({
-      [language === 'ar' ? 'المنتج' : 'Product']: ob.products?.name || '',
-      [language === 'ar' ? 'المنتج بالعربي' : 'Product (Arabic)']: ob.products?.name_ar || '',
-      [language === 'ar' ? 'SKU' : 'SKU']: ob.products?.sku || '',
-      [language === 'ar' ? 'المستودع' : 'Warehouse']: ob.warehouses?.name || '',
-      [language === 'ar' ? 'الكمية' : 'Quantity']: ob.quantity,
-      [language === 'ar' ? 'تكلفة الوحدة' : 'Unit Cost']: ob.unit_cost,
-      [language === 'ar' ? 'القيمة الإجمالية' : 'Total Value']: ob.total_value,
-      [language === 'ar' ? 'تاريخ الرصيد' : 'Balance Date']: ob.balance_date,
-      [language === 'ar' ? 'ملاحظات' : 'Notes']: ob.notes || '',
-    }));
-    exportToExcel(exportData, 'opening_balances', language === 'ar' ? 'أول_المدة' : 'Opening_Balances');
-  };
-
   // Customer import handlers
   const handleCustomerFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    setSelectedCustomerFile(file);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -211,69 +221,82 @@ const DataImportExport: React.FC = () => {
 
   const importCustomersMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedCustomerFile) throw new Error('No file selected');
+      
       setIsImportingCustomers(true);
-      setCustomerImportProgress(0);
-
-      let successCount = 0;
-      let failCount = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < customerImportData.length; i++) {
-        const row = customerImportData[i];
-        try {
-          const { error } = await supabase.from('customers').insert({
-            name: row.name,
-            name_ar: row.name_ar || null,
-            phone: row.phone || null,
-            email: row.email || null,
-            address: row.address || null,
-            notes: row.notes || null
-          });
-
-          if (error) {
-            failCount++;
-            errors.push(`${language === 'ar' ? 'الصف' : 'Row'} ${i + 1}: ${error.message}`);
-          } else {
-            successCount++;
+      setCustomerImportProgress(30);
+      
+      const formData = new FormData();
+      formData.append('file', selectedCustomerFile);
+      
+      const response = await api.post('/customers/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setCustomerImportProgress(percentCompleted);
           }
-        } catch (err: any) {
-          failCount++;
-          errors.push(`${language === 'ar' ? 'الصف' : 'Row'} ${i + 1}: ${err.message}`);
-        }
-        setCustomerImportProgress(Math.round(((i + 1) / customerImportData.length) * 100));
-      }
-
-      return { successCount, failCount, errors };
+        },
+      });
+      
+      setCustomerImportProgress(100);
+      return response.data;
     },
-    onSuccess: (result) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers-export'] });
       toast({
         title: language === 'ar' ? 'تم استيراد العملاء بنجاح' : 'Customers imported successfully',
-        description: `${result.successCount} ${language === 'ar' ? 'ناجح' : 'successful'}, ${result.failCount} ${language === 'ar' ? 'فاشل' : 'failed'}`
+        description: data.message || '',
       });
-      setCustomerImportData([]);
-      setCustomerImportErrors(result.errors);
-      setIsImportingCustomers(false);
-      if (result.errors.length === 0) setShowCustomerImportDialog(false);
+      resetCustomerImport();
+      setShowCustomerImportDialog(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الاستيراد' : 'Import error', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({ 
+        title: language === 'ar' ? 'خطأ في استيراد العملاء' : 'Error importing customers', 
+        description: error.message,
+        variant: 'destructive' 
+      });
       setIsImportingCustomers(false);
+      setCustomerImportProgress(0);
     }
   });
 
+  const resetCustomerImport = () => {
+    setSelectedCustomerFile(null);
+    setCustomerImportData([]);
+    setCustomerImportErrors([]);
+    setIsImportingCustomers(false);
+    setCustomerImportProgress(0);
+    if (customerFileRef.current) customerFileRef.current.value = '';
+  };
+
   const downloadCustomerTemplate = () => {
-    const template = [{ name: 'John Doe', name_ar: 'جون دو', phone: '0501234567', email: 'john@example.com', address: 'Riyadh', notes: '' }];
+    const template = [
+      { 
+        name: 'John Doe', 
+        name_ar: 'جون دو', 
+        phone: '0501234567', 
+        email: 'john@example.com', 
+        address: 'Riyadh', 
+        notes: 'VIP Customer' 
+      }
+    ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Customers');
     XLSX.writeFile(wb, 'customers_template.xlsx');
+    toast({ 
+      title: language === 'ar' ? 'تم تحميل النموذج' : 'Template downloaded' 
+    });
   };
 
   // Supplier import handlers
   const handleSupplierFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    setSelectedSupplierFile(file);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -318,64 +341,75 @@ const DataImportExport: React.FC = () => {
 
   const importSuppliersMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedSupplierFile) throw new Error('No file selected');
+      
       setIsImportingSuppliers(true);
-      setSupplierImportProgress(0);
-
-      let successCount = 0;
-      let failCount = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < supplierImportData.length; i++) {
-        const row = supplierImportData[i];
-        try {
-          const { error } = await supabase.from('suppliers').insert({
-            name: row.name,
-            name_ar: row.name_ar || null,
-            phone: row.phone || null,
-            email: row.email || null,
-            address: row.address || null,
-            contact_person: row.contact_person || null,
-            tax_number: row.tax_number || null
-          });
-
-          if (error) {
-            failCount++;
-            errors.push(`${language === 'ar' ? 'الصف' : 'Row'} ${i + 1}: ${error.message}`);
-          } else {
-            successCount++;
+      setSupplierImportProgress(30);
+      
+      const formData = new FormData();
+      formData.append('file', selectedSupplierFile);
+      
+      const response = await api.post('/suppliers/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setSupplierImportProgress(percentCompleted);
           }
-        } catch (err: any) {
-          failCount++;
-          errors.push(`${language === 'ar' ? 'الصف' : 'Row'} ${i + 1}: ${err.message}`);
-        }
-        setSupplierImportProgress(Math.round(((i + 1) / supplierImportData.length) * 100));
-      }
-
-      return { successCount, failCount, errors };
+        },
+      });
+      
+      setSupplierImportProgress(100);
+      return response.data;
     },
-    onSuccess: (result) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['suppliers-export'] });
       toast({
         title: language === 'ar' ? 'تم استيراد الموردين بنجاح' : 'Suppliers imported successfully',
-        description: `${result.successCount} ${language === 'ar' ? 'ناجح' : 'successful'}, ${result.failCount} ${language === 'ar' ? 'فاشل' : 'failed'}`
+        description: data.message || '',
       });
-      setSupplierImportData([]);
-      setSupplierImportErrors(result.errors);
-      setIsImportingSuppliers(false);
-      if (result.errors.length === 0) setShowSupplierImportDialog(false);
+      resetSupplierImport();
+      setShowSupplierImportDialog(false);
     },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الاستيراد' : 'Import error', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({ 
+        title: language === 'ar' ? 'خطأ في استيراد الموردين' : 'Error importing suppliers', 
+        description: error.message,
+        variant: 'destructive' 
+      });
       setIsImportingSuppliers(false);
+      setSupplierImportProgress(0);
     }
   });
 
+  const resetSupplierImport = () => {
+    setSelectedSupplierFile(null);
+    setSupplierImportData([]);
+    setSupplierImportErrors([]);
+    setIsImportingSuppliers(false);
+    setSupplierImportProgress(0);
+    if (supplierFileRef.current) supplierFileRef.current.value = '';
+  };
+
   const downloadSupplierTemplate = () => {
-    const template = [{ name: 'ABC Supplies', name_ar: 'شركة أ ب ج', phone: '0501234567', email: 'info@abc.com', address: 'Jeddah', contact_person: 'Ahmed', tax_number: '123456789' }];
+    const template = [
+      { 
+        name: 'ABC Supplies', 
+        name_ar: 'شركة أ ب ج للتوريدات', 
+        phone: '0501234567', 
+        email: 'info@abc.com', 
+        address: 'Jeddah - King Road', 
+        contact_person: 'Ahmed Mohammed',
+        tax_number: '123456789'
+      }
+    ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
     XLSX.writeFile(wb, 'suppliers_template.xlsx');
+    toast({ 
+      title: language === 'ar' ? 'تم تحميل النموذج' : 'Template downloaded' 
+    });
   };
 
   const t = {
@@ -421,10 +455,10 @@ const DataImportExport: React.FC = () => {
       id: 'opening',
       icon: Package,
       title: t.openingBalances,
-      count: openingBalances.length,
+      count: 0, // This will be handled by OpeningBalances component
       color: 'text-emerald-500',
       bgColor: 'bg-emerald-500/10',
-      onExport: exportOpeningBalances,
+      onExport: () => {}, // This will be handled by OpeningBalances component
     },
   ];
 
@@ -442,7 +476,7 @@ const DataImportExport: React.FC = () => {
       </div>
 
       {/* Quick Export Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {dataCards.map((card) => (
           <Card key={card.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
@@ -460,24 +494,26 @@ const DataImportExport: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={card.onExport}
-                  disabled={isExporting === card.id}
-                >
-                  {isExporting === card.id ? (
-                    <Loader2 size={14} className="animate-spin me-1" />
-                  ) : (
-                    <Download size={14} className="me-1" />
-                  )}
-                  {t.export}
-                </Button>
+                {card.id !== 'opening' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={card.onExport}
+                    disabled={isExporting === card.id}
+                  >
+                    {isExporting === card.id ? (
+                      <Loader2 size={14} className="animate-spin me-1" />
+                    ) : (
+                      <Download size={14} className="me-1" />
+                    )}
+                    {t.export}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
         ))}
-      </div>
+      </div> */}
 
       {/* Tabs for detailed management */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -622,6 +658,19 @@ const DataImportExport: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Selected File Info */}
+            {selectedCustomerFile && (
+              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <FileSpreadsheet className="text-primary" size={24} />
+                <div className="flex-1">
+                  <p className="font-medium">{selectedCustomerFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(selectedCustomerFile.size / 1024).toFixed(2)} KB
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Progress */}
             {isImportingCustomers && (
               <div className="space-y-2">
@@ -692,12 +741,12 @@ const DataImportExport: React.FC = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCustomerImportDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowCustomerImportDialog(false); resetCustomerImport(); }}>
               {t.cancel}
             </Button>
             <Button 
               onClick={() => importCustomersMutation.mutate()}
-              disabled={isImportingCustomers || customerImportData.length === 0}
+              disabled={isImportingCustomers || !selectedCustomerFile}
             >
               {isImportingCustomers ? (
                 <Loader2 size={16} className="animate-spin me-2" />
@@ -721,6 +770,19 @@ const DataImportExport: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Selected File Info */}
+            {selectedSupplierFile && (
+              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <FileSpreadsheet className="text-primary" size={24} />
+                <div className="flex-1">
+                  <p className="font-medium">{selectedSupplierFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(selectedSupplierFile.size / 1024).toFixed(2)} KB
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Progress */}
             {isImportingSuppliers && (
               <div className="space-y-2">
@@ -793,12 +855,12 @@ const DataImportExport: React.FC = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSupplierImportDialog(false)}>
+            <Button variant="outline" onClick={() => { setShowSupplierImportDialog(false); resetSupplierImport(); }}>
               {t.cancel}
             </Button>
             <Button 
               onClick={() => importSuppliersMutation.mutate()}
-              disabled={isImportingSuppliers || supplierImportData.length === 0}
+              disabled={isImportingSuppliers || !selectedSupplierFile}
             >
               {isImportingSuppliers ? (
                 <Loader2 size={16} className="animate-spin me-2" />

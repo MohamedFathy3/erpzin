@@ -11,7 +11,6 @@ import SupplierForm from '@/components/purchasing/SupplierForm';
 import SupplierDetails from '@/components/purchasing/SupplierDetails';
 import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
 import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
-import PurchaseOrderList from '@/components/purchasing/PurchaseOrderList';
 import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import PurchaseReturnForm from '@/components/purchasing/PurchaseReturnForm';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
@@ -417,12 +416,7 @@ const Purchasing = () => {
       icon: <RotateCcw className="text-warning" size={24} />,
       color: 'bg-warning/10'
     },
-    {
-      label: language === 'ar' ? 'أوامر الشراء' : 'Orders',
-      value: purchaseOrdersCount,
-      icon: <ShoppingCart className="text-chart-3" size={24} />,
-      color: 'bg-chart-3/10'
-    },
+  
     {
       label: language === 'ar' ? 'المستحق للموردين' : 'Payables',
       value: `${totalBalance.toLocaleString()} YER`,
@@ -557,10 +551,7 @@ const Purchasing = () => {
               <FileText size={16} className="me-2" />
               {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
             </TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-800 dark:data-[state=active]:bg-emerald-900 dark:data-[state=active]:text-emerald-100">
-              <ShoppingCart size={16} className="me-2" />
-              {language === 'ar' ? 'أوامر الشراء' : 'Orders'}
-            </TabsTrigger>
+          
             <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 dark:data-[state=active]:bg-orange-900 dark:data-[state=active]:text-orange-100">
               <RotateCcw size={16} className="me-2" />
               {language === 'ar' ? 'المرتجعات' : 'Returns'}
@@ -782,13 +773,7 @@ const Purchasing = () => {
           </TabsContent>
 
           {/* ========== أوامر الشراء ========== */}
-          <TabsContent value="orders" className="mt-4">
-            <Card className="shadow-md border-border">
-              <CardContent className="p-4">
-                <PurchaseOrderList onSave={refetchAll} />
-              </CardContent>
-            </Card>
-          </TabsContent>
+      
 
           {/* ========== المرتجعات ========== */}
           <TabsContent value="returns" className="mt-4">

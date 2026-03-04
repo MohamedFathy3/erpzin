@@ -448,15 +448,12 @@ const payInvoiceMutation = useMutation({
 
                   {/* Tabs for History */}
                   <Tabs defaultValue="invoices" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-1">
                       <TabsTrigger value="invoices">
                         <FileText size={16} className="me-2" />
                         {language === 'ar' ? 'الفواتير' : 'Invoices'}
                       </TabsTrigger>
-                      <TabsTrigger value="orders">
-                        <TrendingUp size={16} className="me-2" />
-                        {language === 'ar' ? 'أوامر الشراء' : 'Orders'}
-                      </TabsTrigger>
+                     
                     </TabsList>
 
                     <TabsContent value="invoices" className="mt-4">
@@ -536,44 +533,7 @@ const payInvoiceMutation = useMutation({
                       )}
                     </TabsContent>
 
-                    <TabsContent value="orders" className="mt-4">
-                      {ordersLoading ? (
-                        <div className="flex justify-center py-8">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                        </div>
-                      ) : (
-                        <div className="border rounded-lg overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>{language === 'ar' ? 'رقم الطلب' : 'Order #'}</TableHead>
-                                <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                                <TableHead className="text-end">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                                <TableHead>{language === 'ar' ? 'التسليم المتوقع' : 'Expected Delivery'}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {orders.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                    {language === 'ar' ? 'لا توجد أوامر شراء' : 'No purchase orders'}
-                                  </TableCell>
-                                </TableRow>
-                              ) : (
-                                orders.map((order: PurchaseOrder) => (
-                                  <TableRow key={order.id}>
-                                    <TableCell className="font-mono">{order.order_number}</TableCell>
-                                    <TableCell>{formatDate(order.created_at)}</TableCell>
-                                    <TableCell className="text-end font-medium">{formatCurrency(Number(order.total_amount))}</TableCell>
-                                    <TableCell>{order.expected_delivery ? formatDate(order.expected_delivery) : '-'}</TableCell>
-                                  </TableRow>
-                                ))
-                              )}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </TabsContent>
+                 
                   </Tabs>
                 </>
               )}

@@ -127,6 +127,7 @@ const filteredProducts = useMemo(() => {
               <button
                 key={product.id}
                 onClick={() => onAddToCart(product as any)}
+                disabled={product.stock === 0}
                 className={cn(
                   'relative flex flex-col rounded-lg overflow-hidden transition-all duration-200',
                   'bg-card border border-border hover:border-primary hover:shadow-md',

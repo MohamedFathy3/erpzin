@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { ProductVariant } from '@/hooks/useVariantData';
 
 const ITEMS_PER_PAGE = 10;
 

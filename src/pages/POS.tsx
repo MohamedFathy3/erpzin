@@ -347,32 +347,34 @@ const POS: React.FC = () => {
     setSearchQuery('');
   }, [selectedCategory]);
 
-  const addToCart = (product: Product) => {
-    if (product.units && product.units.length > 0) {
-      setSelectedProductForVariant(product);
-      setShowVariantSelector(true);
-      return;
-    }
+// في POS.tsx - عدل addToCart
+const addToCart = (product: Product) => {
+  if (product.units && product.units.length > 0) {
+    setSelectedProductForVariant(product);
+    setShowVariantSelector(true);
+    return;
+  }
 
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id && !item.variantId);
-      if (existing) {
-        return prev.map(item =>
-          item.id === product.id && !item.variantId
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prev, {
-        id: product.id,
-        name: product.name,
-        nameAr: product.name_ar || product.name,
-        price: product.price,
-        quantity: 1,
-        sku: product.sku
-      }];
-    });
-  };
+   setCartItems(prev => {
+    const existing = prev.find(item => item.id === product.id && !item.variantId);
+    if (existing) {
+      return prev.map(item =>
+        item.id === product.id && !item.variantId
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      );
+    }
+    return [...prev, {
+      id: product.id,
+      name: product.name,
+      nameAr: product.nameAr || product.name,
+      price: product.price,
+      quantity: 1,
+      sku: product.sku,
+      stock: product.stock,  // 👈 أضف هذا السطر
+    }];
+  });
+};
 
   const addVariantToCart = (variant: {
     productId: string;
@@ -718,7 +720,7 @@ const POS: React.FC = () => {
                 )}
               >
                 <UserCheck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'المبيعات' : 'Sales'}</span>
+                <span className="text-xs font-medium">{language === 'ar' ? 'المندوب' : 'Sales Rep '}</span>
                 {selectedSalesRep && (
                   <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
                 )}

@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 
 // تحديث interface Product ليشمل units
 export interface Product {
+  descriptionAr: string;
   id: string;
   name: string;
   nameAr: string;
