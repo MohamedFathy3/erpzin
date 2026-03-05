@@ -415,7 +415,7 @@ const WarehouseTransfer = () => {
                   <TableHead className="text-center">{t.stock}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody> 
                 {isLoading ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8">

@@ -227,7 +227,7 @@ const Employees = () => {
   // ========== تحديث موظف ==========
   const updateEmployeeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) => {
-      const response = await api.post(`/employee/${id}`, data);
+      const response = await api.patch(`/employee/${id}`, data);
       return response.data;
     },
     onSuccess: () => {

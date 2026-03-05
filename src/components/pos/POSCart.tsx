@@ -3,7 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Trash2, CreditCard, Pause, AlertCircle } from 'lucide-react';
+import { Minus, Plus, Trash2, CreditCard, Pause, AlertCircle, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -17,7 +17,7 @@ interface CartItem {
   sku: string;
   sizeName?: string;
   colorName?: string;
-  stock?: number;  // 👈 أضفنا الـ stock
+  stock?: number;
 }
 
 interface POSCartProps {
@@ -40,35 +40,63 @@ const POSCart: React.FC<POSCartProps> = ({
   heldOrdersCount
 }) => {
   const { t, language } = useLanguage();
-  const { defaultTaxRate } = useCurrencyTax();
+  const { taxes } = useCurrencyTax();
   const { getCurrencySymbol, formatCurrency } = useRegionalSettings();
 
-  const taxRate: number = Number(defaultTaxRate?.rate ?? 0);
+  // فلترة وعرض الضرائب حسب المنطق المطلوب
+  const getActiveTax = () => {
+    if (!taxes || taxes.length === 0) {
+      console.warn('No taxes found');
+      return null;
+    }
+    
+    // فلترة الضرائب النشطة أولاً
+    const activeTaxes = taxes.filter(tax => tax.active === true);
+    
+    if (activeTaxes.length === 0) {
+      console.warn('No active taxes found');
+      return null;
+    }
+    
+    // البحث عن الضريبة النشطة التي هي default true
+    const defaultActiveTax = activeTaxes.find(tax => tax.default === true);
+    
+    // إذا وجدنا default true نرجعه، وإلا نرجع أول ضريبة نشطة
+    const selectedTax = defaultActiveTax || activeTaxes[0];
+    
+    console.log('Selected tax:', selectedTax);
+    return selectedTax;
+  };
+
+  const activeTax = getActiveTax();
+  const taxRate: number = Number(activeTax?.rate ?? 0);
   const currencySymbol = getCurrencySymbol();
   
   const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const tax = (subtotal * taxRate) / 100;
   const total = subtotal + tax;
 
-  // دالة التحقق من إمكانية الزيادة
   const canIncreaseQuantity = (item: CartItem): boolean => {
-    // لو مفيش stock معرف، نسمح بالزيادة
     if (item.stock === undefined || item.stock === null) return true;
-    // نتحقق أن الكمية الحالية أقل من المخزون
     return item.quantity < item.stock;
   };
 
-  // دالة التحقق من إمكانية النقصان
   const canDecreaseQuantity = (item: CartItem): boolean => {
     return item.quantity > 1;
   };
 
-  // رسالة الخطأ حسب اللغة
   const getStockMessage = (item: CartItem): string => {
     if (language === 'ar') {
       return `الحد الأقصى ${item.stock} قطعة فقط`;
     }
     return `Maximum ${item.stock} items only`;
+  };
+
+  const getStockStatusColor = (remaining: number, total: number): string => {
+    const percentage = (remaining / total) * 100;
+    if (percentage < 10) return 'bg-destructive';
+    if (percentage < 30) return 'bg-warning';
+    return 'bg-primary';
   };
 
   return (
@@ -97,6 +125,19 @@ const POSCart: React.FC<POSCartProps> = ({
               </span>
             </div>
           </div>
+          
+          {/* عرض معلومات الضريبة النشطة - اختياري */}
+          {activeTax && (
+            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+              <Info size={12} />
+              <span>
+                {language === 'ar' 
+                  ? `الضريبة: ${activeTax.name} (${taxRate}%) ${activeTax.default ? ' - الافتراضية' : ''}`
+                  : `Tax: ${activeTax.name} (${taxRate}%) ${activeTax.default ? ' - Default' : ''}`
+                }
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Cart Items */}
@@ -119,6 +160,7 @@ const POSCart: React.FC<POSCartProps> = ({
                 const canIncrease = canIncreaseQuantity(item);
                 const canDecrease = canDecreaseQuantity(item);
                 const remainingStock = item.stock !== undefined ? item.stock - item.quantity : null;
+                const progressPercentage = item.stock ? (item.quantity / item.stock) * 100 : 0;
                 
                 return (
                   <div
@@ -142,16 +184,14 @@ const POSCart: React.FC<POSCartProps> = ({
                           <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div 
                               className={cn(
-                                "h-full rounded-full",
-                                remainingStock! < 3 ? "bg-destructive" : "bg-primary"
+                                "h-full rounded-full transition-all",
+                                getStockStatusColor(remainingStock!, item.stock)
                               )}
-                              style={{ 
-                                width: `${Math.min(100, (item.quantity / item.stock) * 100)}%` 
-                              }}
+                              style={{ width: `${Math.min(100, progressPercentage)}%` }}
                             />
                           </div>
                           <span className={cn(
-                            "text-[10px]",
+                            "text-[10px] whitespace-nowrap",
                             remainingStock! < 3 ? "text-destructive font-bold" : "text-muted-foreground"
                           )}>
                             {remainingStock! > 0 
@@ -162,9 +202,14 @@ const POSCart: React.FC<POSCartProps> = ({
                         </div>
                       )}
                       
-                      <p className="text-sm font-semibold text-primary mt-1">
-                        {formatCurrency(item.price)}
-                      </p>
+                      <div className="flex justify-between items-center mt-1">
+                        <p className="text-sm font-semibold text-primary">
+                          {formatCurrency(item.price)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {language === 'ar' ? 'الإجمالي' : 'Total'}: {formatCurrency(item.price * item.quantity)}
+                        </p>
+                      </div>
                     </div>
                     
                     <div className="flex items-center gap-1">
@@ -251,7 +296,16 @@ const POSCart: React.FC<POSCartProps> = ({
               <span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>{language === 'ar' ? `الضريبة (${taxRate}%)` : `VAT (${taxRate}%)`}</span>
+              <span>
+                {language === 'ar' 
+                  ? `الضريبة (${taxRate}%)` 
+                  : `VAT (${taxRate}%)`}
+                {activeTax?.default && (
+                  <span className="text-[10px] ms-1 px-1.5 py-0.5 bg-primary/10 text-primary rounded">
+                    {language === 'ar' ? 'افتراضي' : 'default'}
+                  </span>
+                )}
+              </span>
               <span>{formatCurrency(tax)}</span>
             </div>
             <div className="flex justify-between font-bold text-lg text-foreground pt-2 border-t border-border">

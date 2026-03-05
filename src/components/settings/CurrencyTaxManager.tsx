@@ -24,7 +24,6 @@ interface Currency {
   exchange_rate: number;
   is_active?: boolean; // هنستخدم is_active للواجهة
   active?: boolean;    // الباك بترجع active
-  is_default?: boolean;
   default?: boolean;   // الباك بترجع default
   decimal_places: number;
   sort_order: number;
@@ -37,7 +36,6 @@ interface TaxRate {
   rate: number;
   is_active?: boolean; // هنستخدم is_active للواجهة
   active?: boolean;    // الباك بترجع active
-  is_default?: boolean;
   default?: boolean;   // الباك بترجع default
 }
 
@@ -66,6 +64,7 @@ const CurrencyTaxManager = () => {
     name: '',
     name_ar: '',
     rate: 0
+    
   });
 
   // ========== Fetch Currencies ==========
@@ -74,7 +73,7 @@ const CurrencyTaxManager = () => {
     queryFn: async () => {
       const response = await api.post('/currency/index');
 
-      // ✅ تحويل البيانات - active -> is_active, default -> is_default
+      // ✅ تحويل البيانات - active -> is_active, default -> default
       let data = [];
       if (Array.isArray(response.data)) {
         data = response.data;
@@ -85,7 +84,7 @@ const CurrencyTaxManager = () => {
       return data.map((item: any) => ({
         ...item,
         is_active: item.active === true || item.active === 1,  // ✅ تحويل active
-        is_default: item.default === true || item.default === 1 // ✅ تحويل default
+        default: item.default === true || item.default === 1 // ✅ تحويل default
       }));
     }
   });
@@ -107,7 +106,7 @@ const CurrencyTaxManager = () => {
       return data.map((item: any) => ({
         ...item,
         is_active: item.active === true || item.active === 1,  // ✅ تحويل active
-        is_default: item.default === true || item.default === 1 // ✅ تحويل default
+        default: item.default === true || item.default === 1 // ✅ تحويل default
       }));
     }
   });
@@ -222,7 +221,8 @@ const CurrencyTaxManager = () => {
         name_ar: data.name_ar,
         rate: data.rate,
         active: 1, // ✅ active = 1
-        main_branch: 0 // ✅ main_branch مش default
+        main_branch: 0, // ✅ main_branch مش default
+        default: 0 // ✅ default = 0
       };
 
       if (data.id) {
@@ -273,12 +273,12 @@ const CurrencyTaxManager = () => {
       // ن reset كل الضرائب عدا الضريبة المختارة
       const resetPromises = allTaxes
         .filter(t => t.id !== id) // ما نresetش الضريبة المختارة
-        .map(t => api.put('/tax/' + t.id, { main_branch: 0 }));
+        .map(t => api.put('/tax/' + t.id, { default: 0 }));
 
       await Promise.all(resetPromises);
 
       // ✅ ثم ن set الضريبة المختارة كـ default
-      await api.put('/tax/' + id, { main_branch: 1 });
+      await api.put('/tax/' + id, { default: 1 });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax-rates'] });
@@ -534,7 +534,7 @@ const CurrencyTaxManager = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {currency.is_default ? (
+                      {currency.default ? (
                         <Badge className="bg-primary">
                           <Star size={12} className="mr-1" />
                           {t.default}
@@ -711,7 +711,7 @@ const CurrencyTaxManager = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {tax.is_default ? (
+                      {tax.default ? (
                         <Badge className="bg-primary">
                           <Star size={12} className="mr-1" />
                           {t.default}

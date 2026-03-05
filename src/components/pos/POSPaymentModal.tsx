@@ -645,7 +645,7 @@ const printData = {
               <span className="flex items-center justify-center gap-3">
                 <span>📄</span>
                 {language === 'ar' ? 'حفظ وطباعة الفاتورة' : 'Save & Print Invoice'}
-                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+P</kbd>
+                {/* <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Z</kbd> */}
               </span>
             )}
           </Button>
