@@ -1,7 +1,14 @@
 // lib/api.service.ts
-import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://apierp.dentin.cloud/api';
+const API_BASE_URL = (() => {
+  // محاولة الحصول على URL من window.__ENV__ (إذا كان موجوداً)
+  if (typeof window !== 'undefined' && (window as any).__ENV__?.NEXT_PUBLIC_API_URL) {
+    return (window as any).__ENV__.NEXT_PUBLIC_API_URL;
+  }
+  
+  // استخدام القيمة الافتراضية
+  return 'http://apierp.dentin.cloud/api';
+})();
 
 class ApiService {
   private static instance: ApiService;
@@ -34,24 +41,29 @@ class ApiService {
       ...options?.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'API request failed');
-    }
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'API request failed');
+      }
 
-    const data = await response.json();
-    
-    // التحقق من هيكل الاستجابة
-    if (data.status === 200 && data.result === 'Success') {
-      return data.data || data;
+      const data = await response.json();
+      
+      // التحقق من هيكل الاستجابة
+      if (data.status === 200 && data.result === 'Success') {
+        return data.data || data;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
     }
-    
-    return data;
   }
 
   async get<T>(endpoint: string, useCache = true): Promise<T> {

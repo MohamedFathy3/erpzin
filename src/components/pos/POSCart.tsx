@@ -39,40 +39,36 @@ const POSCart: React.FC<POSCartProps> = ({
   onPay,
   heldOrdersCount
 }) => {
-  const { t, language } = useLanguage();
-  const { taxes } = useCurrencyTax();
-  const { getCurrencySymbol, formatCurrency } = useRegionalSettings();
+  const { language } = useLanguage();
+  const { taxRates } = useCurrencyTax(); // 👈 نجيب taxRates كلها
+  const { formatCurrency } = useRegionalSettings();
 
-  // فلترة وعرض الضرائب حسب المنطق المطلوب
+  // ✅ منطق اختيار الضريبة النشطة والافتراضية
   const getActiveTax = () => {
-    if (!taxes || taxes.length === 0) {
-      console.warn('No taxes found');
+    if (!taxRates || taxRates.length === 0) {
+      console.warn('No tax rates found');
       return null;
     }
-    
-    // فلترة الضرائب النشطة أولاً
-    const activeTaxes = taxes.filter(tax => tax.active === true);
-    
+
+    // الضرائب النشطة فقط
+    const activeTaxes = taxRates.filter(tax => tax.active === true);
+
     if (activeTaxes.length === 0) {
-      console.warn('No active taxes found');
+      console.warn('No active tax rates found');
       return null;
     }
-    
-    // البحث عن الضريبة النشطة التي هي default true
+
+    // البحث عن الضريبة النشطة والافتراضية
     const defaultActiveTax = activeTaxes.find(tax => tax.default === true);
-    
-    // إذا وجدنا default true نرجعه، وإلا نرجع أول ضريبة نشطة
-    const selectedTax = defaultActiveTax || activeTaxes[0];
-    
-    console.log('Selected tax:', selectedTax);
-    return selectedTax;
+
+    // إما الافتراضية أو أول ضريبة نشطة
+    return defaultActiveTax || activeTaxes[0];
   };
 
   const activeTax = getActiveTax();
   const taxRate: number = Number(activeTax?.rate ?? 0);
-  const currencySymbol = getCurrencySymbol();
-  
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const tax = (subtotal * taxRate) / 100;
   const total = subtotal + tax;
 
@@ -125,16 +121,15 @@ const POSCart: React.FC<POSCartProps> = ({
               </span>
             </div>
           </div>
-          
-          {/* عرض معلومات الضريبة النشطة - اختياري */}
+
+          {/* عرض معلومات الضريبة النشطة */}
           {activeTax && (
             <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
               <Info size={12} />
               <span>
-                {language === 'ar' 
+                {language === 'ar'
                   ? `الضريبة: ${activeTax.name} (${taxRate}%) ${activeTax.default ? ' - الافتراضية' : ''}`
-                  : `Tax: ${activeTax.name} (${taxRate}%) ${activeTax.default ? ' - Default' : ''}`
-                }
+                  : `Tax: ${activeTax.name} (${taxRate}%) ${activeTax.default ? ' - Default' : ''}`}
               </span>
             </div>
           )}
@@ -147,10 +142,7 @@ const POSCart: React.FC<POSCartProps> = ({
               <span className="text-4xl mb-2">🛒</span>
               <p className="text-sm">{language === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</p>
               <p className="text-xs mt-2 text-center px-4">
-                {language === 'ar' 
-                  ? 'استخدم F9 للبحث السريع'
-                  : 'Use F9 for quick search'
-                }
+                {language === 'ar' ? 'استخدم F9 للبحث السريع' : 'Use F9 for quick search'}
               </p>
             </div>
           ) : (
@@ -161,7 +153,7 @@ const POSCart: React.FC<POSCartProps> = ({
                 const canDecrease = canDecreaseQuantity(item);
                 const remainingStock = item.stock !== undefined ? item.stock - item.quantity : null;
                 const progressPercentage = item.stock ? (item.quantity / item.stock) * 100 : 0;
-                
+
                 return (
                   <div
                     key={itemKey}
@@ -177,41 +169,42 @@ const POSCart: React.FC<POSCartProps> = ({
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground">{item.sku}</p>
-                      
+
                       {/* عرض المخزون المتبقي */}
                       {item.stock !== undefined && (
                         <div className="flex items-center gap-1 mt-1">
                           <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
+                            <div
                               className={cn(
-                                "h-full rounded-full transition-all",
+                                'h-full rounded-full transition-all',
                                 getStockStatusColor(remainingStock!, item.stock)
                               )}
                               style={{ width: `${Math.min(100, progressPercentage)}%` }}
                             />
                           </div>
-                          <span className={cn(
-                            "text-[10px] whitespace-nowrap",
-                            remainingStock! < 3 ? "text-destructive font-bold" : "text-muted-foreground"
-                          )}>
-                            {remainingStock! > 0 
+                          <span
+                            className={cn(
+                              'text-[10px] whitespace-nowrap',
+                              remainingStock! < 3 ? 'text-destructive font-bold' : 'text-muted-foreground'
+                            )}
+                          >
+                            {remainingStock! > 0
                               ? `${language === 'ar' ? 'متبقي' : 'left'} ${remainingStock}`
-                              : language === 'ar' ? 'نفذ' : 'out'
-                            }
+                              : language === 'ar'
+                              ? 'نفذ'
+                              : 'out'}
                           </span>
                         </div>
                       )}
-                      
+
                       <div className="flex justify-between items-center mt-1">
-                        <p className="text-sm font-semibold text-primary">
-                          {formatCurrency(item.price)}
-                        </p>
+                        <p className="text-sm font-semibold text-primary">{formatCurrency(item.price)}</p>
                         <p className="text-xs text-muted-foreground">
                           {language === 'ar' ? 'الإجمالي' : 'Total'}: {formatCurrency(item.price * item.quantity)}
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-1">
                       {/* زر النقصان */}
                       <Tooltip>
@@ -220,7 +213,7 @@ const POSCart: React.FC<POSCartProps> = ({
                             onClick={() => canDecrease && onUpdateQuantity(item.id, item.quantity - 1, item.variantId)}
                             className={cn(
                               'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                              canDecrease 
+                              canDecrease
                                 ? 'bg-muted hover:bg-muted/80 text-foreground cursor-pointer'
                                 : 'bg-muted/30 text-muted-foreground cursor-not-allowed'
                             )}
@@ -236,9 +229,7 @@ const POSCart: React.FC<POSCartProps> = ({
                         )}
                       </Tooltip>
 
-                      <span className="w-8 text-center font-semibold text-foreground">
-                        {item.quantity}
-                      </span>
+                      <span className="w-8 text-center font-semibold text-foreground">{item.quantity}</span>
 
                       {/* زر الزيادة */}
                       <Tooltip>
@@ -247,7 +238,7 @@ const POSCart: React.FC<POSCartProps> = ({
                             onClick={() => canIncrease && onUpdateQuantity(item.id, item.quantity + 1, item.variantId)}
                             className={cn(
                               'w-8 h-8 rounded-lg flex items-center justify-center transition-colors relative',
-                              canIncrease 
+                              canIncrease
                                 ? 'bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer'
                                 : 'bg-primary/30 text-primary-foreground/50 cursor-not-allowed'
                             )}
@@ -257,7 +248,10 @@ const POSCart: React.FC<POSCartProps> = ({
                           </button>
                         </TooltipTrigger>
                         {!canIncrease && (
-                          <TooltipContent side="top" className="bg-destructive text-destructive-foreground border-destructive">
+                          <TooltipContent
+                            side="top"
+                            className="bg-destructive text-destructive-foreground border-destructive"
+                          >
                             <div className="flex items-center gap-1">
                               <AlertCircle size={12} />
                               <p>{getStockMessage(item)}</p>
@@ -266,7 +260,7 @@ const POSCart: React.FC<POSCartProps> = ({
                         )}
                       </Tooltip>
                     </div>
-                    
+
                     {/* زر الحذف */}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -297,9 +291,7 @@ const POSCart: React.FC<POSCartProps> = ({
             </div>
             <div className="flex justify-between text-muted-foreground">
               <span>
-                {language === 'ar' 
-                  ? `الضريبة (${taxRate}%)` 
-                  : `VAT (${taxRate}%)`}
+                {language === 'ar' ? `الضريبة (${taxRate}%)` : `VAT (${taxRate}%)`}
                 {activeTax?.default && (
                   <span className="text-[10px] ms-1 px-1.5 py-0.5 bg-primary/10 text-primary rounded">
                     {language === 'ar' ? 'افتراضي' : 'default'}
@@ -319,7 +311,7 @@ const POSCart: React.FC<POSCartProps> = ({
             <div className="flex items-center gap-2 p-2 bg-warning/10 border border-warning/30 rounded-lg">
               <AlertCircle size={16} className="text-warning shrink-0" />
               <p className="text-xs text-warning">
-                {language === 'ar' 
+                {language === 'ar'
                   ? 'بعض المنتجات قاربت على النفاد من المخزون'
                   : 'Some products are running low on stock'}
               </p>

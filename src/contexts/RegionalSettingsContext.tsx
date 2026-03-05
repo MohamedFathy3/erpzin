@@ -8,7 +8,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ar, enUS, type Locale } from 'date-fns/locale';
 import { useLanguage } from './LanguageContext';
-import { currencyService, type Currency } from '@/lib/currency.service';
+import { currencyService } from '@/lib/currency.service';
+import type { Currency } from '@/lib/currency.service'; // ✅ تعديل المسار هنا
 
 interface RegionalSettings {
   country: string;
