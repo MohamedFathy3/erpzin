@@ -6,7 +6,7 @@ interface CompanyInfo {
   nameAr?: string;
   logo?: string;
   address?: string | null;
-  addressAr?: string | null; // ✅ العنوان بالعربي
+  addressAr?: string | null;
   phone?: string | null;
   email?: string;
   tax_id?: string | null;
@@ -19,17 +19,17 @@ interface InvoiceTemplateProps {
   invoiceData: {
     id: string;
     date: string;
-    customer: { name: string; nameAr?: string; phone?: string } | null; // ✅ اسم العميل بالعربي
-    salesRep: { name: string; nameAr?: string } | null; // ✅ اسم المندوب بالعربي
+    customer: { name: string; nameAr?: string; phone?: string } | null;
+    salesRep: { name: string; nameAr?: string } | null;
     items: Array<{
       name: string;
       nameAr: string;
       quantity: number;
       price: number;
       sizeName?: string;
-      sizeNameAr?: string; // ✅ المقاس بالعربي
+      sizeNameAr?: string;
       colorName?: string;
-      colorNameAr?: string; // ✅ اللون بالعربي
+      colorNameAr?: string;
     }>;
     subtotal: number;
     tax: number;
@@ -44,142 +44,93 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   ({ invoiceData, companyInfo }, ref) => {
     const { language } = useLanguage();
     const isRTL = language === 'ar';
+    const currency = companyInfo.currency || 'ج.م'; // العملة الافتراضية من الصورة
 
     // نصوص ثابتة حسب اللغة
     const texts = {
-      invoice: isRTL ? 'فاتورة مبيعات' : 'Sales Invoice',
+      invoice: isRTL ? 'فاتورة ضريبية' : 'Tax Invoice', // أو 'ERP زين' إذا أردت
       invoiceNo: isRTL ? 'رقم الفاتورة' : 'Invoice No.',
       date: isRTL ? 'التاريخ' : 'Date',
+      paymentMethod: isRTL ? 'طريقة الدفع' : 'Payment Method',
+      cash: isRTL ? 'نقدي' : 'Cash',
+      card: isRTL ? 'شبكة' : 'Card',
+      wallet: isRTL ? 'محفظة' : 'Wallet',
       customer: isRTL ? 'العميل' : 'Customer',
       salesRep: isRTL ? 'مندوب المبيعات' : 'Sales Rep',
       walkInCustomer: isRTL ? 'عميل عابر' : 'Walk-in Customer',
       notSpecified: isRTL ? 'غير محدد' : 'Not specified',
-      product: isRTL ? 'المنتج' : 'Product',
+      product: isRTL ? 'الصنف' : 'Item', // كلمة "الصف" في الصورة تعني المنتج
       quantity: isRTL ? 'الكمية' : 'Qty',
       price: isRTL ? 'السعر' : 'Price',
       total: isRTL ? 'الإجمالي' : 'Total',
-      subtotal: isRTL ? 'المجموع' : 'Subtotal',
-      tax: isRTL ? 'الضريبة (5%)' : 'Tax (5%)',
-      grandTotal: isRTL ? 'الإجمالي الكلي' : 'Grand Total',
-      paymentMethods: isRTL ? 'طرق الدفع' : 'Payment Methods',
-      cash: isRTL ? 'نقدي' : 'Cash',
-      card: isRTL ? 'شبكة' : 'Card',
-      wallet: isRTL ? 'محفظة' : 'Wallet',
+      subtotal: isRTL ? 'المجموع الفرعي' : 'Subtotal',
+      tax: isRTL ? 'الضريبة (%14)' : 'Tax (14%)', // تم التعديل حسب الصورة
+      grandTotal: isRTL ? 'الإجمالي' : 'Grand Total', // تم التعديل حسب الصورة
+      paid: isRTL ? 'المدفوع' : 'Paid',
       change: isRTL ? 'الباقي' : 'Change',
-      phone: isRTL ? 'هاتف' : 'Phone',
-      email: isRTL ? 'بريد' : 'Email',
-      taxId: isRTL ? 'رقم ضريبي' : 'Tax ID',
-      commercialReg: isRTL ? 'سجل تجاري' : 'Commercial Reg',
       thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
-      electronicInvoice: isRTL ? 'تم إنشاء هذه الفاتورة إلكترونياً' : 'This is an electronically generated invoice',
+      poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP', // تم الإضافة
     };
 
+    // تجهيز نص طريقة الدفع
+    const getPaymentMethodText = (method: string) => {
+      switch (method) {
+        case 'cash': return texts.cash;
+        case 'card': return texts.card;
+        case 'wallet': return texts.wallet;
+        default: return method;
+      }
+    };
+    // دمج طرق الدفع في نص واحد (مثل الصورة)
+    const paymentMethodsText = invoiceData.payments.map(p => getPaymentMethodText(p.method)).join(' - ');
+
     return (
-      <div 
-        ref={ref} 
-        className="p-6 bg-white text-black" 
+      <div
+        ref={ref}
+        className="p-8 bg-white text-black font-sans text-sm" // تم تعديل padding والخط
         style={{ direction: isRTL ? 'rtl' : 'ltr' }}
       >
-        {/* Header - مع بيانات الشركة */}
-        <div className="text-center border-b pb-4 mb-4">
-          {/* Logo إذا كان موجود */}
-          {companyInfo.logo && (
-            <img 
-              src={companyInfo.logo} 
-              alt={companyInfo.name}
-              className="h-16 mx-auto mb-2 object-contain"
-            />
-          )}
-          
-          {/* اسم الشركة حسب اللغة */}
-          <h1 className="text-2xl font-bold text-primary">
+        {/* Header - مبسط بدون تفاصيل كثيرة كما في الصورة */}
+        <div className="text-center border-b-2 border-double border-gray-300 pb-2 mb-4"> {/* خط مزدوج تحت الترويسة */}
+          {/* اسم الشركة فقط بارز */}
+          <h1 className="text-3xl font-bold text-black tracking-wider">
             {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
           </h1>
-          
-          {/* بيانات الشركة الإضافية حسب اللغة */}
-          <div className="text-xs text-gray-600 mt-2 space-y-1">
-            {/* العنوان حسب اللغة */}
-            {isRTL ? (
-              companyInfo.addressAr && <p>{companyInfo.addressAr}</p>
-            ) : (
-              companyInfo.address && <p>{companyInfo.address}</p>
-            )}
-            
-            <div className="flex justify-center gap-4">
-              {companyInfo.phone && (
-                <p>{texts.phone}: {companyInfo.phone}</p>
-              )}
-              {companyInfo.email && (
-                <p>{texts.email}: {companyInfo.email}</p>
-              )}
-            </div>
-            
-            <div className="flex justify-center gap-4">
-              {companyInfo.tax_id && (
-                <p>{texts.taxId}: {companyInfo.tax_id}</p>
-              )}
-              {companyInfo.commercial_register && (
-                <p>{texts.commercialReg}: {companyInfo.commercial_register}</p>
-              )}
-            </div>
-            
-            {companyInfo.website && (
-              <p>{companyInfo.website}</p>
-            )}
+          {/* رقم الفاتورة والتاريخ في سطر واحد */}
+          <div className="flex justify-between text-xs text-gray-600 mt-1">
+            <span>{texts.invoiceNo}: {invoiceData.id}</span>
+            <span>{texts.date}: {new Date(invoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span>
           </div>
-
-          <h2 className="text-xl font-semibold mt-4">{texts.invoice}</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {texts.invoiceNo}: {invoiceData.id}
-          </p>
-          <p className="text-sm text-gray-600">
-            {texts.date}: {new Date(invoiceData.date).toLocaleString(isRTL ? 'ar' : 'en')}
-          </p>
-        </div>
-
-        {/* Customer & Sales Rep Info */}
-        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-          <div>
-            <p className="font-semibold">{texts.customer}:</p>
-            <p>
-              {invoiceData.customer 
-                ? (isRTL && invoiceData.customer.nameAr ? invoiceData.customer.nameAr : invoiceData.customer.name)
-                : texts.walkInCustomer
-              }
-            </p>
-            {invoiceData.customer?.phone && <p className="text-gray-600">{invoiceData.customer.phone}</p>}
-          </div>
-          <div>
-            <p className="font-semibold">{texts.salesRep}:</p>
-            <p>
-              {invoiceData.salesRep 
-                ? (isRTL && invoiceData.salesRep.nameAr ? invoiceData.salesRep.nameAr : invoiceData.salesRep.name)
-                : texts.notSpecified
-              }
-            </p>
+           {/* طريقة الدفع كما في الصورة */}
+          <div className="flex justify-between text-xs text-gray-600 mt-1">
+             <span>{texts.paymentMethod}: {paymentMethodsText}</span>
+             <span></span> {/* مكان فارغ للمحاذاة */}
           </div>
         </div>
 
-        {/* Items Table */}
-        <table className="w-full text-sm mb-4">
+        {/* يمكن إضافة معلومات العميل والموظف هنا إذا أردت، لكن الصورة لا تظهرها */}
+        {/* <div className="mb-2 text-xs"> ... </div> */}
+
+        {/* Items Table - تصميم مشابه للصورة */}
+        <table className="w-full text-xs mb-4 border-collapse">
           <thead>
-            <tr className="border-y">
-              <th className="py-2 text-right">{texts.product}</th>
-              <th className="py-2 text-center">{texts.quantity}</th>
-              <th className="py-2 text-left">{texts.price}</th>
-              <th className="py-2 text-left">{texts.total}</th>
+            <tr className="border-y border-gray-400 bg-gray-100"> {/* خلفية خفيفة للرأس */}
+              <th className="py-1 text-center w-12">{isRTL ? 'م' : '#'}</th> {/* عمود "الصف" */}
+              <th className="py-1 text-right">{texts.product}</th>
+              <th className="py-1 text-center w-16">{texts.quantity}</th>
+              <th className="py-1 text-left w-20">{texts.price}</th>
+              <th className="py-1 text-left w-20">{texts.total}</th>
             </tr>
           </thead>
           <tbody>
             {invoiceData.items.map((item, index) => (
-              <tr key={index} className="border-b">
-                <td className="py-2">
-                  {/* اسم المنتج حسب اللغة */}
+              <tr key={index} className="border-b border-gray-200">
+                <td className="py-1 text-center">{index + 1}</td>
+                <td className="py-1 text-right">
                   {isRTL ? item.nameAr : item.name}
-                  
-                  {/* المقاس واللون حسب اللغة */}
+                  {/* عرض المقاس واللون إذا وجد */}
                   {(item.sizeName || item.colorName) && (
-                    <div className="text-xs text-gray-500">
+                    <span className="text-gray-500 text-[10px] block">
                       {isRTL ? (
                         <>
                           {item.sizeNameAr && `${item.sizeNameAr} `}
@@ -191,66 +142,57 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           {item.colorName && ` - ${item.colorName}`}
                         </>
                       )}
-                    </div>
+                    </span>
                   )}
                 </td>
-                <td className="py-2 text-center">{item.quantity}</td>
-                <td className="py-2 text-left">
-                  {item.price.toLocaleString()} {companyInfo.currency || 'YER'}
-                </td>
-                <td className="py-2 text-left">
-                  {(item.price * item.quantity).toLocaleString()} {companyInfo.currency || 'YER'}
-                </td>
+                <td className="py-1 text-center">{item.quantity}</td>
+                <td className="py-1 text-left">{item.price.toFixed(2)}</td> {/* عرض السعر بدون عملة بجانبه */}
+                <td className="py-1 text-left">{(item.price * item.quantity).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* Totals */}
+        {/* Totals Section - بشكل مشابه جداً للصورة */}
         <div className="flex flex-col items-end mb-4">
-          <div className="w-64">
-            <div className="flex justify-between py-1">
+          <div className="w-48 text-sm border-t-2 border-double border-gray-300 pt-1"> {/* خط مزدوج قبل المجاميع */}
+            <div className="flex justify-between py-0.5">
               <span>{texts.subtotal}:</span>
-              <span>{invoiceData.subtotal.toLocaleString()} {companyInfo.currency || 'YER'}</span>
+              <span>{invoiceData.subtotal.toFixed(2)} {currency}</span>
             </div>
-            <div className="flex justify-between py-1">
+            <div className="flex justify-between py-0.5">
               <span>{texts.tax}:</span>
-              <span>{invoiceData.tax.toLocaleString()} {companyInfo.currency || 'YER'}</span>
+              <span>{invoiceData.tax.toFixed(2)} {currency}</span>
             </div>
-            <div className="flex justify-between py-2 font-bold border-t">
+            <div className="flex justify-between py-1 font-bold border-t border-gray-400 mt-1">
               <span>{texts.grandTotal}:</span>
-              <span>{invoiceData.total.toLocaleString()} {companyInfo.currency || 'YER'}</span>
+              <span>{invoiceData.total.toFixed(2)} {currency}</span>
             </div>
           </div>
         </div>
 
-        {/* Payments */}
-        <div className="border-t pt-4 mb-4">
-          <p className="font-semibold mb-2">{texts.paymentMethods}:</p>
-          {invoiceData.payments.map((payment, index) => (
-            <div key={index} className="flex justify-between text-sm">
-              <span>
-                {payment.method === 'cash' ? texts.cash : 
-                 payment.method === 'card' ? texts.card : 
-                 payment.method === 'wallet' ? texts.wallet : payment.method}
-              </span>
-              <span>{payment.amount.toLocaleString()} {companyInfo.currency || 'YER'}</span>
+        {/* Payment Details - كما في الصورة */}
+        <div className="flex flex-col items-end mb-4">
+            <div className="w-48 text-sm">
+                {invoiceData.payments.map((payment, index) => (
+                    <div key={index} className="flex justify-between py-0.5">
+                        <span>{getPaymentMethodText(payment.method)}:</span>
+                        <span>{payment.amount.toFixed(2)} {currency}</span>
+                    </div>
+                ))}
+                {invoiceData.change && invoiceData.change > 0 && (
+                    <div className="flex justify-between py-0.5 border-t border-gray-300 mt-1">
+                        <span>{texts.change}:</span>
+                        <span className="text-green-600">{invoiceData.change.toFixed(2)} {currency}</span>
+                    </div>
+                )}
             </div>
-          ))}
-          {invoiceData.change && invoiceData.change > 0 && (
-            <div className="flex justify-between text-sm mt-2 pt-2 border-t">
-              <span>{texts.change}:</span>
-              <span className="text-success">
-                {invoiceData.change.toLocaleString()} {companyInfo.currency || 'YER'}
-              </span>
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-xs text-gray-500 border-t pt-4">
-          <p>{texts.thankYou}</p>
-          <p>{texts.electronicInvoice}</p>
+        {/* Footer - مطابق للصورة تماماً */}
+        <div className="text-center text-xs text-gray-500 border-t border-gray-300 pt-3 mt-4">
+          <p className="font-semibold">{texts.thankYou}</p>
+          <p className="text-[10px] mt-1">{texts.poweredBy}</p>
         </div>
       </div>
     );
