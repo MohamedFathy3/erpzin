@@ -581,7 +581,7 @@ const printData = {
               {language === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}
             </p>
             <p className="text-4xl font-bold text-primary">
-              {total.toLocaleString()} <span className="text-lg">YER</span>
+              {total.toLocaleString()} <span className="text-lg"></span>
             </p>
           </div>
 
