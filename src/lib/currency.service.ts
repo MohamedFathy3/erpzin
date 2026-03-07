@@ -1,5 +1,5 @@
 // lib/currency.service.ts
-import { apiService } from './api.service';
+import  api  from './api';
 
 export interface Currency {
   id: number;
@@ -14,7 +14,7 @@ export interface Currency {
 class CurrencyService {
   async getActiveCurrencies(forceRefresh = false): Promise<Currency[]> {
     try {
-      const response = await apiService.get<any>('/currency/index', !forceRefresh);
+      const response = await api.post<any>('/currency/index', !forceRefresh);
       
       // التحقق من هيكل البيانات
       if (response && Array.isArray(response.data)) {

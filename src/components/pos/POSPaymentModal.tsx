@@ -10,6 +10,8 @@ import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
@@ -53,8 +55,26 @@ interface PaymentModalProps {
   deliveryPerson?: { id: string; name: string } | null;
   shiftId?: string | null;
   branchId?: string | null;
-    salesRepresentative?: { id: string | number; name: string; commission_rate?: string } | null;
-
+  salesRepresentative?: { id: string | number; name: string; commission_rate?: string } | null;
+  // ✅ أضف هذه الأسطر
+  branchName?: string | null;
+  branchNameAr?: string | null;
+  branchPhone?: string | null;
+  branchAddress?: string | null;
+  branchAddressAr?: string | null;
+  companyInfo: {
+    name: string;
+    nameAr?: string;
+    logo?: string;
+    address?: string | null;
+    addressAr?: string | null;
+    phone?: string | null;
+    email?: string;
+    tax_id?: string | null;
+    commercial_register?: string | null;
+    website?: string | null;
+    currency?: string | null;
+  };
 }
 
 
@@ -71,9 +91,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   shiftId,
   branchId,
   salesRepresentative,
+  branchName,
+  branchNameAr,
+  branchPhone,
+  branchAddress,
+  branchAddressAr,
+  companyInfo,
 }) => {
   const { language } = useLanguage();
   const { user } = useAuth(); 
+    const isRTL = language === 'ar';
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
   const [cashAmount, setCashAmount] = useState<string>(total.toString());
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({
@@ -85,10 +112,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showPrintOptions, setShowPrintOptions] = useState(false); // ✅ للتحكم في عرض خيارات الطباعة
   const [completedInvoice, setCompletedInvoice] = useState<any>(null); // ✅ لحفظ بيانات الفاتورة بعد الإتمام
-  
+  const { formatCurrency } = useRegionalSettings();
+
   const invoiceRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
 
   // ✅ دالة الطباعة
+  const { activeTaxRates } = useCurrencyTax();
+
+// وفي handleSaveAndPrint، بعد let payments = []:
+const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
+
   const handlePrint = useReactToPrint({
     contentRef: invoiceRef,
     documentTitle: `فاتورة-${Date.now()}`,
@@ -193,7 +226,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         total,
         shift_id: shiftId,
         branch_id: branchId,
-        delivery_id: deliveryPerson?.id
+        delivery_id: parseInt(String(deliveryPerson?.id)) || null
       };
 
       let invoiceId = '';
@@ -253,16 +286,28 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         // تحضير بيانات الفاتورة للطباعة
         // تحضير بيانات الفاتورة للطباعة
 const printData = {
-  id: invoiceId,
+  id: String(invoiceId),
   date: new Date().toISOString(),
+  cashierName: user?.name,
+  branchName: branchName || companyInfo?.name,
+  branchPhone: branchPhone || companyInfo?.phone,
+  branchAddress: isRTL 
+    ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address 
+    : branchAddress || companyInfo?.address,
   customer: customer ? { 
     name: customer.name,
-    nameAr: customer.name_ar || customer.name, // ✅ الاسم العربي
+    nameAr: customer.name_ar || customer.name,
     phone: customer.phone 
   } : null,
   salesRep: salesRepresentative ? { 
     name: salesRepresentative.name,
-    nameAr: salesRepresentative.name // لو الـ API بترجع اسم عربي
+    nameAr: salesRepresentative.name,
+    commission_rate: salesRepresentative.commission_rate
+  } : null,
+  deliveryPerson: deliveryPerson ? { // ✅ مندوب التوصيل
+    name: deliveryPerson.name,
+    nameAr: deliveryPerson.name,
+    phone: deliveryPerson.phone
   } : null,
   items: cartItems.map(item => ({
     name: item.name,
@@ -270,12 +315,13 @@ const printData = {
     quantity: item.quantity,
     price: item.price,
     sizeName: item.sizeName,
-    sizeNameAr: item.sizeName, // لو المقاس له اسم عربي
+    sizeNameAr: item.sizeName,
     colorName: item.colorName,
-    colorNameAr: item.colorName // لو اللون له اسم عربي
+    colorNameAr: item.colorName
   })),
   subtotal,
   tax,
+  taxRate: defaultTax?.rate || 0,
   total,
   payments,
   change: calculateChange()

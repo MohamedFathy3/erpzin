@@ -26,6 +26,12 @@ interface User {
   role: string;
   name_ar?: string | null; // ✅ اسم الشركة بالعربي
   address_ar?: string | null; // ✅ العنوان بالعربي
+    branch_id?: number | null;
+  branch_name?: string | null;
+  branch_name_ar?: string | null;
+  branch_phone?: string | null;
+  branch_address?: string | null;
+  branch_address_ar?: string | null;
 }
 
 interface LoginResponse {
