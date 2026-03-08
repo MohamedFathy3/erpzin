@@ -528,7 +528,7 @@ const Purchasing = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, index) => (
             <Card key={index}>
               <CardContent className="p-4">
@@ -1110,11 +1110,17 @@ const Purchasing = () => {
           setShowSupplierForm(true);
         }}
       />
-      <PurchaseInvoiceForm
-        isOpen={showInvoiceForm}
-        onClose={() => setShowInvoiceForm(false)}
-        onSave={refetchAll}
-      />
+     <PurchaseInvoiceForm
+  isOpen={showInvoiceForm}
+  onClose={() => setShowInvoiceForm(false)}
+  onSave={() => {
+    refetchAll();
+    setShowInvoiceForm(false);
+  }}
+  onSaveAndNew={() => {
+    refetchAll(); 
+  }}
+/>
      
     </MainLayout>
   );

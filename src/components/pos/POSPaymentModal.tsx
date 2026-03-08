@@ -25,10 +25,10 @@ interface PaymentMethod {
 }
 
 const defaultPaymentMethods: PaymentMethod[] = [
-  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'F1' },
-  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'F2' },
-  { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'F3' },
-  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'F4' },
+  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'ctrl+1' },
+  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'ctrl+2' },
+  { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'ctrl+3' },
+  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'ctrl+7' },
 ];
 
 interface CartItem {
@@ -132,6 +132,9 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
     },
   });
 
+
+
+  
   // متابعة حالة النت
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -359,10 +362,11 @@ const printData = {
   const handleSaveAndPrintNow = () => handleSaveAndPrint('both'); // حفظ وطباعة
 
   // Payment modal keyboard shortcuts
-  const paymentShortcuts = getPaymentShortcuts({
-    onConfirm: () => canComplete() && !isProcessing && handleComplete(),
-    onCancel: onClose,
-    onSelectCash: () => setPaymentMethod('cash'),
+const paymentShortcuts = getPaymentShortcuts({
+  onConfirm: () => canComplete() && !isProcessing && handleComplete(),
+  onCancel: onClose,
+  onSaveAndPrint: () => canComplete() && !isProcessing && handleSaveAndPrintNow(), // ✅ إضافة هذا السطر
+  onSelectCash: () => setPaymentMethod('cash'),
     onSelectCard: () => setPaymentMethod('card'),
     onSelectKuraimi: () => setPaymentMethod('wallet'),
     onSelectFloosak: () => { },
@@ -691,7 +695,7 @@ const printData = {
               <span className="flex items-center justify-center gap-3">
                 <span>📄</span>
                 {language === 'ar' ? 'حفظ وطباعة الفاتورة' : 'Save & Print Invoice'}
-                {/* <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Z</kbd> */}
+                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Z</kbd>
               </span>
             )}
           </Button>

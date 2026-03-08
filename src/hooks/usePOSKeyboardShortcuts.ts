@@ -182,6 +182,7 @@ export const getPaymentShortcuts = (handlers: {
   onQuickAmount4?: () => void;
   onQuickAmount5?: () => void;
   onQuickAmount6?: () => void;
+    onSaveAndPrint?: () => void; 
 }): KeyboardShortcut[] => [
   // Confirm payment
   {
@@ -190,6 +191,13 @@ export const getPaymentShortcuts = (handlers: {
     action: () => handlers.onConfirm?.(),
     description: 'Confirm Payment',
     descriptionAr: 'تأكيد الدفع'
+  },
+    {
+    key: 'z',
+    ctrl: true,
+    action: () => handlers.onSaveAndPrint?.(),
+    description: 'Save & Print',
+    descriptionAr: 'حفظ وطباعة'
   },
   // Cancel
   {
@@ -200,43 +208,50 @@ export const getPaymentShortcuts = (handlers: {
   },
   // Payment methods (F1-F7)
   {
-    key: 'F1',
+    key: '1',
+      ctrl: true,
     action: () => handlers.onSelectCash?.(),
     description: 'Cash Payment',
     descriptionAr: 'نقدي'
   },
   {
-    key: 'F2',
+    key: '2',
+      ctrl: true,
     action: () => handlers.onSelectCard?.(),
     description: 'Card Payment',
     descriptionAr: 'شبكة'
   },
   {
-    key: 'F3',
+    key: '3',
+      ctrl: true,
     action: () => handlers.onSelectKuraimi?.(),
     description: 'Kuraimi',
     descriptionAr: 'كريمي'
   },
   {
-    key: 'F4',
+    key: '4',
+      ctrl: true,
     action: () => handlers.onSelectFloosak?.(),
     description: 'Floosak',
     descriptionAr: 'فلوسك'
   },
   {
-    key: 'F5',
+    key: '5',
+          ctrl: true,
     action: () => handlers.onSelectJawal?.(),
     description: 'Jawal Pay',
     descriptionAr: 'جوال باي'
   },
   {
-    key: 'F6',
+    key: '6',
+          ctrl: true,
     action: () => handlers.onSelectBank?.(),
     description: 'Bank Transfer',
     descriptionAr: 'تحويل بنكي'
   },
   {
-    key: 'F7',
+    key: '7',
+          ctrl: true,
     action: () => handlers.onSelectSplit?.(),
     description: 'Split Payment',
     descriptionAr: 'تقسيم'
