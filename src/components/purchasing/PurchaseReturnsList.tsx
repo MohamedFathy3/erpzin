@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useState, useRef } from "react"; // ✅ أضف useRef
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext"; // ✅ أضف useAuth
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign } from "lucide-react";
+import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign, Printer } from "lucide-react"; // ✅ أضف Printer
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
 import api from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
+import { useReactToPrint } from "react-to-print"; // ✅ أضف useReactToPrint
+import PurchaseReturnPrintTemplate from "./PurchaseReturnPrintTemplate"; // ✅ استيراد القالب
 
 // ========== أنواع البيانات من API ==========
 
@@ -64,16 +67,28 @@ interface ReturnFilters {
 
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
+  const { user } = useAuth(); // ✅ استخدام useAuth
   const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showPrint, setShowPrint] = useState(false); // ✅ للتحكم في إظهار الطباعة
+  const printRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
+
+  // دالة الطباعة
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `مرتجع-${selectedReturn?.return_number}`,
+    onAfterPrint: () => {
+      setShowPrint(false);
+    },
+  });
 
   // ========== Filter fields ==========
   const filterFields: FilterField[] = [
     { 
       key: 'search', 
       label: 'Return/Invoice', 
-      labelAr: 'المرتجع/', 
+      labelAr: 'المرتجع/الفاتورة', 
       type: 'text', 
       placeholder: 'Search...', 
       placeholderAr: 'بحث...' 
@@ -84,12 +99,6 @@ const PurchaseReturnsList = () => {
       labelAr: 'التاريخ', 
       type: 'dateRange' 
     },
-    // { 
-    //   key: 'amount', 
-    //   label: 'Amount', 
-    //   labelAr: 'المبلغ', 
-    //   type: 'numberRange' 
-    // },
   ];
 
   // ========== Fetch purchase returns with filters ==========
@@ -122,7 +131,6 @@ const PurchaseReturnsList = () => {
         if (filterValues.amount_min) {
           filters.total_amount = Number(filterValues.amount_min);
         }
-
 
         if (Object.keys(filters).length > 0) {
           payload.filters = filters;
@@ -164,6 +172,15 @@ const PurchaseReturnsList = () => {
 
   const formatAmount = (amount: string) => {
     return Number(amount).toLocaleString();
+  };
+
+  // معالج الطباعة
+  const handlePrintClick = () => {
+    if (!selectedReturn) return;
+    setShowPrint(true);
+    setTimeout(() => {
+      handlePrint();
+    }, 100);
   };
 
   return (
@@ -273,11 +290,25 @@ const PurchaseReturnsList = () => {
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'}
-              <span className="font-mono text-muted-foreground">#{selectedReturn?.return_number}</span>
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'}
+                <span className="font-mono text-muted-foreground">#{selectedReturn?.return_number}</span>
+              </DialogTitle>
+              {/* زر الطباعة */}
+              {selectedReturn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrintClick}
+                  className="gap-2"
+                >
+                  <Printer size={16} />
+                  {language === 'ar' ? 'طباعة' : 'Print'}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {selectedReturn && (
@@ -402,6 +433,23 @@ const PurchaseReturnsList = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* قالب الطباعة المخفي */}
+      {showPrint && selectedReturn && (
+        <div style={{ display: 'none' }}>
+          <PurchaseReturnPrintTemplate
+            ref={printRef}
+            returnData={{
+              return_number: selectedReturn.return_number,
+              invoice_number: selectedReturn.invoice_number,
+              date: selectedReturn.created_at,
+              items: selectedReturn.items,
+              total_amount: selectedReturn.total_amount,
+              reason: selectedReturn.reason,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

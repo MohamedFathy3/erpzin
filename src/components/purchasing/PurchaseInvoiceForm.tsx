@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +18,7 @@ import {
 import {
   FileText, Trash2, Package, Building2,
   Warehouse, CreditCard, Calendar, Loader2, DollarSign, 
-  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle
+  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -26,6 +27,12 @@ import PurchaseVariantSelector from './PurchaseVariantSelector';
 import QuickProductSearch from '@/components/shared/QuickProductSearch';
 import api from '@/lib/api';
 import { Badge } from '../ui/badge';
+import { useReactToPrint } from 'react-to-print';
+import { format, parseISO } from 'date-fns';
+import PurchaseInvoiceTemplate from './PurchaseInvoiceTemplate';
+import DatePicker from '../ui/date-picker';
+
+
 
 // ========== الأنواع ==========
 interface InvoiceItem {
@@ -126,6 +133,9 @@ interface Product {
   }>;
 }
 
+// ✅ تحديث نوع action ليشمل save_and_print
+type InvoiceAction = 'save' | 'save_and_new' | 'save_and_print';
+
 interface PurchaseInvoiceFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -140,11 +150,25 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   onSaveAndNew
 }) => {
   const { language } = useLanguage();
+  const { user } = useAuth(); // ✅ استخدام useAuth
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [variantProduct, setVariantProduct] = useState<any>(null);
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const invoicePrintRef = useRef<HTMLDivElement>(null);
+  const [showPrint, setShowPrint] = useState(false);
+  const [printData, setPrintData] = useState<any>(null);
+
+  // دالة للطباعة
+  const handlePrint = useReactToPrint({
+    contentRef: invoicePrintRef,
+    documentTitle: `فاتورة-مشتريات-${Date.now()}`,
+    onAfterPrint: () => {
+      setShowPrint(false);
+      setPrintData(null);
+    },
+  });
 
   // دالة للحصول على تاريخ اليوم بالتنسيق الصحيح (YYYY-MM-DD)
   const getTodayDate = useCallback(() => {
@@ -159,7 +183,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     supplier_id: '',
     branch_id: '',
     warehouse_id: '',
-    invoice_date: getTodayDate(), // تاريخ اليوم من الشمال
+    invoice_date: getTodayDate(),
     due_date: '',
     payment_method: 'cash',
     tax_id: '',
@@ -361,7 +385,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   useEffect(() => {
     if (formData.branch_id) {
       refetchWarehouses();
-      // إعادة تعيين المستودع عند تغيير الفرع
       setFormData(prev => ({ ...prev, warehouse_id: '' }));
     }
   }, [formData.branch_id, refetchWarehouses]);
@@ -533,7 +556,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   // ========== Mutation ==========
 
   const createInvoiceMutation = useMutation({
-    mutationFn: async (action: 'save' | 'save_and_new') => {
+    mutationFn: async (action: InvoiceAction) => {
       if (!validateForm()) {
         throw new Error('Validation failed');
       }
@@ -580,10 +603,54 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
 
-      if (result.action === 'save_and_new' && onSaveAndNew) {
+      // ✅ معالجة حالة save_and_print
+    // في onSuccess - جزء save_and_print
+if (result.action === 'save_and_print') {
+  const printInvoiceData = {
+    id: result.data.data.id,
+    invoice_number: result.data.data.invoice_number,
+    date: new Date().toISOString(),
+    supplier: suppliers.find(s => s.id === Number(formData.supplier_id)),
+    cashierName: user?.name || 'المدير',
+    branchName: user?.branch_name || branches.find(b => b.id === Number(formData.branch_id))?.name,
+    branchPhone: user?.branch_phone,
+    branchAddress: user?.branch_address,
+    taxRate: formData.tax_id ? taxes.find(t => t.id === Number(formData.tax_id))?.rate : 0, // ✅ إضافة taxRate
+    items: items.map(item => ({
+      name: item.product_name,
+      nameAr: item.product_name,
+      quantity: item.quantity,
+      price: item.unit_cost,
+      sizeName: item.size_name,
+      colorName: item.color_name,
+      discount_percent: item.discount_percent,
+      tax_percent: item.tax_percent
+    })),
+    subtotal: totals.subtotal,
+    tax: totals.totalTax,
+    discount_total: totals.totalDiscount,
+    total: totals.total,
+    paid_amount: formData.paid_amount,
+    remaining_amount: remainingAmount,
+    payment_method: formData.payment_method,
+    notes: formData.notes,
+  };
+  
+  setPrintData(printInvoiceData);
+  setShowPrint(true);
+  setTimeout(() => handlePrint(), 100);
+  
+  resetForm();
+  onSave();
+  onClose();
+}
+      // ✅ معالجة حالة save_and_new
+      else if (result.action === 'save_and_new' && onSaveAndNew) {
         resetForm();
         onSaveAndNew(); // المودال يبقى مفتوح
-      } else {
+      } 
+      // ✅ معالجة حالة save العادية
+      else {
         resetForm();
         onSave();
         onClose(); // المودال يقفل
@@ -592,7 +659,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     onError: (error: any) => {
       console.error('❌ Error creating invoice:', error.response?.data || error);
       
-      // عرض رسالة الخطأ من API إذا كانت موجودة
       const errorMessage = error.response?.data?.message || error.message;
       
       toast({
@@ -611,7 +677,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       supplier_id: '',
       branch_id: '',
       warehouse_id: '',
-      invoice_date: getTodayDate(), // تاريخ اليوم من الشمال
+      invoice_date: getTodayDate(),
       due_date: '',
       payment_method: 'cash',
       tax_id: defaultTax?.id?.toString() || '',
@@ -624,7 +690,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     setErrors({});
   };
 
-  const handleSubmit = (action: 'save' | 'save_and_new') => {
+  const handleSubmit = (action: InvoiceAction) => {
     createInvoiceMutation.mutate(action);
   };
 
@@ -789,30 +855,47 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </Select>
               </div>
 
-              {/* Invoice Date - اليوم من الشمال */}
+              {/* Invoice Date */}
               <div className="space-y-1">
                 <Label className="text-xs flex items-center gap-1">
                   <Calendar size={12} />
                   {language === 'ar' ? 'التاريخ' : 'Date'}
                 </Label>
-                <Input
-                  type="date"
-                  value={formData.invoice_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, invoice_date: e.target.value }))}
-                  className="h-8 text-sm"
-                />
+           
+<DatePicker
+  value={formData.invoice_date}
+  onChange={(value) => setFormData(prev => ({ ...prev, invoice_date: value }))}
+  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+  className="h-8 text-sm"
+/>
+
+  {formData.invoice_date && (
+    <div className="text-xs text-gray-500">
+      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+      {format(parseISO(formData.invoice_date), 'dd/MM/yyyy')}
+    </div>
+  )}
               </div>
 
-              {/* Due Date - اليوم من الشمال */}
-              <div className="space-y-1">
-                <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
-                <Input
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
-                  className="h-8 text-sm"
-                />
-              </div>
+              {/* Due Date */}
+
+<div className="space-y-1">
+  <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
+  
+<DatePicker
+  value={formData.due_date}
+  onChange={(value) => setFormData(prev => ({ ...prev, due_date: value }))}
+  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+  className="h-8 text-sm"
+/>
+
+  {formData.due_date && (
+    <div className="text-xs text-gray-500">
+      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+      {format(parseISO(formData.due_date), 'dd/MM/yyyy')}
+    </div>
+  )}
+</div>
 
               {/* Currency */}
               <div className="space-y-1">
@@ -1140,7 +1223,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 )}
               </Button>
               
-              {/* زر حفظ وإضافة جديد - يظهر فقط لو في onSaveAndNew */}
+              {/* زر حفظ وإضافة جديد */}
               {onSaveAndNew && (
                 <Button 
                   onClick={() => handleSubmit('save_and_new')} 
@@ -1162,10 +1245,41 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   )}
                 </Button>
               )}
+
+              {/* زر حفظ وطباعة */}
+              <Button 
+                onClick={() => handleSubmit('save_and_print')} 
+                disabled={createInvoiceMutation.isPending || !isFormValid} 
+                size="sm" 
+                variant="default"
+                className="min-w-24 bg-green-600 hover:bg-green-700"
+              >
+                {createInvoiceMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="me-1.5 animate-spin" />
+                    {language === 'ar' ? 'جاري...' : 'Saving...'}
+                  </>
+                ) : (
+                  <>
+                    <Printer size={14} className="me-1.5" />
+                    {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
+                  </>
+                )}
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* مكون الطباعة المخفي */}
+      {showPrint && printData && (
+        <div style={{ display: 'none' }}>
+          <PurchaseInvoiceTemplate
+            ref={invoicePrintRef}
+            invoiceData={printData}
+          />
+        </div>
+      )}
 
       {variantProduct && (
         <PurchaseVariantSelector
