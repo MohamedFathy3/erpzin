@@ -182,6 +182,7 @@ export const getPaymentShortcuts = (handlers: {
   onQuickAmount4?: () => void;
   onQuickAmount5?: () => void;
   onQuickAmount6?: () => void;
+   onSaveOnly?: () => void; 
     onSaveAndPrint?: () => void; 
 }): KeyboardShortcut[] => [
   // Confirm payment
@@ -200,6 +201,13 @@ export const getPaymentShortcuts = (handlers: {
     descriptionAr: 'حفظ وطباعة'
   },
   // Cancel
+    {
+    key: 's',
+    ctrl: true,
+    action: () => handlers.onSaveOnly?.(),
+    description: 'Save Only',
+    descriptionAr: 'حفظ فقط'
+  },
   {
     key: 'Escape',
     action: () => handlers.onCancel?.(),

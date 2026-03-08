@@ -365,6 +365,7 @@ const printData = {
 const paymentShortcuts = getPaymentShortcuts({
   onConfirm: () => canComplete() && !isProcessing && handleComplete(),
   onCancel: onClose,
+  onSaveOnly: () => canComplete() && !isProcessing && handleComplete(), 
   onSaveAndPrint: () => canComplete() && !isProcessing && handleSaveAndPrintNow(), // ✅ إضافة هذا السطر
   onSelectCash: () => setPaymentMethod('cash'),
     onSelectCard: () => setPaymentMethod('card'),
@@ -700,33 +701,36 @@ const paymentShortcuts = getPaymentShortcuts({
             )}
           </Button>
 
-          {/* ✅ زر الحفظ فقط */}
-          <div className="flex gap-2">
-            <Button
-              onClick={handleComplete}
-              disabled={!canComplete() || isProcessing}
-              variant="outline"
-              className={cn(
-                'flex-1 h-12',
-                isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
-              )}
-            >
-              {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
-              {isOffline 
-                ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
-                : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
-              }
-            </Button>
-            
-            {/* ✅ زر إلغاء */}
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              className="h-12 px-6"
-            >
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </Button>
-          </div>
+         {/* ✅ زر الحفظ فقط - مع عرض الاختصار */}
+<div className="flex gap-2">
+  <Button
+    onClick={handleComplete}
+    disabled={!canComplete() || isProcessing}
+    variant="outline"
+    className={cn(
+      'flex-1 h-12 relative',
+      isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
+    )}
+  >
+    {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
+    {isOffline 
+      ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
+      : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
+    }
+    <kbd className="absolute -top-1 -end-1 text-[9px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
+      Ctrl+S
+    </kbd>
+  </Button>
+  
+  {/* ✅ زر إلغاء */}
+  <Button
+    onClick={onClose}
+    variant="ghost"
+    className="h-12 px-6"
+  >
+    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+  </Button>
+</div>
         </div>
       </div>
 
