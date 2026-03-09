@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // ✅ أضف useRef
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ أضف useAuth
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,11 +18,13 @@ import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advan
 import { cn, formatDate } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from '@/components/ui/use-toast';
+import { useReactToPrint } from 'react-to-print'; // ✅ أضف useReactToPrint
+import PurchaseInvoiceTemplate from '@/components/purchasing/PurchaseInvoiceTemplate'; // ✅ استيراد القالب
 
 import {
   Plus, FileText, Building2, Phone,
   Wallet, Receipt, ShoppingCart, RotateCcw,
-  Eye, Calendar, DollarSign, Package, Trash2
+  Eye, Calendar, DollarSign, Package, Trash2, Printer // ✅ أضف Printer
 } from 'lucide-react';
 import {
   Dialog,
@@ -148,12 +151,15 @@ interface InvoiceTableRow {
 
 const Purchasing = () => {
   const { language } = useLanguage();
+  const { user } = useAuth(); // ✅ استخدام useAuth
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('invoices');
   const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
   const [supplierFilters, setSupplierFilters] = useState<FilterValues>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
+  const invoicePrintRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
+  const [showPrint, setShowPrint] = useState(false); // ✅ للتحكم في إظهار الطباعة
 
   // Modals
   const [showSupplierForm, setShowSupplierForm] = useState(false);
@@ -163,7 +169,16 @@ const Purchasing = () => {
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null); // 👈 نخزن الـ ID بس
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+
+  // دالة الطباعة
+  const handlePrint = useReactToPrint({
+    contentRef: invoicePrintRef,
+    documentTitle: `فاتورة-شراء-${selectedInvoiceId}`,
+    onAfterPrint: () => {
+      setShowPrint(false);
+    },
+  });
 
   // ========== جلب تفاصيل الفاتورة عند الضغط عليها ==========
   const { data: invoiceDetails, isLoading: invoiceDetailsLoading, refetch: refetchInvoiceDetails } = useQuery<PurchaseInvoiceDetailsResponse>({
@@ -191,7 +206,59 @@ const Purchasing = () => {
     enabled: !!selectedInvoiceId && showInvoiceDetails,
   });
 
-  // ========== جلب فواتير الشراء مع Pagination ==========
+  // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
+  const getPrintData = () => {
+    if (!invoiceDetails?.data) return null;
+
+    const data = invoiceDetails.data;
+    
+    return {
+      id: data.id.toString(),
+      invoice_number: data.invoice_number,
+      date: data.invoice_date,
+      supplier: {
+        name: data.supplier.name,
+        nameAr: data.supplier.name,
+        phone: '',
+        tax_number: '',
+      },
+      cashierName: user?.name || 'المدير',
+      branchName: data.branch,
+      branchPhone: '',
+      branchAddress: '',
+      taxRate: 14, // أو من البيانات إذا كانت موجودة
+      items: data.items.map(item => ({
+        name: item.product_name,
+        nameAr: item.product_name,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        sizeName: '',
+        sizeNameAr: '',
+        colorName: '',
+        colorNameAr: '',
+        discount_percent: parseFloat(item.discount) / (item.quantity * parseFloat(item.price)) * 100 || 0,
+        tax_percent: parseFloat(item.tax) / (item.quantity * parseFloat(item.price)) * 100 || 0,
+      })),
+      subtotal: parseFloat(data.subtotal),
+      tax: parseFloat(data.tax_total),
+      discount_total: parseFloat(data.discount_total),
+      total: parseFloat(data.total_amount),
+      paid_amount: parseFloat(data.paid_amount || '0'),
+      remaining_amount: parseFloat(data.total_amount) - parseFloat(data.paid_amount || '0'),
+      payment_method: data.payment_method,
+      notes: data.note || '',
+    };
+  };
+
+  // معالج الطباعة
+  const handlePrintClick = () => {
+    setShowPrint(true);
+    setTimeout(() => {
+      handlePrint();
+    }, 100);
+  };
+
+  // ========== باقي الكود كما هو ==========
   const {
     data: invoicesResponse,
     isLoading: invoicesLoading,
@@ -528,7 +595,7 @@ const Purchasing = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, index) => (
             <Card key={index}>
               <CardContent className="p-4">
@@ -877,13 +944,27 @@ const Purchasing = () => {
       <Dialog open={showInvoiceDetails} onOpenChange={setShowInvoiceDetails}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              {language === 'ar' ? 'تفاصيل فاتورة الشراء' : 'Purchase Invoice Details'}
-              <span className="font-mono text-muted-foreground">
-                #{invoiceDetails?.data?.invoice_number || selectedInvoiceId}
-              </span>
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                {language === 'ar' ? 'تفاصيل فاتورة الشراء' : 'Purchase Invoice Details'}
+                <span className="font-mono text-muted-foreground">
+                  #{invoiceDetails?.data?.invoice_number || selectedInvoiceId}
+                </span>
+              </DialogTitle>
+              {/* ✅ زر الطباعة */}
+              {invoiceDetails?.data && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrintClick}
+                  className="gap-2"
+                >
+                  <Printer size={16} />
+                  {language === 'ar' ? 'طباعة' : 'Print'}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {invoiceDetailsLoading ? (
@@ -1113,9 +1194,24 @@ const Purchasing = () => {
       <PurchaseInvoiceForm
         isOpen={showInvoiceForm}
         onClose={() => setShowInvoiceForm(false)}
-        onSave={refetchAll}
+        onSave={() => {
+          refetchAll();
+          setShowInvoiceForm(false);
+        }}
+        onSaveAndNew={() => {
+          refetchAll(); 
+        }}
       />
-     
+
+      {/* ✅ قالب الطباعة المخفي */}
+      {showPrint && invoiceDetails?.data && (
+        <div style={{ display: 'none' }}>
+          <PurchaseInvoiceTemplate
+            ref={invoicePrintRef}
+            invoiceData={getPrintData()!}
+          />
+        </div>
+      )}
     </MainLayout>
   );
 };

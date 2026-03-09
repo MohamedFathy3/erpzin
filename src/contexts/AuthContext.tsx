@@ -8,6 +8,7 @@ interface User {
   id: number;
   name: string;
   email: string;
+  fullUrl?: string | null;
   logoUrl?: string;
   logo?: number | null;
   logo_icon?: string;

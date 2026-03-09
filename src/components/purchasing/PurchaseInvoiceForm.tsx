@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   FileText, Trash2, Package, Building2,
-  Warehouse, CreditCard, Calendar, Loader2, DollarSign
+  Warehouse, CreditCard, Calendar, Loader2, DollarSign, 
+  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -25,7 +26,15 @@ import { cn } from '@/lib/utils';
 import PurchaseVariantSelector from './PurchaseVariantSelector';
 import QuickProductSearch from '@/components/shared/QuickProductSearch';
 import api from '@/lib/api';
+import { Badge } from '../ui/badge';
+import { useReactToPrint } from 'react-to-print';
+import { format, parseISO } from 'date-fns';
+import PurchaseInvoiceTemplate from './PurchaseInvoiceTemplate';
+import DatePicker from '../ui/date-picker';
 
+
+
+// ========== الأنواع ==========
 interface InvoiceItem {
   id: string;
   product_id: number | null;
@@ -54,6 +63,7 @@ interface Supplier {
   credit_limit?: number;
   payment_terms?: number;
   active: boolean;
+  balance?: number;
 }
 
 interface Branch {
@@ -123,27 +133,57 @@ interface Product {
   }>;
 }
 
+// ✅ تحديث نوع action ليشمل save_and_print
+type InvoiceAction = 'save' | 'save_and_new' | 'save_and_print';
+
 interface PurchaseInvoiceFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
+  onSaveAndNew?: () => void;
 }
 
 const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   isOpen,
   onClose,
-  onSave
+  onSave,
+  onSaveAndNew
 }) => {
   const { language } = useLanguage();
+  const { user } = useAuth(); // ✅ استخدام useAuth
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [variantProduct, setVariantProduct] = useState<any>(null);
+  const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const invoicePrintRef = useRef<HTMLDivElement>(null);
+  const [showPrint, setShowPrint] = useState(false);
+  const [printData, setPrintData] = useState<any>(null);
+
+  // دالة للطباعة
+  const handlePrint = useReactToPrint({
+    contentRef: invoicePrintRef,
+    documentTitle: `فاتورة-مشتريات-${Date.now()}`,
+    onAfterPrint: () => {
+      setShowPrint(false);
+      setPrintData(null);
+    },
+  });
+
+  // دالة للحصول على تاريخ اليوم بالتنسيق الصحيح (YYYY-MM-DD)
+  const getTodayDate = useCallback(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   const [formData, setFormData] = useState({
     supplier_id: '',
     branch_id: '',
     warehouse_id: '',
-    invoice_date: new Date().toISOString().split('T')[0],
+    invoice_date: getTodayDate(),
     due_date: '',
     payment_method: 'cash',
     tax_id: '',
@@ -154,7 +194,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
 
-  // ✅ جلب العملات - POST /currency/index
+  // ========== جلب البيانات ==========
+
+  // جلب العملات
   const { data: currencies = [], isLoading: loadingCurrencies } = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => {
@@ -179,7 +221,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ جلب الضرائب - POST /tax/index
+  // جلب الضرائب
   const { data: taxes = [], isLoading: loadingTaxes } = useQuery({
     queryKey: ['taxes'],
     queryFn: async () => {
@@ -204,7 +246,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ جلب الموردين - POST /suppliers/index
+  // جلب الموردين
   const { data: suppliers = [], isLoading: loadingSuppliers } = useQuery({
     queryKey: ['suppliers-active'],
     queryFn: async () => {
@@ -234,7 +276,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ جلب الفروع - POST /branch/index
+  // جلب الفروع
   const { data: branches = [], isLoading: loadingBranches } = useQuery({
     queryKey: ['branches-active'],
     queryFn: async () => {
@@ -259,12 +301,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ جلب المستودعات - POST /warehouse/index (بتتغير مع الفرع)
+  // جلب المستودعات (بتتغير مع الفرع)
   const { data: warehouses = [], isLoading: loadingWarehouses, refetch: refetchWarehouses } = useQuery({
     queryKey: ['warehouses-active', formData.branch_id],
     queryFn: async () => {
       try {
-        // بناء الفلاتر - بنضيف branch_id لو موجود
         const filters: any = { active: true };
         
         if (formData.branch_id) {
@@ -295,15 +336,13 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ جلب المنتجات - POST /product/index (كل المنتجات - من غير فلتر)
+  // جلب المنتجات
   const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ['products-for-purchase'],
     queryFn: async () => {
       try {
         const response = await api.post('/product/index', {
-          filters: {
-            // ✅ مش بنضيف أي فلتر - كل المنتجات
-          },
+          filters: {},
           orderBy: 'name',
           orderByDirection: 'asc',
           perPage: 1000,
@@ -324,47 +363,48 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ✅ فلترة المستودعات - مش محتاجينها دلوقتي لأن الـ API بيرجع المفلتر
-  // بس هنستخدم warehouses مباشرة
+  // ========== Effects ==========
 
-  // ✅ تعيين العملة الافتراضية
+  // تعيين العملة الافتراضية
   useEffect(() => {
     if (currencies.length > 0 && !formData.currency_id) {
       const defaultCurr = currencies.find((c: Currency) => c.default === true) || currencies[0];
       setFormData(prev => ({ ...prev, currency_id: defaultCurr.id.toString() }));
     }
-  }, [currencies]);
+  }, [currencies, formData.currency_id]);
 
-  // ✅ تعيين الضريبة الافتراضية
+  // تعيين الضريبة الافتراضية
   useEffect(() => {
     if (taxes.length > 0 && !formData.tax_id) {
       const defaultTax = taxes.find((t: Tax) => t.default === true) || taxes[0];
       setFormData(prev => ({ ...prev, tax_id: defaultTax.id.toString() }));
     }
-  }, [taxes]);
+  }, [taxes, formData.tax_id]);
 
-  // ✅ تحديث paid_amount تلقائياً
-  useEffect(() => {
-    const totals = calculateTotals();
-    if (formData.payment_method === 'cash' && totals.total > 0 && formData.paid_amount === 0) {
-      setFormData(prev => ({ ...prev, paid_amount: totals.total }));
-    }
-  }, [items, formData.payment_method]);
-
-  // ✅ refetch المستودعات عند تغيير الفرع
+  // تحديث المستودعات عند تغيير الفرع
   useEffect(() => {
     if (formData.branch_id) {
       refetchWarehouses();
+      setFormData(prev => ({ ...prev, warehouse_id: '' }));
     }
   }, [formData.branch_id, refetchWarehouses]);
 
-  // ✅ طرق الدفع
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setErrors({});
+    }
+  }, [isOpen]);
+
+  // ========== طرق الدفع ==========
   const paymentMethods = [
     { code: 'cash', name: 'Cash', name_ar: 'نقداً' },
     { code: 'credit', name: 'Credit', name_ar: 'آجل' },
     { code: 'card', name: 'Card', name_ar: 'بطاقة' },
     { code: 'bank_transfer', name: 'Bank Transfer', name_ar: 'تحويل بنكي' }
   ];
+
+  // ========== دوال إدارة المنتجات ==========
 
   const handleProductClick = (product: any) => {
     if (product.units && product.units.length > 0) {
@@ -474,18 +514,52 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     });
   };
 
-  const calculateTotals = () => {
+  // ========== دوال الحسابات ==========
+
+  const calculateTotals = useCallback(() => {
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
     const totalDiscount = items.reduce((sum, item) => sum + item.discount_amount, 0);
     const totalTax = items.reduce((sum, item) => sum + item.tax_amount, 0);
     const total = items.reduce((sum, item) => sum + item.total_cost, 0);
     const remaining = total - (formData.paid_amount || 0);
     return { subtotal, totalDiscount, totalTax, total, remaining };
+  }, [items, formData.paid_amount]);
+
+  const remainingAmount = useMemo(() => {
+    const totals = calculateTotals();
+    return totals.remaining;
+  }, [calculateTotals]);
+
+  const totals = calculateTotals();
+
+  // ========== دوال التحقق ==========
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.supplier_id) {
+      newErrors.supplier_id = language === 'ar' ? 'يرجى اختيار المورد' : 'Please select a supplier';
+    }
+
+    if (!formData.warehouse_id) {
+      newErrors.warehouse_id = language === 'ar' ? 'يرجى اختيار المستودع' : 'Please select a warehouse';
+    }
+
+    if (items.length === 0) {
+      newErrors.items = language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
+  // ========== Mutation ==========
+
   const createInvoiceMutation = useMutation({
-    mutationFn: async () => {
-      const totals = calculateTotals();
+    mutationFn: async (action: InvoiceAction) => {
+      if (!validateForm()) {
+        throw new Error('Validation failed');
+      }
 
       const payload = {
         supplier_id: Number(formData.supplier_id),
@@ -498,8 +572,10 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         due_date: formData.due_date || null,
         note: formData.notes || null,
         paid_amount: formData.paid_amount || 0,
+        remaining_amount: remainingAmount,
         items: items.map(item => ({
           product_id: item.product_id,
+          product_variant_id: item.product_variant_id || null,
           quantity: item.quantity,
           price: item.unit_cost,
           discount: item.discount_percent,
@@ -510,9 +586,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       console.log('📦 Sending payload:', JSON.stringify(payload, null, 2));
 
       const response = await api.post('/purchases-invoices/store', payload);
-      return response.data;
+      return { data: response.data, action };
     },
-    onSuccess: (data) => {
+    onSuccess: (result) => {
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
         description: language === 'ar' 
@@ -520,21 +596,74 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           : `Purchase invoice created successfully`
       });
 
+      // تحديث الكاش
       queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
 
-      resetForm();
-      onSave();
-      onClose();
+      // ✅ معالجة حالة save_and_print
+    // في onSuccess - جزء save_and_print
+if (result.action === 'save_and_print') {
+  const printInvoiceData = {
+    id: result.data.data.id,
+    invoice_number: result.data.data.invoice_number,
+    date: new Date().toISOString(),
+    supplier: suppliers.find(s => s.id === Number(formData.supplier_id)),
+    cashierName: user?.name || 'المدير',
+    branchName: user?.branch_name || branches.find(b => b.id === Number(formData.branch_id))?.name,
+    branchPhone: user?.branch_phone,
+    branchAddress: user?.branch_address,
+    taxRate: formData.tax_id ? taxes.find(t => t.id === Number(formData.tax_id))?.rate : 0, // ✅ إضافة taxRate
+    items: items.map(item => ({
+      name: item.product_name,
+      nameAr: item.product_name,
+      quantity: item.quantity,
+      price: item.unit_cost,
+      sizeName: item.size_name,
+      colorName: item.color_name,
+      discount_percent: item.discount_percent,
+      tax_percent: item.tax_percent
+    })),
+    subtotal: totals.subtotal,
+    tax: totals.totalTax,
+    discount_total: totals.totalDiscount,
+    total: totals.total,
+    paid_amount: formData.paid_amount,
+    remaining_amount: remainingAmount,
+    payment_method: formData.payment_method,
+    notes: formData.notes,
+  };
+  
+  setPrintData(printInvoiceData);
+  setShowPrint(true);
+  setTimeout(() => handlePrint(), 100);
+  
+  resetForm();
+  onSave();
+  onClose();
+}
+      // ✅ معالجة حالة save_and_new
+      else if (result.action === 'save_and_new' && onSaveAndNew) {
+        resetForm();
+        onSaveAndNew(); // المودال يبقى مفتوح
+      } 
+      // ✅ معالجة حالة save العادية
+      else {
+        resetForm();
+        onSave();
+        onClose(); // المودال يقفل
+      }
     },
     onError: (error: any) => {
       console.error('❌ Error creating invoice:', error.response?.data || error);
+      
+      const errorMessage = error.response?.data?.message || error.message;
+      
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.response?.data?.message || error.message,
+        description: errorMessage,
         variant: 'destructive'
       });
     }
@@ -548,7 +677,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       supplier_id: '',
       branch_id: '',
       warehouse_id: '',
-      invoice_date: new Date().toISOString().split('T')[0],
+      invoice_date: getTodayDate(),
       due_date: '',
       payment_method: 'cash',
       tax_id: defaultTax?.id?.toString() || '',
@@ -557,45 +686,26 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       paid_amount: 0
     });
     setItems([]);
+    setShowPaymentDetails(false);
+    setErrors({});
   };
 
-  const handleSubmit = async () => {
-    if (!formData.supplier_id) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى اختيار المورد' : 'Please select a supplier',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    if (!formData.warehouse_id) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى اختيار المستودع' : 'Please select a warehouse',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    if (items.length === 0) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    createInvoiceMutation.mutate();
+  const handleSubmit = (action: InvoiceAction) => {
+    createInvoiceMutation.mutate(action);
   };
-
-  const totals = calculateTotals();
 
   const formatCurrency = (amount: number) => {
     const currency = currencies.find((c: Currency) => c.id === Number(formData.currency_id));
     return `${amount.toLocaleString()} ${currency?.symbol || ''}`;
   };
+
+  const getSupplierName = (supplier: Supplier) => {
+    return language === 'ar' ? supplier.name_ar || supplier.name : supplier.name;
+  };
+
+  const isFormValid = formData.supplier_id && formData.warehouse_id && items.length > 0;
+
+  // ========== Render ==========
 
   return (
     <>
@@ -619,9 +729,15 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </Label>
                 <Select
                   value={formData.supplier_id}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, supplier_id: v }))}
+                  onValueChange={(v) => {
+                    setFormData(prev => ({ ...prev, supplier_id: v }));
+                    if (errors.supplier_id) setErrors(prev => ({ ...prev, supplier_id: '' }));
+                  }}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className={cn(
+                    "h-8 text-sm",
+                    errors.supplier_id && "border-destructive"
+                  )}>
                     <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -632,12 +748,15 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     ) : (
                       suppliers.map((s: Supplier) => (
                         <SelectItem key={s.id} value={s.id.toString()}>
-                          {language === 'ar' ? s.name_ar || s.name : s.name}
+                          {getSupplierName(s)}
                         </SelectItem>
                       ))
                     )}
                   </SelectContent>
                 </Select>
+                {errors.supplier_id && (
+                  <p className="text-[10px] text-destructive">{errors.supplier_id}</p>
+                )}
               </div>
 
               {/* Branch */}
@@ -668,7 +787,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </Select>
               </div>
 
-              {/* Warehouse - بتجيب المستودعات حسب الفرع */}
+              {/* Warehouse */}
               <div className="space-y-1">
                 <Label className="text-xs flex items-center gap-1">
                   <Warehouse size={12} />
@@ -676,10 +795,16 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </Label>
                 <Select
                   value={formData.warehouse_id}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, warehouse_id: v }))}
+                  onValueChange={(v) => {
+                    setFormData(prev => ({ ...prev, warehouse_id: v }));
+                    if (errors.warehouse_id) setErrors(prev => ({ ...prev, warehouse_id: '' }));
+                  }}
                   disabled={!formData.branch_id || warehouses.length === 0}
                 >
-                  <SelectTrigger className="h-8 text-sm">
+                  <SelectTrigger className={cn(
+                    "h-8 text-sm",
+                    errors.warehouse_id && "border-destructive"
+                  )}>
                     <SelectValue placeholder={
                       !formData.branch_id 
                         ? (language === 'ar' ? 'اختر فرعاً أولاً' : 'Select branch first')
@@ -702,6 +827,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     )}
                   </SelectContent>
                 </Select>
+                {errors.warehouse_id && (
+                  <p className="text-[10px] text-destructive">{errors.warehouse_id}</p>
+                )}
               </div>
 
               {/* Payment Method */}
@@ -733,24 +861,41 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   <Calendar size={12} />
                   {language === 'ar' ? 'التاريخ' : 'Date'}
                 </Label>
-                <Input
-                  type="date"
-                  value={formData.invoice_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, invoice_date: e.target.value }))}
-                  className="h-8 text-sm"
-                />
+           
+<DatePicker
+  value={formData.invoice_date}
+  onChange={(value) => setFormData(prev => ({ ...prev, invoice_date: value }))}
+  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+  className="h-8 text-sm"
+/>
+
+  {formData.invoice_date && (
+    <div className="text-xs text-gray-500">
+      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+      {format(parseISO(formData.invoice_date), 'dd/MM/yyyy')}
+    </div>
+  )}
               </div>
 
               {/* Due Date */}
-              <div className="space-y-1">
-                <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
-                <Input
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
-                  className="h-8 text-sm"
-                />
-              </div>
+
+<div className="space-y-1">
+  <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
+  
+<DatePicker
+  value={formData.due_date}
+  onChange={(value) => setFormData(prev => ({ ...prev, due_date: value }))}
+  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+  className="h-8 text-sm"
+/>
+
+  {formData.due_date && (
+    <div className="text-xs text-gray-500">
+      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+      {format(parseISO(formData.due_date), 'dd/MM/yyyy')}
+    </div>
+  )}
+</div>
 
               {/* Currency */}
               <div className="space-y-1">
@@ -806,23 +951,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Paid Amount */}
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  <DollarSign size={12} />
-                  {language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount'}
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.paid_amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: Number(e.target.value) }))}
-                  className="h-8 text-sm"
-                  placeholder="0.00"
-                />
-              </div>
             </div>
 
             {/* Product Search */}
@@ -841,7 +969,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   autoFocus
                   showStock
                   products={products}
-                  disabled={false} // ✅ مش معطل - كل المنتجات متاحة
+                  disabled={false}
                 />
 
                 {/* Items Table */}
@@ -940,40 +1068,102 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     </TableBody>
                   </Table>
                 </div>
+                {errors.items && (
+                  <p className="text-[10px] text-destructive text-center">{errors.items}</p>
+                )}
+              </CardContent>
+            </Card>
 
-                {/* Totals */}
-                <div className="flex justify-end">
-                  <div className="w-64 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'المجموع' : 'Subtotal'}</span>
-                      <span>{formatCurrency(totals.subtotal)}</span>
+            {/* Payment Section */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPaymentDetails(!showPaymentDetails)}
+                    className="gap-2"
+                  >
+                    <DollarSign size={16} />
+                    {showPaymentDetails 
+                      ? (language === 'ar' ? 'إخفاء تفاصيل الدفع' : 'Hide Payment Details')
+                      : (language === 'ar' ? 'إظهار تفاصيل الدفع' : 'Show Payment Details')
+                    }
+                  </Button>
+                  
+                  {/* المبلغ الإجمالي والمتبقي للمورد */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-end">
+                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
+                      <p className="text-lg font-bold text-primary">{formatCurrency(totals.total)}</p>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'الخصم' : 'Discount'}</span>
-                      <span className="text-destructive">-{formatCurrency(totals.totalDiscount)}</span>
+                    <ArrowLeftRight size={20} className="text-muted-foreground" />
+                    <div className="text-end">
+                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'المتبقي للمورد' : 'Remaining'}</p>
+                      <p className={`text-lg font-bold ${remainingAmount > 0 ? 'text-warning' : 'text-success'}`}>
+                        {formatCurrency(remainingAmount)}
+                      </p>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'}</span>
-                      <span>+{formatCurrency(totals.totalTax)}</span>
-                    </div>
-                    <div className="flex justify-between pt-1.5 border-t font-bold">
-                      <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                      <span className="text-primary">{formatCurrency(totals.total)}</span>
+                  </div>
+                </div>
+
+                {showPaymentDetails && (
+                  <div className="space-y-4 mt-4 pt-4 border-t border-primary/20">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>{language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount'}</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.paid_amount}
+                          onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: Number(e.target.value) }))}
+                          placeholder="0"
+                          className="text-lg font-bold"
+                        />
+                      </div>
+                      <div>
+                        <Label>{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</Label>
+                        <Select
+                          value={formData.payment_method}
+                          onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {paymentMethods.map((method) => (
+                              <SelectItem key={method.code} value={method.code}>
+                                {language === 'ar' ? method.name_ar : method.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     
-                    {formData.payment_method === 'credit' && (
-                      <div className="flex justify-between pt-1.5 border-t border-dashed">
-                        <span className="text-muted-foreground">{language === 'ar' ? 'المتبقي' : 'Remaining'}</span>
-                        <span className={cn(
-                          "font-bold",
-                          totals.remaining > 0 ? "text-warning" : "text-success"
-                        )}>
-                          {formatCurrency(totals.remaining)}
-                        </span>
+                    {remainingAmount > 0 && (
+                      <div className="bg-warning/10 p-3 rounded-lg flex items-center gap-2">
+                        <DollarSign size={18} className="text-warning" />
+                        <p className="text-sm text-warning">
+                          {language === 'ar' 
+                            ? `المتبقي للمورد: ${formatCurrency(remainingAmount)}`
+                            : `Remaining for supplier: ${formatCurrency(remainingAmount)}`
+                          }
+                        </p>
+                      </div>
+                    )}
+                    
+                    {remainingAmount === 0 && totals.total > 0 && (
+                      <div className="bg-success/10 p-3 rounded-lg flex items-center gap-2">
+                        <BadgeCheck size={18} className="text-success" />
+                        <p className="text-sm text-success">
+                          {language === 'ar' ? 'تم الدفع بالكامل' : 'Fully paid'}
+                        </p>
                       </div>
                     )}
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -990,28 +1180,106 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
             </div>
           </div>
 
-          <DialogFooter className="p-4 pt-3 border-t bg-muted/30">
-            <Button variant="outline" onClick={onClose} size="sm">
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button 
-              onClick={handleSubmit} 
-              disabled={createInvoiceMutation.isPending || items.length === 0 || !formData.warehouse_id} 
-              size="sm" 
-              className="min-w-24"
-            >
-              {createInvoiceMutation.isPending ? (
-                <>
-                  <Loader2 size={14} className="me-1.5 animate-spin" />
-                  {language === 'ar' ? 'جاري...' : 'Saving...'}
-                </>
-              ) : (
-                language === 'ar' ? 'حفظ' : 'Save'
+          <DialogFooter className="p-4 pt-3 border-t bg-muted/30 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-sm py-1">
+                {language === 'ar' ? 'الإجمالي:' : 'Total:'} {formatCurrency(totals.total)}
+              </Badge>
+              {remainingAmount > 0 && (
+                <Badge variant="destructive" className="text-sm py-1">
+                  {language === 'ar' ? 'المتبقي:' : 'Remaining:'} {formatCurrency(remainingAmount)}
+                </Badge>
               )}
-            </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={onClose} 
+                size="sm"
+                disabled={createInvoiceMutation.isPending}
+              >
+                <XCircle size={14} className="me-1.5" />
+                {language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </Button>
+              
+              {/* زر حفظ فقط */}
+              <Button 
+                onClick={() => handleSubmit('save')} 
+                disabled={createInvoiceMutation.isPending || !isFormValid} 
+                size="sm" 
+                className="min-w-24"
+              >
+                {createInvoiceMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="me-1.5 animate-spin" />
+                    {language === 'ar' ? 'جاري...' : 'Saving...'}
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} className="me-1.5" />
+                    {language === 'ar' ? 'حفظ فقط' : 'Save Only'}
+                  </>
+                )}
+              </Button>
+              
+              {/* زر حفظ وإضافة جديد */}
+              {onSaveAndNew && (
+                <Button 
+                  onClick={() => handleSubmit('save_and_new')} 
+                  disabled={createInvoiceMutation.isPending || !isFormValid} 
+                  size="sm" 
+                  variant="secondary"
+                  className="min-w-24"
+                >
+                  {createInvoiceMutation.isPending ? (
+                    <>
+                      <Loader2 size={14} className="me-1.5 animate-spin" />
+                      {language === 'ar' ? 'جاري...' : 'Saving...'}
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} className="me-1.5" />
+                      {language === 'ar' ? 'حفظ وإضافة' : 'Save & New'}
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {/* زر حفظ وطباعة */}
+              <Button 
+                onClick={() => handleSubmit('save_and_print')} 
+                disabled={createInvoiceMutation.isPending || !isFormValid} 
+                size="sm" 
+                variant="default"
+                className="min-w-24 bg-green-600 hover:bg-green-700"
+              >
+                {createInvoiceMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="me-1.5 animate-spin" />
+                    {language === 'ar' ? 'جاري...' : 'Saving...'}
+                  </>
+                ) : (
+                  <>
+                    <Printer size={14} className="me-1.5" />
+                    {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
+                  </>
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* مكون الطباعة المخفي */}
+      {showPrint && printData && (
+        <div style={{ display: 'none' }}>
+          <PurchaseInvoiceTemplate
+            ref={invoicePrintRef}
+            invoiceData={printData}
+          />
+        </div>
+      )}
 
       {variantProduct && (
         <PurchaseVariantSelector

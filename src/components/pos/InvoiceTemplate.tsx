@@ -21,8 +21,6 @@ interface InvoiceTemplateProps {
     id: string;
     date: string;
     customer: { name: string; nameAr?: string; phone?: string } | null;
-    salesRep: { name: string; nameAr?: string; commission_rate?: string } | null;
-    deliveryPerson?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
     branchName?: string;
     branchPhone?: string;
@@ -58,8 +56,6 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       id: invoiceData.id || '',
       date: invoiceData.date || new Date().toISOString(),
       customer: invoiceData.customer || null,
-      salesRep: invoiceData.salesRep || null,
-      deliveryPerson: invoiceData.deliveryPerson || null,
       cashierName: invoiceData.cashierName || '---',
       branchName: invoiceData.branchName,
       branchPhone: invoiceData.branchPhone,
@@ -78,13 +74,10 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       invoice: isRTL ? 'فاتورة ضريبية' : 'Tax Invoice',
       invoiceNo: isRTL ? 'رقم الفاتورة' : 'Invoice No.',
       date: isRTL ? 'التاريخ' : 'Date',
-      paymentMethod: isRTL ? 'طريقة الدفع' : 'Payment Method',
+      paymentMethod: isRTL ? 'طريقة الدفع' : 'Payment',
       cash: isRTL ? 'نقدي' : 'Cash',
       card: isRTL ? 'شبكة' : 'Card',
-      wallet: isRTL ? 'محفظة' : 'Wallet',
       customer: isRTL ? 'العميل' : 'Customer',
-      salesRep: isRTL ? 'مندوب المبيعات' : 'Sales Rep',
-      delivery: isRTL ? 'مندوب التوصيل' : 'Delivery Man',
       cashier: isRTL ? 'الكاشير' : 'Cashier',
       branch: isRTL ? 'الفرع' : 'Branch',
       phone: isRTL ? 'تليفون' : 'Phone',
@@ -106,10 +99,9 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
     // تجهيز نص طريقة الدفع
     const getPaymentMethodText = (method: string) => {
-      switch (method) {
+      switch (method.toLowerCase()) {
         case 'cash': return texts.cash;
         case 'card': return texts.card;
-        case 'wallet': return texts.wallet;
         default: return method;
       }
     };
@@ -170,32 +162,27 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           
           {/* رقم الضريبة إذا كان موجود */}
           {companyInfo.tax_id && (
-            <p className="text-[9px] text-gray-700">{texts.tax}: {companyInfo.tax_id}</p>
+            <p className="text-[9px] text-gray-700">VAT: {companyInfo.tax_id}</p>
           )}
         </div>
 
-        {/* رقم الفاتورة والتاريخ وطريقة الدفع والكاشير */}
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
+        {/* Invoice Header - مع تنسيق جديد: رقم الفاتورة وطريقة الدفع يمين، التاريخ والكاشير يسار */}
+        <div className="flex justify-between items-start text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
+          {/* الجانب الأيمن - رقم الفاتورة وطريقة الدفع */}
           <div className="text-left">
-            <span className="font-bold">{texts.invoiceNo}:</span>
-            <span className="mr-1">{String(safeInvoiceData.id).slice(-8)}</span>
+            <div><span className="font-bold">{texts.invoiceNo}:</span> <span className="font-mono">{String(safeInvoiceData.id).slice(-8)}</span></div>
+            <div><span className="font-bold">{texts.paymentMethod}:</span> <span>{paymentMethodsText}</span></div>
           </div>
+          
+          {/* الجانب الأيسر - التاريخ والكاشير */}
           <div className="text-right">
-            <span className="font-bold">{texts.date}:</span>
-            <span className="mr-1">{new Date(safeInvoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span>
-          </div>
-          <div className="text-left">
-            <span className="font-bold">{texts.paymentMethod}:</span>
-            <span className="mr-1">{paymentMethodsText}</span>
-          </div>
-          <div className="text-right">
-            <span className="font-bold">{texts.cashier}:</span>
-            <span className="mr-1">{safeInvoiceData.cashierName}</span>
+            <div><span className="font-bold">{texts.date}:</span> <span>{new Date(safeInvoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span></div>
+            <div><span className="font-bold">{texts.cashier}:</span> <span>{safeInvoiceData.cashierName}</span></div>
           </div>
         </div>
 
         {/* معلومات العميل إذا وجد */}
-        {safeInvoiceData.customer && (
+        {safeInvoiceData.customer ? (
           <div className="text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
             <div className="flex justify-between">
               <span className="font-bold">{texts.customer}:</span>
@@ -210,44 +197,12 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               </div>
             )}
           </div>
-        )}
-
-        {/* مندوب المبيعات ومندوب التوصيل معاً في سطرين منفصلين */}
-        {(safeInvoiceData.salesRep || safeInvoiceData.deliveryPerson) && (
-          <div className="text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2 space-y-1">
-            {/* مندوب المبيعات */}
-            {safeInvoiceData.salesRep && (
-              <div className="flex justify-between">
-                <span className="font-bold">{texts.salesRep}:</span>
-                <div className="text-right">
-                  <span>
-                    {isRTL && safeInvoiceData.salesRep.nameAr ? safeInvoiceData.salesRep.nameAr : safeInvoiceData.salesRep.name}
-                  </span>
-                  {safeInvoiceData.salesRep.commission_rate && (
-                    <span className="text-[8px] text-gray-500 block">
-                      {language === 'ar' ? `عمولة: ${safeInvoiceData.salesRep.commission_rate}%` : `Commission: ${safeInvoiceData.salesRep.commission_rate}%`}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* مندوب التوصيل */}
-            {safeInvoiceData.deliveryPerson && (
-              <div className="flex justify-between">
-                <span className="font-bold">{texts.delivery}:</span>
-                <div className="text-right">
-                  <span>
-                    {isRTL && safeInvoiceData.deliveryPerson.nameAr ? safeInvoiceData.deliveryPerson.nameAr : safeInvoiceData.deliveryPerson.name}
-                  </span>
-                  {safeInvoiceData.deliveryPerson.phone && (
-                    <span className="text-[8px] text-gray-500 block">
-                      {safeInvoiceData.deliveryPerson.phone}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+        ) : (
+          <div className="text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
+            <div className="flex justify-between">
+              <span className="font-bold">{texts.customer}:</span>
+              <span className="text-gray-500">{texts.walkInCustomer}</span>
+            </div>
           </div>
         )}
 
@@ -255,11 +210,11 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
         <table className="w-full text-[9px] mb-2 border-collapse">
           <thead>
             <tr className="border-y border-gray-400">
-              <th className="py-1 text-center w-8">{isRTL ? 'م' : '#'}</th>
+              <th className="py-1 text-center w-6">#</th>
               <th className="py-1 text-right">{texts.product}</th>
-              <th className="py-1 text-center w-10">{texts.quantity}</th>
-              <th className="py-1 text-left w-14">{texts.price}</th>
-              <th className="py-1 text-left w-14">{texts.total}</th>
+              <th className="py-1 text-center w-8">{texts.quantity}</th>
+              <th className="py-1 text-right w-14">{texts.price}</th>
+              <th className="py-1 text-right w-14">{texts.total}</th>
             </tr>
           </thead>
           <tbody>
@@ -267,9 +222,9 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <tr key={index} className="border-b border-gray-200">
                 <td className="py-1 text-center">{index + 1}</td>
                 <td className="py-1 text-right">
-                  {isRTL ? item.nameAr : item.name}
+                  <div>{isRTL ? item.nameAr : item.name}</div>
                   {(item.sizeName || item.colorName) && (
-                    <span className="text-gray-500 text-[8px] block">
+                    <div className="text-gray-500 text-[8px]">
                       {isRTL ? (
                         <>
                           {item.sizeNameAr && `${item.sizeNameAr} `}
@@ -281,20 +236,20 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           {item.colorName && ` - ${item.colorName}`}
                         </>
                       )}
-                    </span>
+                    </div>
                   )}
                 </td>
                 <td className="py-1 text-center">{item.quantity}</td>
-                <td className="py-1 text-left">{formatCurrency(item.price)}</td>
-                <td className="py-1 text-left">{formatCurrency(item.price * item.quantity)}</td>
+                <td className="py-1 text-right">{formatCurrency(item.price)}</td>
+                <td className="py-1 text-right">{formatCurrency(item.price * item.quantity)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         {/* Totals Section */}
-        <div className="flex flex-col items-end mb-2">
-          <div className="w-full text-[9px]">
+        <div className="flex flex-col items-end mb-2 border-t border-gray-300 pt-2">
+          <div className="w-3/4 text-[9px]">
             <div className="flex justify-between py-0.5">
               <span>{texts.subtotal}:</span>
               <span>{formatCurrency(safeInvoiceData.subtotal)}</span>
@@ -311,22 +266,25 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
         </div>
 
         {/* Payment Details */}
-        <div className="flex flex-col items-end mb-2 border-t border-dashed border-gray-300 pt-2">
-          <div className="w-full text-[9px]">
-            {safeInvoiceData.payments.map((payment, index) => (
-              <div key={index} className="flex justify-between py-0.5">
-                <span>{getPaymentMethodText(payment.method)}:</span>
-                <span>{formatCurrency(payment.amount)}</span>
-              </div>
-            ))}
-            {safeInvoiceData.change > 0 && (
-              <div className="flex justify-between py-0.5 border-t border-gray-300 mt-1">
-                <span>{texts.change}:</span>
-                <span className="text-green-600">{formatCurrency(safeInvoiceData.change)}</span>
-              </div>
-            )}
+        {safeInvoiceData.payments.length > 0 && (
+          <div className="mb-2 border-t border-dashed border-gray-300 pt-2">
+            <div className="w-full text-[9px]">
+              <div className="font-bold mb-1">{texts.paid}:</div>
+              {safeInvoiceData.payments.map((payment, index) => (
+                <div key={index} className="flex justify-between py-0.5">
+                  <span>{getPaymentMethodText(payment.method)}:</span>
+                  <span>{formatCurrency(payment.amount)}</span>
+                </div>
+              ))}
+              {safeInvoiceData.change > 0 && (
+                <div className="flex justify-between py-0.5 border-t border-gray-300 mt-1 pt-1">
+                  <span className="font-bold">{texts.change}:</span>
+                  <span className="text-green-600">{formatCurrency(safeInvoiceData.change)}</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Footer */}
         <div className="text-center text-[8px] text-gray-500 border-t border-dashed border-gray-300 pt-2 mt-2">

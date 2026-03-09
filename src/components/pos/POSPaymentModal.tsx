@@ -25,10 +25,10 @@ interface PaymentMethod {
 }
 
 const defaultPaymentMethods: PaymentMethod[] = [
-  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'F1' },
-  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'F2' },
-  { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'F3' },
-  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'F4' },
+  { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'ctrl+1' },
+  { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'ctrl+2' },
+  { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'ctrl+3' },
+  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'ctrl+7' },
 ];
 
 interface CartItem {
@@ -132,6 +132,9 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
     },
   });
 
+
+
+  
   // متابعة حالة النت
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -359,10 +362,12 @@ const printData = {
   const handleSaveAndPrintNow = () => handleSaveAndPrint('both'); // حفظ وطباعة
 
   // Payment modal keyboard shortcuts
-  const paymentShortcuts = getPaymentShortcuts({
-    onConfirm: () => canComplete() && !isProcessing && handleComplete(),
-    onCancel: onClose,
-    onSelectCash: () => setPaymentMethod('cash'),
+const paymentShortcuts = getPaymentShortcuts({
+  onConfirm: () => canComplete() && !isProcessing && handleComplete(),
+  onCancel: onClose,
+  onSaveOnly: () => canComplete() && !isProcessing && handleComplete(), 
+  onSaveAndPrint: () => canComplete() && !isProcessing && handleSaveAndPrintNow(), // ✅ إضافة هذا السطر
+  onSelectCash: () => setPaymentMethod('cash'),
     onSelectCard: () => setPaymentMethod('card'),
     onSelectKuraimi: () => setPaymentMethod('wallet'),
     onSelectFloosak: () => { },
@@ -691,38 +696,41 @@ const printData = {
               <span className="flex items-center justify-center gap-3">
                 <span>📄</span>
                 {language === 'ar' ? 'حفظ وطباعة الفاتورة' : 'Save & Print Invoice'}
-                {/* <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Z</kbd> */}
+                <kbd className="ms-2 px-2 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+Z</kbd>
               </span>
             )}
           </Button>
 
-          {/* ✅ زر الحفظ فقط */}
-          <div className="flex gap-2">
-            <Button
-              onClick={handleComplete}
-              disabled={!canComplete() || isProcessing}
-              variant="outline"
-              className={cn(
-                'flex-1 h-12',
-                isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
-              )}
-            >
-              {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
-              {isOffline 
-                ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
-                : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
-              }
-            </Button>
-            
-            {/* ✅ زر إلغاء */}
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              className="h-12 px-6"
-            >
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </Button>
-          </div>
+         {/* ✅ زر الحفظ فقط - مع عرض الاختصار */}
+<div className="flex gap-2">
+  <Button
+    onClick={handleComplete}
+    disabled={!canComplete() || isProcessing}
+    variant="outline"
+    className={cn(
+      'flex-1 h-12 relative',
+      isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
+    )}
+  >
+    {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
+    {isOffline 
+      ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
+      : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
+    }
+    <kbd className="absolute -top-1 -end-1 text-[9px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
+      Ctrl+S
+    </kbd>
+  </Button>
+  
+  {/* ✅ زر إلغاء */}
+  <Button
+    onClick={onClose}
+    variant="ghost"
+    className="h-12 px-6"
+  >
+    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+  </Button>
+</div>
         </div>
       </div>
 
