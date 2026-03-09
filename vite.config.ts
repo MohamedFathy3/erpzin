@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 7000, 
     proxy: {
       "/api": {
-        target: "https://apierp.dentin.cloud",
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, "/api"),

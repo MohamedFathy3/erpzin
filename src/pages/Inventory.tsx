@@ -510,131 +510,175 @@ const Inventory: React.FC = () => {
     setShowVariantsModal(true);
   };
 
-  const handleSaveProduct = async (formData: ProductFormData) => {
-    try {
-      // Prepare product data for API
-      const productData: any = {
-        name: formData.name,
-        description: formData.description || '',
-        category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
-        sku: formData.sku,
-        barcode: formData.barcode || null,
-        reorder_level: formData.reorderPoint || 5,
-        cost: formData.cost || 0,
-        price: formData.price || 0,
-        stock: formData.stock || 0,
-        active: formData.status === 'active',
-        has_variants: formData.hasVariants || false,
-        branch_ids: formData.branchIds && formData.branchIds.length > 0 
-          ? formData.branchIds.map(id => parseInt(id)) 
-          : [],
-        warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0 
-          ? formData.warehouseIds.map(id => parseInt(id)) 
-          : [],
-        valuation_method: formData.valuationMethod || 'fifo',
-        units: []
-      };
+const handleSaveProduct = async (formData: ProductFormData) => {
+  try {
+    // Prepare product data for API
+    const productData: any = {
+      name: formData.name,
+      description: formData.description || '',
+      category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
+      sku: formData.sku,
+      barcode: formData.barcode || null,
+      reorder_level: formData.reorderPoint || 5,
+      cost: formData.cost || 0,
+      price: formData.price || 0,
+      stock: formData.stock || 0,
+      active: formData.status === 'active',
+      has_variants: formData.hasVariants || false,
+      branch_ids: formData.branchIds && formData.branchIds.length > 0 
+        ? formData.branchIds.map(id => parseInt(id)) 
+        : [],
+      warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0 
+        ? formData.warehouseIds.map(id => parseInt(id)) 
+        : [],
+      valuation_method: formData.valuationMethod || 'fifo',
+      units: []
+    };
 
-      // إضافة الاسم العربي والوصف العربي
-      if (formData.nameAr && formData.nameAr.trim() !== '') {
-        productData.name_ar = formData.nameAr;
-      }
-      if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
-        productData.description_ar = formData.descriptionAr;
-      }
+    // إضافة الاسم العربي والوصف العربي
+    if (formData.nameAr && formData.nameAr.trim() !== '') {
+      productData.name_ar = formData.nameAr;
+    }
+    if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
+      productData.description_ar = formData.descriptionAr;
+    }
 
-      // معالجة الصورة
-      if (formData.imageId && formData.imageId > 0) {
-        productData.image = formData.imageId;
-      } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
-        productData.image_url = formData.imageUrl;
-      }
+    // معالجة الصورة
+    if (formData.imageId && formData.imageId > 0) {
+      productData.image = formData.imageId;
+    } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
+      productData.image_url = formData.imageUrl;
+    }
 
-      // Handle variants if product has variants
-      if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
-        const enabledVariants = formData.variants.filter(v => v.enabled);
+    // Handle variants if product has variants
+    if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
+      const enabledVariants = formData.variants.filter(v => v.enabled);
+      
+      if (enabledVariants.length > 0) {
+        // ✅ تجميع المتغيرات حسب unit_id
+        const unitsMap = new Map();
         
-        if (enabledVariants.length > 0) {
-          const units: any[] = [];
+        enabledVariants.forEach(variant => {
+          const unitId = variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null;
+          if (!unitId) return;
           
-          enabledVariants.forEach(variant => {
-            const unitData: any = {
-              unit_id: variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null,
+          if (!unitsMap.has(unitId)) {
+            // إذا كانت الوحدة جديدة، أنشئها
+            unitsMap.set(unitId, {
+              unit_id: unitId,
               cost_price: variant.cost || formData.cost || 0,
               sell_price: variant.price || formData.price || 0,
-              barcode: variant.barcode || `${formData.sku}-${variant.unitId || ''}-${variant.colorId || ''}`
-            };
+              barcode: variant.barcode || `${formData.sku}-${unitId}`,
+              colors: []
+            });
+          }
+          
+          // إذا كان فيه لون، أضفه - مع التأكد من عدم التكرار
+          if (variant.colorId && variant.colorId !== '') {
+            const colorId = parseInt(variant.colorId);
             
-            if (variant.colorId && variant.colorId !== '') {
-              unitData.colors = [{
-                color_id: parseInt(variant.colorId),
+            // ✅ الأهم: التأكد من عدم إضافة نفس اللون مرتين
+            const existingColors = unitsMap.get(unitId).colors;
+            const colorExists = existingColors.some((c: any) => c.color_id === colorId);
+            
+            if (!colorExists) {
+              unitsMap.get(unitId).colors.push({
+                color_id: colorId,
                 stock: variant.stock || formData.stock || 0
-              }];
+              });
+            } else {
+              console.warn(`⚠️ Skipping duplicate color ${colorId} for unit ${unitId}`);
+            }
+          } else if (variant.noColor) {
+            // حالة "بدون لون" - نضيفها كوحدة بدون ألوان
+            const unitData = unitsMap.get(unitId);
+            if (unitData && unitData.colors.length === 0) {
+              // موجودة بالفعل بدون ألوان
+            } else {
+              // أعد تعيين الوحدة بدون ألوان
+              unitsMap.set(unitId, {
+                unit_id: unitId,
+                cost_price: variant.cost || formData.cost || 0,
+                sell_price: variant.price || formData.price || 0,
+                barcode: variant.barcode || `${formData.sku}-${unitId}`,
+                colors: []
+              });
+            }
+          }
+        });
+        
+        // ✅ تنظيف إضافي: إزالة أي تكرار متبقي
+        productData.units = Array.from(unitsMap.values()).map(unit => {
+          if (unit.colors && unit.colors.length > 0) {
+            // إزالة الألوان المكررة باستخدام Set
+            const uniqueColors = [];
+            const seenColorIds = new Set();
+            
+            for (const color of unit.colors) {
+              if (!seenColorIds.has(color.color_id)) {
+                seenColorIds.add(color.color_id);
+                uniqueColors.push(color);
+              }
             }
             
-            units.push(unitData);
-          });
-          
-          productData.units = units;
-        }
-      }
-
-      let productId = formData.id;
-      let response;
-
-      if (productId) {
-        // Update existing product
-        console.log('🔄 Updating existing product ID:', productId);
-        response = await api.put(`/product/${productId}`, productData);
-        console.log('✅ Update response:', response.data);
-        
-        toast({ 
-          title: language === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully',
-          description: language === 'ar' 
-            ? `تم تحديث المنتج "${formData.name}"`
-            : `Product "${formData.name}" updated`
-        });
-      } else {
-        // Create new product
-        response = await api.post('/product', productData);
-        productId = response.data.id;
-        
-        toast({ 
-          title: language === 'ar' ? 'تم الإضافة بنجاح' : 'Added successfully',
-          description: language === 'ar' 
-            ? `تم إضافة المنتج "${formData.name}"`
-            : `Product "${formData.name}" added`
+            unit.colors = uniqueColors;
+          }
+          return unit;
         });
       }
-
-      // تحديث البيانات
-      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      refetch();
-      
-      // إغلاق النموذج
-      setShowProductForm(false);
-      setEditProduct(null);
-      
-    } catch (error: any) {
-      let errorMessage = 'Unknown error';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors) {
-        errorMessage = Object.values(error.response.data.errors).flat().join(', ');
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      console.error('❌ Save error:', errorMessage);
-      
-      toast({ 
-        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-      throw error;
     }
-  };
+
+
+    console.log('📦 Final product data units:', JSON.stringify(productData.units, null, 2));
+
+    let productId = formData.id;
+    let response;
+
+    if (productId) {
+      // Update existing product
+      response = await api.put(`/product/${productId}`, productData);
+    } else {
+      // Create new product
+      response = await api.post('/product', productData);
+      productId = response.data.id;
+    }
+
+    // تحديث البيانات
+    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+    refetch();
+    
+    // إغلاق النموذج
+    setShowProductForm(false);
+    setEditProduct(null);
+    
+    toast({ 
+      title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
+      description: language === 'ar' 
+        ? `تم حفظ المنتج "${formData.name}"`
+        : `Product "${formData.name}" saved`
+    });
+    
+  } catch (error: any) {
+    let errorMessage = 'Unknown error';
+    if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    } else if (error.response?.data?.errors) {
+      errorMessage = Object.values(error.response.data.errors).flat().join(', ');
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    console.error('❌ Save error:', errorMessage);
+    console.error('❌ Error details:', error.response?.data);
+    
+    toast({ 
+      title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+      description: errorMessage,
+      variant: 'destructive'
+    });
+    throw error;
+  }
+};
 
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
