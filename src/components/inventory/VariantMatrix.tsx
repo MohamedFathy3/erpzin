@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { toast } from '@/hooks/use-toast';
 
 export interface VariantOption {
   id: string;
@@ -255,45 +256,60 @@ const VariantMatrix: React.FC<VariantMatrixProps> = ({
   };
 
   // Add color for current unit
-  const addColorForUnit = (colorId: string) => {
-    if (!activeUnitId) return;
+// Add color for current unit
+const addColorForUnit = (colorId: string) => {
+  if (!activeUnitId) return;
+  
+  // ✅ التأكد من عدم إضافة نفس اللون مرتين لنفس الوحدة
+  const existingForThisUnit = variants.filter(
+    v => v.unitId === activeUnitId && v.colorId === colorId && v.enabled
+  );
+  
+  if (existingForThisUnit.length > 0) {
+    toast({
+      title: language === 'ar' ? 'تحذير' : 'Warning',
+      description: language === 'ar' 
+        ? 'هذا اللون مضاف بالفعل لهذه الوحدة' 
+        : 'This color is already added to this unit',
+    });
+    return;
+  }
+  
+  // Add color to selected if not already
+  if (!selectedColors.includes(colorId) && onColorSelectionChange) {
+    onColorSelectionChange([...selectedColors, colorId]);
+  }
+  
+  const pricing = getUnitPricing(activeUnitId);
+  
+  // Create the variant
+  const existing = getVariant(colorId, activeUnitId);
+  if (!existing) {
+    const color = colors.find(c => c.id === colorId);
+    const unit = sizes.find(s => s.id === activeUnitId);
     
-    // Add color to selected if not already
-    if (!selectedColors.includes(colorId) && onColorSelectionChange) {
-      onColorSelectionChange([...selectedColors, colorId]);
-    }
+    const newVariant: ProductVariant = {
+      id: `${colorId}-${activeUnitId}`,
+      colorId,
+      unitId: activeUnitId,
+      sku: generateSKU(baseSku, color?.value || '', unit?.value || ''),
+      barcode: pricing.barcode,
+      customBarcode: false,
+      stock: 0,
+      cost: pricing.cost,
+      price: pricing.price,
+      enabled: true
+    };
     
-    const pricing = getUnitPricing(activeUnitId);
-    
-    // Create the variant
-    const existing = getVariant(colorId, activeUnitId);
-    if (!existing) {
-      const color = colors.find(c => c.id === colorId);
-      const unit = sizes.find(s => s.id === activeUnitId);
-      
-      const newVariant: ProductVariant = {
-        id: `${colorId}-${activeUnitId}`,
-        colorId,
-        unitId: activeUnitId,
-        sku: generateSKU(baseSku, color?.value || '', unit?.value || ''),
-        barcode: pricing.barcode,
-        customBarcode: false,
-        stock: 0,
-        cost: pricing.cost,
-        price: pricing.price,
-        enabled: true
-      };
-      
-      onVariantChange([...variants, newVariant]);
-    } else if (!existing.enabled) {
-      onVariantChange(variants.map(v => 
-        v.colorId === colorId && v.unitId === activeUnitId
-          ? { ...v, enabled: true, cost: pricing.cost, price: pricing.price }
-          : v
-      ));
-    }
-  };
-
+    onVariantChange([...variants, newVariant]);
+  } else if (!existing.enabled) {
+    onVariantChange(variants.map(v => 
+      v.colorId === colorId && v.unitId === activeUnitId
+        ? { ...v, enabled: true, cost: pricing.cost, price: pricing.price }
+        : v
+    ));
+  }
+};
   // Remove color for current unit
   const removeColorForUnit = (colorId: string) => {
     if (!activeUnitId) return;
