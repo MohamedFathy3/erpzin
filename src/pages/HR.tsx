@@ -33,11 +33,59 @@ import {
   Filter,
   X,
   Key,
-  Shield
+  Shield,
+  Landmark,
+  MapPin
 } from 'lucide-react';
 import SalesmenManager from "@/components/sales/SalesmenManager";
 import api from '@/lib/api';
 import { useDebounce } from '@/hooks/use-debounce';
+
+// ========== أنواع البيانات ==========
+interface Role {
+  id: number;
+  name: string;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  name_ar?: string;
+}
+
+interface Treasury {
+  id: number;
+  name: string;
+  name_ar?: string;
+  is_main?: boolean;
+}
+
+interface Employee {
+  id: number;
+  employee_code: string;
+  name: string;
+  name_ar?: string;
+  position?: string;
+  department?: string;
+  role: Role;
+  branch: Branch | null;
+  treasury: Treasury | null;
+  phone?: string;
+  email?: string;
+  salary: string | number;
+  is_active?: boolean;
+  created_at: string;
+}
+
+interface DeliveryPerson {
+  id: string;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  vehicle_type?: string;
+  vehicle_number?: string;
+  is_active: boolean;
+}
 
 const HR = () => {
   const { language, direction } = useLanguage();
@@ -65,7 +113,6 @@ const HR = () => {
     name: '',
     name_ar: '',
     position: '',
-    // department: '',
     phone: '',
     email: '',
     salary: '',
@@ -74,7 +121,6 @@ const HR = () => {
     treasury_id: '',
     branch_id: '',
     password: '',
-  
   });
   
   const [newDelivery, setNewDelivery] = useState({
@@ -101,6 +147,7 @@ const HR = () => {
     }
   });
 
+  // ========== جلب الخزائن ==========
   const { data: treasury = [], isLoading: treasuryLoading } = useQuery({
     queryKey: ['treasury'],
     queryFn: async () => {
@@ -114,7 +161,9 @@ const HR = () => {
       return response.data.data || [];
     }
   });
- const { data: branches = [], isLoading: branchesLoading } = useQuery({
+
+  // ========== جلب الفروع ==========
+  const { data: branches = [], isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
       const response = await api.post('/branch/index', {
@@ -128,8 +177,6 @@ const HR = () => {
     }
   });
 
-
-  
   // ========== Fetch Employees ==========
   const { 
     data: employees = [], 
@@ -145,18 +192,15 @@ const HR = () => {
           orderByDirection: 'desc',
           perPage: 100,
           paginate: false,
-          with: ['role'] // 👈 نجيب بيانات الدور
+          with: ['role', 'branch', 'treasury']
         };
 
-        // ✅ بناء الفلاتر حسب الـ payload المطلوب
         const filters: any = {};
 
-        // ✅ البحث بالاسم (زي ما انت عاوز)
         if (debouncedSearch) {
           filters.name = debouncedSearch;
         }
 
-        // فلاتر تانية
         if (employeeFilters.position && employeeFilters.position !== 'all') {
           filters.position = employeeFilters.position;
         }
@@ -172,7 +216,6 @@ const HR = () => {
           filters.salary_max = Number(employeeFilters.salary_max);
         }
 
-        // إضافة الفلاتر للـ payload لو موجودة
         if (Object.keys(filters).length > 0) {
           payload.filters = filters;
         }
@@ -218,7 +261,6 @@ const HR = () => {
 
         const filters: any = {};
 
-        // البحث بالاسم
         if (debouncedSearch) {
           filters.name = debouncedSearch;
         }
@@ -288,17 +330,6 @@ const HR = () => {
     enabled: activeTab === 'attendance',
   });
 
-  // ========== Fetch Single Employee for Edit ==========
-  const fetchEmployeeById = async (id: string) => {
-    try {
-      const response = await api.get(`/employee/${id}`);
-      return response.data.data;
-    } catch (error) {
-      console.error('Error fetching employee:', error);
-      throw error;
-    }
-  };
-
   // ========== Mutations ==========
 
   // ✅ Add employee mutation
@@ -309,7 +340,6 @@ const HR = () => {
         name: employee.name,
         name_ar: employee.name_ar || null,
         position: employee.position || null,
-        // department: employee.department || null,
         phone: employee.phone || null,
         email: employee.email || null,
         salary: employee.salary ? parseFloat(employee.salary) : 0,
@@ -318,12 +348,10 @@ const HR = () => {
         branch_id: employee.branch_id || null,
       };
 
-      // 👈 إضافة role_id لو موجود
       if (employee.role_id) {
         payload.role_id = parseInt(employee.role_id);
       }
 
-      // 👈 إضافة password لو موجود
       if (employee.password) {
         payload.password = employee.password;
       }
@@ -358,7 +386,7 @@ const HR = () => {
     },
   });
 
-  // ✅ Update employee mutation - PATCH /employee/{id}
+  // ✅ Update employee mutation
   const updateEmployeeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof newEmployee }) => {
       const payload: any = {
@@ -366,19 +394,18 @@ const HR = () => {
         name: data.name,
         name_ar: data.name_ar || null,
         position: data.position || null,
-        // department: data.department || null,
         phone: data.phone || null,
         email: data.email || null,
         salary: data.salary ? parseFloat(data.salary) : 0,
         is_active: data.is_active,
+        treasury_id: data.treasury_id || null,
+        branch_id: data.branch_id || null,
       };
 
-      // 👈 إضافة role_id لو موجود
       if (data.role_id) {
         payload.role_id = parseInt(data.role_id);
       }
 
-      // 👈 إضافة password لو تم إدخاله (فقط لو مش فاضي)
       if (data.password && data.password.trim() !== '') {
         payload.password = data.password;
       }
@@ -554,7 +581,6 @@ const HR = () => {
       name: '',
       name_ar: '',
       position: '',
-      // department: '',
       phone: '',
       email: '',
       salary: '',
@@ -610,48 +636,40 @@ const HR = () => {
     addEmployeeMutation.mutate(newEmployee);
   };
 
-const handleEditEmployee = async (employee: any) => {
-  try {
-    // جلب بيانات الموظف كاملة من API
-    const response = await api.get(`/employee/${employee.id}`);
-    const employeeData = response.data.data;
-    
-    console.log('📦 Employee data from API:', employeeData); // للتصحيح
-    
-    // 🔥 التعديل المهم هنا - إيجاد الـ role_id المناسب من قائمة الـ roles
-    let roleId = '';
-    if (employeeData.role) {
-      // دور كـ string - نبحث عنه في قائمة الـ roles
-      const foundRole = roles.find((r: any) => r.name === employeeData.role);
-      roleId = foundRole ? foundRole.id.toString() : '';
+  const handleEditEmployee = async (employee: any) => {
+    try {
+      const response = await api.get(`/employee/${employee.id}`);
+      const employeeData = response.data.data;
+      
+      console.log('📦 Employee data from API:', employeeData);
+      
+      setNewEmployee({
+        employee_code: employeeData.employee_code || '',
+        name: employeeData.name || '',
+        name_ar: employeeData.name_ar || '',
+        position: employeeData.position || '',
+        phone: employeeData.phone || '',
+        email: employeeData.email || '',
+        salary: employeeData.salary || '',
+        is_active: employeeData.is_active ?? true,
+        role_id: employeeData.role?.id?.toString() || '',
+        password: '',
+        treasury_id: employeeData.treasury?.id?.toString() || '',
+        branch_id: employeeData.branch?.id?.toString() || ''
+      });
+      
+      setIsEditingEmployee(true);
+      setCurrentEmployeeId(employee.id);
+      setShowEmployeeDialog(true);
+    } catch (error) {
+      console.error('Error fetching employee details:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
+        variant: 'destructive'
+      });
     }
-    
-    setNewEmployee({
-      employee_code: employeeData.employee_code || '',
-      name: employeeData.name || '',
-      name_ar: employeeData.name_ar || '',
-      position: employeeData.position || '',
-      phone: employeeData.phone || '',
-      email: employeeData.email || '',
-      salary: employeeData.salary || '',
-      is_active: employeeData.is_active ?? true,
-      role_id: roleId, // 👈 هنا بنستخدم role_id الصح
-      password: '', // 👈 الباسورد فاضي عشان ما يظهرش
-      treasury_id: employeeData.treasury_id || null,
-      branch_id: employeeData.branch_id || null
-    });
-    
-    setIsEditingEmployee(true);
-    setCurrentEmployeeId(employee.id);
-    setShowEmployeeDialog(true);
-  } catch (error) {
-    console.error('Error fetching employee details:', error);
-    toast({
-      title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
-      variant: 'destructive'
-    });
-  }
-};
+  };
+
   const handleUpdateEmployee = () => {
     if (!newEmployee.employee_code || !newEmployee.name) {
       toast({ 
@@ -1184,23 +1202,9 @@ const handleEditEmployee = async (employee: any) => {
                       />
                     </div>
                   </div>
-<div className="grid grid-cols-2 gap-4">
-     <div className="space-y-2">
-                      <Label>{t.treasury}</Label>
-                      <select
-                        className="w-full px-3 py-2 border rounded-md bg-background"
-                        value={newEmployee.treasury_id || ''}
-                        onChange={(e) => setNewEmployee(prev => ({ ...prev, treasury_id: e.target.value }))}
-                      >
-                        <option value="">{language === 'ar' ? 'بدون خزينة' : 'No Treasury'}</option>
-                        {treasury.map((treasury: any) => (
-                          <option key={treasury.id} value={treasury.id.toString()}>
-                            {treasury.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                       <div className="space-y-2">
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label>{t.branch}</Label>
                       <select
                         className="w-full px-3 py-2 border rounded-md bg-background"
@@ -1215,8 +1219,24 @@ const handleEditEmployee = async (employee: any) => {
                         ))}
                       </select>
                     </div>
-</div>
-                  {/* ========== حقل الباسورد الجديد ========== */}
+                    <div className="space-y-2">
+                      <Label>{t.treasury}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.treasury_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, treasury_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون خزينة' : 'No Treasury'}</option>
+                        {treasury.map((treasury: any) => (
+                          <option key={treasury.id} value={treasury.id.toString()}>
+                            {treasury.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* ========== حقل الباسورد ========== */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Key size={14} />
@@ -1410,71 +1430,94 @@ const handleEditEmployee = async (employee: any) => {
                           <TableHead>{t.name}</TableHead>
                           <TableHead>{t.position}</TableHead>
                           <TableHead>{t.role}</TableHead>
+                          <TableHead>{t.branch}</TableHead>
+                          <TableHead>{t.treasury}</TableHead>
                           <TableHead>{t.salary}</TableHead>
                           <TableHead className="text-end">{t.actions}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {employees.map((employee: any) => {
-                          // البحث عن الدور
-                          
-                          return (
-                            <TableRow key={employee.id}>
-                              <TableCell className="font-mono">{employee.employee_code}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="h-8 w-8">
-                                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                      {(language === 'ar' ? employee.name_ar || employee.name : employee.name).charAt(0)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="font-medium">
-                                    {language === 'ar' ? employee.name_ar || employee.name : employee.name}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell>{employee.position || '-'}</TableCell>
+                        {employees.map((employee: Employee) => (
+                          <TableRow key={employee.id}>
+                            <TableCell className="font-mono">{employee.employee_code}</TableCell>
                             <TableCell>
-  {employee.role ? (
-    <div className="flex items-center gap-1">
-      <Shield size={14} className="text-muted-foreground" />
-      {employee.role} {/* 👈 هنا بنستخدم role مش role_id */}
-    </div>
-  ) : (
-    '-'
-  )}
-</TableCell>
-                              <TableCell>{parseFloat(employee.salary || 0).toLocaleString()} YER</TableCell>
-                              
-                              <TableCell className="text-end">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleEditEmployee(employee)}
-                                    title={t.edit}
-                                    disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
-                                  >
-                                    <Edit2 size={14} />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDeleteEmployee(employee.id, employee.name_ar || employee.name)}
-                                    title={t.delete}
-                                    disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
-                                  >
-                                    {deleteEmployeeMutation.isPending && deleteEmployeeMutation.variables === employee.id ? (
-                                      <Loader2 size={14} className="animate-spin text-destructive" />
-                                    ) : (
-                                      <Trash2 size={14} className="text-destructive" />
-                                    )}
-                                  </Button>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                    {(language === 'ar' ? employee.name_ar || employee.name : employee.name).charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">
+                                  {language === 'ar' ? employee.name_ar || employee.name : employee.name}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{employee.position || '-'}</TableCell>
+                            <TableCell>
+                              {employee.role ? (
+                                <div className="flex items-center gap-1">
+                                  <Shield size={14} className="text-muted-foreground" />
+                                  {employee.role.name}
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {employee.branch ? (
+                                <div className="flex items-center gap-1">
+                                  <MapPin size={14} className="text-muted-foreground" />
+                                  {language === 'ar' ? employee.branch.name_ar || employee.branch.name : employee.branch.name}
+                                </div>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {employee.treasury ? (
+                                <div className="flex items-center gap-1">
+                                  <Landmark size={14} className="text-muted-foreground" />
+                                  {language === 'ar' ? employee.treasury.name_ar || employee.treasury.name : employee.treasury.name}
+                                  {employee.treasury.is_main && (
+                                    <Badge variant="outline" className="text-[10px] bg-primary/10">
+                                      {language === 'ar' ? 'رئيسية' : 'Main'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>{parseFloat(employee.salary?.toString() || '0').toLocaleString()} YER</TableCell>
+                            
+                            <TableCell className="text-end">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditEmployee(employee)}
+                                  title={t.edit}
+                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                >
+                                  <Edit2 size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteEmployee(employee.id.toString(), employee.name_ar || employee.name)}
+                                  title={t.delete}
+                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                >
+                                  {deleteEmployeeMutation.isPending && deleteEmployeeMutation.variables === employee.id.toString() ? (
+                                    <Loader2 size={14} className="animate-spin text-destructive" />
+                                  ) : (
+                                    <Trash2 size={14} className="text-destructive" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
@@ -1549,7 +1592,7 @@ const handleEditEmployee = async (employee: any) => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {deliveryPersons.map((person: any) => (
+                        {deliveryPersons.map((person: DeliveryPerson) => (
                           <TableRow key={person.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
