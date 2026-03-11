@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'; // ✅ أضف useRef
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext'; // ✅ أضف useAuth
+import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,20 +11,19 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import SupplierForm from '@/components/purchasing/SupplierForm';
 import SupplierDetails from '@/components/purchasing/SupplierDetails';
 import PurchaseInvoiceForm from '@/components/purchasing/PurchaseInvoiceForm';
-import SupplierPaymentForm from '@/components/purchasing/SupplierPaymentForm';
 import PurchaseReturnsList from '@/components/purchasing/PurchaseReturnsList';
 import PurchaseReturnForm from '@/components/purchasing/PurchaseReturnForm';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 import { cn, formatDate } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from '@/components/ui/use-toast';
-import { useReactToPrint } from 'react-to-print'; // ✅ أضف useReactToPrint
-import PurchaseInvoiceTemplate from '@/components/purchasing/PurchaseInvoiceTemplate'; // ✅ استيراد القالب
+import { useReactToPrint } from 'react-to-print';
+import PurchaseInvoiceTemplate from '@/components/purchasing/PurchaseInvoiceTemplate';
 
 import {
   Plus, FileText, Building2, Phone,
-  Wallet, Receipt, ShoppingCart, RotateCcw,
-  Eye, Calendar, DollarSign, Package, Trash2, Printer // ✅ أضف Printer
+  Wallet, Receipt, RotateCcw,
+  Eye, Calendar, DollarSign, Package, Trash2, Printer, Edit2, Landmark
 } from 'lucide-react';
 import {
   Dialog,
@@ -33,10 +32,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-// ========== أنواع البيانات من API ==========
+// ========== أنواع البيانات من API (موحدة) ==========
 
 interface Supplier {
-  id: number | string;
+  id: number;
   name: string;
   name_ar?: string;
   contact_person?: string;
@@ -46,7 +45,6 @@ interface Supplier {
   tax_number?: string;
   credit_limit?: number;
   payment_terms?: number;
-  is_active?: boolean;
   active?: number;
   note?: string;
   balance?: number;
@@ -54,43 +52,71 @@ interface Supplier {
   updated_at?: string;
 }
 
+// ✅ نوع موحد للفاتورة (نفس الـ Resource)
 interface PurchaseInvoice {
   id: number;
   invoice_number: string;
   supplier: {
     id: number;
     name: string;
+    name_ar?: string;
   };
-  branch: string;
-  warehouse: string;
-  currency: string;
-  tax: string;
+  branch: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  warehouse: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  treasury: {
+    id: number;
+    name: string;
+    name_ar?: string;
+    is_main?: boolean;
+  } | null;
+  currency: {
+    id: number;
+    name: string;
+    code: string;
+    symbol: string;
+  };
+  tax: {
+    id: number;
+    name: string;
+    rate: string;
+  } | null;
   invoice_date: string;
   due_date: string;
   payment_method: string;
   note: string | null;
-  subtotal: string;
-  paid_amount: string;
-  discount_total: string;
-  tax_total: string;
-  total_amount: string;
+  subtotal: number;
+  paid_amount: number;
+  discount_total: number;
+  tax_total: number;
+  total_amount: number;
+  remaining_amount: number;
   items: Array<{
+    id: number;
     product_id: number;
     product_name: string;
+    product_name_ar?: string;
+    product_sku: string;
+    product_variant_id?: number;
+    variant_details?: {
+      size?: string;
+      color?: string;
+    } | null;
     quantity: number;
-    price: string;
-    discount: string;
-    tax: string;
-    total: string;
+    price: number;
+    discount: number;
+    tax: number;
+    total: number;
   }>;
   created_at: string;
-}
-
-interface PurchaseInvoiceDetailsResponse {
-  data: PurchaseInvoice;
-  result: string;
-  message: string;
-  status: number;
+  updated_at: string;
 }
 
 interface PurchaseInvoicesResponse {
@@ -111,6 +137,27 @@ interface PurchaseInvoicesResponse {
   result: string;
   message: string;
   status: number;
+}
+
+interface PurchaseInvoiceDetailsResponse {
+  data: PurchaseInvoice;
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface InvoiceTableRow {
+  id: number;
+  invoice_number: string;
+  supplier_name: string;
+  treasury_name: string;
+  total_amount: number;
+  payment_method: string;
+  invoice_date: string;
+  due_date: string;
+  items_count: number;
+  paid_amount: number;
+  remaining_amount: number;
 }
 
 interface PurchaseOrdersResponse {
@@ -137,39 +184,28 @@ interface PurchaseReturnsResponse {
   };
 }
 
-interface InvoiceTableRow {
-  id: number;
-  invoice_number: string;
-  supplier: string;
-  total_amount: number;
-  payment_method: string;
-  invoice_date: string;
-  due_date: string;
-  items_count: number;
-  paid_amount?: string;
-}
-
 const Purchasing = () => {
   const { language } = useLanguage();
-  const { user } = useAuth(); // ✅ استخدام useAuth
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('invoices');
   const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
   const [supplierFilters, setSupplierFilters] = useState<FilterValues>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
-  const invoicePrintRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
-  const [showPrint, setShowPrint] = useState(false); // ✅ للتحكم في إظهار الطباعة
+  const invoicePrintRef = useRef<HTMLDivElement>(null);
+  const [showPrint, setShowPrint] = useState(false);
 
   // Modals
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [showSupplierDetails, setShowSupplierDetails] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [showEditInvoiceForm, setShowEditInvoiceForm] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoice | null>(null);
 
   // دالة الطباعة
   const handlePrint = useReactToPrint({
@@ -180,85 +216,7 @@ const Purchasing = () => {
     },
   });
 
-  // ========== جلب تفاصيل الفاتورة عند الضغط عليها ==========
-  const { data: invoiceDetails, isLoading: invoiceDetailsLoading, refetch: refetchInvoiceDetails } = useQuery<PurchaseInvoiceDetailsResponse>({
-    queryKey: ['purchase-invoice-details', selectedInvoiceId],
-    queryFn: async () => {
-      if (!selectedInvoiceId) throw new Error('No invoice selected');
-
-      try {
-        const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
-
-        if (response.data.result === 'Success') {
-          return response.data;
-        }
-
-        throw new Error(response.data.message || 'Failed to fetch invoice details');
-      } catch (error) {
-        console.error('Error fetching invoice details:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب تفاصيل الفاتورة' : 'Error fetching invoice details',
-          variant: 'destructive',
-        });
-        throw error;
-      }
-    },
-    enabled: !!selectedInvoiceId && showInvoiceDetails,
-  });
-
-  // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
-  const getPrintData = () => {
-    if (!invoiceDetails?.data) return null;
-
-    const data = invoiceDetails.data;
-    
-    return {
-      id: data.id.toString(),
-      invoice_number: data.invoice_number,
-      date: data.invoice_date,
-      supplier: {
-        name: data.supplier.name,
-        nameAr: data.supplier.name,
-        phone: '',
-        tax_number: '',
-      },
-      cashierName: user?.name || 'المدير',
-      branchName: data.branch,
-      branchPhone: '',
-      branchAddress: '',
-      taxRate: 14, // أو من البيانات إذا كانت موجودة
-      items: data.items.map(item => ({
-        name: item.product_name,
-        nameAr: item.product_name,
-        quantity: item.quantity,
-        price: parseFloat(item.price),
-        sizeName: '',
-        sizeNameAr: '',
-        colorName: '',
-        colorNameAr: '',
-        discount_percent: parseFloat(item.discount) / (item.quantity * parseFloat(item.price)) * 100 || 0,
-        tax_percent: parseFloat(item.tax) / (item.quantity * parseFloat(item.price)) * 100 || 0,
-      })),
-      subtotal: parseFloat(data.subtotal),
-      tax: parseFloat(data.tax_total),
-      discount_total: parseFloat(data.discount_total),
-      total: parseFloat(data.total_amount),
-      paid_amount: parseFloat(data.paid_amount || '0'),
-      remaining_amount: parseFloat(data.total_amount) - parseFloat(data.paid_amount || '0'),
-      payment_method: data.payment_method,
-      notes: data.note || '',
-    };
-  };
-
-  // معالج الطباعة
-  const handlePrintClick = () => {
-    setShowPrint(true);
-    setTimeout(() => {
-      handlePrint();
-    }, 100);
-  };
-
-  // ========== باقي الكود كما هو ==========
+  // ========== جلب الفواتير ==========
   const {
     data: invoicesResponse,
     isLoading: invoicesLoading,
@@ -301,8 +259,6 @@ const Purchasing = () => {
           payload.filters = filters;
         }
 
-        console.log('📦 Fetching purchase invoices with payload:', payload);
-
         const response = await api.post<PurchaseInvoicesResponse>('/purchases-invoices/index', payload);
 
         if (response.data.result === 'Success') {
@@ -321,20 +277,55 @@ const Purchasing = () => {
     },
   });
 
-  // تحويل البيانات إلى الشكل المطلوب للجدول
+  // ✅ تحويل البيانات إلى الشكل المطلوب للجدول (مباشرة من الـ API)
   const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: PurchaseInvoice) => ({
     id: invoice.id,
     invoice_number: invoice.invoice_number,
-    supplier: invoice.supplier.name,
-    total_amount: parseFloat(invoice.total_amount),
+    supplier_name: language === 'ar' 
+      ? invoice.supplier.name_ar || invoice.supplier.name 
+      : invoice.supplier.name,
+    treasury_name: invoice.treasury 
+      ? (language === 'ar' ? invoice.treasury.name_ar || invoice.treasury.name : invoice.treasury.name)
+      : '-',
+    total_amount: invoice.total_amount,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,
-    items_count: invoice.items.length,
+    items_count: invoice.items?.length || 0,
     paid_amount: invoice.paid_amount,
+    remaining_amount: invoice.remaining_amount,
   }));
 
   const paginationMeta = invoicesResponse?.meta;
+
+  // ========== جلب تفاصيل الفاتورة عند الضغط عليها ==========
+  const { data: invoiceDetails, isLoading: invoiceDetailsLoading } = useQuery<PurchaseInvoiceDetailsResponse>({
+    queryKey: ['purchase-invoice-details', selectedInvoiceId],
+    queryFn: async () => {
+      if (!selectedInvoiceId) throw new Error('No invoice selected');
+
+      try {
+        const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
+
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch invoice details');
+      } catch (error) {
+        console.error('Error fetching invoice details:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ في جلب تفاصيل الفاتورة' : 'Error fetching invoice details',
+          variant: 'destructive',
+        });
+        throw error;
+      }
+    },
+    enabled: !!selectedInvoiceId && showInvoiceDetails,
+  });
+
+  // ========== حذف الفاتورة ==========
+
 
   // ========== حذف المورد ==========
   const deleteSupplierMutation = useMutation({
@@ -371,6 +362,60 @@ const Purchasing = () => {
     },
   });
 
+  // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
+  const getPrintData = () => {
+    if (!invoiceDetails?.data) return null;
+
+    const data = invoiceDetails.data;
+    
+    return {
+      id: data.id.toString(),
+      invoice_number: data.invoice_number,
+      date: data.invoice_date,
+      supplier: {
+        name: data.supplier.name,
+        nameAr: data.supplier.name_ar || data.supplier.name,
+        phone: '',
+        tax_number: '',
+      },
+      cashierName: user?.name || 'المدير',
+      branchName: data.branch.name,
+      branchPhone: '',
+      branchAddress: '',
+      taxRate: data.tax ? parseFloat(data.tax.rate) : 0,
+      items: data.items.map(item => ({
+        name: item.product_name,
+        nameAr: item.product_name_ar || item.product_name,
+        quantity: item.quantity,
+        price: item.price,
+        sizeName: item.variant_details?.size || '',
+        sizeNameAr: item.variant_details?.size || '',
+        colorName: item.variant_details?.color || '',
+        colorNameAr: item.variant_details?.color || '',
+        discount_percent: item.discount,
+        tax_percent: item.tax,
+      })),
+      subtotal: data.subtotal,
+      tax: data.tax_total,
+      discount_total: data.discount_total,
+      total: data.total_amount,
+      paid_amount: data.paid_amount,
+      remaining_amount: data.remaining_amount,
+      payment_method: data.payment_method,
+      notes: data.note || '',
+    };
+  };
+
+  // معالج الطباعة
+  const handlePrintClick = () => {
+    if (!invoiceDetails?.data) return;
+    
+    setShowPrint(true);
+    setTimeout(() => {
+      handlePrint();
+    }, 100);
+  };
+
   // ========== جلب الموردين ==========
   const {
     data: suppliers = [],
@@ -394,7 +439,6 @@ const Purchasing = () => {
         }
 
         if (supplierFilters.balance_min || supplierFilters.balance_max) {
-          
           if (supplierFilters.balance_min) {
             filters.credit_limit = Number(supplierFilters.balance_min);
           }
@@ -437,8 +481,7 @@ const Purchasing = () => {
     },
   });
 
-  const purchaseOrders = purchaseOrdersResponse?.data || [];
-  const purchaseOrdersCount = purchaseOrdersResponse?.meta?.total || purchaseOrders.length;
+  const purchaseOrdersCount = purchaseOrdersResponse?.meta?.total || purchaseOrdersResponse?.data?.length || 0;
 
   // ========== جلب مرتجعات الشراء ==========
   const { data: purchaseReturnsResponse } = useQuery<PurchaseReturnsResponse>({
@@ -457,8 +500,7 @@ const Purchasing = () => {
     },
   });
 
-  const purchaseReturns = purchaseReturnsResponse?.data || [];
-  const purchaseReturnsCount = purchaseReturnsResponse?.meta?.total || purchaseReturns.length;
+  const purchaseReturnsCount = purchaseReturnsResponse?.meta?.total || purchaseReturnsResponse?.data?.length || 0;
 
   // ========== حساب الإحصائيات ==========
   const totalBalance = suppliers.reduce((sum: number, s: Supplier) => sum + Number(s.credit_limit || 0), 0);
@@ -483,7 +525,6 @@ const Purchasing = () => {
       icon: <RotateCcw className="text-warning" size={24} />,
       color: 'bg-warning/10'
     },
-  
     {
       label: language === 'ar' ? 'المستحق للموردين' : 'Payables',
       value: `${totalBalance.toLocaleString()} YER`,
@@ -558,13 +599,14 @@ const Purchasing = () => {
   // ========== دالة تنسيق الأرقام ==========
   const formatAmount = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString();
+    return isNaN(num) ? '0' : num.toLocaleString();
   };
 
-  // للتحقق من حالة المودال
-  useEffect(() => {
-    console.log('🔵 showInvoiceForm changed to:', showInvoiceForm);
-  }, [showInvoiceForm]);
+  // معالج التعديل
+  const handleEditInvoice = (invoice: PurchaseInvoice) => {
+    setEditingInvoice(invoice);
+    setShowEditInvoiceForm(true);
+  };
 
   return (
     <MainLayout activeItem="purchasing">
@@ -580,12 +622,8 @@ const Purchasing = () => {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-           
             <Button
-              onClick={() => {
-                console.log('🟢 Button clicked - opening invoice form');
-                setShowInvoiceForm(true);
-              }}
+              onClick={() => setShowInvoiceForm(true)}
               className="bg-primary"
             >
               <Plus size={16} className="me-2" />
@@ -654,91 +692,109 @@ const Purchasing = () => {
                         <TableHead className="w-16">#</TableHead>
                         <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المورد' : 'Supplier'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
                         <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
-                        <TableHead>{language === 'ar' ? 'عدد الأصناف' : 'Items'}</TableHead>
-                        <TableHead>{language === 'ar' ? 'تاريخ الفاتورة' : 'Invoice Date'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'الأصناف' : 'Items'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
                         <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                       </TableRow>
                     </TableHeader>
-                  <TableBody>
-  {invoicesLoading ? (
-    <TableRow>
-      <TableCell colSpan={9} className="text-center py-8">
-        <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      </TableCell>
-    </TableRow>
-  ) : invoicesList.length === 0 ? (
-    <TableRow>
-      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-        {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
-      </TableCell>
-    </TableRow>
-  ) : (
-    invoicesList.map((inv: InvoiceTableRow, index: number) => (
-      <TableRow key={inv.id}>
-        <TableCell className="font-mono text-muted-foreground">
-          {paginationMeta?.from ? paginationMeta.from + index : index + 1}
-        </TableCell>
-        <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
-        <TableCell>{inv.supplier}</TableCell>
-        <TableCell className="font-semibold">{inv.total_amount.toLocaleString()} YER</TableCell>
-        <TableCell>
-          {inv.paid_amount ? (
-            <span className="font-medium text-success">
-              {parseFloat(inv.paid_amount).toLocaleString()} YER
-            </span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
-        </TableCell>
-        <TableCell>
-          <Badge variant="outline">
-            {getPaymentMethodLabel(inv.payment_method)}
-          </Badge>
-        </TableCell>
-        <TableCell className="text-center">{inv.items_count}</TableCell>
-        <TableCell>{formatDate(inv.invoice_date)}</TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                console.log('👁️ Opening invoice details for ID:', inv.id);
-                setSelectedInvoiceId(inv.id);
-                setShowInvoiceDetails(true);
-              }}
-              className="h-8 w-8 p-0"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                console.log('🔄 Opening return form for invoice ID:', inv.id);
-                setSelectedInvoiceId(inv.id);
-                setShowReturnForm(true);
-              }}
-              className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    ))
-  )}
-</TableBody>
+                    <TableBody>
+                      {invoicesLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={11} className="text-center py-8">
+                            <div className="flex justify-center">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : invoicesList.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                            {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        invoicesList.map((inv: InvoiceTableRow, index: number) => (
+                          <TableRow key={inv.id}>
+                            <TableCell className="font-mono text-muted-foreground">
+                              {paginationMeta?.from ? paginationMeta.from + index : index + 1}
+                            </TableCell>
+                            <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
+                            <TableCell>{inv.supplier_name}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Landmark size={14} className="text-muted-foreground" />
+                                <span className="text-sm">{inv.treasury_name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-semibold">{inv.total_amount.toLocaleString()} YER</TableCell>
+                            <TableCell className="text-success font-medium">{inv.paid_amount.toLocaleString()} YER</TableCell>
+                            <TableCell className={inv.remaining_amount > 0 ? 'text-warning font-medium' : 'text-muted-foreground'}>
+                              {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} YER
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {getPaymentMethodLabel(inv.payment_method)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">{inv.items_count}</TableCell>
+                            <TableCell>{formatDate(inv.invoice_date)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedInvoiceId(inv.id);
+                                    setShowInvoiceDetails(true);
+                                  }}
+                                  className="h-8 w-8 p-0"
+                                  title={language === 'ar' ? 'عرض' : 'View'}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const fullInvoice = invoicesResponse?.data.find(i => i.id === inv.id);
+                                    if (fullInvoice) {
+                                      handleEditInvoice(fullInvoice);
+                                    }
+                                  }}
+                                  className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title={language === 'ar' ? 'تعديل' : 'Edit'}
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedInvoiceId(inv.id);
+                                    setShowReturnForm(true);
+                                  }}
+                                  className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                  title={language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
+                                
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
                   </Table>
                 </div>
 
                 {/* Pagination */}
-                {paginationMeta && paginationMeta.last_page > 0 && (
+                {paginationMeta && paginationMeta.last_page > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <div className="flex items-center gap-4">
                       <div className="text-sm text-muted-foreground">
@@ -760,7 +816,6 @@ const Purchasing = () => {
                             setShowAllInvoices(true);
                             setCurrentPage(1);
                           }}
-                          disabled={invoicesLoading}
                         >
                           {language === 'ar' ? 'عرض الكل' : 'Show All'}
                         </Button>
@@ -773,25 +828,23 @@ const Purchasing = () => {
                             setShowAllInvoices(false);
                             setCurrentPage(1);
                           }}
-                          disabled={invoicesLoading}
                         >
                           {language === 'ar' ? 'عرض بالصفحات' : 'Paginate'}
                         </Button>
                       )}
                     </div>
 
-                    {!showAllInvoices && paginationMeta.last_page > 1 && (
+                    {!showAllInvoices && (
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1 || invoicesLoading}
+                          disabled={currentPage === 1}
                         >
                           {language === 'ar' ? 'السابق' : 'Previous'}
                         </Button>
 
-                        {/* Page numbers */}
                         <div className="flex items-center gap-1">
                           {Array.from({ length: Math.min(5, paginationMeta.last_page) }, (_, i) => {
                             let pageNum: number;
@@ -805,21 +858,17 @@ const Purchasing = () => {
                               pageNum = currentPage - 2 + i;
                             }
 
-                            if (pageNum > 0 && pageNum <= paginationMeta.last_page) {
-                              return (
-                                <Button
-                                  key={pageNum}
-                                  variant={currentPage === pageNum ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={() => setCurrentPage(pageNum)}
-                                  disabled={invoicesLoading}
-                                  className="w-8 h-8 p-0"
-                                >
-                                  {pageNum}
-                                </Button>
-                              );
-                            }
-                            return null;
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
                           })}
                         </div>
 
@@ -827,7 +876,7 @@ const Purchasing = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.min(paginationMeta.last_page, prev + 1))}
-                          disabled={currentPage === paginationMeta.last_page || invoicesLoading}
+                          disabled={currentPage === paginationMeta.last_page}
                         >
                           {language === 'ar' ? 'التالي' : 'Next'}
                         </Button>
@@ -838,9 +887,6 @@ const Purchasing = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          {/* ========== أوامر الشراء ========== */}
-      
 
           {/* ========== المرتجعات ========== */}
           <TabsContent value="returns" className="mt-4">
@@ -875,63 +921,62 @@ const Purchasing = () => {
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {suppliers
-                      .map((supplier: Supplier) => (
-                        <Card
-                          key={supplier.id}
-                          className="border hover:shadow-md transition-shadow cursor-pointer relative"
-                          onClick={() => {
-                            setSelectedSupplier(supplier);
-                            setShowSupplierDetails(true);
-                          }}
-                        >
-                          <CardContent className="p-4">
-                            {/* Delete Button */}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا المورد؟' : 'Are you sure you want to delete this supplier?')) {
-                                  deleteSupplierMutation.mutate(supplier.id);
-                                }
-                              }}
-                              className="absolute top-2 right-2 h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              disabled={deleteSupplierMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                    {suppliers.map((supplier: Supplier) => (
+                      <Card
+                        key={supplier.id}
+                        className="border hover:shadow-md transition-shadow cursor-pointer relative"
+                        onClick={() => {
+                          setSelectedSupplier(supplier);
+                          setShowSupplierDetails(true);
+                        }}
+                      >
+                        <CardContent className="p-4">
+                          {/* Delete Button */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا المورد؟' : 'Are you sure you want to delete this supplier?')) {
+                                deleteSupplierMutation.mutate(Number(supplier.id));
+                              }
+                            }}
+                            className="absolute top-2 right-2 h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deleteSupplierMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
 
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 rounded-lg bg-primary/10">
-                                <Building2 className="text-primary" size={20} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-foreground truncate">
-                                  {language === 'ar' ? supplier.name_ar || supplier.name : supplier.name}
-                                </h3>
-                                {supplier.phone && (
-                                  <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                                    <Phone size={14} />
-                                    <span dir="ltr">{supplier.phone}</span>
-                                  </div>
-                                )}
-                                <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                                  <span className="text-xs text-muted-foreground">
-                                    {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
-                                  </span>
-                                  <span className={cn(
-                                    "font-semibold",
-                                    Number(supplier.balance) > 0 ? "text-destructive" : "text-success"
-                                  )}>
-                                    {Number(supplier.credit_limit || 0).toLocaleString()} YER
-                                  </span>
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Building2 className="text-primary" size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-foreground truncate">
+                                {language === 'ar' ? supplier.name_ar || supplier.name : supplier.name}
+                              </h3>
+                              {supplier.phone && (
+                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                  <Phone size={14} />
+                                  <span dir="ltr">{supplier.phone}</span>
                                 </div>
+                              )}
+                              <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                                <span className="text-xs text-muted-foreground">
+                                  {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
+                                </span>
+                                <span className={cn(
+                                  "font-semibold",
+                                  Number(supplier.credit_limit) > 0 ? "text-destructive" : "text-success"
+                                )}>
+                                  {Number(supplier.credit_limit || 0).toLocaleString()} YER
+                                </span>
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -952,7 +997,6 @@ const Purchasing = () => {
                   #{invoiceDetails?.data?.invoice_number || selectedInvoiceId}
                 </span>
               </DialogTitle>
-              {/* ✅ زر الطباعة */}
               {invoiceDetails?.data && (
                 <Button
                   variant="outline"
@@ -982,7 +1026,9 @@ const Purchasing = () => {
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </div>
                     <div className="font-medium">
-                      {invoiceDetails.data.supplier.name}
+                      {language === 'ar' 
+                        ? invoiceDetails.data.supplier.name_ar || invoiceDetails.data.supplier.name
+                        : invoiceDetails.data.supplier.name}
                     </div>
                   </CardContent>
                 </Card>
@@ -1025,30 +1071,62 @@ const Purchasing = () => {
               </div>
 
               {/* Additional Info Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'الفرع' : 'Branch'}
                   </p>
-                  <p className="font-medium">{invoiceDetails.data.branch}</p>
+                  <p className="font-medium">
+                    {language === 'ar' 
+                      ? invoiceDetails.data.branch.name_ar || invoiceDetails.data.branch.name
+                      : invoiceDetails.data.branch.name}
+                  </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'المستودع' : 'Warehouse'}
                   </p>
-                  <p className="font-medium">{invoiceDetails.data.warehouse}</p>
+                  <p className="font-medium">
+                    {language === 'ar' 
+                      ? invoiceDetails.data.warehouse.name_ar || invoiceDetails.data.warehouse.name
+                      : invoiceDetails.data.warehouse.name}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                  </p>
+                  <p className="font-medium flex items-center gap-1">
+                    <Landmark size={14} className="text-primary" />
+                    {invoiceDetails.data.treasury 
+                      ? (language === 'ar' 
+                        ? invoiceDetails.data.treasury.name_ar || invoiceDetails.data.treasury.name 
+                        : invoiceDetails.data.treasury.name)
+                      : '-'
+                    }
+                    {invoiceDetails.data.treasury?.is_main && (
+                      <Badge variant="outline" className="text-[10px] bg-primary/10">
+                        {language === 'ar' ? 'رئيسية' : 'Main'}
+                      </Badge>
+                    )}
+                  </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'العملة' : 'Currency'}
                   </p>
-                  <p className="font-medium">{invoiceDetails.data.currency}</p>
+                  <p className="font-medium">{invoiceDetails.data.currency.code} - {invoiceDetails.data.currency.symbol}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
                     {language === 'ar' ? 'الضريبة' : 'Tax'}
                   </p>
-                  <p className="font-medium">{invoiceDetails.data.tax}</p>
+                  <p className="font-medium">
+                    {invoiceDetails.data.tax 
+                      ? `${invoiceDetails.data.tax.name} (${invoiceDetails.data.tax.rate}%)`
+                      : '-'
+                    }
+                  </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">
@@ -1061,6 +1139,28 @@ const Purchasing = () => {
                     {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
                   </p>
                   <p className="font-medium">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
+                </div>
+              </div>
+
+              {/* Payment Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-success/10 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'المدفوع' : 'Paid'}
+                  </p>
+                  <p className="font-bold text-success">{formatAmount(invoiceDetails.data.paid_amount)} YER</p>
+                </div>
+                <div className="p-3 bg-warning/10 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'المتبقي' : 'Remaining'}
+                  </p>
+                  <p className="font-bold text-warning">{formatAmount(invoiceDetails.data.remaining_amount)} YER</p>
+                </div>
+                <div className="p-3 bg-primary/10 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
+                  </p>
+                  <p className="font-bold">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
                 </div>
               </div>
 
@@ -1089,22 +1189,34 @@ const Purchasing = () => {
                         <TableRow className="bg-muted/50">
                           <TableHead className="w-16">#</TableHead>
                           <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead>{language === 'ar' ? 'المواصفات' : 'Specs'}</TableHead>
                           <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
-                          <TableHead className="text-right">{language === 'ar' ? 'الخصم' : 'Discount'}</TableHead>
+                          <TableHead className="text-right">{language === 'ar' ? 'الخصم' : 'Disc'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'الضريبة' : 'Tax'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {invoiceDetails.data.items.map((item, idx) => (
-                          <TableRow key={idx}>
+                          <TableRow key={item.id}>
                             <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                            <TableCell className="font-medium">{item.product_name}</TableCell>
+                            <TableCell className="font-medium">
+                              {language === 'ar' ? item.product_name_ar || item.product_name : item.product_name}
+                              <div className="text-xs text-muted-foreground">{item.product_sku}</div>
+                            </TableCell>
+                            <TableCell>
+                              {item.variant_details && (
+                                <div className="text-xs">
+                                  {item.variant_details.size && <span>📏 {item.variant_details.size}</span>}
+                                  {item.variant_details.color && <span> 🎨 {item.variant_details.color}</span>}
+                                </div>
+                              )}
+                            </TableCell>
                             <TableCell className="text-center">{item.quantity}</TableCell>
                             <TableCell className="text-right">{formatAmount(item.price)}</TableCell>
-                            <TableCell className="text-right">{formatAmount(item.discount)}</TableCell>
-                            <TableCell className="text-right">{formatAmount(item.tax)}</TableCell>
+                            <TableCell className="text-right text-destructive">{item.discount > 0 ? `${item.discount}%` : '-'}</TableCell>
+                            <TableCell className="text-right">{item.tax > 0 ? `${item.tax}%` : '-'}</TableCell>
                             <TableCell className="text-right font-semibold">{formatAmount(item.total)}</TableCell>
                           </TableRow>
                         ))}
@@ -1117,19 +1229,19 @@ const Purchasing = () => {
                     <div className="w-64 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
-                        <span>{formatAmount(invoiceDetails.data.subtotal)}</span>
+                        <span>{formatAmount(invoiceDetails.data.subtotal)} YER</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الخصم' : 'Total Discount'}</span>
-                        <span className="text-destructive">-{formatAmount(invoiceDetails.data.discount_total)}</span>
+                        <span className="text-destructive">-{formatAmount(invoiceDetails.data.discount_total)} YER</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الضريبة' : 'Total Tax'}</span>
-                        <span>+{formatAmount(invoiceDetails.data.tax_total)}</span>
+                        <span>+{formatAmount(invoiceDetails.data.tax_total)} YER</span>
                       </div>
                       <div className="flex justify-between font-bold pt-2 border-t">
                         <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                        <span className="text-primary">{formatAmount(invoiceDetails.data.total_amount)}</span>
+                        <span className="text-primary">{formatAmount(invoiceDetails.data.total_amount)} YER</span>
                       </div>
                     </div>
                   </div>
@@ -1142,8 +1254,20 @@ const Purchasing = () => {
                   {language === 'ar' ? 'إغلاق' : 'Close'}
                 </Button>
                 <Button
+                  variant="outline"
                   onClick={() => {
-                    console.log('🔄 Opening return form from details for invoice ID:', selectedInvoiceId);
+                    if (invoiceDetails?.data) {
+                      handleEditInvoice(invoiceDetails.data);
+                      setShowInvoiceDetails(false);
+                    }
+                  }}
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <Edit2 size={16} className="me-2" />
+                  {language === 'ar' ? 'تعديل' : 'Edit'}
+                </Button>
+                <Button
+                  onClick={() => {
                     setShowInvoiceDetails(false);
                     setShowReturnForm(true);
                   }}
@@ -1175,6 +1299,26 @@ const Purchasing = () => {
         />
       )}
 
+      {/* ========== Modal تعديل الفاتورة ========== */}
+      {editingInvoice && (
+        <PurchaseInvoiceForm
+          isOpen={showEditInvoiceForm}
+          onClose={() => {
+            setShowEditInvoiceForm(false);
+            setEditingInvoice(null);
+          }}
+          onSave={() => {
+            refetchAll();
+            setShowEditInvoiceForm(false);
+            setEditingInvoice(null);
+          }}
+          onSaveAndNew={() => {
+            refetchAll();
+          }}
+          invoiceToEdit={editingInvoice}
+        />
+      )}
+
       {/* Modals */}
       <SupplierForm
         isOpen={showSupplierForm}
@@ -1203,7 +1347,7 @@ const Purchasing = () => {
         }}
       />
 
-      {/* ✅ قالب الطباعة المخفي */}
+      {/* قالب الطباعة المخفي */}
       {showPrint && invoiceDetails?.data && (
         <div style={{ display: 'none' }}>
           <PurchaseInvoiceTemplate

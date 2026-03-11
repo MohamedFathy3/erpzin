@@ -18,7 +18,7 @@ import {
 import {
   FileText, Trash2, Package, Building2,
   Warehouse, CreditCard, Calendar, Loader2, DollarSign, 
-  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer, Landmark
+  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer, Landmark, Edit2
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -142,6 +142,73 @@ interface Product {
   }>;
 }
 
+// ✅ نوع للفاتورة من الـ API (بنفس شكل Resource)
+interface ApiPurchaseInvoice {
+  id: number;
+  invoice_number: string;
+  supplier: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  branch: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  warehouse: {
+    id: number;
+    name: string;
+    name_ar?: string;
+  };
+  treasury: {
+    id: number;
+    name: string;
+    name_ar?: string;
+    is_main?: boolean;
+  } | null;
+  currency: {
+    id: number;
+    name: string;
+    code: string;
+    symbol: string;
+  };
+  tax: {
+    id: number;
+    name: string;
+    rate: string;
+  } | null;
+  invoice_date: string;
+  due_date: string;
+  payment_method: string;
+  note: string | null;
+  subtotal: number;
+  paid_amount: number;
+  discount_total: number;
+  tax_total: number;
+  total_amount: number;
+  remaining_amount: number;
+  items: Array<{
+    id: number;
+    product_id: number;
+    product_name: string;
+    product_name_ar?: string;
+    product_sku: string;
+    product_variant_id?: number;
+    variant_details?: {
+      size?: string;
+      color?: string;
+    } | null;
+    quantity: number;
+    price: number;
+    discount: number;
+    tax: number;
+    total: number;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
 type InvoiceAction = 'save' | 'save_and_new' | 'save_and_print';
 
 interface PurchaseInvoiceFormProps {
@@ -149,13 +216,15 @@ interface PurchaseInvoiceFormProps {
   onClose: () => void;
   onSave: () => void;
   onSaveAndNew?: () => void;
+  invoiceToEdit?: ApiPurchaseInvoice | null;
 }
 
 const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   isOpen,
   onClose,
   onSave,
-  onSaveAndNew
+  onSaveAndNew,
+  invoiceToEdit
 }) => {
   const { language } = useLanguage();
   const { user } = useAuth();
@@ -167,6 +236,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const invoicePrintRef = useRef<HTMLDivElement>(null);
   const [showPrint, setShowPrint] = useState(false);
   const [printData, setPrintData] = useState<any>(null);
+
+  // ✅ تحديد إذا كنا في وضع التعديل
+  const isEditMode = !!invoiceToEdit;
 
   // دالة للطباعة
   const handlePrint = useReactToPrint({
@@ -202,6 +274,56 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   });
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
+
+  // ========== تحميل بيانات الفاتورة في وضع التعديل ==========
+  useEffect(() => {
+    if (isEditMode && invoiceToEdit) {
+      console.log('📝 Loading invoice for edit:', invoiceToEdit);
+      
+      // تحميل بيانات الفاتورة من الـ Resource مباشرة
+      setFormData({
+        supplier_id: invoiceToEdit.supplier.id.toString(),
+        branch_id: invoiceToEdit.branch.id.toString(),
+        warehouse_id: invoiceToEdit.warehouse.id.toString(),
+        invoice_date: invoiceToEdit.invoice_date || getTodayDate(),
+        due_date: invoiceToEdit.due_date || '',
+        payment_method: invoiceToEdit.payment_method || 'cash',
+        tax_id: invoiceToEdit.tax?.id?.toString() || '',
+        currency_id: invoiceToEdit.currency.id.toString(),
+        notes: invoiceToEdit.note || '',
+        paid_amount: invoiceToEdit.paid_amount || 0,
+        treasury_id: invoiceToEdit.treasury?.id?.toString() || ''
+      });
+
+      // تحميل الأصناف (باستخدام بيانات المنتج من الـ Resource)
+      if (invoiceToEdit.items && invoiceToEdit.items.length > 0) {
+        const loadedItems: InvoiceItem[] = invoiceToEdit.items.map((item, index) => ({
+          id: `edit-${index}-${Date.now()}-${Math.random()}`,
+          product_id: item.product_id,
+          product_variant_id: item.product_variant_id,
+          product_name: language === 'ar' 
+            ? (item.product_name_ar || item.product_name) 
+            : item.product_name,
+          product_sku: item.product_sku,
+          size_name: item.variant_details?.size,
+          color_name: item.variant_details?.color,
+          quantity: item.quantity,
+          unit_cost: item.price,
+          discount_percent: item.discount,
+          discount_amount: (item.quantity * item.price) * (item.discount / 100),
+          tax_percent: item.tax,
+          tax_amount: ((item.quantity * item.price) * (1 - item.discount / 100)) * (item.tax / 100),
+          total_cost: item.total
+        }));
+        setItems(loadedItems);
+      }
+
+      // إظهار تفاصيل الدفع إذا كان المبلغ المدفوع أكبر من 0
+      if (invoiceToEdit.paid_amount > 0) {
+        setShowPaymentDetails(true);
+      }
+    }
+  }, [isEditMode, invoiceToEdit, getTodayDate, language]);
 
   // ========== جلب البيانات ==========
 
@@ -366,14 +488,13 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     enabled: isOpen
   });
 
-  // ========== جلب الخزائن ==========
+  // جلب الخزائن
   const { data: treasury = [], isLoading: treasuryLoading, refetch: refetchTreasury } = useQuery({
     queryKey: ['treasury', formData.branch_id],
     queryFn: async () => {
       try {
         const filters: any = {};
         
-        // ✅ نجيب كل خزائن الفرع المختار
         if (formData.branch_id) {
           filters.branch_id = Number(formData.branch_id);
         }
@@ -395,64 +516,32 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         return [];
       }
     },
-    enabled: isOpen && !!formData.branch_id // 👈 نشغل الـ query بس لو فيه فرع مختار
+    enabled: isOpen && !!formData.branch_id
   });
 
   // ========== Effects ==========
 
   // تعيين العملة الافتراضية
   useEffect(() => {
-    if (currencies.length > 0 && !formData.currency_id) {
+    if (currencies.length > 0 && !formData.currency_id && !isEditMode) {
       const defaultCurr = currencies.find((c: Currency) => c.default === true) || currencies[0];
       setFormData(prev => ({ ...prev, currency_id: defaultCurr.id.toString() }));
     }
-  }, [currencies, formData.currency_id]);
+  }, [currencies, formData.currency_id, isEditMode]);
 
   // تعيين الضريبة الافتراضية
   useEffect(() => {
-    if (taxes.length > 0 && !formData.tax_id) {
+    if (taxes.length > 0 && !formData.tax_id && !isEditMode) {
       const defaultTax = taxes.find((t: Tax) => t.default === true) || taxes[0];
       setFormData(prev => ({ ...prev, tax_id: defaultTax.id.toString() }));
     }
-  }, [taxes, formData.tax_id]);
+  }, [taxes, formData.tax_id, isEditMode]);
 
-  // ✅ تأثير اختيار الفرع - نجيب المستودعات والخزائن ونختار الرئيسية كافتراضية
+  // تأثير اختيار الفرع - نجيب المستودعات والخزائن
   useEffect(() => {
     if (formData.branch_id) {
-      // نجيب المستودعات
       refetchWarehouses();
-      
-      // نجيب الخزائن
-      refetchTreasury().then((result) => {
-        const treasuries = result.data || [];
-        if (treasuries.length > 0) {
-          // ✅ ندور على الخزينة الرئيسية (is_main = true)
-          const mainTreasury = treasuries.find((t: Treasury) => t.is_main === true);
-          
-          if (mainTreasury) {
-            // ✅ لو لقينا رئيسية، نختارها
-            setFormData(prev => ({ 
-              ...prev, 
-              treasury_id: mainTreasury.id.toString(),
-              warehouse_id: '' // نمسح المستودع لأن الفرع اتغير
-            }));
-          } else {
-            // ✅ لو مفيش رئيسية، نختار أول خزينة
-            setFormData(prev => ({ 
-              ...prev, 
-              treasury_id: treasuries[0].id.toString(),
-              warehouse_id: ''
-            }));
-          }
-        } else {
-          // ✅ لو مفيش خزائن خالص، نفضي الحقل
-          setFormData(prev => ({ 
-            ...prev, 
-            treasury_id: '',
-            warehouse_id: ''
-          }));
-        }
-      });
+      refetchTreasury();
     }
   }, [formData.branch_id, refetchWarehouses, refetchTreasury]);
 
@@ -462,6 +551,13 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       setErrors({});
     }
   }, [isOpen]);
+
+  // Reset form when opening without edit data
+  useEffect(() => {
+    if (isOpen && !invoiceToEdit) {
+      resetForm();
+    }
+  }, [isOpen, invoiceToEdit]);
 
   // ========== طرق الدفع ==========
   const paymentMethods = [
@@ -616,7 +712,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       newErrors.items = language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products';
     }
 
-    // ✅ التحقق من الخزينة لو طريقة الدفع نقداً والمبلغ المدفوع أكبر من 0
     if (formData.payment_method === 'cash' && formData.paid_amount > 0 && !formData.treasury_id) {
       newErrors.treasury_id = language === 'ar' ? 'يرجى اختيار الخزينة' : 'Please select treasury';
     }
@@ -625,8 +720,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // ========== Mutation ==========
+  // ========== Mutations ==========
 
+  // ✅ Mutation للإضافة
   const createInvoiceMutation = useMutation({
     mutationFn: async (action: InvoiceAction) => {
       if (!validateForm()) {
@@ -645,7 +741,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         note: formData.notes || null,
         paid_amount: formData.paid_amount || 0,
         remaining_amount: remainingAmount,
-        treasury_id: formData.treasury_id ? Number(formData.treasury_id) : null, // ✅ إضافة الخزينة
+        treasury_id: formData.treasury_id ? Number(formData.treasury_id) : null,
         items: items.map(item => ({
           product_id: item.product_id,
           product_variant_id: item.product_variant_id || null,
@@ -742,6 +838,120 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   });
 
+  // ✅ Mutation للتحديث (edit)
+  const updateInvoiceMutation = useMutation({
+    mutationFn: async (action: InvoiceAction) => {
+      if (!validateForm()) {
+        throw new Error('Validation failed');
+      }
+
+      if (!invoiceToEdit?.id) {
+        throw new Error('No invoice to update');
+      }
+
+      const payload = {
+        supplier_id: Number(formData.supplier_id),
+        branch_id: formData.branch_id ? Number(formData.branch_id) : null,
+        warehouse_id: Number(formData.warehouse_id),
+        currency_id: Number(formData.currency_id),
+        tax_id: formData.tax_id ? Number(formData.tax_id) : null,
+        payment_method: formData.payment_method,
+        invoice_date: formData.invoice_date,
+        due_date: formData.due_date || null,
+        note: formData.notes || null,
+        paid_amount: formData.paid_amount || 0,
+        remaining_amount: remainingAmount,
+        treasury_id: formData.treasury_id ? Number(formData.treasury_id) : null,
+        items: items.map(item => ({
+          product_id: item.product_id,
+          product_variant_id: item.product_variant_id || null,
+          quantity: item.quantity,
+          price: item.unit_cost,
+          discount: item.discount_percent,
+          tax: item.tax_percent
+        }))
+      };
+
+      console.log('📦 Updating invoice:', invoiceToEdit.id, payload);
+
+      // ✅ التعديل هنا: استخدام POST بدلاً من PUT
+      const response = await api.put(`/purchases-invoices/update/${invoiceToEdit.id}`, payload);
+      return { data: response.data, action };
+    },
+    onSuccess: (result) => {
+      toast({
+        title: language === 'ar' ? 'تم التحديث' : 'Updated',
+        description: language === 'ar' 
+          ? `تم تحديث فاتورة الشراء بنجاح` 
+          : `Purchase invoice updated successfully`
+      });
+
+      // تحديث الكاش
+      queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] });
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
+      queryClient.invalidateQueries({ queryKey: ['treasury'] });
+
+      // معالجة حالة save_and_print
+      if (result.action === 'save_and_print') {
+        const printInvoiceData = {
+          id: result.data.data.id,
+          invoice_number: result.data.data.invoice_number,
+          date: new Date().toISOString(),
+          supplier: suppliers.find(s => s.id === Number(formData.supplier_id)),
+          cashierName: user?.name || 'المدير',
+          branchName: user?.branch_name || branches.find(b => b.id === Number(formData.branch_id))?.name,
+          branchPhone: user?.branch_phone,
+          branchAddress: user?.branch_address,
+          taxRate: formData.tax_id ? taxes.find(t => t.id === Number(formData.tax_id))?.rate : 0,
+          items: items.map(item => ({
+            name: item.product_name,
+            nameAr: item.product_name,
+            quantity: item.quantity,
+            price: item.unit_cost,
+            sizeName: item.size_name,
+            colorName: item.color_name,
+            discount_percent: item.discount_percent,
+            tax_percent: item.tax_percent
+          })),
+          subtotal: totals.subtotal,
+          tax: totals.totalTax,
+          discount_total: totals.totalDiscount,
+          total: totals.total,
+          paid_amount: formData.paid_amount,
+          remaining_amount: remainingAmount,
+          payment_method: formData.payment_method,
+          notes: formData.notes,
+        };
+        
+        setPrintData(printInvoiceData);
+        setShowPrint(true);
+        setTimeout(() => handlePrint(), 100);
+        
+        onSave();
+        onClose();
+      }
+      // معالجة حالة save العادية
+      else {
+        onSave();
+        onClose();
+      }
+    },
+    onError: (error: any) => {
+      console.error('❌ Error updating invoice:', error.response?.data || error);
+      
+      const errorMessage = error.response?.data?.message || error.message;
+      
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    }
+  });
+
   const resetForm = () => {
     const defaultCurrency = currencies.find((c: Currency) => c.default === true) || currencies[0];
     const defaultTax = taxes.find((t: Tax) => t.default === true) || taxes[0];
@@ -765,7 +975,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   };
 
   const handleSubmit = (action: InvoiceAction) => {
-    createInvoiceMutation.mutate(action);
+    if (isEditMode) {
+      updateInvoiceMutation.mutate(action);
+    } else {
+      createInvoiceMutation.mutate(action);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -788,7 +1002,15 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           <DialogHeader className="p-4 pb-3 border-b">
             <DialogTitle className="flex items-center gap-2 text-lg">
               <FileText className="text-primary" size={20} />
-              {language === 'ar' ? 'فاتورة شراء جديدة' : 'New Purchase Invoice'}
+              {isEditMode 
+                ? (language === 'ar' ? 'تعديل فاتورة شراء' : 'Edit Purchase Invoice')
+                : (language === 'ar' ? 'فاتورة شراء جديدة' : 'New Purchase Invoice')
+              }
+              {isEditMode && invoiceToEdit && (
+                <span className="font-mono text-sm text-muted-foreground">
+                  #{invoiceToEdit.invoice_number}
+                </span>
+              )}
             </DialogTitle>
           </DialogHeader>
 
@@ -807,6 +1029,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     setFormData(prev => ({ ...prev, supplier_id: v }));
                     if (errors.supplier_id) setErrors(prev => ({ ...prev, supplier_id: '' }));
                   }}
+                  disabled={loadingSuppliers || createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className={cn(
                     "h-8 text-sm",
@@ -841,6 +1064,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   onValueChange={(v) => {
                     setFormData(prev => ({ ...prev, branch_id: v, warehouse_id: '' }));
                   }}
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
@@ -873,7 +1097,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     setFormData(prev => ({ ...prev, warehouse_id: v }));
                     if (errors.warehouse_id) setErrors(prev => ({ ...prev, warehouse_id: '' }));
                   }}
-                  disabled={!formData.branch_id || warehouses.length === 0}
+                  disabled={!formData.branch_id || warehouses.length === 0 || createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className={cn(
                     "h-8 text-sm",
@@ -915,6 +1139,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 <Select
                   value={formData.payment_method}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
@@ -940,6 +1165,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   onChange={(value) => setFormData(prev => ({ ...prev, invoice_date: value }))}
                   placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
                   className="h-8 text-sm"
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 />
                 {formData.invoice_date && (
                   <div className="text-xs text-gray-500">
@@ -957,6 +1183,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   onChange={(value) => setFormData(prev => ({ ...prev, due_date: value }))}
                   placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
                   className="h-8 text-sm"
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 />
                 {formData.due_date && (
                   <div className="text-xs text-gray-500">
@@ -972,6 +1199,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 <Select
                   value={formData.currency_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
@@ -1001,6 +1229,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 <Select
                   value={formData.tax_id}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, tax_id: v }))}
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder={language === 'ar' ? 'اختر' : 'Select'} />
@@ -1038,7 +1267,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   autoFocus
                   showStock
                   products={products}
-                  disabled={false}
+                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                 />
 
                 {/* Items Table */}
@@ -1086,6 +1315,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                                 value={item.quantity}
                                 onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
                                 className="w-14 h-7 text-xs text-center mx-auto"
+                                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                               />
                             </TableCell>
                             <TableCell className="py-1.5 text-center">
@@ -1096,6 +1326,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                                 value={item.unit_cost}
                                 onChange={(e) => updateItem(index, 'unit_cost', Number(e.target.value))}
                                 className="w-18 h-7 text-xs text-center mx-auto"
+                                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                               />
                             </TableCell>
                             <TableCell className="py-1.5 text-center">
@@ -1106,6 +1337,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                                 value={item.discount_percent}
                                 onChange={(e) => updateItem(index, 'discount_percent', Number(e.target.value))}
                                 className="w-12 h-7 text-xs text-center mx-auto"
+                                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                               />
                             </TableCell>
                             <TableCell className="py-1.5 text-center">
@@ -1116,6 +1348,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                                 value={item.tax_percent}
                                 onChange={(e) => updateItem(index, 'tax_percent', Number(e.target.value))}
                                 className="w-12 h-7 text-xs text-center mx-auto"
+                                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                               />
                             </TableCell>
                             <TableCell className="py-1.5 text-end font-semibold text-xs">
@@ -1127,6 +1360,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                                 size="icon"
                                 className="h-6 w-6 text-destructive hover:text-destructive"
                                 onClick={() => removeItem(index)}
+                                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                               >
                                 <Trash2 size={12} />
                               </Button>
@@ -1152,6 +1386,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     size="sm"
                     onClick={() => setShowPaymentDetails(!showPaymentDetails)}
                     className="gap-2"
+                    disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                   >
                     <DollarSign size={16} />
                     {showPaymentDetails 
@@ -1160,7 +1395,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     }
                   </Button>
                   
-                  {/* المبلغ الإجمالي والمتبقي للمورد */}
                   <div className="flex items-center gap-4">
                     <div className="text-end">
                       <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
@@ -1189,100 +1423,99 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                           onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: Number(e.target.value) }))}
                           placeholder="0"
                           className="text-lg font-bold"
+                          disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
                         />
                       </div>
                       
-                      {/* ✅ حقل الخزينة - يظهر فقط للدفع النقدي */}
-                    {/* ✅ حقل الخزينة - نسخة محسنة للعربية */}
-{formData.payment_method === 'cash' && (
-  <div>
-    <Label className="flex items-center gap-1 mb-1.5 font-medium">
-      <Landmark size={16} className="text-primary" />
-      {language === 'ar' ? 'الخزينة' : 'Treasury'}
-      {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
-    </Label>
-    
-    {!formData.branch_id ? (
-      <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-        {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
-      </div>
-    ) : treasuryLoading ? (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
-      </div>
-    ) : treasury.length === 0 ? (
-      <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-        {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
-      </div>
-    ) : (
-      <select
-        value={formData.treasury_id}
-        onChange={(e) => {
-          setFormData(prev => ({ ...prev, treasury_id: e.target.value }));
-          if (errors.treasury_id) setErrors(prev => ({ ...prev, treasury_id: '' }));
-        }}
-        className={cn(
-          "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
-          "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
-          "transition-all duration-200",
-          "font-sans", // تأكد من استخدام خط يدعم العربية
-          errors.treasury_id 
-            ? "border-destructive bg-destructive/5" 
-            : "border-input hover:border-primary/50"
-        )}
-        dir={language === 'ar' ? 'rtl' : 'ltr'}
-        style={{ 
-          textAlign: language === 'ar' ? 'right' : 'left',
-          fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", sans-serif'
-        }}
-      >
-        <option value="" disabled className="text-muted-foreground">
-          {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
-        </option>
-        
-        {treasury.map((treasuryItem: Treasury) => {
-          // فك الترميز وعرض النص بشكل صحيح
-          const displayName = language === 'ar' 
-            ? (treasuryItem.name_ar || treasuryItem.name) 
-            : treasuryItem.name;
-          
-          return (
-            <option 
-              key={treasuryItem.id} 
-              value={treasuryItem.id.toString()}
-              className="py-1"
-              style={{ 
-                direction: language === 'ar' ? 'rtl' : 'ltr',
-                textAlign: language === 'ar' ? 'right' : 'left'
-              }}
-            >
-              {displayName}
-              {treasuryItem.is_main && (
-                ` ${language === 'ar' ? '(رئيسية)' : '(Main)'}`
-              )}
-            </option>
-          );
-        })}
-      </select>
-    )}
-    
-    {errors.treasury_id && (
-      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-        <span>⚠️</span>
-        {errors.treasury_id}
-      </p>
-    )}
-    
-    {/* عرض الخزينة المختارة حالياً */}
-    {formData.treasury_id && !errors.treasury_id && (
-      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-        <span>✓</span>
-        {language === 'ar' ? 'تم الاختيار' : 'Selected'}
-      </p>
-    )}
-  </div>
-)}
+                      {/* حقل الخزينة - يظهر فقط للدفع النقدي */}
+                      {formData.payment_method === 'cash' && (
+                        <div>
+                          <Label className="flex items-center gap-1 mb-1.5 font-medium">
+                            <Landmark size={16} className="text-primary" />
+                            {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                            {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
+                          </Label>
+                          
+                          {!formData.branch_id ? (
+                            <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                              {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
+                            </div>
+                          ) : treasuryLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
+                            </div>
+                          ) : treasury.length === 0 ? (
+                            <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                              {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
+                            </div>
+                          ) : (
+                            <select
+                              value={formData.treasury_id}
+                              onChange={(e) => {
+                                setFormData(prev => ({ ...prev, treasury_id: e.target.value }));
+                                if (errors.treasury_id) setErrors(prev => ({ ...prev, treasury_id: '' }));
+                              }}
+                              className={cn(
+                                "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
+                                "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
+                                "transition-all duration-200",
+                                "font-sans",
+                                errors.treasury_id 
+                                  ? "border-destructive bg-destructive/5" 
+                                  : "border-input hover:border-primary/50"
+                              )}
+                              dir={language === 'ar' ? 'rtl' : 'ltr'}
+                              style={{ 
+                                textAlign: language === 'ar' ? 'right' : 'left',
+                                fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", sans-serif'
+                              }}
+                              disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
+                            >
+                              <option value="" disabled className="text-muted-foreground">
+                                {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
+                              </option>
+                              
+                              {treasury.map((treasuryItem: Treasury) => {
+                                const displayName = language === 'ar' 
+                                  ? (treasuryItem.name_ar || treasuryItem.name) 
+                                  : treasuryItem.name;
+                                
+                                return (
+                                  <option 
+                                    key={treasuryItem.id} 
+                                    value={treasuryItem.id.toString()}
+                                    className="py-1"
+                                    style={{ 
+                                      direction: language === 'ar' ? 'rtl' : 'ltr',
+                                      textAlign: language === 'ar' ? 'right' : 'left'
+                                    }}
+                                  >
+                                    {displayName}
+                                    {treasuryItem.is_main && (
+                                      ` ${language === 'ar' ? '(رئيسية)' : '(Main)'}`
+                                    )}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
+                          
+                          {errors.treasury_id && (
+                            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                              <span>⚠️</span>
+                              {errors.treasury_id}
+                            </p>
+                          )}
+                          
+                          {formData.treasury_id && !errors.treasury_id && (
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                              <span>✓</span>
+                              {language === 'ar' ? 'تم الاختيار' : 'Selected'}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     {remainingAmount > 0 && (
@@ -1319,6 +1552,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 placeholder={language === 'ar' ? 'ملاحظات...' : 'Notes...'}
                 rows={2}
                 className="text-sm"
+                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
               />
             </div>
           </div>
@@ -1340,7 +1574,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 variant="outline" 
                 onClick={onClose} 
                 size="sm"
-                disabled={createInvoiceMutation.isPending}
+                disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
               >
                 <XCircle size={14} className="me-1.5" />
                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
@@ -1349,25 +1583,28 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               {/* زر حفظ فقط */}
               <Button 
                 onClick={() => handleSubmit('save')} 
-                disabled={createInvoiceMutation.isPending || !isFormValid} 
+                disabled={(isEditMode ? updateInvoiceMutation.isPending : createInvoiceMutation.isPending) || !isFormValid} 
                 size="sm" 
                 className="min-w-24"
               >
-                {createInvoiceMutation.isPending ? (
+                {(isEditMode ? updateInvoiceMutation.isPending : createInvoiceMutation.isPending) ? (
                   <>
                     <Loader2 size={14} className="me-1.5 animate-spin" />
                     {language === 'ar' ? 'جاري...' : 'Saving...'}
                   </>
                 ) : (
                   <>
-                    <Save size={14} className="me-1.5" />
-                    {language === 'ar' ? 'حفظ فقط' : 'Save Only'}
+                    {isEditMode ? <Edit2 size={14} className="me-1.5" /> : <Save size={14} className="me-1.5" />}
+                    {isEditMode 
+                      ? (language === 'ar' ? 'تحديث' : 'Update')
+                      : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
+                    }
                   </>
                 )}
               </Button>
               
-              {/* زر حفظ وإضافة جديد */}
-              {onSaveAndNew && (
+              {/* زر حفظ وإضافة جديد - يظهر فقط في وضع الإضافة */}
+              {!isEditMode && onSaveAndNew && (
                 <Button 
                   onClick={() => handleSubmit('save_and_new')} 
                   disabled={createInvoiceMutation.isPending || !isFormValid} 
@@ -1389,15 +1626,15 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 </Button>
               )}
 
-              {/* زر حفظ وطباعة */}
+              {/* زر حفظ وطباعة - يظهر في الحالتين */}
               <Button 
                 onClick={() => handleSubmit('save_and_print')} 
-                disabled={createInvoiceMutation.isPending || !isFormValid} 
+                disabled={(isEditMode ? updateInvoiceMutation.isPending : createInvoiceMutation.isPending) || !isFormValid} 
                 size="sm" 
                 variant="default"
                 className="min-w-24 bg-green-600 hover:bg-green-700"
               >
-                {createInvoiceMutation.isPending ? (
+                {(isEditMode ? updateInvoiceMutation.isPending : createInvoiceMutation.isPending) ? (
                   <>
                     <Loader2 size={14} className="me-1.5 animate-spin" />
                     {language === 'ar' ? 'جاري...' : 'Saving...'}
