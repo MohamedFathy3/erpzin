@@ -71,6 +71,8 @@ const HR = () => {
     salary: '',
     is_active: true,
     role_id: '',
+    treasury_id: '',
+    branch_id: '',
     password: '',
   
   });
@@ -99,6 +101,35 @@ const HR = () => {
     }
   });
 
+  const { data: treasury = [], isLoading: treasuryLoading } = useQuery({
+    queryKey: ['treasury'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index', {
+        filters: { },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false
+      });
+      return response.data.data || [];
+    }
+  });
+ const { data: branches = [], isLoading: branchesLoading } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const response = await api.post('/branch/index', {
+        filters: { },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false
+      });
+      return response.data.data || [];
+    }
+  });
+
+
+  
   // ========== Fetch Employees ==========
   const { 
     data: employees = [], 
@@ -283,6 +314,8 @@ const HR = () => {
         email: employee.email || null,
         salary: employee.salary ? parseFloat(employee.salary) : 0,
         is_active: employee.is_active,
+        treasury_id: employee.treasury_id || null,
+        branch_id: employee.branch_id || null,
       };
 
       // 👈 إضافة role_id لو موجود
@@ -527,7 +560,9 @@ const HR = () => {
       salary: '',
       is_active: true,
       role_id: '',
-      password: ''
+      password: '',
+      treasury_id: '',
+      branch_id: ''
     });
   };
 
@@ -583,6 +618,14 @@ const handleEditEmployee = async (employee: any) => {
     
     console.log('📦 Employee data from API:', employeeData); // للتصحيح
     
+    // 🔥 التعديل المهم هنا - إيجاد الـ role_id المناسب من قائمة الـ roles
+    let roleId = '';
+    if (employeeData.role) {
+      // دور كـ string - نبحث عنه في قائمة الـ roles
+      const foundRole = roles.find((r: any) => r.name === employeeData.role);
+      roleId = foundRole ? foundRole.id.toString() : '';
+    }
+    
     setNewEmployee({
       employee_code: employeeData.employee_code || '',
       name: employeeData.name || '',
@@ -592,8 +635,10 @@ const handleEditEmployee = async (employee: any) => {
       email: employeeData.email || '',
       salary: employeeData.salary || '',
       is_active: employeeData.is_active ?? true,
-      role_id: employeeData.role || '', // 👈 هنا الفرق! بناخد role مباشرة لأنها string
-      password: '' // 👈 الباسورد فاضي عشان ما يظهرش
+      role_id: roleId, // 👈 هنا بنستخدم role_id الصح
+      password: '', // 👈 الباسورد فاضي عشان ما يظهرش
+      treasury_id: employeeData.treasury_id || null,
+      branch_id: employeeData.branch_id || null
     });
     
     setIsEditingEmployee(true);
@@ -607,7 +652,6 @@ const handleEditEmployee = async (employee: any) => {
     });
   }
 };
-
   const handleUpdateEmployee = () => {
     if (!newEmployee.employee_code || !newEmployee.name) {
       toast({ 
@@ -752,6 +796,8 @@ const handleEditEmployee = async (employee: any) => {
       vehicleNumber: 'Vehicle Number',
       motorcycle: 'Motorcycle',
       car: 'Car',
+      treasury: 'Treasury',
+      branch: 'Branch',
       bicycle: 'Bicycle',
       available: 'Available',
       unavailable: 'Unavailable',
@@ -795,6 +841,8 @@ const handleEditEmployee = async (employee: any) => {
       nameAr: 'الاسم (عربي)',
       position: 'المنصب',
       role: 'الدور',
+      treasury: 'الخزينة',
+      branch: 'الفرع',
       password: 'كلمة المرور',
       salary: 'الراتب',
       status: 'الحالة',
@@ -1136,7 +1184,38 @@ const handleEditEmployee = async (employee: any) => {
                       />
                     </div>
                   </div>
-
+<div className="grid grid-cols-2 gap-4">
+     <div className="space-y-2">
+                      <Label>{t.treasury}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.treasury_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, treasury_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون خزينة' : 'No Treasury'}</option>
+                        {treasury.map((treasury: any) => (
+                          <option key={treasury.id} value={treasury.id.toString()}>
+                            {treasury.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                       <div className="space-y-2">
+                      <Label>{t.branch}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.branch_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, branch_id: e.target.value }))}   
+                      >
+                        <option value="">{language === 'ar' ? 'بدون فرع' : 'No Branch'}</option>
+                        {branches.map((branch: any) => (
+                          <option key={branch.id} value={branch.id.toString()}>
+                            {branch.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+</div>
                   {/* ========== حقل الباسورد الجديد ========== */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
@@ -1355,16 +1434,16 @@ const handleEditEmployee = async (employee: any) => {
                                 </div>
                               </TableCell>
                               <TableCell>{employee.position || '-'}</TableCell>
-                              <TableCell>
-                                {employee.role ? (
-                                  <div className="flex items-center gap-1">
-                                    <Shield size={14} className="text-muted-foreground" />
-                                    {employee.role}
-                                  </div>
-                                ) : (
-                                  '-'
-                                )}
-                              </TableCell>
+                            <TableCell>
+  {employee.role ? (
+    <div className="flex items-center gap-1">
+      <Shield size={14} className="text-muted-foreground" />
+      {employee.role} {/* 👈 هنا بنستخدم role مش role_id */}
+    </div>
+  ) : (
+    '-'
+  )}
+</TableCell>
                               <TableCell>{parseFloat(employee.salary || 0).toLocaleString()} YER</TableCell>
                               
                               <TableCell className="text-end">

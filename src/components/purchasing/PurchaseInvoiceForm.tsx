@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,7 @@ import {
 import {
   FileText, Trash2, Package, Building2,
   Warehouse, CreditCard, Calendar, Loader2, DollarSign, 
-  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer
+  ArrowLeftRight, Copy, Save, BadgeCheck, XCircle, Printer, Landmark
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
@@ -31,8 +31,6 @@ import { useReactToPrint } from 'react-to-print';
 import { format, parseISO } from 'date-fns';
 import PurchaseInvoiceTemplate from './PurchaseInvoiceTemplate';
 import DatePicker from '../ui/date-picker';
-
-
 
 // ========== الأنواع ==========
 interface InvoiceItem {
@@ -106,6 +104,17 @@ interface Tax {
   default?: boolean;
 }
 
+interface Treasury {
+  id: number;
+  name: string;
+  name_ar?: string;
+  branch_id: number;
+  balance: number;
+  currency: string;
+  is_main: boolean;
+  notes?: string;
+}
+
 interface Product {
   id: number;
   name: string;
@@ -133,7 +142,6 @@ interface Product {
   }>;
 }
 
-// ✅ تحديث نوع action ليشمل save_and_print
 type InvoiceAction = 'save' | 'save_and_new' | 'save_and_print';
 
 interface PurchaseInvoiceFormProps {
@@ -150,7 +158,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   onSaveAndNew
 }) => {
   const { language } = useLanguage();
-  const { user } = useAuth(); // ✅ استخدام useAuth
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [variantProduct, setVariantProduct] = useState<any>(null);
@@ -189,7 +197,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     tax_id: '',
     currency_id: '',
     notes: '',
-    paid_amount: 0
+    paid_amount: 0,
+    treasury_id: ''
   });
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -312,8 +321,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           filters.branch_id = Number(formData.branch_id);
         }
         
-        console.log('Fetching warehouses with filters:', filters);
-        
         const response = await api.post('/warehouse/index', {
           filters: filters,
           orderBy: 'name',
@@ -321,8 +328,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           perPage: 1000,
           paginate: false
         });
-        
-        console.log('Warehouses response:', response.data);
         
         if (response.data.result === 'Success') {
           return response.data.data || [];
@@ -333,7 +338,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         return [];
       }
     },
-    enabled: isOpen
+    enabled: isOpen && !!formData.branch_id
   });
 
   // جلب المنتجات
@@ -349,8 +354,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           paginate: false
         });
         
-        console.log('Products response:', response.data);
-        
         if (response.data.result === 'Success') {
           return response.data.data || [];
         }
@@ -361,6 +364,38 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       }
     },
     enabled: isOpen
+  });
+
+  // ========== جلب الخزائن ==========
+  const { data: treasury = [], isLoading: treasuryLoading, refetch: refetchTreasury } = useQuery({
+    queryKey: ['treasury', formData.branch_id],
+    queryFn: async () => {
+      try {
+        const filters: any = {};
+        
+        // ✅ نجيب كل خزائن الفرع المختار
+        if (formData.branch_id) {
+          filters.branch_id = Number(formData.branch_id);
+        }
+        
+        const response = await api.post('/treasury/index', {
+          filters: filters,
+          orderBy: 'name',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching treasury:', error);
+        return [];
+      }
+    },
+    enabled: isOpen && !!formData.branch_id // 👈 نشغل الـ query بس لو فيه فرع مختار
   });
 
   // ========== Effects ==========
@@ -381,13 +416,45 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   }, [taxes, formData.tax_id]);
 
-  // تحديث المستودعات عند تغيير الفرع
+  // ✅ تأثير اختيار الفرع - نجيب المستودعات والخزائن ونختار الرئيسية كافتراضية
   useEffect(() => {
     if (formData.branch_id) {
+      // نجيب المستودعات
       refetchWarehouses();
-      setFormData(prev => ({ ...prev, warehouse_id: '' }));
+      
+      // نجيب الخزائن
+      refetchTreasury().then((result) => {
+        const treasuries = result.data || [];
+        if (treasuries.length > 0) {
+          // ✅ ندور على الخزينة الرئيسية (is_main = true)
+          const mainTreasury = treasuries.find((t: Treasury) => t.is_main === true);
+          
+          if (mainTreasury) {
+            // ✅ لو لقينا رئيسية، نختارها
+            setFormData(prev => ({ 
+              ...prev, 
+              treasury_id: mainTreasury.id.toString(),
+              warehouse_id: '' // نمسح المستودع لأن الفرع اتغير
+            }));
+          } else {
+            // ✅ لو مفيش رئيسية، نختار أول خزينة
+            setFormData(prev => ({ 
+              ...prev, 
+              treasury_id: treasuries[0].id.toString(),
+              warehouse_id: ''
+            }));
+          }
+        } else {
+          // ✅ لو مفيش خزائن خالص، نفضي الحقل
+          setFormData(prev => ({ 
+            ...prev, 
+            treasury_id: '',
+            warehouse_id: ''
+          }));
+        }
+      });
     }
-  }, [formData.branch_id, refetchWarehouses]);
+  }, [formData.branch_id, refetchWarehouses, refetchTreasury]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -549,6 +616,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       newErrors.items = language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products';
     }
 
+    // ✅ التحقق من الخزينة لو طريقة الدفع نقداً والمبلغ المدفوع أكبر من 0
+    if (formData.payment_method === 'cash' && formData.paid_amount > 0 && !formData.treasury_id) {
+      newErrors.treasury_id = language === 'ar' ? 'يرجى اختيار الخزينة' : 'Please select treasury';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -573,6 +645,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         note: formData.notes || null,
         paid_amount: formData.paid_amount || 0,
         remaining_amount: remainingAmount,
+        treasury_id: formData.treasury_id ? Number(formData.treasury_id) : null, // ✅ إضافة الخزينة
         items: items.map(item => ({
           product_id: item.product_id,
           product_variant_id: item.product_variant_id || null,
@@ -602,58 +675,58 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers-active'] });
+      queryClient.invalidateQueries({ queryKey: ['treasury'] });
 
-      // ✅ معالجة حالة save_and_print
-    // في onSuccess - جزء save_and_print
-if (result.action === 'save_and_print') {
-  const printInvoiceData = {
-    id: result.data.data.id,
-    invoice_number: result.data.data.invoice_number,
-    date: new Date().toISOString(),
-    supplier: suppliers.find(s => s.id === Number(formData.supplier_id)),
-    cashierName: user?.name || 'المدير',
-    branchName: user?.branch_name || branches.find(b => b.id === Number(formData.branch_id))?.name,
-    branchPhone: user?.branch_phone,
-    branchAddress: user?.branch_address,
-    taxRate: formData.tax_id ? taxes.find(t => t.id === Number(formData.tax_id))?.rate : 0, // ✅ إضافة taxRate
-    items: items.map(item => ({
-      name: item.product_name,
-      nameAr: item.product_name,
-      quantity: item.quantity,
-      price: item.unit_cost,
-      sizeName: item.size_name,
-      colorName: item.color_name,
-      discount_percent: item.discount_percent,
-      tax_percent: item.tax_percent
-    })),
-    subtotal: totals.subtotal,
-    tax: totals.totalTax,
-    discount_total: totals.totalDiscount,
-    total: totals.total,
-    paid_amount: formData.paid_amount,
-    remaining_amount: remainingAmount,
-    payment_method: formData.payment_method,
-    notes: formData.notes,
-  };
-  
-  setPrintData(printInvoiceData);
-  setShowPrint(true);
-  setTimeout(() => handlePrint(), 100);
-  
-  resetForm();
-  onSave();
-  onClose();
-}
-      // ✅ معالجة حالة save_and_new
+      // معالجة حالة save_and_print
+      if (result.action === 'save_and_print') {
+        const printInvoiceData = {
+          id: result.data.data.id,
+          invoice_number: result.data.data.invoice_number,
+          date: new Date().toISOString(),
+          supplier: suppliers.find(s => s.id === Number(formData.supplier_id)),
+          cashierName: user?.name || 'المدير',
+          branchName: user?.branch_name || branches.find(b => b.id === Number(formData.branch_id))?.name,
+          branchPhone: user?.branch_phone,
+          branchAddress: user?.branch_address,
+          taxRate: formData.tax_id ? taxes.find(t => t.id === Number(formData.tax_id))?.rate : 0,
+          items: items.map(item => ({
+            name: item.product_name,
+            nameAr: item.product_name,
+            quantity: item.quantity,
+            price: item.unit_cost,
+            sizeName: item.size_name,
+            colorName: item.color_name,
+            discount_percent: item.discount_percent,
+            tax_percent: item.tax_percent
+          })),
+          subtotal: totals.subtotal,
+          tax: totals.totalTax,
+          discount_total: totals.totalDiscount,
+          total: totals.total,
+          paid_amount: formData.paid_amount,
+          remaining_amount: remainingAmount,
+          payment_method: formData.payment_method,
+          notes: formData.notes,
+        };
+        
+        setPrintData(printInvoiceData);
+        setShowPrint(true);
+        setTimeout(() => handlePrint(), 100);
+        
+        resetForm();
+        onSave();
+        onClose();
+      }
+      // معالجة حالة save_and_new
       else if (result.action === 'save_and_new' && onSaveAndNew) {
         resetForm();
-        onSaveAndNew(); // المودال يبقى مفتوح
+        onSaveAndNew();
       } 
-      // ✅ معالجة حالة save العادية
+      // معالجة حالة save العادية
       else {
         resetForm();
         onSave();
-        onClose(); // المودال يقفل
+        onClose();
       }
     },
     onError: (error: any) => {
@@ -683,7 +756,8 @@ if (result.action === 'save_and_print') {
       tax_id: defaultTax?.id?.toString() || '',
       currency_id: defaultCurrency?.id?.toString() || '',
       notes: '',
-      paid_amount: 0
+      paid_amount: 0,
+      treasury_id: ''
     });
     setItems([]);
     setShowPaymentDetails(false);
@@ -861,41 +935,36 @@ if (result.action === 'save_and_print') {
                   <Calendar size={12} />
                   {language === 'ar' ? 'التاريخ' : 'Date'}
                 </Label>
-           
-<DatePicker
-  value={formData.invoice_date}
-  onChange={(value) => setFormData(prev => ({ ...prev, invoice_date: value }))}
-  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
-  className="h-8 text-sm"
-/>
-
-  {formData.invoice_date && (
-    <div className="text-xs text-gray-500">
-      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
-      {format(parseISO(formData.invoice_date), 'dd/MM/yyyy')}
-    </div>
-  )}
+                <DatePicker
+                  value={formData.invoice_date}
+                  onChange={(value) => setFormData(prev => ({ ...prev, invoice_date: value }))}
+                  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+                  className="h-8 text-sm"
+                />
+                {formData.invoice_date && (
+                  <div className="text-xs text-gray-500">
+                    {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+                    {format(parseISO(formData.invoice_date), 'dd/MM/yyyy')}
+                  </div>
+                )}
               </div>
 
               {/* Due Date */}
-
-<div className="space-y-1">
-  <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
-  
-<DatePicker
-  value={formData.due_date}
-  onChange={(value) => setFormData(prev => ({ ...prev, due_date: value }))}
-  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
-  className="h-8 text-sm"
-/>
-
-  {formData.due_date && (
-    <div className="text-xs text-gray-500">
-      {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
-      {format(parseISO(formData.due_date), 'dd/MM/yyyy')}
-    </div>
-  )}
-</div>
+              <div className="space-y-1">
+                <Label className="text-xs">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</Label>
+                <DatePicker
+                  value={formData.due_date}
+                  onChange={(value) => setFormData(prev => ({ ...prev, due_date: value }))}
+                  placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select Date'}
+                  className="h-8 text-sm"
+                />
+                {formData.due_date && (
+                  <div className="text-xs text-gray-500">
+                    {language === 'ar' ? 'التاريخ المختار: ' : 'Selected Date: '}
+                    {format(parseISO(formData.due_date), 'dd/MM/yyyy')}
+                  </div>
+                )}
+              </div>
 
               {/* Currency */}
               <div className="space-y-1">
@@ -1122,24 +1191,98 @@ if (result.action === 'save_and_print') {
                           className="text-lg font-bold"
                         />
                       </div>
-                      <div>
-                        <Label>{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</Label>
-                        <Select
-                          value={formData.payment_method}
-                          onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {paymentMethods.map((method) => (
-                              <SelectItem key={method.code} value={method.code}>
-                                {language === 'ar' ? method.name_ar : method.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      
+                      {/* ✅ حقل الخزينة - يظهر فقط للدفع النقدي */}
+                    {/* ✅ حقل الخزينة - نسخة محسنة للعربية */}
+{formData.payment_method === 'cash' && (
+  <div>
+    <Label className="flex items-center gap-1 mb-1.5 font-medium">
+      <Landmark size={16} className="text-primary" />
+      {language === 'ar' ? 'الخزينة' : 'Treasury'}
+      {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
+    </Label>
+    
+    {!formData.branch_id ? (
+      <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+        {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
+      </div>
+    ) : treasuryLoading ? (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
+      </div>
+    ) : treasury.length === 0 ? (
+      <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+        {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
+      </div>
+    ) : (
+      <select
+        value={formData.treasury_id}
+        onChange={(e) => {
+          setFormData(prev => ({ ...prev, treasury_id: e.target.value }));
+          if (errors.treasury_id) setErrors(prev => ({ ...prev, treasury_id: '' }));
+        }}
+        className={cn(
+          "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
+          "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
+          "transition-all duration-200",
+          "font-sans", // تأكد من استخدام خط يدعم العربية
+          errors.treasury_id 
+            ? "border-destructive bg-destructive/5" 
+            : "border-input hover:border-primary/50"
+        )}
+        dir={language === 'ar' ? 'rtl' : 'ltr'}
+        style={{ 
+          textAlign: language === 'ar' ? 'right' : 'left',
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", sans-serif'
+        }}
+      >
+        <option value="" disabled className="text-muted-foreground">
+          {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
+        </option>
+        
+        {treasury.map((treasuryItem: Treasury) => {
+          // فك الترميز وعرض النص بشكل صحيح
+          const displayName = language === 'ar' 
+            ? (treasuryItem.name_ar || treasuryItem.name) 
+            : treasuryItem.name;
+          
+          return (
+            <option 
+              key={treasuryItem.id} 
+              value={treasuryItem.id.toString()}
+              className="py-1"
+              style={{ 
+                direction: language === 'ar' ? 'rtl' : 'ltr',
+                textAlign: language === 'ar' ? 'right' : 'left'
+              }}
+            >
+              {displayName}
+              {treasuryItem.is_main && (
+                ` ${language === 'ar' ? '(رئيسية)' : '(Main)'}`
+              )}
+            </option>
+          );
+        })}
+      </select>
+    )}
+    
+    {errors.treasury_id && (
+      <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+        <span>⚠️</span>
+        {errors.treasury_id}
+      </p>
+    )}
+    
+    {/* عرض الخزينة المختارة حالياً */}
+    {formData.treasury_id && !errors.treasury_id && (
+      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+        <span>✓</span>
+        {language === 'ar' ? 'تم الاختيار' : 'Selected'}
+      </p>
+    )}
+  </div>
+)}
                     </div>
                     
                     {remainingAmount > 0 && (
