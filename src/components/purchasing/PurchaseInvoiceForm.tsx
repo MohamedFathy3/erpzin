@@ -1428,7 +1428,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                       </div>
                       
                       {/* حقل الخزينة - يظهر فقط للدفع النقدي */}
-                      {formData.payment_method === 'cash' && (
+{(formData.payment_method === 'cash' || formData.payment_method === 'credit') && (
                         <div>
                           <Label className="flex items-center gap-1 mb-1.5 font-medium">
                             <Landmark size={16} className="text-primary" />

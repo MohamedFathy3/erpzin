@@ -298,20 +298,21 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
   }[language === 'ar' ? 'ar' : 'en'];
 
   // ========== Handlers ==========
-  const handleOpenShift = () => {
-    const amount = parseFloat(openingAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error(t.validAmount);
-      return;
-    }
+const handleOpenShift = () => {
+  const amount = parseFloat(openingAmount);
+  // السماح بـ 0 مع التأكد إن القيمة رقمية
+  if (isNaN(amount) || amount < 0) {
+    toast.error(t.validAmount);
+    return;
+  }
 
-    if (!window.confirm(t.confirmOpen)) return;
+  if (!window.confirm(t.confirmOpen)) return;
 
-    openShiftMutation.mutate({
-      opening_balance: amount,
-      notes: openingNotes || undefined
-    });
-  };
+  openShiftMutation.mutate({
+    opening_balance: amount,
+    notes: openingNotes || undefined
+  });
+};
 
   const handleCloseShift = () => {
     const amount = parseFloat(closingAmount);

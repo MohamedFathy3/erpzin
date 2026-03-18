@@ -10,9 +10,9 @@ export default defineConfig(({ mode }) => ({
     port: 7000, 
     proxy: {
       "/api": {
-        target: "https://apierp.dentin.cloud",
+        target: "http://localhost:8000",
         changeOrigin: true,
-        secure: false,
+        secure: true,
         rewrite: (path) => path.replace(/^\/api/, "/api"),
         configure: (proxy, _options) => {
           proxy.on("error", (err, _req, _res) => {
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => ({
       "/sanctum": {
         target: "https://apierp.dentin.cloud",
         changeOrigin: true,
-        secure: false,
+        secure: true,
         configure: (proxy, _options) => {
           proxy.on("error", (err, _req, _res) => {
             console.log("sanctum proxy error", err);
@@ -58,6 +58,8 @@ export default defineConfig(({ mode }) => ({
       '.injazyemen.cloud' // للسماح بالنطاقات الفرعية أيضاً
     ]
   },
+
+  
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
