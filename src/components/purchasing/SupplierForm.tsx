@@ -16,22 +16,23 @@ import {
 import { Building2, User, Phone, Mail, MapPin, CreditCard, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-
-interface Supplier {
-  id: number | string;
-  name: string;
-  name_ar?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  tax_number?: string;
-  credit_limit?: number;
-  payment_terms?: number;
-  is_active?: boolean;
-  active?: number;
-  note?: string;
-}
+import type { Supplier, SupplierDto } from '@/types/supplier';
+import { supplierService } from '@/services/supplierservice';
+// interface Supplier {
+//   id: number | string;
+//   name: string;
+//   name_ar?: string;
+//   contact_person?: string;
+//   phone?: string;
+//   email?: string;
+//   address?: string;
+//   tax_number?: string;
+//   credit_limit?: number;
+//   payment_terms?: number;
+//   is_active?: boolean;
+//   active?: number;
+//   note?: string;
+// }
 
 interface SupplierFormProps {
   isOpen: boolean;
@@ -91,11 +92,66 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     }
   }, [editSupplier, isOpen]);
 
+  // const handleSubmit = async () => 
+  //   {
+  //   if (!formData.name.trim()) {
+  //     toast({
+  //       title: language === 'ar' ? 'خطأ' : 'Error',
+  //       description: language === 'ar' ? 'اسم المورد مطلوب' : 'Supplier name is required',
+  //       variant: 'destructive'
+  //     });
+  //     return;
+  //   }
+
+  //   setLoading(true);
+
+  //   try {
+  //     const body = {
+  //       name: formData.name,
+  //       contact_person: formData.contact_person,
+  //       phone: formData.phone,
+  //       address: formData.address,
+  //       tax_number: formData.tax_number,
+  //       //note: formData.note || '', 
+  //       credit_limit: formData.credit_limit,
+  //       payment_terms: formData.payment_terms,
+  //       active: formData.is_active ? 1 : 0
+  //     };
+
+  //     if (editSupplier) {
+  //       // Update existing supplier
+  //       await api.put(`/suppliers/${editSupplier.id}`, body);
+  //     } else {
+  //       // Create new supplier
+  //       await api.post('/suppliers', body);
+  //     }
+
+  //     toast({
+  //       title: language === 'ar' ? 'تم الحفظ' : 'Saved',
+  //       description: language === 'ar' ? 'تم حفظ بيانات المورد بنجاح' : 'Supplier saved successfully'
+  //     });
+
+  //     onSave();
+  //     onClose();
+
+  //   } catch (error: unknown) {
+  //     const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
+  //     toast({
+  //       title: language === 'ar' ? 'خطأ' : 'Error',
+  //       description: errorMessage,
+  //       variant: 'destructive'
+  //     });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'اسم المورد مطلوب' : 'Supplier name is required',
+        description: language === 'ar'
+          ? 'اسم المورد مطلوب'
+          : 'Supplier name is required',
         variant: 'destructive'
       });
       return;
@@ -110,39 +166,39 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
         phone: formData.phone,
         address: formData.address,
         tax_number: formData.tax_number,
-        //note: formData.note || '', 
         credit_limit: formData.credit_limit,
         payment_terms: formData.payment_terms,
         active: formData.is_active ? 1 : 0
       };
 
       if (editSupplier) {
-        // Update existing supplier
-        await api.put(`/suppliers/${editSupplier.id}`, body);
+        await supplierService.updateSupplier(editSupplier.id, body);
       } else {
-        // Create new supplier
-        await api.post('/suppliers', body);
+        await supplierService.createSupplier(body);
       }
 
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-        description: language === 'ar' ? 'تم حفظ بيانات المورد بنجاح' : 'Supplier saved successfully'
+        description: language === 'ar'
+          ? 'تم حفظ بيانات المورد بنجاح'
+          : 'Supplier saved successfully'
       });
 
       onSave();
       onClose();
 
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
+      const err = error as { message?: string }; // تحويل النوع
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: errorMessage,
+        description: err.message ?? 'Unknown error', // لو message مش موجودة
         variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
