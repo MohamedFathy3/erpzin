@@ -1,3 +1,5 @@
+import type { Supplier, SupplierDto } from '@/types/supplier';
+import { supplierService } from '@/services/supplierservice';
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,23 +36,23 @@ import {
 
 // ========== أنواع البيانات من API (موحدة) ==========
 
-interface Supplier {
-  id: number;
-  name: string;
-  name_ar?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  tax_number?: string;
-  credit_limit?: number;
-  payment_terms?: number;
-  active?: number;
-  note?: string;
-  balance?: number;
-  created_at?: string;
-  updated_at?: string;
-}
+// interface Supplier {
+//   id: number;
+//   name: string;
+//   name_ar?: string;
+//   contact_person?: string;
+//   phone?: string;
+//   email?: string;
+//   address?: string;
+//   tax_number?: string;
+//   credit_limit?: number;
+//   payment_terms?: number;
+//   active?: number;
+//   note?: string;
+//   balance?: number;
+//   created_at?: string;
+//   updated_at?: string;
+// }
 
 // ✅ نوع موحد للفاتورة (نفس الـ Resource)
 interface PurchaseInvoice {
@@ -281,10 +283,10 @@ const Purchasing = () => {
   const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: PurchaseInvoice) => ({
     id: invoice.id,
     invoice_number: invoice.invoice_number,
-    supplier_name: language === 'ar' 
-      ? invoice.supplier.name_ar || invoice.supplier.name 
+    supplier_name: language === 'ar'
+      ? invoice.supplier.name_ar || invoice.supplier.name
       : invoice.supplier.name,
-    treasury_name: invoice.treasury 
+    treasury_name: invoice.treasury
       ? (language === 'ar' ? invoice.treasury.name_ar || invoice.treasury.name : invoice.treasury.name)
       : '-',
     total_amount: invoice.total_amount,
@@ -328,14 +330,42 @@ const Purchasing = () => {
 
 
   // ========== حذف المورد ==========
-  const deleteSupplierMutation = useMutation({
-    mutationFn: async (supplierId: number) => {
-      const response = await api.delete('/suppliers/delete', {
-        data: { items: [supplierId] }
-      });
+  // const deleteSupplierMutation = useMutation({
+  //   mutationFn: async (supplierId: number) => {
+  //     const response = await api.delete('/suppliers/delete', {
+  //       data: { items: [supplierId] }
+  //     });
 
-      return response.data;
-    },
+  //     return response.data;
+  //   },
+  //   onSuccess: (data) => {
+  //     if (data.result === 'Success') {
+  //       toast({
+  //         title: language === 'ar' ? 'تم حذف المورد بنجاح' : 'Supplier deleted successfully',
+  //         variant: 'default',
+  //       });
+  //       refetchSuppliers();
+  //       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+  //     } else {
+  //       toast({
+  //         title: language === 'ar' ? 'فشل في حذف المورد' : 'Failed to delete supplier',
+  //         description: data.message,
+  //         variant: 'destructive',
+  //       });
+  //     }
+  //   },
+  //   onError: (error: any) => {
+  //     console.error('Error deleting supplier:', error);
+  //     toast({
+  //       title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
+  //       description: error.response?.data?.message || error.message,
+  //       variant: 'destructive',
+  //     });
+  //   },
+  // });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: (id: number) => supplierService.deleteSupplier(id),
     onSuccess: (data) => {
       if (data.result === 'Success') {
         toast({
@@ -352,8 +382,7 @@ const Purchasing = () => {
         });
       }
     },
-    onError: (error: any) => {
-      console.error('Error deleting supplier:', error);
+    onError: (error: Error | any) => {
       toast({
         title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
         description: error.response?.data?.message || error.message,
@@ -362,12 +391,13 @@ const Purchasing = () => {
     },
   });
 
+
   // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
   const getPrintData = () => {
     if (!invoiceDetails?.data) return null;
 
     const data = invoiceDetails.data;
-    
+
     return {
       id: data.id.toString(),
       invoice_number: data.invoice_number,
@@ -409,7 +439,7 @@ const Purchasing = () => {
   // معالج الطباعة
   const handlePrintClick = () => {
     if (!invoiceDetails?.data) return;
-    
+
     setShowPrint(true);
     setTimeout(() => {
       handlePrint();
@@ -417,52 +447,63 @@ const Purchasing = () => {
   };
 
   // ========== جلب الموردين ==========
+  // const {
+  //   data: suppliers = [],
+  //   isLoading: suppliersLoading,
+  //   refetch: refetchSuppliers
+  // } = useQuery<Supplier[]>({
+  //   queryKey: ['suppliers', supplierFilters],
+  //   queryFn: async () => {
+  //     try {
+  //       const payload: any = {
+  //         orderBy: 'name',
+  //         orderByDirection: 'asc',
+  //         perPage: 1000,
+  //         paginate: false,
+  //       };
+
+  //       const filters: any = { active: true };
+
+  //       if (supplierFilters.search) {
+  //         filters.name = supplierFilters.search;
+  //       }
+
+  //       if (supplierFilters.balance_min || supplierFilters.balance_max) {
+  //         if (supplierFilters.balance_min) {
+  //           filters.credit_limit = Number(supplierFilters.balance_min);
+  //         }
+  //         if (supplierFilters.balance_max) {
+  //           filters.balance.max = Number(supplierFilters.balance_max);
+  //         }
+  //       }
+
+  //       if (Object.keys(filters).length > 0) {
+  //         payload.filters = filters;
+  //       }
+
+  //       const response = await api.post('/suppliers/index', payload);
+
+  //       if (response.data.result === 'Success') {
+  //         return response.data.data || [];
+  //       }
+  //       return [];
+  //     } catch (error) {
+  //       console.error('Error fetching suppliers:', error);
+  //       return [];
+  //     }
+  //   },
+  // });
+
+
   const {
     data: suppliers = [],
     isLoading: suppliersLoading,
     refetch: refetchSuppliers
-  } = useQuery<Supplier[]>({
+  } = useQuery({
     queryKey: ['suppliers', supplierFilters],
-    queryFn: async () => {
-      try {
-        const payload: any = {
-          orderBy: 'name',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false,
-        };
-
-        const filters: any = { active: true };
-
-        if (supplierFilters.search) {
-          filters.name = supplierFilters.search;
-        }
-
-        if (supplierFilters.balance_min || supplierFilters.balance_max) {
-          if (supplierFilters.balance_min) {
-            filters.credit_limit = Number(supplierFilters.balance_min);
-          }
-          if (supplierFilters.balance_max) {
-            filters.balance.max = Number(supplierFilters.balance_max);
-          }
-        }
-
-        if (Object.keys(filters).length > 0) {
-          payload.filters = filters;
-        }
-
-        const response = await api.post('/suppliers/index', payload);
-
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching suppliers:', error);
-        return [];
-      }
-    },
+    queryFn: () => supplierService.getSuppliers(supplierFilters),
   });
+
 
   // ========== جلب أوامر الشراء ==========
   const { data: purchaseOrdersResponse } = useQuery<PurchaseOrdersResponse>({
@@ -656,7 +697,7 @@ const Purchasing = () => {
               <FileText size={16} className="me-2" />
               {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
             </TabsTrigger>
-          
+
             <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 dark:data-[state=active]:bg-orange-900 dark:data-[state=active]:text-orange-100">
               <RotateCcw size={16} className="me-2" />
               {language === 'ar' ? 'المرتجعات' : 'Returns'}
@@ -783,7 +824,7 @@ const Purchasing = () => {
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
-                                
+
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1026,7 +1067,7 @@ const Purchasing = () => {
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </div>
                     <div className="font-medium">
-                      {language === 'ar' 
+                      {language === 'ar'
                         ? invoiceDetails.data.supplier.name_ar || invoiceDetails.data.supplier.name
                         : invoiceDetails.data.supplier.name}
                     </div>
@@ -1077,7 +1118,7 @@ const Purchasing = () => {
                     {language === 'ar' ? 'الفرع' : 'Branch'}
                   </p>
                   <p className="font-medium">
-                    {language === 'ar' 
+                    {language === 'ar'
                       ? invoiceDetails.data.branch.name_ar || invoiceDetails.data.branch.name
                       : invoiceDetails.data.branch.name}
                   </p>
@@ -1087,7 +1128,7 @@ const Purchasing = () => {
                     {language === 'ar' ? 'المستودع' : 'Warehouse'}
                   </p>
                   <p className="font-medium">
-                    {language === 'ar' 
+                    {language === 'ar'
                       ? invoiceDetails.data.warehouse.name_ar || invoiceDetails.data.warehouse.name
                       : invoiceDetails.data.warehouse.name}
                   </p>
@@ -1098,9 +1139,9 @@ const Purchasing = () => {
                   </p>
                   <p className="font-medium flex items-center gap-1">
                     <Landmark size={14} className="text-primary" />
-                    {invoiceDetails.data.treasury 
-                      ? (language === 'ar' 
-                        ? invoiceDetails.data.treasury.name_ar || invoiceDetails.data.treasury.name 
+                    {invoiceDetails.data.treasury
+                      ? (language === 'ar'
+                        ? invoiceDetails.data.treasury.name_ar || invoiceDetails.data.treasury.name
                         : invoiceDetails.data.treasury.name)
                       : '-'
                     }
@@ -1122,7 +1163,7 @@ const Purchasing = () => {
                     {language === 'ar' ? 'الضريبة' : 'Tax'}
                   </p>
                   <p className="font-medium">
-                    {invoiceDetails.data.tax 
+                    {invoiceDetails.data.tax
                       ? `${invoiceDetails.data.tax.name} (${invoiceDetails.data.tax.rate}%)`
                       : '-'
                     }
@@ -1343,7 +1384,7 @@ const Purchasing = () => {
           setShowInvoiceForm(false);
         }}
         onSaveAndNew={() => {
-          refetchAll(); 
+          refetchAll();
         }}
       />
 
