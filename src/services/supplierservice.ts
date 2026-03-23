@@ -4,6 +4,7 @@ import { BaseService } from './baseService';
 //     PaymentPayload,   PaymentResponse,}from '../types/index';
 import type { Supplier, SupplierDto, SupplierRequestPayload, SupplierFiltersPayload, SupplierFilters } from '@/types/supplier';
 import api from '../lib/api';
+import { KeySchema } from 'zod';
 
 class SupplierService extends BaseService<Supplier> {
   constructor() {
@@ -47,7 +48,7 @@ class SupplierService extends BaseService<Supplier> {
         data: { items: [id] },
       });
       return response.data;
-    } catch (error: any) {
+    } catch (error: Error | unknown) {
       console.error('Error deleting supplier:', error);
       throw error;
     }
