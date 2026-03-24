@@ -14,10 +14,9 @@ import {
 } from '@/components/ui/dialog';
 import { Wallet, Building2, CreditCard, Calendar, Loader2, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supplierService } from '@/services/supplierservice';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-
 interface SupplierPaymentFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,7 +32,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
 }) => {
   const { language } = useLanguage();
   const [loading, setLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     supplier_id: '',
     amount: 0,
@@ -46,15 +45,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
   // Fetch suppliers
   const { data: suppliers = [] } = useQuery({
     queryKey: ['suppliers-with-balance'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data;
-    }
+    queryFn: () => supplierService.getSuppliers(),
   });
 
   useEffect(() => {
@@ -88,7 +79,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
     if (formData.amount > currentBalance) {
       toast({
         title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? 'المبلغ المدخل أكبر من رصيد المورد'
           : 'Amount is greater than supplier balance',
         variant: 'destructive'
@@ -141,7 +132,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
 
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? `تم تسجيل الدفعة رقم ${paymentNumber}`
           : `Payment ${paymentNumber} recorded`
       });
@@ -176,8 +167,8 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
               <Building2 size={14} />
               {language === 'ar' ? 'المورد' : 'Supplier'} *
             </Label>
-            <Select 
-              value={formData.supplier_id} 
+            <Select
+              value={formData.supplier_id}
               onValueChange={(v) => setFormData(prev => ({ ...prev, supplier_id: v }))}
             >
               <SelectTrigger>
@@ -227,8 +218,8 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
               <CreditCard size={14} />
               {language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}
             </Label>
-            <Select 
-              value={formData.payment_method} 
+            <Select
+              value={formData.payment_method}
               onValueChange={(v) => setFormData(prev => ({ ...prev, payment_method: v }))}
             >
               <SelectTrigger>

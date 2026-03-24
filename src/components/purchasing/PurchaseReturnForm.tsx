@@ -57,24 +57,28 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
-  
+
   // ========== جلب تفاصيل الفاتورة ==========
+
   const { data: invoice, isLoading: invoiceLoading } = useQuery<PurchaseInvoice>({
     queryKey: ['purchase-invoice', invoiceId],
     queryFn: async () => {
       if (!invoiceId) throw new Error('No invoice ID');
-      
+
       const response = await api.get(`/purchases-invoices/${invoiceId}`);
-      
+
       if (response.data.result === 'Success') {
         return response.data.data;
       }
-      
+
       throw new Error(response.data.message || 'Failed to fetch invoice');
     },
     enabled: isOpen && !!invoiceId,
   });
-  
+
+
+
+
   // State for items
   const [items, setItems] = useState<ReturnItem[]>([]);
 
@@ -93,8 +97,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
   }, [invoice]);
 
   const updateItemQuantity = (productId: number, quantity: number) => {
-    setItems(prev => prev.map(item => 
-      item.product_id === productId 
+    setItems(prev => prev.map(item =>
+      item.product_id === productId
         ? { ...item, quantity: Math.min(quantity, item.max_quantity) }
         : item
     ));
@@ -129,8 +133,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     onSuccess: (data) => {
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
-        description: language === 'ar' 
-          ? 'تم إنشاء المرتجع بنجاح' 
+        description: language === 'ar'
+          ? 'تم إنشاء المرتجع بنجاح'
           : 'Return created successfully'
       });
 
@@ -295,8 +299,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                     <div className="flex items-center gap-2 p-3 bg-amber-50 text-amber-600 rounded-lg border border-amber-200">
                       <AlertCircle size={16} />
                       <span className="text-sm">
-                        {language === 'ar' 
-                          ? 'يرجى تحديد كمية لمنتج واحد على الأقل' 
+                        {language === 'ar'
+                          ? 'يرجى تحديد كمية لمنتج واحد على الأقل'
                           : 'Please select quantity for at least one product'}
                       </span>
                     </div>

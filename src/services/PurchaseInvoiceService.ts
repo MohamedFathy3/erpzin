@@ -44,6 +44,69 @@ class PurchaseInvoiceService extends BaseService<PurchaseInvoice> {
         );
         return response.data;
     }
+
+
+    // function to get invoices with filters and pagination    PurchaseInvoicesList 
+    async getInvoices(
+        params: {
+            page?: number;
+            showAll?: boolean;
+            filters?: {
+                search?: string;
+                date_from?: string;
+                date_to?: string;
+                amount_min?: number;
+                amount_max?: number;
+            };
+        }
+    ): Promise<PurchaseInvoicesResponse> {
+        const { page = 1, showAll = false, filters: filtersInput } = params;
+
+        const payload: any = {
+            orderBy: 'id',
+            orderByDirection: 'desc',
+            perPage: showAll ? 10000 : 10,
+            paginate: !showAll,
+            page: showAll ? 1 : page,
+        };
+
+        const filters: any = {};
+
+        if (filtersInput?.search) {
+            filters.invoice_number = filtersInput.search;
+        }
+
+        if (filtersInput?.date_from) {
+            filters.date_from = filtersInput.date_from.split('T')[0];
+        }
+
+        if (filtersInput?.date_to) {
+            filters.date_to = filtersInput.date_to.split('T')[0];
+        }
+
+        if (filtersInput?.amount_min !== undefined) {
+            filters.amount_min = Number(filtersInput.amount_min);
+        }
+
+        if (filtersInput?.amount_max !== undefined) {
+            filters.amount_max = Number(filtersInput.amount_max);
+        }
+
+        if (Object.keys(filters).length > 0) {
+            payload.filters = filters;
+        }
+
+        const response = await api.post<PurchaseInvoicesResponse>(
+            `/purchases-invoices/index`,
+            payload
+        );
+
+        if (response.data.result === 'Success') {
+            return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch invoices');
+    }
 }
 
 // Singleton instance
