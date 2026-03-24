@@ -300,7 +300,6 @@ const Purchasing = () => {
   const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: PurchaseInvoice) => ({
     id: invoice.id,
     invoice_number: invoice.invoice_number,
-<<<<<<< HEAD
   supplier_name: (() => {
   if (!invoice.supplier) return '-';
   return language === 'ar' 
@@ -324,7 +323,6 @@ treasury_name: (() => {
     treasury_name: invoice.treasury
       ? (language === 'ar' ? invoice.treasury.name_ar || invoice.treasury.name : invoice.treasury.name)
       : '-',
->>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
     total_amount: invoice.total_amount,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
@@ -1090,7 +1088,6 @@ treasury_name: (() => {
             </div>
           </DialogHeader>
 
-<<<<<<< HEAD
         {invoiceDetailsLoading ? (
   <div className="flex justify-center py-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1147,7 +1144,6 @@ treasury_name: (() => {
                     </div>
                   </CardContent>
                 </Card>
->>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
 
       <Card>
         <CardContent className="pt-4">
@@ -1394,7 +1390,6 @@ treasury_name: (() => {
             </TableBody>
           </Table>
         </div>
-=======
               {/* Additional Info Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted/30 rounded-lg">
@@ -1466,7 +1461,6 @@ treasury_name: (() => {
                   <p className="font-medium">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
                 </div>
               </div>
->>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
 
         {/* Totals Summary */}
         <div className="flex justify-end mt-4">
