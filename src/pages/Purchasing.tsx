@@ -316,7 +316,6 @@ treasury_name: (() => {
   
   return language === 'ar' ? treasuryNameAr : treasuryName;
 })(),
-=======
     supplier_name: language === 'ar'
       ? invoice.supplier.name_ar || invoice.supplier.name
       : invoice.supplier.name,
