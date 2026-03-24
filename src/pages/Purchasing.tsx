@@ -1,3 +1,6 @@
+import { purchaseReturnService } from '@/services/purchaseReturnService';
+import type { Supplier, SupplierDto } from '@/types/supplier';
+import { supplierService } from '@/services/supplierservice';
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,113 +34,116 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { purchaseInvoiceService } from '@/services/PurchaseInvoiceService';
+import type { PurchaseInvoicesResponse, PurchaseInvoice, PaymentPayload, PaymentResponse } from '@/types/PurchaseInvoice';
 
 // ========== أنواع البيانات من API (موحدة) ==========
 
-interface Supplier {
-  id: number;
-  name: string;
-  name_ar?: string;
-  contact_person?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  tax_number?: string;
-  credit_limit?: number;
-  payment_terms?: number;
-  active?: number;
-  note?: string;
-  balance?: number;
-  created_at?: string;
-  updated_at?: string;
-}
+// interface Supplier {
+//   id: number;
+//   name: string;
+//   name_ar?: string;
+//   contact_person?: string;
+//   phone?: string;
+//   email?: string;
+//   address?: string;
+//   tax_number?: string;
+//   credit_limit?: number;
+//   payment_terms?: number;
+//   active?: number;
+//   note?: string;
+//   balance?: number;
+//   created_at?: string;
+//   updated_at?: string;
+// }
 
 // ✅ نوع موحد للفاتورة (نفس الـ Resource)
-interface PurchaseInvoice {
-  id: number;
-  invoice_number: string;
-  supplier: {
-    id: number;
-    name: string;
-    name_ar?: string;
-  };
-  branch: {
-    id: number;
-    name: string;
-    name_ar?: string;
-  };
-  warehouse: {
-    id: number;
-    name: string;
-    name_ar?: string;
-  };
-  treasury: {
-    id: number;
-    name: string;
-    name_ar?: string;
-    is_main?: boolean;
-  } | null;
-  currency: {
-    id: number;
-    name: string;
-    code: string;
-    symbol: string;
-  };
-  tax: {
-    id: number;
-    name: string;
-    rate: string;
-  } | null;
-  invoice_date: string;
-  due_date: string;
-  payment_method: string;
-  note: string | null;
-  subtotal: number;
-  paid_amount: number;
-  discount_total: number;
-  tax_total: number;
-  total_amount: number;
-  remaining_amount: number;
-  items: Array<{
-    id: number;
-    product_id: number;
-    product_name: string;
-    product_name_ar?: string;
-    product_sku: string;
-    product_variant_id?: number;
-    variant_details?: {
-      size?: string;
-      color?: string;
-    } | null;
-    quantity: number;
-    price: number;
-    discount: number;
-    tax: number;
-    total: number;
-  }>;
-  created_at: string;
-  updated_at: string;
-}
 
-interface PurchaseInvoicesResponse {
-  data: PurchaseInvoice[];
-  links: {
-    first: string;
-    last: string;
-    prev: string | null;
-    next: string | null;
-  };
-  meta: {
-    current_page: number;
-    from: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-  };
-  result: string;
-  message: string;
-  status: number;
-}
+// interface PurchaseInvoice {
+//   id: number;
+//   invoice_number: string;
+//   supplier: {
+//     id: number;
+//     name: string;
+//     name_ar?: string;
+//   };
+//   branch: {
+//     id: number;
+//     name: string;
+//     name_ar?: string;
+//   };
+//   warehouse: {
+//     id: number;
+//     name: string;
+//     name_ar?: string;
+//   };
+//   treasury: {
+//     id: number;
+//     name: string;
+//     name_ar?: string;
+//     is_main?: boolean;
+//   } | null;
+//   currency: {
+//     id: number;
+//     name: string;
+//     code: string;
+//     symbol: string;
+//   };
+//   tax: {
+//     id: number;
+//     name: string;
+//     rate: string;
+//   } | null;
+//   invoice_date: string;
+//   due_date: string;
+//   payment_method: string;
+//   note: string | null;
+//   subtotal: number;
+//   paid_amount: number;
+//   discount_total: number;
+//   tax_total: number;
+//   total_amount: number;
+//   remaining_amount: number;
+//   items: Array<{
+//     id: number;
+//     product_id: number;
+//     product_name: string;
+//     product_name_ar?: string;
+//     product_sku: string;
+//     product_variant_id?: number;
+//     variant_details?: {
+//       size?: string;
+//       color?: string;
+//     } | null;
+//     quantity: number;
+//     price: number;
+//     discount: number;
+//     tax: number;
+//     total: number;
+//   }>;
+//   created_at: string;
+//   updated_at: string;
+// }
+
+// interface PurchaseInvoicesResponse {
+//   data: PurchaseInvoice[];
+//   links: {
+//     first: string;
+//     last: string;
+//     prev: string | null;
+//     next: string | null;
+//   };
+//   meta: {
+//     current_page: number;
+//     from: number;
+//     last_page: number;
+//     per_page: number;
+//     total: number;
+//   };
+//   result: string;
+//   message: string;
+//   status: number;
+// }
 
 interface PurchaseInvoiceDetailsResponse {
   data: PurchaseInvoice;
@@ -217,70 +223,84 @@ const Purchasing = () => {
   });
 
   // ========== جلب الفواتير ==========
+  // const {
+  //   data: invoicesResponse,
+  //   isLoading: invoicesLoading,
+  //   refetch: refetchInvoices
+  // } = useQuery<PurchaseInvoicesResponse>({
+  //   queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices],
+  //   queryFn: async () => {
+  //     try {
+  //       const payload: any = {
+  //         orderBy: 'id',
+  //         orderByDirection: 'desc',
+  //         perPage: showAllInvoices ? 10000 : 10,
+  //         paginate: !showAllInvoices,
+  //         page: showAllInvoices ? 1 : currentPage,
+  //       };
+
+  //       const filters: any = {};
+
+  //       if (invoiceFilters.search) {
+  //         filters.invoice_number = invoiceFilters.search;
+  //       }
+
+  //       if (invoiceFilters.date_from) {
+  //         filters.date_from = invoiceFilters.date_from.split('T')[0];
+  //       }
+
+  //       if (invoiceFilters.date_to) {
+  //         filters.date_to = invoiceFilters.date_to.split('T')[0];
+  //       }
+
+  //       if (invoiceFilters.amount_min) {
+  //         filters.amount_min = Number(invoiceFilters.amount_min);
+  //       }
+
+  //       if (invoiceFilters.amount_max) {
+  //         filters.amount_max = Number(invoiceFilters.amount_max);
+  //       }
+
+  //       if (Object.keys(filters).length > 0) {
+  //         payload.filters = filters;
+  //       }
+
+  //       const response = await api.post<PurchaseInvoicesResponse>('/purchases-invoices/index', payload);
+
+  //       if (response.data.result === 'Success') {
+  //         return response.data;
+  //       }
+
+  //       throw new Error(response.data.message || 'Failed to fetch invoices');
+  //     } catch (error) {
+  //       console.error('Error fetching invoices:', error);
+  //       toast({
+  //         title: language === 'ar' ? 'خطأ في جلب الفواتير' : 'Error fetching invoices',
+  //         variant: 'destructive',
+  //       });
+  //       throw error;
+  //     }
+  //   },
+  // });
+
   const {
     data: invoicesResponse,
     isLoading: invoicesLoading,
     refetch: refetchInvoices
-  } = useQuery<PurchaseInvoicesResponse>({
+  } = useQuery({
     queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices],
-    queryFn: async () => {
-      try {
-        const payload: any = {
-          orderBy: 'id',
-          orderByDirection: 'desc',
-          perPage: showAllInvoices ? 10000 : 10,
-          paginate: !showAllInvoices,
-          page: showAllInvoices ? 1 : currentPage,
-        };
-
-        const filters: any = {};
-
-        if (invoiceFilters.search) {
-          filters.invoice_number = invoiceFilters.search;
-        }
-
-        if (invoiceFilters.date_from) {
-          filters.date_from = invoiceFilters.date_from.split('T')[0];
-        }
-
-        if (invoiceFilters.date_to) {
-          filters.date_to = invoiceFilters.date_to.split('T')[0];
-        }
-
-        if (invoiceFilters.amount_min) {
-          filters.amount_min = Number(invoiceFilters.amount_min);
-        }
-
-        if (invoiceFilters.amount_max) {
-          filters.amount_max = Number(invoiceFilters.amount_max);
-        }
-
-        if (Object.keys(filters).length > 0) {
-          payload.filters = filters;
-        }
-
-        const response = await api.post<PurchaseInvoicesResponse>('/purchases-invoices/index', payload);
-
-        if (response.data.result === 'Success') {
-          return response.data;
-        }
-
-        throw new Error(response.data.message || 'Failed to fetch invoices');
-      } catch (error) {
-        console.error('Error fetching invoices:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب الفواتير' : 'Error fetching invoices',
-          variant: 'destructive',
-        });
-        throw error;
-      }
-    },
+    queryFn: () =>
+      purchaseInvoiceService.getInvoices({
+        page: currentPage,
+        showAll: showAllInvoices,
+        filters: invoiceFilters,
+      }),
   });
-
   // ✅ تحويل البيانات إلى الشكل المطلوب للجدول (مباشرة من الـ API)
   const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: PurchaseInvoice) => ({
     id: invoice.id,
     invoice_number: invoice.invoice_number,
+<<<<<<< HEAD
   supplier_name: (() => {
   if (!invoice.supplier) return '-';
   return language === 'ar' 
@@ -297,6 +317,14 @@ treasury_name: (() => {
   
   return language === 'ar' ? treasuryNameAr : treasuryName;
 })(),
+=======
+    supplier_name: language === 'ar'
+      ? invoice.supplier.name_ar || invoice.supplier.name
+      : invoice.supplier.name,
+    treasury_name: invoice.treasury
+      ? (language === 'ar' ? invoice.treasury.name_ar || invoice.treasury.name : invoice.treasury.name)
+      : '-',
+>>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
     total_amount: invoice.total_amount,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
@@ -338,14 +366,42 @@ treasury_name: (() => {
 
 
   // ========== حذف المورد ==========
-  const deleteSupplierMutation = useMutation({
-    mutationFn: async (supplierId: number) => {
-      const response = await api.delete('/suppliers/delete', {
-        data: { items: [supplierId] }
-      });
+  // const deleteSupplierMutation = useMutation({
+  //   mutationFn: async (supplierId: number) => {
+  //     const response = await api.delete('/suppliers/delete', {
+  //       data: { items: [supplierId] }
+  //     });
 
-      return response.data;
-    },
+  //     return response.data;
+  //   },
+  //   onSuccess: (data) => {
+  //     if (data.result === 'Success') {
+  //       toast({
+  //         title: language === 'ar' ? 'تم حذف المورد بنجاح' : 'Supplier deleted successfully',
+  //         variant: 'default',
+  //       });
+  //       refetchSuppliers();
+  //       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+  //     } else {
+  //       toast({
+  //         title: language === 'ar' ? 'فشل في حذف المورد' : 'Failed to delete supplier',
+  //         description: data.message,
+  //         variant: 'destructive',
+  //       });
+  //     }
+  //   },
+  //   onError: (error: any) => {
+  //     console.error('Error deleting supplier:', error);
+  //     toast({
+  //       title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
+  //       description: error.response?.data?.message || error.message,
+  //       variant: 'destructive',
+  //     });
+  //   },
+  // });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: (id: number) => supplierService.deleteSupplier(id),
     onSuccess: (data) => {
       if (data.result === 'Success') {
         toast({
@@ -362,8 +418,7 @@ treasury_name: (() => {
         });
       }
     },
-    onError: (error: any) => {
-      console.error('Error deleting supplier:', error);
+    onError: (error: Error | any) => {
       toast({
         title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
         description: error.response?.data?.message || error.message,
@@ -372,12 +427,13 @@ treasury_name: (() => {
     },
   });
 
+
   // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
   const getPrintData = () => {
     if (!invoiceDetails?.data) return null;
 
     const data = invoiceDetails.data;
-    
+
     return {
       id: data.id.toString(),
       invoice_number: data.invoice_number,
@@ -419,7 +475,7 @@ treasury_name: (() => {
   // معالج الطباعة
   const handlePrintClick = () => {
     if (!invoiceDetails?.data) return;
-    
+
     setShowPrint(true);
     setTimeout(() => {
       handlePrint();
@@ -427,52 +483,63 @@ treasury_name: (() => {
   };
 
   // ========== جلب الموردين ==========
+  // const {
+  //   data: suppliers = [],
+  //   isLoading: suppliersLoading,
+  //   refetch: refetchSuppliers
+  // } = useQuery<Supplier[]>({
+  //   queryKey: ['suppliers', supplierFilters],
+  //   queryFn: async () => {
+  //     try {
+  //       const payload: any = {
+  //         orderBy: 'name',
+  //         orderByDirection: 'asc',
+  //         perPage: 1000,
+  //         paginate: false,
+  //       };
+
+  //       const filters: any = { active: true };
+
+  //       if (supplierFilters.search) {
+  //         filters.name = supplierFilters.search;
+  //       }
+
+  //       if (supplierFilters.balance_min || supplierFilters.balance_max) {
+  //         if (supplierFilters.balance_min) {
+  //           filters.credit_limit = Number(supplierFilters.balance_min);
+  //         }
+  //         if (supplierFilters.balance_max) {
+  //           filters.balance.max = Number(supplierFilters.balance_max);
+  //         }
+  //       }
+
+  //       if (Object.keys(filters).length > 0) {
+  //         payload.filters = filters;
+  //       }
+
+  //       const response = await api.post('/suppliers/index', payload);
+
+  //       if (response.data.result === 'Success') {
+  //         return response.data.data || [];
+  //       }
+  //       return [];
+  //     } catch (error) {
+  //       console.error('Error fetching suppliers:', error);
+  //       return [];
+  //     }
+  //   },
+  // });
+
+
   const {
     data: suppliers = [],
     isLoading: suppliersLoading,
     refetch: refetchSuppliers
-  } = useQuery<Supplier[]>({
+  } = useQuery({
     queryKey: ['suppliers', supplierFilters],
-    queryFn: async () => {
-      try {
-        const payload: any = {
-          orderBy: 'name',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false,
-        };
-
-        const filters: any = { active: true };
-
-        if (supplierFilters.search) {
-          filters.name = supplierFilters.search;
-        }
-
-        if (supplierFilters.balance_min || supplierFilters.balance_max) {
-          if (supplierFilters.balance_min) {
-            filters.credit_limit = Number(supplierFilters.balance_min);
-          }
-          if (supplierFilters.balance_max) {
-            filters.balance.max = Number(supplierFilters.balance_max);
-          }
-        }
-
-        if (Object.keys(filters).length > 0) {
-          payload.filters = filters;
-        }
-
-        const response = await api.post('/suppliers/index', payload);
-
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching suppliers:', error);
-        return [];
-      }
-    },
+    queryFn: () => supplierService.getSuppliers(supplierFilters),
   });
+
 
   // ========== جلب أوامر الشراء ==========
   const { data: purchaseOrdersResponse } = useQuery<PurchaseOrdersResponse>({
@@ -494,15 +561,11 @@ treasury_name: (() => {
   const purchaseOrdersCount = purchaseOrdersResponse?.meta?.total || purchaseOrdersResponse?.data?.length || 0;
 
   // ========== جلب مرتجعات الشراء ==========
-  const { data: purchaseReturnsResponse } = useQuery<PurchaseReturnsResponse>({
+  const { data: purchaseReturnsResponse, isLoading } = useQuery({
     queryKey: ['purchase-returns'],
     queryFn: async () => {
       try {
-        const response = await api.post('/return-invoices/index', {
-          perPage: 10000,
-          paginate: false,
-        });
-        return response.data;
+        purchaseReturnService.getPurchaseReturns(); // طلب غير فعّال لتحديث الكاش
       } catch (error) {
         console.error('Error fetching returns:', error);
         return { data: [] };
@@ -666,7 +729,7 @@ treasury_name: (() => {
               <FileText size={16} className="me-2" />
               {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
             </TabsTrigger>
-          
+
             <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 dark:data-[state=active]:bg-orange-900 dark:data-[state=active]:text-orange-100">
               <RotateCcw size={16} className="me-2" />
               {language === 'ar' ? 'المرتجعات' : 'Returns'}
@@ -793,7 +856,7 @@ treasury_name: (() => {
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
-                                
+
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1027,6 +1090,7 @@ treasury_name: (() => {
             </div>
           </DialogHeader>
 
+<<<<<<< HEAD
         {invoiceDetailsLoading ? (
   <div className="flex justify-center py-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1061,6 +1125,29 @@ treasury_name: (() => {
           </div>
         </CardContent>
       </Card>
+
+          {invoiceDetailsLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : invoiceDetails?.data ? (
+            <div className="space-y-4">
+              {/* Info Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Building2 className="h-3 w-3" />
+                      {language === 'ar' ? 'المورد' : 'Supplier'}
+                    </div>
+                    <div className="font-medium">
+                      {language === 'ar'
+                        ? invoiceDetails.data.supplier.name_ar || invoiceDetails.data.supplier.name
+                        : invoiceDetails.data.supplier.name}
+                    </div>
+                  </CardContent>
+                </Card>
+>>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
 
       <Card>
         <CardContent className="pt-4">
@@ -1307,6 +1394,79 @@ treasury_name: (() => {
             </TableBody>
           </Table>
         </div>
+=======
+              {/* Additional Info Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الفرع' : 'Branch'}
+                  </p>
+                  <p className="font-medium">
+                    {language === 'ar'
+                      ? invoiceDetails.data.branch.name_ar || invoiceDetails.data.branch.name
+                      : invoiceDetails.data.branch.name}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'المستودع' : 'Warehouse'}
+                  </p>
+                  <p className="font-medium">
+                    {language === 'ar'
+                      ? invoiceDetails.data.warehouse.name_ar || invoiceDetails.data.warehouse.name
+                      : invoiceDetails.data.warehouse.name}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                  </p>
+                  <p className="font-medium flex items-center gap-1">
+                    <Landmark size={14} className="text-primary" />
+                    {invoiceDetails.data.treasury
+                      ? (language === 'ar'
+                        ? invoiceDetails.data.treasury.name_ar || invoiceDetails.data.treasury.name
+                        : invoiceDetails.data.treasury.name)
+                      : '-'
+                    }
+                    {invoiceDetails.data.treasury?.is_main && (
+                      <Badge variant="outline" className="text-[10px] bg-primary/10">
+                        {language === 'ar' ? 'رئيسية' : 'Main'}
+                      </Badge>
+                    )}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'العملة' : 'Currency'}
+                  </p>
+                  <p className="font-medium">{invoiceDetails.data.currency.code} - {invoiceDetails.data.currency.symbol}</p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الضريبة' : 'Tax'}
+                  </p>
+                  <p className="font-medium">
+                    {invoiceDetails.data.tax
+                      ? `${invoiceDetails.data.tax.name} (${invoiceDetails.data.tax.rate}%)`
+                      : '-'
+                    }
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'طريقة الدفع' : 'Payment'}
+                  </p>
+                  <p className="font-medium">{getPaymentMethodLabel(invoiceDetails.data.payment_method)}</p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
+                  </p>
+                  <p className="font-medium">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
+                </div>
+              </div>
+>>>>>>> 2cf0d3b28daeb0cb0baa575832e6b93a7fd94885
 
         {/* Totals Summary */}
         <div className="flex justify-end mt-4">
@@ -1427,7 +1587,7 @@ treasury_name: (() => {
           setShowInvoiceForm(false);
         }}
         onSaveAndNew={() => {
-          refetchAll(); 
+          refetchAll();
         }}
       />
 

@@ -1,191 +1,119 @@
-import { useState, useRef } from "react"; // ✅ أضف useRef
+import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAuth } from "@/contexts/AuthContext"; // ✅ أضف useAuth
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign, Printer } from "lucide-react"; // ✅ أضف Printer
+import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
-import api from "@/lib/api";
 import { toast } from "@/components/ui/use-toast";
-import { useReactToPrint } from "react-to-print"; // ✅ أضف useReactToPrint
-import PurchaseReturnPrintTemplate from "./PurchaseReturnPrintTemplate"; // ✅ استيراد القالب
+import { useReactToPrint } from "react-to-print";
+import PurchaseReturnPrintTemplate from "./PurchaseReturnPrintTemplate";
+import { purchaseReturnService } from '@/services/purchaseReturnService';
+import type {
+  PurchaseReturn,
+  ReturnItem,
+  PurchaseReturnsResponse
+} from '@/types/PurcheasRetuern';
 
-// ========== أنواع البيانات من API ==========
-
-interface ReturnItem {
+interface PrintItem {
   product: string;
   quantity: number;
   unit_price: string;
   total_price: string;
 }
 
-interface PurchaseReturn {
-  id: number;
-  return_number: string;
-  invoice_number: string;
-  total_amount: string;
-  reason: string | null;
-  items: ReturnItem[];
-  created_at: string;
-}
-
-interface PurchaseReturnsResponse {
-  data: PurchaseReturn[];
-  links: {
-    first: string;
-    last: string;
-    prev: string | null;
-    next: string | null;
-  };
-  meta: {
-    current_page: number;
-    from: number;
-    last_page: number;
-    path: string;
-    per_page: number;
-    to: number;
-    total: number;
-  };
-  result: string;
-  message: string;
-  status: number;
-}
-
-interface ReturnFilters {
-  search?: string;
-  date_from?: string;
-  date_to?: string;
-  amount_min?: string;
-  amount_max?: string;
-}
+const transformItems = (items: ReturnItem[]): PrintItem[] =>
+  items.map(item => ({
+    product: item.product_name || 'غير معروف',
+    quantity: item.quantity || 0,
+    unit_price: item.price?.toString() || '0',
+    total_price: ((item.quantity || 0) * (item.price || 0)).toString()
+  }));
 
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
-  const { user } = useAuth(); // ✅ استخدام useAuth
   const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showPrint, setShowPrint] = useState(false); // ✅ للتحكم في إظهار الطباعة
-  const printRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
+  const [showPrint, setShowPrint] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
-  // دالة الطباعة
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `مرتجع-${selectedReturn?.return_number}`,
-    onAfterPrint: () => {
-      setShowPrint(false);
-    },
+    onAfterPrint: () => setShowPrint(false),
   });
 
-  // ========== Filter fields ==========
+  const handlePrintClick = useCallback(() => {
+    if (!selectedReturn) return;
+    setShowPrint(true);
+    setTimeout(() => handlePrint(), 100);
+  }, [selectedReturn, handlePrint]);
+
+  // Filter fields
   const filterFields: FilterField[] = [
-    { 
-      key: 'search', 
-      label: 'Return/Invoice', 
-      labelAr: 'المرتجع/الفاتورة', 
-      type: 'text', 
-      placeholder: 'Search...', 
-      placeholderAr: 'بحث...' 
+    {
+      key: 'search',
+      label: 'Return/Invoice',
+      labelAr: 'المرتجع/الفاتورة',
+      type: 'text',
+      placeholder: 'Search...',
+      placeholderAr: 'بحث...'
     },
-    { 
-      key: 'date', 
-      label: 'Date', 
-      labelAr: 'التاريخ', 
-      type: 'dateRange' 
+    {
+      key: 'date',
+      label: 'Date',
+      labelAr: 'التاريخ',
+      type: 'dateRange'
     },
+    {
+      key: 'amount_min',
+      label: 'Min Amount',
+      labelAr: 'الحد الأدنى للمبلغ',
+      type: 'number',
+      placeholder: '0',
+      placeholderAr: '0'
+    },
+    {
+      key: 'amount_max',
+      label: 'Max Amount',
+      labelAr: 'الحد الأقصى للمبلغ',
+      type: 'number',
+      placeholder: '999999',
+      placeholderAr: '999999'
+    }
   ];
 
-  // ========== Fetch purchase returns with filters ==========
-  const { data: returnsResponse, isLoading, refetch } = useQuery<PurchaseReturnsResponse>({
+  const { data: returnsResponse, isLoading, refetch } = useQuery({
     queryKey: ['purchase-returns', filterValues],
-    queryFn: async () => {
-      try {
-        // Build request body for filtering
-        const payload: any = {
-          orderBy: 'id',
-          orderByDirection: 'desc',
-          perPage: 100,
-          paginate: false,
-        };
-
-        const filters: any = {};
-
-        if (filterValues.search) {
-          filters.return_number = filterValues.search;
-        }
-
-        if (filterValues.date_from) {
-          filters.date_from = filterValues.date_from.split('T')[0];
-        }
-
-        if (filterValues.date_to) {
-          filters.date_to = filterValues.date_to.split('T')[0];
-        }
-
-        if (filterValues.amount_min) {
-          filters.total_amount = Number(filterValues.amount_min);
-        }
-
-        if (Object.keys(filters).length > 0) {
-          payload.filters = filters;
-        }
-
-        console.log('📦 Fetching purchase returns with payload:', payload);
-
-        const response = await api.post<PurchaseReturnsResponse>('/purchase-returns/index', payload);
-
-        if (response.data.result === 'Success') {
-          return response.data;
-        }
-
-        throw new Error(response.data.message || 'Failed to fetch returns');
-      } catch (error) {
-        console.error('Error fetching returns:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب المرتجعات' : 'Error fetching returns',
-          variant: 'destructive',
-        });
-        throw error;
-      }
-    }
+    queryFn: () => purchaseReturnService.getPurchaseReturns(filterValues),
   });
 
   const returns = returnsResponse?.data || [];
   const paginationMeta = returnsResponse?.meta;
 
-  // ========== Helper functions ==========
   const formatDate = (dateStr: string) => {
     try {
-      return format(new Date(dateStr), 'yyyy/MM/dd', { 
-        locale: language === 'ar' ? ar : undefined 
+      return format(new Date(dateStr), 'yyyy/MM/dd', {
+        locale: language === 'ar' ? ar : undefined
       });
     } catch {
       return dateStr;
     }
   };
 
-  const formatAmount = (amount: string) => {
-    return Number(amount).toLocaleString();
-  };
+  const formatAmount = (amount: string) => Number(amount).toLocaleString();
 
-  // معالج الطباعة
-  const handlePrintClick = () => {
-    if (!selectedReturn) return;
-    setShowPrint(true);
-    setTimeout(() => {
-      handlePrint();
-    }, 100);
-  };
+  const transformedItems = selectedReturn ? transformItems(selectedReturn.items) : [];
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex-1 w-full">
           <AdvancedFilter
@@ -198,7 +126,6 @@ const PurchaseReturnsList = () => {
         </div>
       </div>
 
-      {/* Returns Table */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
@@ -227,7 +154,7 @@ const PurchaseReturnsList = () => {
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                        <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
                         {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                       </div>
                     </TableCell>
@@ -239,7 +166,7 @@ const PurchaseReturnsList = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  returns.map((ret: PurchaseReturn, index: number) => (
+                  returns.map((ret, index) => (
                     <TableRow key={ret.id} className="hover:bg-muted/50">
                       <TableCell className="font-mono text-muted-foreground">{index + 1}</TableCell>
                       <TableCell className="font-mono font-medium">{ret.return_number}</TableCell>
@@ -256,9 +183,9 @@ const PurchaseReturnsList = () => {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => { 
-                            setSelectedReturn(ret); 
-                            setShowDetails(true); 
+                          onClick={() => {
+                            setSelectedReturn(ret);
+                            setShowDetails(true);
                           }}
                           className="h-8 w-8 p-0"
                         >
@@ -272,7 +199,6 @@ const PurchaseReturnsList = () => {
             </Table>
           </div>
 
-          {/* Pagination info */}
           {paginationMeta && paginationMeta.total > 0 && (
             <div className="flex items-center justify-end mt-4">
               <div className="text-sm text-muted-foreground">
@@ -286,7 +212,6 @@ const PurchaseReturnsList = () => {
         </CardContent>
       </Card>
 
-      {/* Return Details Dialog */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -296,14 +221,8 @@ const PurchaseReturnsList = () => {
                 {language === 'ar' ? 'تفاصيل المرتجع' : 'Return Details'}
                 <span className="font-mono text-muted-foreground">#{selectedReturn?.return_number}</span>
               </DialogTitle>
-              {/* زر الطباعة */}
               {selectedReturn && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrintClick}
-                  className="gap-2"
-                >
+                <Button variant="outline" size="sm" onClick={handlePrintClick} className="gap-2">
                   <Printer size={16} />
                   {language === 'ar' ? 'طباعة' : 'Print'}
                 </Button>
@@ -313,7 +232,6 @@ const PurchaseReturnsList = () => {
 
           {selectedReturn && (
             <div className="space-y-4">
-              {/* Info Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-4">
@@ -346,7 +264,7 @@ const PurchaseReturnsList = () => {
                       {language === 'ar' ? 'عدد الأصناف' : 'Items'}
                     </div>
                     <div className="font-medium text-lg">
-                      {selectedReturn.items?.length || 0}
+                      {selectedReturn.items.length}
                     </div>
                   </CardContent>
                 </Card>
@@ -364,21 +282,15 @@ const PurchaseReturnsList = () => {
                 </Card>
               </div>
 
-              {/* Reason (if exists) */}
               {selectedReturn.reason && (
-                <Card>
-                  <CardContent className="pt-4">
-                    <div className="text-sm text-muted-foreground mb-1">
-                      {language === 'ar' ? 'السبب' : 'Reason'}
-                    </div>
-                    <div className="p-3 bg-muted/30 rounded-lg border">
-                      {selectedReturn.reason}
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="p-3 bg-muted/30 rounded-lg border">
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {language === 'ar' ? 'السبب' : 'Reason'}
+                  </div>
+                  <div>{selectedReturn.reason}</div>
+                </div>
               )}
 
-              {/* Items Table */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -399,7 +311,7 @@ const PurchaseReturnsList = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedReturn.items?.map((item: ReturnItem, idx: number) => (
+                        {transformedItems.map((item, idx) => (
                           <TableRow key={idx}>
                             <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                             <TableCell className="font-medium">{item.product}</TableCell>
@@ -413,8 +325,6 @@ const PurchaseReturnsList = () => {
                       </TableBody>
                     </Table>
                   </div>
-
-                  {/* Total Summary */}
                   <div className="flex justify-end mt-4">
                     <div className="w-64 p-4 bg-primary/5 rounded-lg border border-primary/20">
                       <div className="flex justify-between items-center">
@@ -434,7 +344,6 @@ const PurchaseReturnsList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* قالب الطباعة المخفي */}
       {showPrint && selectedReturn && (
         <div style={{ display: 'none' }}>
           <PurchaseReturnPrintTemplate
@@ -443,7 +352,7 @@ const PurchaseReturnsList = () => {
               return_number: selectedReturn.return_number,
               invoice_number: selectedReturn.invoice_number,
               date: selectedReturn.created_at,
-              items: selectedReturn.items,
+              items: transformedItems,
               total_amount: selectedReturn.total_amount,
               reason: selectedReturn.reason,
             }}
@@ -455,3 +364,4 @@ const PurchaseReturnsList = () => {
 };
 
 export default PurchaseReturnsList;
+
