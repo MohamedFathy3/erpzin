@@ -351,7 +351,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
         payload.is_main = data.currencies[0].is_main;
       }
 
-      const response = await api.post('/treasury/store', payload);
+      const response = await api.post('/treasury', payload);
       return response.data;
     },
     onSuccess: () => {
@@ -410,7 +410,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   // Bank mutations (زي ما هما)
   const createBankMutation = useMutation({
     mutationFn: async (data: typeof bankForm) => {
-      const response = await api.post('/bank/store', {
+      const response = await api.post('/bank', {
         name: data.name,
         name_ar: data.name_ar || null,
         account_number: data.account_number || null,

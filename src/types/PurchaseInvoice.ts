@@ -24,6 +24,7 @@
 //     created_at: string;
 // }
 
+
 // export interface PurchaseInvoicesResponse {
 //     data: PurchaseInvoice[];
 //     links: any;
@@ -46,94 +47,72 @@ export interface PaymentResponse {
     message: string;
     status: number;
 }
+export interface PurchaseInvoiceItem {
+  product_id: number;
+  product_name: string;
+  product_name_ar?: string;
+  product_sku?: string;
+  quantity: number;
+  price: number;
+  discount: number;
+  tax: number;
+  total: number;
+  variant_details?: {
+    size?: string;
+    color?: string;
+  } | null;
+}
 
 
 export interface PurchaseInvoice {
-    id: number;
-    invoice_number: string;
-    supplier: {
-        id: number;
-        name: string;
-        name_ar?: string;
-    };
-    branch: {
-        id: number;
-        name: string;
-        name_ar?: string;
-    };
-    warehouse: {
-        id: number;
-        name: string;
-        name_ar?: string;
-    };
-    treasury: {
-        id: number;
-        name: string;
-        name_ar?: string;
-        is_main?: boolean;
-    } | null;
-    currency: {
-        id: number;
-        name: string;
-        code: string;
-        symbol: string;
-    };
-    tax: {
-        id: number;
-        name: string;
-        rate: string;
-    } | null;
-    invoice_date: string;
-    due_date: string;
-    payment_method: string;
-    note: string | null;
-    subtotal: number;
-    paid_amount: number;
-    discount_total: number;
-    tax_total: number;
-    total_amount: number;
-    remaining_amount: number;
-    items: Array<{
-        id: number;
-        product_id: number;
-        product_name: string;
-        product_name_ar?: string;
-        product_sku: string;
-        product_variant_id?: number;
-        variant_details?: {
-            size?: string;
-            color?: string;
-        } | null;
-        quantity: number;
-        price: number;
-        discount: number;
-        tax: number;
-        total: number;
-    }>;
-    created_at: string;
-    updated_at: string;
+  id: number;
+  invoice_number: string;
+  supplier_id: number;
+  supplier_name: string;
+  supplier_name_ar: string | null;
+  branch_id: number;
+  branch_name: string;
+  warehouse_id: number;
+  warehouse_name: string;
+  treasury_id: number;
+  treasury_name: string;
+  currency_id: number;
+  currency_code: string;
+  tax_id: number | null;
+  tax_rate: string | null;
+  invoice_date: string;
+  due_date: string;
+  payment_method: string;
+  note: string | null;
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  total_amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  items: PurchaseInvoiceItem[];
+  created_at: string;
+  updated_at: string;
 }
-
 export interface PurchaseInvoicesResponse {
-    data: PurchaseInvoice[];
-    links: {
-        first: string;
-        last: string;
-        prev: string | null;
-        next: string | null;
-    };
-    meta: {
-        current_page: number;
-        from: number;
-        last_page: number;
-        per_page: number;
-        total: number;
-    };
-    result: string;
-    message: string;
-    status: number;
+  data: PurchaseInvoice[];
+  links: {
+    first: string;
+    last: string;
+    prev: string | null;
+    next: string | null;
+  };
+  meta: {
+    current_page: number;
+    from: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+  result: string;
+  message: string;
+  status: number;
 }
-
 
 
 

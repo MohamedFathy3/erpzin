@@ -38,120 +38,6 @@ import { purchaseInvoiceService } from '@/services/PurchaseInvoiceService';
 import type { PurchaseInvoicesResponse, PurchaseInvoice, PaymentPayload, PaymentResponse } from '@/types/PurchaseInvoice';
 
 // ========== أنواع البيانات من API (موحدة) ==========
-
-// interface Supplier {
-//   id: number;
-//   name: string;
-//   name_ar?: string;
-//   contact_person?: string;
-//   phone?: string;
-//   email?: string;
-//   address?: string;
-//   tax_number?: string;
-//   credit_limit?: number;
-//   payment_terms?: number;
-//   active?: number;
-//   note?: string;
-//   balance?: number;
-//   created_at?: string;
-//   updated_at?: string;
-// }
-
-// ✅ نوع موحد للفاتورة (نفس الـ Resource)
-
-// interface PurchaseInvoice {
-//   id: number;
-//   invoice_number: string;
-//   supplier: {
-//     id: number;
-//     name: string;
-//     name_ar?: string;
-//   };
-//   branch: {
-//     id: number;
-//     name: string;
-//     name_ar?: string;
-//   };
-//   warehouse: {
-//     id: number;
-//     name: string;
-//     name_ar?: string;
-//   };
-//   treasury: {
-//     id: number;
-//     name: string;
-//     name_ar?: string;
-//     is_main?: boolean;
-//   } | null;
-//   currency: {
-//     id: number;
-//     name: string;
-//     code: string;
-//     symbol: string;
-//   };
-//   tax: {
-//     id: number;
-//     name: string;
-//     rate: string;
-//   } | null;
-//   invoice_date: string;
-//   due_date: string;
-//   payment_method: string;
-//   note: string | null;
-//   subtotal: number;
-//   paid_amount: number;
-//   discount_total: number;
-//   tax_total: number;
-//   total_amount: number;
-//   remaining_amount: number;
-//   items: Array<{
-//     id: number;
-//     product_id: number;
-//     product_name: string;
-//     product_name_ar?: string;
-//     product_sku: string;
-//     product_variant_id?: number;
-//     variant_details?: {
-//       size?: string;
-//       color?: string;
-//     } | null;
-//     quantity: number;
-//     price: number;
-//     discount: number;
-//     tax: number;
-//     total: number;
-//   }>;
-//   created_at: string;
-//   updated_at: string;
-// }
-
-// interface PurchaseInvoicesResponse {
-//   data: PurchaseInvoice[];
-//   links: {
-//     first: string;
-//     last: string;
-//     prev: string | null;
-//     next: string | null;
-//   };
-//   meta: {
-//     current_page: number;
-//     from: number;
-//     last_page: number;
-//     per_page: number;
-//     total: number;
-//   };
-//   result: string;
-//   message: string;
-//   status: number;
-// }
-
-interface PurchaseInvoiceDetailsResponse {
-  data: PurchaseInvoice;
-  result: string;
-  message: string;
-  status: number;
-}
-
 interface InvoiceTableRow {
   id: number;
   invoice_number: string;
@@ -211,7 +97,7 @@ const Purchasing = () => {
   const [showEditInvoiceForm, setShowEditInvoiceForm] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
-  const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoice | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
 
   // دالة الطباعة
   const handlePrint = useReactToPrint({
@@ -223,66 +109,6 @@ const Purchasing = () => {
   });
 
   // ========== جلب الفواتير ==========
-  // const {
-  //   data: invoicesResponse,
-  //   isLoading: invoicesLoading,
-  //   refetch: refetchInvoices
-  // } = useQuery<PurchaseInvoicesResponse>({
-  //   queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices],
-  //   queryFn: async () => {
-  //     try {
-  //       const payload: any = {
-  //         orderBy: 'id',
-  //         orderByDirection: 'desc',
-  //         perPage: showAllInvoices ? 10000 : 10,
-  //         paginate: !showAllInvoices,
-  //         page: showAllInvoices ? 1 : currentPage,
-  //       };
-
-  //       const filters: any = {};
-
-  //       if (invoiceFilters.search) {
-  //         filters.invoice_number = invoiceFilters.search;
-  //       }
-
-  //       if (invoiceFilters.date_from) {
-  //         filters.date_from = invoiceFilters.date_from.split('T')[0];
-  //       }
-
-  //       if (invoiceFilters.date_to) {
-  //         filters.date_to = invoiceFilters.date_to.split('T')[0];
-  //       }
-
-  //       if (invoiceFilters.amount_min) {
-  //         filters.amount_min = Number(invoiceFilters.amount_min);
-  //       }
-
-  //       if (invoiceFilters.amount_max) {
-  //         filters.amount_max = Number(invoiceFilters.amount_max);
-  //       }
-
-  //       if (Object.keys(filters).length > 0) {
-  //         payload.filters = filters;
-  //       }
-
-  //       const response = await api.post<PurchaseInvoicesResponse>('/purchases-invoices/index', payload);
-
-  //       if (response.data.result === 'Success') {
-  //         return response.data;
-  //       }
-
-  //       throw new Error(response.data.message || 'Failed to fetch invoices');
-  //     } catch (error) {
-  //       console.error('Error fetching invoices:', error);
-  //       toast({
-  //         title: language === 'ar' ? 'خطأ في جلب الفواتير' : 'Error fetching invoices',
-  //         variant: 'destructive',
-  //       });
-  //       throw error;
-  //     }
-  //   },
-  // });
-
   const {
     data: invoicesResponse,
     isLoading: invoicesLoading,
@@ -296,32 +122,21 @@ const Purchasing = () => {
         filters: invoiceFilters,
       }),
   });
-  // ✅ تحويل البيانات إلى الشكل المطلوب للجدول (مباشرة من الـ API)
-  const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: PurchaseInvoice) => ({
+
+  // ✅ تحويل البيانات إلى الشكل المطلوب للجدول (بما يتوافق مع API المسطح)
+  const invoicesList: InvoiceTableRow[] = (invoicesResponse?.data || []).map((invoice: any) => ({
     id: invoice.id,
     invoice_number: invoice.invoice_number,
-  supplier_name: (() => {
-  if (!invoice.supplier) return '-';
-  return language === 'ar' 
-    ? (invoice.supplier.name_ar || invoice.supplier.name) 
-    : invoice.supplier.name;
-})(),
-   // ✅ حل آمن 100%
-treasury_name: (() => {
-  if (!invoice.treasury) return '-';
-  
-  const treasury = invoice.treasury;
-  const treasuryName = treasury.name || '';
-  const treasuryNameAr = treasury.name_ar || treasuryName;
-  
-  return language === 'ar' ? treasuryNameAr : treasuryName;
-})(),
-    supplier_name: language === 'ar'
-      ? invoice.supplier.name_ar || invoice.supplier.name
-      : invoice.supplier.name,
-    treasury_name: invoice.treasury
-      ? (language === 'ar' ? invoice.treasury.name_ar || invoice.treasury.name : invoice.treasury.name)
-      : '-',
+    supplier_name: (() => {
+      // API يرسل supplier_name مباشرة
+      return language === 'ar' 
+        ? (invoice.supplier_name_ar || invoice.supplier_name)
+        : invoice.supplier_name;
+    })(),
+    treasury_name: (() => {
+      // API يرسل treasury_name مباشرة
+      return invoice.treasury_name || '-';
+    })(),
     total_amount: invoice.total_amount,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
@@ -334,69 +149,17 @@ treasury_name: (() => {
   const paginationMeta = invoicesResponse?.meta;
 
   // ========== جلب تفاصيل الفاتورة عند الضغط عليها ==========
-  const { data: invoiceDetails, isLoading: invoiceDetailsLoading } = useQuery<PurchaseInvoiceDetailsResponse>({
+  const { data: invoiceDetails, isLoading: invoiceDetailsLoading } = useQuery({
     queryKey: ['purchase-invoice-details', selectedInvoiceId],
     queryFn: async () => {
       if (!selectedInvoiceId) throw new Error('No invoice selected');
-
-      try {
-        const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
-
-        if (response.data.result === 'Success') {
-          return response.data;
-        }
-
-        throw new Error(response.data.message || 'Failed to fetch invoice details');
-      } catch (error) {
-        console.error('Error fetching invoice details:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب تفاصيل الفاتورة' : 'Error fetching invoice details',
-          variant: 'destructive',
-        });
-        throw error;
-      }
+      const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
+      return response.data; // API يرسل { data, result, message, status }
     },
     enabled: !!selectedInvoiceId && showInvoiceDetails,
   });
 
-  // ========== حذف الفاتورة ==========
-
-
   // ========== حذف المورد ==========
-  // const deleteSupplierMutation = useMutation({
-  //   mutationFn: async (supplierId: number) => {
-  //     const response = await api.delete('/suppliers/delete', {
-  //       data: { items: [supplierId] }
-  //     });
-
-  //     return response.data;
-  //   },
-  //   onSuccess: (data) => {
-  //     if (data.result === 'Success') {
-  //       toast({
-  //         title: language === 'ar' ? 'تم حذف المورد بنجاح' : 'Supplier deleted successfully',
-  //         variant: 'default',
-  //       });
-  //       refetchSuppliers();
-  //       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-  //     } else {
-  //       toast({
-  //         title: language === 'ar' ? 'فشل في حذف المورد' : 'Failed to delete supplier',
-  //         description: data.message,
-  //         variant: 'destructive',
-  //       });
-  //     }
-  //   },
-  //   onError: (error: any) => {
-  //     console.error('Error deleting supplier:', error);
-  //     toast({
-  //       title: language === 'ar' ? 'خطأ في حذف المورد' : 'Error deleting supplier',
-  //       description: error.response?.data?.message || error.message,
-  //       variant: 'destructive',
-  //     });
-  //   },
-  // });
-
   const deleteSupplierMutation = useMutation({
     mutationFn: (id: number) => supplierService.deleteSupplier(id),
     onSuccess: (data) => {
@@ -424,29 +187,27 @@ treasury_name: (() => {
     },
   });
 
-
   // ========== تحويل بيانات الفاتورة لتناسب قالب الطباعة ==========
   const getPrintData = () => {
-    if (!invoiceDetails?.data) return null;
-
-    const data = invoiceDetails.data;
+    const data = invoiceDetails?.data;
+    if (!data) return null;
 
     return {
       id: data.id.toString(),
       invoice_number: data.invoice_number,
       date: data.invoice_date,
       supplier: {
-        name: data.supplier.name,
-        nameAr: data.supplier.name_ar || data.supplier.name,
+        name: data.supplier_name,
+        nameAr: data.supplier_name_ar || data.supplier_name,
         phone: '',
         tax_number: '',
       },
       cashierName: user?.name || 'المدير',
-      branchName: data.branch.name,
+      branchName: data.branch_name || '-',
       branchPhone: '',
       branchAddress: '',
-      taxRate: data.tax ? parseFloat(data.tax.rate) : 0,
-      items: data.items.map(item => ({
+      taxRate: data.tax_rate ? parseFloat(data.tax_rate) : 0,
+      items: (data.items || []).map((item: any) => ({
         name: item.product_name,
         nameAr: item.product_name_ar || item.product_name,
         quantity: item.quantity,
@@ -472,7 +233,6 @@ treasury_name: (() => {
   // معالج الطباعة
   const handlePrintClick = () => {
     if (!invoiceDetails?.data) return;
-
     setShowPrint(true);
     setTimeout(() => {
       handlePrint();
@@ -480,54 +240,6 @@ treasury_name: (() => {
   };
 
   // ========== جلب الموردين ==========
-  // const {
-  //   data: suppliers = [],
-  //   isLoading: suppliersLoading,
-  //   refetch: refetchSuppliers
-  // } = useQuery<Supplier[]>({
-  //   queryKey: ['suppliers', supplierFilters],
-  //   queryFn: async () => {
-  //     try {
-  //       const payload: any = {
-  //         orderBy: 'name',
-  //         orderByDirection: 'asc',
-  //         perPage: 1000,
-  //         paginate: false,
-  //       };
-
-  //       const filters: any = { active: true };
-
-  //       if (supplierFilters.search) {
-  //         filters.name = supplierFilters.search;
-  //       }
-
-  //       if (supplierFilters.balance_min || supplierFilters.balance_max) {
-  //         if (supplierFilters.balance_min) {
-  //           filters.credit_limit = Number(supplierFilters.balance_min);
-  //         }
-  //         if (supplierFilters.balance_max) {
-  //           filters.balance.max = Number(supplierFilters.balance_max);
-  //         }
-  //       }
-
-  //       if (Object.keys(filters).length > 0) {
-  //         payload.filters = filters;
-  //       }
-
-  //       const response = await api.post('/suppliers/index', payload);
-
-  //       if (response.data.result === 'Success') {
-  //         return response.data.data || [];
-  //       }
-  //       return [];
-  //     } catch (error) {
-  //       console.error('Error fetching suppliers:', error);
-  //       return [];
-  //     }
-  //   },
-  // });
-
-
   const {
     data: suppliers = [],
     isLoading: suppliersLoading,
@@ -536,7 +248,6 @@ treasury_name: (() => {
     queryKey: ['suppliers', supplierFilters],
     queryFn: () => supplierService.getSuppliers(supplierFilters),
   });
-
 
   // ========== جلب أوامر الشراء ==========
   const { data: purchaseOrdersResponse } = useQuery<PurchaseOrdersResponse>({
@@ -555,14 +266,13 @@ treasury_name: (() => {
     },
   });
 
-  const purchaseOrdersCount = purchaseOrdersResponse?.meta?.total || purchaseOrdersResponse?.data?.length || 0;
-
   // ========== جلب مرتجعات الشراء ==========
-  const { data: purchaseReturnsResponse, isLoading } = useQuery({
+  const { data: purchaseReturnsResponse } = useQuery({
     queryKey: ['purchase-returns'],
     queryFn: async () => {
       try {
-        purchaseReturnService.getPurchaseReturns(); // طلب غير فعّال لتحديث الكاش
+        const response = await purchaseReturnService.getPurchaseReturns();
+        return response;
       } catch (error) {
         console.error('Error fetching returns:', error);
         return { data: [] };
@@ -673,10 +383,12 @@ treasury_name: (() => {
   };
 
   // معالج التعديل
-  const handleEditInvoice = (invoice: PurchaseInvoice) => {
+  const handleEditInvoice = (invoice: any) => {
     setEditingInvoice(invoice);
     setShowEditInvoiceForm(true);
   };
+
+  const invoiceData = invoiceDetails?.data;
 
   return (
     <MainLayout activeItem="purchasing">
@@ -726,12 +438,11 @@ treasury_name: (() => {
               <FileText size={16} className="me-2" />
               {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
             </TabsTrigger>
-
-            <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 dark:data-[state=active]:bg-orange-900 dark:data-[state=active]:text-orange-100">
+            <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
               <RotateCcw size={16} className="me-2" />
               {language === 'ar' ? 'المرتجعات' : 'Returns'}
             </TabsTrigger>
-            <TabsTrigger value="suppliers" className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800 dark:data-[state=active]:bg-violet-900 dark:data-[state=active]:text-violet-100">
+            <TabsTrigger value="suppliers" className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800">
               <Building2 size={16} className="me-2" />
               {language === 'ar' ? 'الموردين' : 'Suppliers'}
             </TabsTrigger>
@@ -741,18 +452,16 @@ treasury_name: (() => {
           <TabsContent value="invoices" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex flex-col gap-3">
-                  <AdvancedFilter
-                    fields={invoiceFilterFields}
-                    values={invoiceFilters}
-                    onChange={setInvoiceFilters}
-                    onReset={() => {
-                      setInvoiceFilters({});
-                      setCurrentPage(1);
-                    }}
-                    language={language}
-                  />
-                </div>
+                <AdvancedFilter
+                  fields={invoiceFilterFields}
+                  values={invoiceFilters}
+                  onChange={setInvoiceFilters}
+                  onReset={() => {
+                    setInvoiceFilters({});
+                    setCurrentPage(1);
+                  }}
+                  language={language}
+                />
               </CardHeader>
               <CardContent>
                 <div className="rounded-md border">
@@ -790,26 +499,17 @@ treasury_name: (() => {
                       ) : (
                         invoicesList.map((inv: InvoiceTableRow, index: number) => (
                           <TableRow key={inv.id}>
-                            <TableCell className="font-mono text-muted-foreground">
-                              {paginationMeta?.from ? paginationMeta.from + index : index + 1}
-                            </TableCell>
+                            <TableCell>{paginationMeta?.from ? paginationMeta.from + index : index + 1}</TableCell>
                             <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
                             <TableCell>{inv.supplier_name}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Landmark size={14} className="text-muted-foreground" />
-                                <span className="text-sm">{inv.treasury_name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-semibold">{inv.total_amount.toLocaleString()} YER</TableCell>
-                            <TableCell className="text-success font-medium">{inv.paid_amount.toLocaleString()} YER</TableCell>
-                            <TableCell className={inv.remaining_amount > 0 ? 'text-warning font-medium' : 'text-muted-foreground'}>
+                            <TableCell>{inv.treasury_name}</TableCell>
+                            <TableCell>{inv.total_amount.toLocaleString()} YER</TableCell>
+                            <TableCell className="text-green-600">{inv.paid_amount.toLocaleString()} YER</TableCell>
+                            <TableCell className={inv.remaining_amount > 0 ? 'text-orange-500' : ''}>
                               {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} YER
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">
-                                {getPaymentMethodLabel(inv.payment_method)}
-                              </Badge>
+                              <Badge variant="outline">{getPaymentMethodLabel(inv.payment_method)}</Badge>
                             </TableCell>
                             <TableCell className="text-center">{inv.items_count}</TableCell>
                             <TableCell>{formatDate(inv.invoice_date)}</TableCell>
@@ -831,12 +531,10 @@ treasury_name: (() => {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => {
-                                    const fullInvoice = invoicesResponse?.data.find(i => i.id === inv.id);
-                                    if (fullInvoice) {
-                                      handleEditInvoice(fullInvoice);
-                                    }
+                                    const fullInvoice = invoicesResponse?.data.find((i: any) => i.id === inv.id);
+                                    if (fullInvoice) handleEditInvoice(fullInvoice);
                                   }}
-                                  className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  className="h-8 w-8 p-0 text-blue-600"
                                   title={language === 'ar' ? 'تعديل' : 'Edit'}
                                 >
                                   <Edit2 className="h-4 w-4" />
@@ -848,12 +546,11 @@ treasury_name: (() => {
                                     setSelectedInvoiceId(inv.id);
                                     setShowReturnForm(true);
                                   }}
-                                  className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                  className="h-8 w-8 p-0 text-orange-600"
                                   title={language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
-
                               </div>
                             </TableCell>
                           </TableRow>
@@ -866,92 +563,32 @@ treasury_name: (() => {
                 {/* Pagination */}
                 {paginationMeta && paginationMeta.last_page > 1 && (
                   <div className="flex items-center justify-between mt-4">
-                    <div className="flex items-center gap-4">
-                      <div className="text-sm text-muted-foreground">
-                        {showAllInvoices ? (
-                          language === 'ar'
-                            ? `عرض جميع الفواتير (${paginationMeta.total})`
-                            : `Showing all invoices (${paginationMeta.total})`
-                        ) : (
-                          language === 'ar'
-                            ? `عرض ${paginationMeta.from || 0} إلى ${paginationMeta.to || 0} من ${paginationMeta.total} فاتورة`
-                            : `Showing ${paginationMeta.from || 0} to ${paginationMeta.to || 0} of ${paginationMeta.total} invoices`
-                        )}
-                      </div>
-                      {!showAllInvoices && paginationMeta.last_page > 1 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowAllInvoices(true);
-                            setCurrentPage(1);
-                          }}
-                        >
-                          {language === 'ar' ? 'عرض الكل' : 'Show All'}
-                        </Button>
-                      )}
-                      {showAllInvoices && paginationMeta.last_page > 1 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowAllInvoices(false);
-                            setCurrentPage(1);
-                          }}
-                        >
-                          {language === 'ar' ? 'عرض بالصفحات' : 'Paginate'}
-                        </Button>
-                      )}
+                    <div className="text-sm text-muted-foreground">
+                      {showAllInvoices
+                        ? language === 'ar' ? `عرض جميع الفواتير (${paginationMeta.total})` : `Showing all invoices (${paginationMeta.total})`
+                        : language === 'ar'
+                          ? `عرض ${paginationMeta.from || 0} إلى ${paginationMeta.to || 0} من ${paginationMeta.total} فاتورة`
+                          : `Showing ${paginationMeta.from || 0} to ${paginationMeta.to || 0} of ${paginationMeta.total} invoices`
+                      }
                     </div>
-
-                    {!showAllInvoices && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1}
-                        >
-                          {language === 'ar' ? 'السابق' : 'Previous'}
-                        </Button>
-
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, paginationMeta.last_page) }, (_, i) => {
-                            let pageNum: number;
-                            if (paginationMeta.last_page <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= paginationMeta.last_page - 2) {
-                              pageNum = paginationMeta.last_page - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
-
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                className="w-8 h-8 p-0"
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(paginationMeta.last_page, prev + 1))}
-                          disabled={currentPage === paginationMeta.last_page}
-                        >
-                          {language === 'ar' ? 'التالي' : 'Next'}
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        {language === 'ar' ? 'السابق' : 'Previous'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(paginationMeta.last_page, p + 1))}
+                        disabled={currentPage === paginationMeta.last_page}
+                      >
+                        {language === 'ar' ? 'التالي' : 'Next'}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -967,21 +604,19 @@ treasury_name: (() => {
           <TabsContent value="suppliers" className="mt-4">
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <AdvancedFilter
-                      fields={supplierFilterFields}
-                      values={supplierFilters}
-                      onChange={setSupplierFilters}
-                      onReset={() => setSupplierFilters({})}
-                      language={language}
-                      className="flex-1"
-                    />
-                    <Button variant="outline" onClick={() => { setSelectedSupplier(null); setShowSupplierForm(true); }}>
-                      <Plus size={18} className="me-2" />
-                      {language === 'ar' ? 'مورد جديد' : 'New Supplier'}
-                    </Button>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <AdvancedFilter
+                    fields={supplierFilterFields}
+                    values={supplierFilters}
+                    onChange={setSupplierFilters}
+                    onReset={() => setSupplierFilters({})}
+                    language={language}
+                    className="flex-1"
+                  />
+                  <Button variant="outline" onClick={() => { setSelectedSupplier(null); setShowSupplierForm(true); }}>
+                    <Plus size={18} className="me-2" />
+                    {language === 'ar' ? 'مورد جديد' : 'New Supplier'}
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -991,68 +626,57 @@ treasury_name: (() => {
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                 {suppliers.map((supplier: Supplier) => (
-  <Card
-    key={supplier.id}
-    className="border hover:shadow-md transition-shadow cursor-pointer relative"
-    onClick={() => {
-      setSelectedSupplier(supplier);
-      setShowSupplierDetails(true);
-    }}
-  >
-    <CardContent className="p-4">
-      {/* Delete Button */}
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا المورد؟' : 'Are you sure you want to delete this supplier?')) {
-            deleteSupplierMutation.mutate(Number(supplier.id));
-          }
-        }}
-        className="absolute top-2 right-2 h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-        disabled={deleteSupplierMutation.isPending}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-
-      <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Building2 className="text-primary" size={20} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground truncate">
-            {(() => {
-              // ✅ حل آمن لقراءة اسم المورد
-              if (!supplier) return '-';
-              const name = supplier.name || '';
-              const nameAr = supplier.name_ar || name;
-              return language === 'ar' ? nameAr : name;
-            })()}
-          </h3>
-          {supplier.phone && (
-            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-              <Phone size={14} />
-              <span dir="ltr">{supplier.phone}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t">
-            <span className="text-xs text-muted-foreground">
-              {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
-            </span>
-            <span className={cn(
-              "font-semibold",
-              Number(supplier.credit_limit) > 0 ? "text-destructive" : "text-success"
-            )}>
-              {Number(supplier.credit_limit || 0).toLocaleString()} YER
-            </span>
-          </div>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-))}
+                    {suppliers.map((supplier: Supplier) => (
+                      <Card
+                        key={supplier.id}
+                        className="border hover:shadow-md transition-shadow cursor-pointer relative"
+                        onClick={() => {
+                          setSelectedSupplier(supplier);
+                          setShowSupplierDetails(true);
+                        }}
+                      >
+                        <CardContent className="p-4">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا المورد؟' : 'Are you sure you want to delete this supplier?')) {
+                                deleteSupplierMutation.mutate(Number(supplier.id));
+                              }
+                            }}
+                            className="absolute top-2 right-2 h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deleteSupplierMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Building2 className="text-primary" size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-foreground truncate">
+                                {language === 'ar' ? (supplier.name_ar || supplier.name) : supplier.name}
+                              </h3>
+                              {supplier.phone && (
+                                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                  <Phone size={14} />
+                                  <span dir="ltr">{supplier.phone}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                                <span className="text-xs text-muted-foreground">
+                                  {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
+                                </span>
+                                <span className={cn("font-semibold", Number(supplier.credit_limit) > 0 ? "text-destructive" : "text-success")}>
+                                  {Number(supplier.credit_limit || 0).toLocaleString()} YER
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -1070,16 +694,11 @@ treasury_name: (() => {
                 <FileText className="h-5 w-5" />
                 {language === 'ar' ? 'تفاصيل فاتورة الشراء' : 'Purchase Invoice Details'}
                 <span className="font-mono text-muted-foreground">
-                  #{invoiceDetails?.data?.invoice_number || selectedInvoiceId}
+                  #{invoiceData?.invoice_number || selectedInvoiceId}
                 </span>
               </DialogTitle>
-              {invoiceDetails?.data && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrintClick}
-                  className="gap-2"
-                >
+              {invoiceData && (
+                <Button variant="outline" size="sm" onClick={handlePrintClick} className="gap-2">
                   <Printer size={16} />
                   {language === 'ar' ? 'طباعة' : 'Print'}
                 </Button>
@@ -1087,46 +706,11 @@ treasury_name: (() => {
             </div>
           </DialogHeader>
 
-        {invoiceDetailsLoading ? (
-  <div className="flex justify-center py-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-  </div>
-) : invoiceDetails?.data ? (
-  <div className="space-y-4">
-    {/* Info Cards */}
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card>
-        <CardContent className="pt-4">
-          <div className="text-sm text-muted-foreground flex items-center gap-1">
-            <Building2 className="h-3 w-3" />
-            {language === 'ar' ? 'المورد' : 'Supplier'}
-          </div>
-          <div className="font-medium">
-            {(() => {
-              const data = invoiceDetails.data as any;
-              // التعامل مع الشكل القديم (flat)
-              if (data.supplier_name) {
-                return language === 'ar' 
-                  ? (data.supplier_name_ar || data.supplier_name)
-                  : data.supplier_name;
-              }
-              // التعامل مع الشكل الجديد (nested)
-              if (data.supplier) {
-                return language === 'ar' 
-                  ? (data.supplier.name_ar || data.supplier.name)
-                  : data.supplier.name;
-              }
-              return '-';
-            })()}
-          </div>
-        </CardContent>
-      </Card>
-
           {invoiceDetailsLoading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
-          ) : invoiceDetails?.data ? (
+          ) : invoiceData ? (
             <div className="space-y-4">
               {/* Info Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1137,385 +721,190 @@ treasury_name: (() => {
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </div>
                     <div className="font-medium">
-                      {language === 'ar'
-                        ? invoiceDetails.data.supplier.name_ar || invoiceDetails.data.supplier.name
-                        : invoiceDetails.data.supplier.name}
+                      {language === 'ar' ? (invoiceData.supplier_name_ar || invoiceData.supplier_name) : invoiceData.supplier_name}
                     </div>
                   </CardContent>
                 </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      {language === 'ar' ? 'الإجمالي' : 'Total'}
+                    </div>
+                    <div className="font-bold text-lg text-primary">{formatAmount(invoiceData.total_amount)} YER</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Package className="h-3 w-3" />
+                      {language === 'ar' ? 'عدد الأصناف' : 'Items'}
+                    </div>
+                    <div className="font-medium text-lg">{invoiceData.items?.length || 0}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {language === 'ar' ? 'التاريخ' : 'Date'}
+                    </div>
+                    <div className="font-medium">{formatDate(invoiceData.invoice_date)}</div>
+                  </CardContent>
+                </Card>
+              </div>
 
-      <Card>
-        <CardContent className="pt-4">
-          <div className="text-sm text-muted-foreground flex items-center gap-1">
-            <DollarSign className="h-3 w-3" />
-            {language === 'ar' ? 'الإجمالي' : 'Total'}
-          </div>
-          <div className="font-bold text-lg text-primary">
-            {formatAmount(invoiceDetails.data.total_amount)} YER
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-4">
-          <div className="text-sm text-muted-foreground flex items-center gap-1">
-            <Package className="h-3 w-3" />
-            {language === 'ar' ? 'عدد الأصناف' : 'Items'}
-          </div>
-          <div className="font-medium text-lg">
-            {invoiceDetails.data.items.length}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-4">
-          <div className="text-sm text-muted-foreground flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {language === 'ar' ? 'التاريخ' : 'Date'}
-          </div>
-          <div className="font-medium">
-            {formatDate(invoiceDetails.data.invoice_date)}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-
-    {/* Additional Info Grid */}
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {/* الفرع */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'الفرع' : 'Branch'}
-        </p>
-        <p className="font-medium">
-          {(() => {
-            const data = invoiceDetails.data as any;
-            if (data.branch_name) {
-              return data.branch_name;
-            }
-            if (data.branch) {
-              return language === 'ar' 
-                ? (data.branch.name_ar || data.branch.name)
-                : data.branch.name;
-            }
-            return '-';
-          })()}
-        </p>
-      </div>
-
-      {/* المستودع */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'المستودع' : 'Warehouse'}
-        </p>
-        <p className="font-medium">
-          {(() => {
-            const data = invoiceDetails.data as any;
-            if (data.warehouse_name) {
-              return data.warehouse_name;
-            }
-            if (data.warehouse) {
-              return language === 'ar' 
-                ? (data.warehouse.name_ar || data.warehouse.name)
-                : data.warehouse.name;
-            }
-            return '-';
-          })()}
-        </p>
-      </div>
-
-      {/* الخزينة */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'الخزينة' : 'Treasury'}
-        </p>
-        <p className="font-medium flex items-center gap-1">
-          <Landmark size={14} className="text-primary" />
-          {(() => {
-            const data = invoiceDetails.data as any;
-            if (data.treasury_name) {
-              return data.treasury_name;
-            }
-            if (data.treasury) {
-              return language === 'ar' 
-                ? (data.treasury.name_ar || data.treasury.name)
-                : data.treasury.name;
-            }
-            return '-';
-          })()}
-        </p>
-      </div>
-
-      {/* العملة */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'العملة' : 'Currency'}
-        </p>
-        <p className="font-medium">
-          {(() => {
-            const data = invoiceDetails.data as any;
-            if (data.currency_code) {
-              return data.currency_code;
-            }
-            if (data.currency) {
-              return `${data.currency.code} - ${data.currency.symbol}`;
-            }
-            return '-';
-          })()}
-        </p>
-      </div>
-
-      {/* الضريبة */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'الضريبة' : 'Tax'}
-        </p>
-        <p className="font-medium">
-          {(() => {
-            const data = invoiceDetails.data as any;
-            if (data.tax_rate) {
-              return `${data.tax_rate}%`;
-            }
-            if (data.tax) {
-              return `${data.tax.name} (${data.tax.rate}%)`;
-            }
-            return '-';
-          })()}
-        </p>
-      </div>
-
-      {/* طريقة الدفع */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'طريقة الدفع' : 'Payment'}
-        </p>
-        <p className="font-medium">{getPaymentMethodLabel(invoiceDetails.data.payment_method)}</p>
-      </div>
-
-      {/* تاريخ الاستحقاق */}
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
-        </p>
-        <p className="font-medium">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
-      </div>
-    </div>
-
-    {/* باقي المكونات (نفس الكود) */}
-    {/* Payment Summary */}
-    <div className="grid grid-cols-3 gap-4">
-      <div className="p-3 bg-success/10 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'المدفوع' : 'Paid'}
-        </p>
-        <p className="font-bold text-success">{formatAmount(invoiceDetails.data.paid_amount)} YER</p>
-      </div>
-      <div className="p-3 bg-warning/10 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'المتبقي' : 'Remaining'}
-        </p>
-        <p className="font-bold text-warning">{formatAmount(invoiceDetails.data.remaining_amount)} YER</p>
-      </div>
-      <div className="p-3 bg-primary/10 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
-        </p>
-        <p className="font-bold">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
-      </div>
-    </div>
-
-    {/* Note */}
-    {invoiceDetails.data.note && (
-      <div className="p-3 bg-muted/30 rounded-lg">
-        <p className="text-xs text-muted-foreground mb-1">
-          {language === 'ar' ? 'ملاحظات' : 'Notes'}
-        </p>
-        <p className="text-sm">{invoiceDetails.data.note}</p>
-      </div>
-    )}
-
-    {/* Items Table (نفس الكود) */}
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Package className="h-4 w-4" />
-          {language === 'ar' ? 'الأصناف' : 'Items'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-16">#</TableHead>
-                <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                <TableHead>{language === 'ar' ? 'المواصفات' : 'Specs'}</TableHead>
-                <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
-                <TableHead className="text-right">{language === 'ar' ? 'الخصم' : 'Disc'}</TableHead>
-                <TableHead className="text-right">{language === 'ar' ? 'الضريبة' : 'Tax'}</TableHead>
-                <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoiceDetails.data.items.map((item, idx) => (
-                <TableRow key={item.id}>
-                  <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                  <TableCell className="font-medium">
-                    {(() => {
-                      const itemData = item as any;
-                      const productName = itemData.product_name || itemData.name || '';
-                      const productNameAr = itemData.product_name_ar || itemData.name_ar || productName;
-                      return language === 'ar' ? productNameAr : productName;
-                    })()}
-                    <div className="text-xs text-muted-foreground">{item.product_sku}</div>
-                  </TableCell>
-                  <TableCell>
-                    {item.variant_details && (
-                      <div className="text-xs">
-                        {item.variant_details.size && <span>📏 {item.variant_details.size}</span>}
-                        {item.variant_details.color && <span> 🎨 {item.variant_details.color}</span>}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center">{item.quantity}</TableCell>
-                  <TableCell className="text-right">{formatAmount(item.price)}</TableCell>
-                  <TableCell className="text-right text-destructive">{item.discount > 0 ? `${item.discount}%` : '-'}</TableCell>
-                  <TableCell className="text-right">{item.tax > 0 ? `${item.tax}%` : '-'}</TableCell>
-                  <TableCell className="text-right font-semibold">{formatAmount(item.total)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
               {/* Additional Info Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'الفرع' : 'Branch'}
-                  </p>
-                  <p className="font-medium">
-                    {language === 'ar'
-                      ? invoiceDetails.data.branch.name_ar || invoiceDetails.data.branch.name
-                      : invoiceDetails.data.branch.name}
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الفرع' : 'Branch'}</p>
+                  <p className="font-medium">{invoiceData.branch_name || '-'}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'المستودع' : 'Warehouse'}
-                  </p>
-                  <p className="font-medium">
-                    {language === 'ar'
-                      ? invoiceDetails.data.warehouse.name_ar || invoiceDetails.data.warehouse.name
-                      : invoiceDetails.data.warehouse.name}
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المستودع' : 'Warehouse'}</p>
+                  <p className="font-medium">{invoiceData.warehouse_name || '-'}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'الخزينة' : 'Treasury'}
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الخزينة' : 'Treasury'}</p>
                   <p className="font-medium flex items-center gap-1">
                     <Landmark size={14} className="text-primary" />
-                    {invoiceDetails.data.treasury
-                      ? (language === 'ar'
-                        ? invoiceDetails.data.treasury.name_ar || invoiceDetails.data.treasury.name
-                        : invoiceDetails.data.treasury.name)
-                      : '-'
-                    }
-                    {invoiceDetails.data.treasury?.is_main && (
-                      <Badge variant="outline" className="text-[10px] bg-primary/10">
-                        {language === 'ar' ? 'رئيسية' : 'Main'}
-                      </Badge>
-                    )}
+                    {invoiceData.treasury_name || '-'}
                   </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'العملة' : 'Currency'}
-                  </p>
-                  <p className="font-medium">{invoiceDetails.data.currency.code} - {invoiceDetails.data.currency.symbol}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'العملة' : 'Currency'}</p>
+                  <p className="font-medium">{invoiceData.currency_code || '-'}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'الضريبة' : 'Tax'}
-                  </p>
-                  <p className="font-medium">
-                    {invoiceDetails.data.tax
-                      ? `${invoiceDetails.data.tax.name} (${invoiceDetails.data.tax.rate}%)`
-                      : '-'
-                    }
-                  </p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الضريبة' : 'Tax'}</p>
+                  <p className="font-medium">{invoiceData.tax_rate ? `${invoiceData.tax_rate}%` : '-'}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'طريقة الدفع' : 'Payment'}
-                  </p>
-                  <p className="font-medium">{getPaymentMethodLabel(invoiceDetails.data.payment_method)}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</p>
+                  <p className="font-medium">{getPaymentMethodLabel(invoiceData.payment_method)}</p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}
-                  </p>
-                  <p className="font-medium">{invoiceDetails.data.due_date ? formatDate(invoiceDetails.data.due_date) : '-'}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</p>
+                  <p className="font-medium">{invoiceData.due_date ? formatDate(invoiceData.due_date) : '-'}</p>
                 </div>
               </div>
 
-        {/* Totals Summary */}
-        <div className="flex justify-end mt-4">
-          <div className="w-64 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
-              <span>{formatAmount(invoiceDetails.data.subtotal)} YER</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الخصم' : 'Total Discount'}</span>
-              <span className="text-destructive">-{formatAmount(invoiceDetails.data.discount_total)} YER</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الضريبة' : 'Total Tax'}</span>
-              <span>+{formatAmount(invoiceDetails.data.tax_total)} YER</span>
-            </div>
-            <div className="flex justify-between font-bold pt-2 border-t">
-              <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-              <span className="text-primary">{formatAmount(invoiceDetails.data.total_amount)} YER</span>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+              {/* Payment Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المدفوع' : 'Paid'}</p>
+                  <p className="font-bold text-green-600">{formatAmount(invoiceData.paid_amount)} YER</p>
+                </div>
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المتبقي' : 'Remaining'}</p>
+                  <p className="font-bold text-orange-600">{formatAmount(invoiceData.remaining_amount)} YER</p>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</p>
+                  <p className="font-bold">{invoiceData.due_date ? formatDate(invoiceData.due_date) : '-'}</p>
+                </div>
+              </div>
 
-    {/* Action Buttons */}
-    <div className="flex justify-end gap-2">
-      <Button variant="outline" onClick={() => setShowInvoiceDetails(false)}>
-        {language === 'ar' ? 'إغلاق' : 'Close'}
-      </Button>
-      <Button
-        variant="outline"
-        onClick={() => {
-          if (invoiceDetails?.data) {
-            handleEditInvoice(invoiceDetails.data);
-            setShowInvoiceDetails(false);
-          }
-        }}
-        className="border-blue-600 text-blue-600 hover:bg-blue-50"
-      >
-        <Edit2 size={16} className="me-2" />
-        {language === 'ar' ? 'تعديل' : 'Edit'}
-      </Button>
-      <Button
-        onClick={() => {
-          setShowInvoiceDetails(false);
-          setShowReturnForm(true);
-        }}
-        className="bg-orange-600 hover:bg-orange-700"
-      >
-        <RotateCcw size={16} className="me-2" />
-        {language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
-      </Button>
-    </div>
-  </div>
-) : null}
+              {/* Note */}
+              {invoiceData.note && (
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'ملاحظات' : 'Notes'}</p>
+                  <p className="text-sm">{invoiceData.note}</p>
+                </div>
+              )}
+
+              {/* Items Table */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    {language === 'ar' ? 'الأصناف' : 'Items'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-16">#</TableHead>
+                          <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                          <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
+                          <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(invoiceData.items || []).map((item: any, idx: number) => (
+                          <TableRow key={idx}>
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>
+                              <div className="font-medium">
+                                {language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{item.product_sku}</div>
+                            </TableCell>
+                            <TableCell className="text-center">{item.quantity}</TableCell>
+                            <TableCell className="text-right">{formatAmount(item.price)} YER</TableCell>
+                            <TableCell className="text-right font-semibold">{formatAmount(item.total)} YER</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Totals Summary */}
+                  <div className="flex justify-end mt-4">
+                    <div className="w-64 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
+                        <span>{formatAmount(invoiceData.subtotal)} YER</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الخصم' : 'Total Discount'}</span>
+                        <span className="text-red-500">-{formatAmount(invoiceData.discount_total)} YER</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الضريبة' : 'Total Tax'}</span>
+                        <span>+{formatAmount(invoiceData.tax_total)} YER</span>
+                      </div>
+                      <div className="flex justify-between font-bold pt-2 border-t">
+                        <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
+                        <span className="text-primary">{formatAmount(invoiceData.total_amount)} YER</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowInvoiceDetails(false)}>
+                  {language === 'ar' ? 'إغلاق' : 'Close'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    handleEditInvoice(invoiceData);
+                    setShowInvoiceDetails(false);
+                  }}
+                  className="border-blue-600 text-blue-600"
+                >
+                  <Edit2 size={16} className="me-2" />
+                  {language === 'ar' ? 'تعديل' : 'Edit'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowInvoiceDetails(false);
+                    setShowReturnForm(true);
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <RotateCcw size={16} className="me-2" />
+                  {language === 'ar' ? 'إنشاء مرتجع' : 'Create Return'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
 
@@ -1585,7 +974,7 @@ treasury_name: (() => {
       />
 
       {/* قالب الطباعة المخفي */}
-      {showPrint && invoiceDetails?.data && (
+      {showPrint && invoiceData && (
         <div style={{ display: 'none' }}>
           <PurchaseInvoiceTemplate
             ref={invoicePrintRef}

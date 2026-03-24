@@ -906,12 +906,9 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="min-w-[150px]">{t.invoiceNumber}</TableHead>
-                        <TableHead className="min-w-[150px]">{t.date}</TableHead>
                         <TableHead className="min-w-[200px]">{t.customer}</TableHead>
-                        <TableHead className="min-w-[200px]">{t.salesRepresentative}</TableHead>
                         <TableHead className="min-w-[250px]">{t.paymentMethod}</TableHead>
                         <TableHead className="min-w-[200px] text-right">{t.total}</TableHead>
-                        <TableHead className="min-w-[120px]">{t.status}</TableHead>
                         <TableHead className="min-w-[100px] text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -938,13 +935,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                             <TableCell className="font-mono text-sm font-medium">
                               {sale.invoice_number || '-'}
                             </TableCell>
-                            <TableCell className="text-sm">
-                              {sale.created_at ? 
-                                format(new Date(sale.created_at), 'yyyy-MM-dd HH:mm', { 
-                                  locale: language === 'ar' ? ar : undefined 
-                                }) : '-'
-                              }
-                            </TableCell>
+                         
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <User size={14} className="text-muted-foreground" />
@@ -956,7 +947,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell>{sale.salesRepresentative?.name || '-'}</TableCell>
 
                             <TableCell>
                               {renderPaymentMethods(sale.payments)}
@@ -964,7 +954,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                             <TableCell className="text-right">
                               {renderAmounts(sale.amounts)}
                             </TableCell>
-                            <TableCell>{getStatusBadge(getSaleStatus(sale))}</TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
                                 <Button 
