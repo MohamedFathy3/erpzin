@@ -165,6 +165,24 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     onClose();
   };
 
+  // دالة مساعدة لجلب اسم المورد بأمان
+  const getSupplierName = () => {
+    if (!invoice) return '-';
+    
+    // ✅ التعامل مع الشكلين المحتملين للبيانات
+    // الشكل الأول: invoice.supplier.name
+    if (invoice.supplier?.name) {
+      return invoice.supplier.name;
+    }
+    
+    // الشكل الثاني: invoice.supplier_name
+    if ((invoice as any).supplier_name) {
+      return (invoice as any).supplier_name;
+    }
+    
+    return '-';
+  };
+
   // لو لسه بيجيب بيانات الفاتورة
   if (isOpen && invoiceLoading) {
     return (
@@ -210,7 +228,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                     <p className="text-xs text-muted-foreground">
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </p>
-                    <p className="font-medium">{invoice.supplier.name}</p>
+                    {/* ✅ هنا الحل - استخدام الدالة المساعدة */}
+                    <p className="font-medium">{getSupplierName()}</p>
                   </div>
                 </div>
               </CardContent>

@@ -32,6 +32,7 @@ interface Product {
       color_id: number;
       color: string;
       stock: number;
+      hex_code?: string; // ✅ أضفنا hex_code هنا
     }>;
   }>;
 }
@@ -95,7 +96,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
       id: color.color_id,
       name: color.color,
       stock: color.stock,
-      hexCode: getColorHex(color.color)
+      hexCode: color.hex_code || getColorHex(color.color) // ✅ استخدم hex_code من API
     }));
   }, [product.units, selectedSize]);
 
@@ -137,7 +138,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
         unitId: selectedVariantDetails.unitId,
         colorId: selectedVariantDetails.colorId,
         size: selectedSize,
-        color: selectedColor || '', // ✅ لو مفيش لون، نرسل string فاضي
+        color: selectedColor || '',
         price: selectedVariantDetails.price,
         sku: selectedVariantDetails.sku,
         stock: selectedVariantDetails.stock
@@ -159,7 +160,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     en: {
       selectVariants: 'Select Variants',
       size: 'Size',
-      colors: 'Colors (Optional)',
+      colors: 'Colors',
       addToCart: 'Add to Cart',
       items: 'items',
       total: 'Total',
@@ -174,7 +175,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     ar: {
       selectVariants: 'اختر المتغيرات',
       size: 'المقاس',
-      colors: 'الألوان (اختياري)',
+      colors: 'الألوان',
       addToCart: 'إضافة للسلة',
       items: 'عناصر',
       total: 'المجموع',
@@ -282,7 +283,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
           </div>
 
           {/* Color Selection - اختياري - يظهر فقط لو اختار مقاس */}
-          {selectedSize && (
+          {selectedSize && availableColors.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-5 bg-primary rounded-full" />
@@ -312,7 +313,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                   <button
                     key={color.id}
                     onClick={() => setSelectedColor(color.name)}
-                    // disabled={color.stock === 0}
+                    disabled={color.stock === 0}
                     className={cn(
                       'relative flex flex-col items-center gap-1 p-2 rounded-lg transition-all',
                       selectedColor === color.name
@@ -326,7 +327,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                         "w-10 h-10 rounded-full border-2 flex items-center justify-center",
                         selectedColor === color.name ? 'border-primary' : 'border-border'
                       )}
-                      style={{ backgroundColor: color.hexCode || '#ccc' }}
+                      style={{ backgroundColor: color.hexCode }} // ✅ استخدم hexCode الحقيقي
                     >
                       {selectedColor === color.name && (
                         <Check size={16} className="text-white drop-shadow-md" />
@@ -335,6 +336,11 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
                     <span className="text-xs font-medium truncate w-full text-center">
                       {color.name}
                     </span>
+                    {color.stock === 0 && (
+                      <Badge variant="destructive" className="absolute -top-2 -right-2 text-[10px] px-1">
+                        0
+                      </Badge>
+                    )}
                   </button>
                 ))}
               </div>
@@ -379,12 +385,11 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
           {selectedSize ? (
             <Button 
               onClick={handleAddToCart}
-              // disabled={selectedVariantDetails?.stock === 0}
               className="w-full h-12 text-base gap-2"
             >
               <ShoppingCart size={20} />
               {t.addToCart}
-              {selectedVariantDetails && selectedVariantDetails.price > 0 && (
+              {selectedVariantDetails && (
                 <span className="ms-2 opacity-90">
                   {formatCurrency(selectedVariantDetails.price)}
                 </span>
@@ -401,7 +406,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
   );
 };
 
-// دالة مساعدة للحصول على هيكس كود اللون
+// دالة مساعدة للـ fallback (لو hex_code مش موجود)
 function getColorHex(colorName: string): string {
   const colorMap: Record<string, string> = {
     'أسود': '#000000',

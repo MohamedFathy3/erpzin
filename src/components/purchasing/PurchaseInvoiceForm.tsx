@@ -276,54 +276,111 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const [items, setItems] = useState<InvoiceItem[]>([]);
 
   // ========== تحميل بيانات الفاتورة في وضع التعديل ==========
-  useEffect(() => {
-    if (isEditMode && invoiceToEdit) {
-      console.log('📝 Loading invoice for edit:', invoiceToEdit);
-      
-      // تحميل بيانات الفاتورة من الـ Resource مباشرة
-      setFormData({
-        supplier_id: invoiceToEdit.supplier.id.toString(),
-        branch_id: invoiceToEdit.branch.id.toString(),
-        warehouse_id: invoiceToEdit.warehouse.id.toString(),
-        invoice_date: invoiceToEdit.invoice_date || getTodayDate(),
-        due_date: invoiceToEdit.due_date || '',
-        payment_method: invoiceToEdit.payment_method || 'cash',
-        tax_id: invoiceToEdit.tax?.id?.toString() || '',
-        currency_id: invoiceToEdit.currency.id.toString(),
-        notes: invoiceToEdit.note || '',
-        paid_amount: invoiceToEdit.paid_amount || 0,
-        treasury_id: invoiceToEdit.treasury?.id?.toString() || ''
-      });
+// ========== تحميل بيانات الفاتورة في وضع التعديل ==========
+useEffect(() => {
+  if (isEditMode && invoiceToEdit) {
+    console.log('📝 Loading invoice for edit:', invoiceToEdit);
+    
+    // التحقق من شكل البيانات (قديم أو جديد)
+    const supplierId = (invoiceToEdit as any).supplier_id || invoiceToEdit.supplier?.id;
+    const supplierIdStr = supplierId ? supplierId.toString() : '';
+    
+    const branchId = (invoiceToEdit as any).branch_id || invoiceToEdit.branch?.id;
+    const branchIdStr = branchId ? branchId.toString() : '';
+    
+    const warehouseId = (invoiceToEdit as any).warehouse_id || invoiceToEdit.warehouse?.id;
+    const warehouseIdStr = warehouseId ? warehouseId.toString() : '';
+    
+    const currencyId = (invoiceToEdit as any).currency_id || invoiceToEdit.currency?.id;
+    const currencyIdStr = currencyId ? currencyId.toString() : '';
+    
+    const taxId = (invoiceToEdit as any).tax_id || invoiceToEdit.tax?.id;
+    const taxIdStr = taxId ? taxId.toString() : '';
+    
+    const treasuryId = (invoiceToEdit as any).treasury_id || invoiceToEdit.treasury?.id;
+    const treasuryIdStr = treasuryId ? treasuryId.toString() : '';
+    
+    const invoiceDate = invoiceToEdit.invoice_date || 
+                       (invoiceToEdit as any).date || 
+                       getTodayDate();
+    
+    const dueDate = invoiceToEdit.due_date || 
+                   (invoiceToEdit as any).due_date || 
+                   '';
+    
+    const paymentMethod = invoiceToEdit.payment_method || 
+                         (invoiceToEdit as any).payment_method || 
+                         'cash';
+    
+    const notes = invoiceToEdit.note || 
+                 (invoiceToEdit as any).notes || 
+                 '';
+    
+    const paidAmount = invoiceToEdit.paid_amount || 
+                      (invoiceToEdit as any).paid_amount || 
+                      0;
+    
+    // تحميل بيانات الفاتورة
+    setFormData({
+      supplier_id: supplierIdStr,
+      branch_id: branchIdStr,
+      warehouse_id: warehouseIdStr,
+      invoice_date: invoiceDate,
+      due_date: dueDate,
+      payment_method: paymentMethod,
+      tax_id: taxIdStr,
+      currency_id: currencyIdStr,
+      notes: notes,
+      paid_amount: paidAmount,
+      treasury_id: treasuryIdStr
+    });
 
-      // تحميل الأصناف (باستخدام بيانات المنتج من الـ Resource)
-      if (invoiceToEdit.items && invoiceToEdit.items.length > 0) {
-        const loadedItems: InvoiceItem[] = invoiceToEdit.items.map((item, index) => ({
+    // تحميل الأصناف
+    const itemsList = (invoiceToEdit as any).items || 
+                     (invoiceToEdit as any).products || 
+                     [];
+    
+    if (itemsList.length > 0) {
+      const loadedItems: InvoiceItem[] = itemsList.map((item: any, index: number) => {
+        // التعامل مع شكلين مختلفين للصنف
+        const productId = item.product_id || item.id;
+        const productName = item.product_name || item.name || '';
+        const productNameAr = item.product_name_ar || item.name_ar || productName;
+        const productSku = item.product_sku || item.sku || '';
+        const quantity = item.quantity || 1;
+        const price = item.price || item.unit_cost || 0;
+        const discount = item.discount || item.discount_percent || 0;
+        const tax = item.tax || item.tax_percent || 0;
+        const total = item.total || item.total_cost || (quantity * price);
+        
+        return {
           id: `edit-${index}-${Date.now()}-${Math.random()}`,
-          product_id: item.product_id,
+          product_id: productId,
           product_variant_id: item.product_variant_id,
           product_name: language === 'ar' 
-            ? (item.product_name_ar || item.product_name) 
-            : item.product_name,
-          product_sku: item.product_sku,
-          size_name: item.variant_details?.size,
-          color_name: item.variant_details?.color,
-          quantity: item.quantity,
-          unit_cost: item.price,
-          discount_percent: item.discount,
-          discount_amount: (item.quantity * item.price) * (item.discount / 100),
-          tax_percent: item.tax,
-          tax_amount: ((item.quantity * item.price) * (1 - item.discount / 100)) * (item.tax / 100),
-          total_cost: item.total
-        }));
-        setItems(loadedItems);
-      }
-
-      // إظهار تفاصيل الدفع إذا كان المبلغ المدفوع أكبر من 0
-      if (invoiceToEdit.paid_amount > 0) {
-        setShowPaymentDetails(true);
-      }
+            ? (productNameAr || productName) 
+            : productName,
+          product_sku: productSku,
+          size_name: item.variant_details?.size || item.size_name,
+          color_name: item.variant_details?.color || item.color_name,
+          quantity: quantity,
+          unit_cost: price,
+          discount_percent: discount,
+          discount_amount: (quantity * price) * (discount / 100),
+          tax_percent: tax,
+          tax_amount: ((quantity * price) * (1 - discount / 100)) * (tax / 100),
+          total_cost: total
+        };
+      });
+      setItems(loadedItems);
     }
-  }, [isEditMode, invoiceToEdit, getTodayDate, language]);
+
+    // إظهار تفاصيل الدفع إذا كان المبلغ المدفوع أكبر من 0
+    if (paidAmount > 0) {
+      setShowPaymentDetails(true);
+    }
+  }
+}, [isEditMode, invoiceToEdit, getTodayDate, language]);
 
   // ========== جلب البيانات ==========
 
