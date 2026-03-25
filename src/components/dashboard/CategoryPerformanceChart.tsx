@@ -1,148 +1,73 @@
+// components/dashboard/CategoryPerformanceChart.tsx
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useQuery } from '@tanstack/react-query';
-import api from '@/lib/api';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from 'recharts';
-import { Skeleton } from '@/components/ui/skeleton';
 
-interface RevenueReport {
-  top_categories: Array<{
-    category_id: number;
-    category_name: string;
-    total_quantity: number;
-  }>;
+interface Category {
+  category_id: number;
+  category_name: string;
+  total_quantity: number;
 }
 
 interface CategoryPerformanceChartProps {
-  categories?: Array<{
-    category_id: number;
-    category_name: string;
-    total_quantity: number;
-  }>;
+  categories?: Category[];
 }
 
-const COLORS = [
-  'hsl(217, 47%, 19%)',
-  'hsl(134, 61%, 41%)',
-  'hsl(162, 63%, 46%)',
-  'hsl(199, 89%, 48%)',
-  'hsl(38, 92%, 50%)',
-  'hsl(280, 65%, 60%)',
-];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec489a'];
 
-const CategoryPerformanceChart: React.FC<CategoryPerformanceChartProps> = ({ categories: propCategories }) => {
-  const { t, language } = useLanguage();
+const CategoryPerformanceChart: React.FC<CategoryPerformanceChartProps> = ({ categories = [] }) => {
+  const { language, t } = useLanguage();
 
-  const { data: categoryData, isLoading } = useQuery({
-    queryKey: ['category-performance-chart'],
-    queryFn: async () => {
-      // إذا كان عندنا categories من الـ props، استخدمها
-      if (propCategories && propCategories.length > 0) {
-        return propCategories.map((cat, index) => ({
-          name: cat.category_name,
-          value: cat.total_quantity,
-          color: COLORS[index % COLORS.length],
-        }));
-      }
-      
-      // وإلا جيبها من API
-      const response = await api.get<RevenueReport>('/reports/revenue');
-      const topCategories = response.data?.top_categories || [];
-      
-      return topCategories.map((cat, index) => ({
-        name: cat.category_name,
-        value: cat.total_quantity,
-        color: COLORS[index % COLORS.length],
-      }));
-    },
-  });
+  // تأكد من وجود بيانات صالحة
+  const validCategories = categories.filter(cat => cat && cat.category_name && cat.total_quantity > 0);
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      const total = categoryData?.reduce((sum, item) => sum + item.value, 0) || 1;
-      const percentage = ((data.value / total) * 100).toFixed(1);
-      
-      return (
-        <div className="bg-card border border-border rounded-lg shadow-lg p-3">
-          <div className="flex items-center gap-2">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: data.color }}
-            />
-            <span className="font-medium text-sm">{data.name}</span>
-          </div>
-          <p className="text-sm mt-1 text-muted-foreground">
-            {percentage}% {t('dashboard.ofTotalSales')}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const CustomLegend = ({ payload }: any) => {
+  if (validCategories.length === 0) {
     return (
-      <div className="flex flex-wrap justify-center gap-3 mt-4">
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-1.5 text-xs">
-            <div 
-              className="w-2.5 h-2.5 rounded-full" 
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-muted-foreground">{entry.value}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <div className="card-elevated p-5">
-        <Skeleton className="h-6 w-32 mb-4" />
-        <Skeleton className="h-56 w-full rounded-full" />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('dashboard.categoryPerformance')}</CardTitle>
+        </CardHeader>
+        <CardContent className="h-[300px] flex items-center justify-center">
+          <p className="text-muted-foreground">{t('common.noData')}</p>
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <div className="card-elevated p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-foreground">
-          {t('dashboard.categoryPerformance')}
-        </h3>
-      </div>
+  const data = validCategories.map(cat => ({
+    name: language === 'ar' ? cat.category_name : cat.category_name,
+    value: cat.total_quantity
+  }));
 
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('dashboard.categoryPerformance')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
-              data={categoryData}
+              data={data}
               cx="50%"
               cy="50%"
-              innerRadius={50}
+              labelLine={false}
+              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
               outerRadius={80}
-              paddingAngle={2}
+              fill="#8884d8"
               dataKey="value"
             >
-              {categoryData?.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
-            <Legend content={<CustomLegend />} />
+            <Tooltip />
+            <Legend />
           </PieChart>
         </ResponsiveContainer>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

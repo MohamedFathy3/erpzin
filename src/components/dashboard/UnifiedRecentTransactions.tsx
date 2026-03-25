@@ -1,49 +1,26 @@
-// components/dashboard/RecentTransactions.tsx
+// components/dashboard/UnifiedRecentTransactions.tsx
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { RecentTransaction } from '@/hooks/useDashboardData';
 
-// أنواع المعاملات المدعومة
-interface BaseTransaction {
-  id: string;
-  type: 'sale' | 'purchase';
-  reference: string;
-  amount: number;
-  date: string;
-  branch: string;
-}
-
-interface SaleTransaction extends BaseTransaction {
-  type: 'sale';
-  customer: string;
-  payment_method: string;
-}
-
-interface PurchaseTransaction extends BaseTransaction {
-  type: 'purchase';
-  supplier: string;
-}
-
-type Transaction = SaleTransaction | PurchaseTransaction;
-
-interface RecentTransactionsProps {
-  transactions?: Transaction[];
+interface UnifiedRecentTransactionsProps {
+  transactions: RecentTransaction[];
   isLoading?: boolean;
 }
 
-const RecentTransactions: React.FC<RecentTransactionsProps> = ({ 
-  transactions = [], 
+const UnifiedRecentTransactions: React.FC<UnifiedRecentTransactionsProps> = ({ 
+  transactions, 
   isLoading = false 
 }) => {
   const { t, language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const navigate = useNavigate();
 
-  const getPaymentBadge = (method: string | null) => {
+  const getPaymentBadge = (method: string | null | undefined) => {
     const methodLower = method?.toLowerCase() || 'cash';
     switch (methodLower) {
       case 'cash':
@@ -80,7 +57,7 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
     });
   };
 
-  const getDisplayName = (transaction: Transaction): string => {
+  const getDisplayName = (transaction: RecentTransaction): string => {
     if (transaction.type === 'sale') {
       return transaction.customer || (language === 'ar' ? 'عميل نقدي' : 'Walk-in Customer');
     } else {
@@ -88,30 +65,22 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
     }
   };
 
-  const getSecondaryInfo = (transaction: Transaction): string => {
-    if (transaction.type === 'sale') {
-      return `${transaction.reference} • ${formatTime(transaction.date)} • ${transaction.branch}`;
-    } else {
-      return `${transaction.reference} • ${formatTime(transaction.date)} • ${transaction.branch}`;
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="card-elevated p-5">
         <div className="flex items-center justify-between mb-4">
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-4 w-16" />
+          <div className="h-6 w-32 bg-muted animate-pulse rounded" />
+          <div className="h-4 w-16 bg-muted animate-pulse rounded" />
         </div>
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/50">
-              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
               <div className="flex-1">
-                <Skeleton className="h-4 w-24 mb-1" />
-                <Skeleton className="h-3 w-32" />
+                <div className="h-4 w-24 bg-muted animate-pulse mb-1" />
+                <div className="h-3 w-32 bg-muted animate-pulse" />
               </div>
-              <Skeleton className="h-4 w-20" />
+              <div className="h-4 w-20 bg-muted animate-pulse" />
             </div>
           ))}
         </div>
@@ -150,13 +119,17 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium truncate">{displayName}</p>
                     {getTransactionTypeBadge(tx.type)}
-                    {tx.type === 'sale' && 'payment_method' in tx && getPaymentBadge(tx.payment_method)}
+                    {tx.type === 'sale' && tx.payment_method && getPaymentBadge(tx.payment_method)}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{getSecondaryInfo(tx)}</span>
+                    <span>{tx.reference}</span>
+                    <span>•</span>
+                    <span>{formatTime(tx.date)}</span>
+                    <span>•</span>
+                    <span>{tx.branch}</span>
                   </div>
                 </div>
                 <div className="text-right">
@@ -177,4 +150,4 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
   );
 };
 
-export default RecentTransactions;
+export default UnifiedRecentTransactions;

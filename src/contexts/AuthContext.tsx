@@ -20,6 +20,7 @@ interface User {
   commercial_register?: string | null;
   country?: string | null;
   currency?: string | null;
+  
   date?: string | null;
   created_at: string;
   updated_at: string;

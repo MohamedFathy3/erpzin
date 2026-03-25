@@ -1,5 +1,5 @@
 // config/permissions.ts
-export type UserRole = 'admin' | 'Cashier' | 'manager' | 'accountant' | 'sales' | 'purchasing' | 'warehouse' | 'hr' | 'viewer';
+export type UserRole = 'admin' | 'Cashier' | 'Manager' | 'Accountant' | 'Sales' | 'purchasing' | 'warehouse' | 'HR' | 'viewer';
 
 export interface PagePermission {
   id: string;
@@ -17,7 +17,7 @@ export const PAGES: PagePermission[] = [
     label: 'Dashboard',
     labelAr: 'لوحة التحكم',
     icon: 'LayoutDashboard',
-    allowedRoles: ['admin',  'manager','Cashier', 'accountant', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
+    allowedRoles: ['admin',  'Manager','Cashier', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
   },
   {
     id: 'pos',
@@ -25,7 +25,7 @@ export const PAGES: PagePermission[] = [
     label: 'POS',
     labelAr: 'نقطة البيع',
     icon: 'ShoppingCart',
-    allowedRoles: ['admin', 'Cashier', 'manager', 'sales'],
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'Sales'],
   },
   {
     id: 'inventory',
@@ -33,7 +33,7 @@ export const PAGES: PagePermission[] = [
     label: 'Inventory',
     labelAr: 'المخزون',
     icon: 'Package',
-    allowedRoles: ['admin', 'manager', 'purchasing', 'warehouse'],
+    allowedRoles: ['admin', 'Manager', 'purchasing', 'warehouse'],
   },
   {
     id: 'sales',
@@ -41,7 +41,7 @@ export const PAGES: PagePermission[] = [
     label: 'Sales',
     labelAr: 'المبيعات',
     icon: 'Receipt',
-    allowedRoles: ['admin', 'manager', 'sales', 'Cashier', 'accountant'],
+    allowedRoles: ['admin', 'Manager', 'Sales', 'Cashier', 'Accountant'],
   },
   {
     id: 'purchasing',
@@ -49,7 +49,7 @@ export const PAGES: PagePermission[] = [
     label: 'Purchasing',
     labelAr: 'المشتريات',
     icon: 'Truck',
-    allowedRoles: ['admin', 'manager', 'purchasing'],
+    allowedRoles: ['admin', 'Manager', 'purchasing'],
   },
   {
     id: 'finance',
@@ -57,7 +57,7 @@ export const PAGES: PagePermission[] = [
     label: 'Finance',
     labelAr: 'المالية',
     icon: 'Wallet',
-    allowedRoles: ['admin', 'manager', 'accountant'],
+    allowedRoles: ['admin', 'Manager', 'Accountant'],
   },
   {
     id: 'hr',
@@ -65,7 +65,7 @@ export const PAGES: PagePermission[] = [
     label: 'HR',
     labelAr: 'الموارد البشرية',
     icon: 'Users',
-    allowedRoles: ['admin', 'manager', 'hr'],
+    allowedRoles: ['admin', 'Manager', 'HR'],
   },
   {
     id: 'crm',
@@ -73,7 +73,7 @@ export const PAGES: PagePermission[] = [
     label: 'CRM',
     labelAr: 'العملاء',
     icon: 'Crown',
-    allowedRoles: ['admin', 'manager', 'sales'],
+    allowedRoles: ['admin', 'Manager', 'Sales'],
   },
   {
     id: 'reports',
@@ -81,7 +81,7 @@ export const PAGES: PagePermission[] = [
     label: 'Reports',
     labelAr: 'التقارير',
     icon: 'FileBarChart',
-    allowedRoles: ['admin', 'manager', 'accountant', 'sales', 'purchasing', 'warehouse', 'hr', 'viewer'],
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
     id: 'settings',

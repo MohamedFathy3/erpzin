@@ -1,43 +1,12 @@
-import React, { useState, useMemo } from 'react';
+// components/purchase/PurchaseVariantSelector.tsx
+import React, { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Package, Ruler, Palette, DollarSign } from 'lucide-react';
+import { Product, ProductUnit } from '@/types/purchaseform';
 import { cn } from '@/lib/utils';
-import { X, Check, ChevronRight, Package } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import api from '@/lib/api';
-
-interface UnitColor {
-  id: number;
-  color_id: number;
-  color: string;
-  stock: number;
-}
-
-interface Unit {
-  id: number;
-  unit_id: number;
-  unit_name: string;
-  cost_price: string;
-  sell_price: string;
-  barcode: string;
-  colors?: UnitColor[];
-}
-
-interface Product {
-  id: number;
-  name: string;
-  name_ar?: string;
-  sku: string;
-  cost?: number;
-  image_url?: string;
-  units: Unit[];
-}
 
 interface PurchaseVariantSelectorProps {
   isOpen: boolean;
@@ -51,6 +20,8 @@ interface PurchaseVariantSelectorProps {
     unit_cost: number;
     size_name?: string;
     color_name?: string;
+    product_unit_id?: number;
+    color_id?: number;
   }) => void;
 }
 
@@ -61,218 +32,138 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
   onSelectVariant
 }) => {
   const { language } = useLanguage();
-  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
+  const [selectedColor, setSelectedColor] = useState<any>(null);
 
-  // استخراج الوحدات من المنتج
-  const units = product.units || [];
-
-  // الحصول على الوحدة المحددة
-  const selectedUnit = useMemo(() => {
-    if (!selectedUnitId) return null;
-    return units.find(u => u.id === selectedUnitId);
-  }, [selectedUnitId, units]);
-
-  // الحصول على الألوان للوحدة المحددة
-  const colorsForSelectedUnit = useMemo(() => {
-    if (!selectedUnit || !selectedUnit.colors) return [];
-    return selectedUnit.colors;
-  }, [selectedUnit]);
-
-  const handleUnitSelect = (unit: Unit) => {
-    setSelectedUnitId(unit.id);
+  const handleUnitSelect = (unit: ProductUnit) => {
+    setSelectedUnit(unit);
+    setSelectedColor(null);
   };
 
-  const handleColorSelect = (color: UnitColor) => {
-    if (!selectedUnit) return;
-
-    const unitCost = parseFloat(selectedUnit.cost_price) || 0;
-
-    onSelectVariant({
-      product_id: product.id.toString(),
-      variant_id: color.id.toString(),
-      product_name: `${language === 'ar' ? product.name_ar || product.name : product.name} - ${selectedUnit.unit_name} / ${color.color}`,
-      product_sku: `${product.sku}-${selectedUnit.id}-${color.id}`,
-      unit_cost: unitCost,
-      size_name: selectedUnit.unit_name,
-      color_name: color.color
-    });
-    handleClose();
+  const handleColorSelect = (color: any) => {
+    setSelectedColor(color);
   };
 
-  const handleDefaultSelect = () => {
-    if (!selectedUnit) return;
-
-    const unitCost = parseFloat(selectedUnit.cost_price) || 0;
-
-    onSelectVariant({
-      product_id: product.id.toString(),
-      variant_id: selectedUnit.id.toString(),
-      product_name: `${language === 'ar' ? product.name_ar || product.name : product.name} - ${selectedUnit.unit_name}`,
-      product_sku: `${product.sku}-${selectedUnit.id}`,
-      unit_cost: unitCost,
-      size_name: selectedUnit.unit_name
-    });
-    handleClose();
-  };
-
-  const handleClose = () => {
+  const handleConfirm = () => {
+    if (selectedUnit) {
+      onSelectVariant({
+        product_id: product.id.toString(),
+        variant_id: selectedUnit.id.toString(),
+        product_name: language === 'ar' ? product.name_ar || product.name : product.name,
+        product_sku: product.sku,
+        unit_cost: Number(selectedUnit.cost_price),
+        size_name: selectedUnit.unit_name,
+        color_name: selectedColor?.color,
+        product_unit_id: selectedUnit.id,
+        color_id: selectedColor?.id
+      });
+    }
     onClose();
-    setSelectedUnitId(null);
   };
+
+  const productName = language === 'ar' ? product.name_ar || product.name : product.name;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md p-0">
-        <DialogHeader className="p-4 pb-3 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-              {product.image_url ? (
-                <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-              ) : (
-                <Package size={20} className="text-muted-foreground" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <DialogTitle className="text-base font-bold truncate">
-                {language === 'ar' ? product.name_ar || product.name : product.name}
-              </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                {(product.cost || 0).toLocaleString()} YER
-              </p>
-            </div>
-          </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package size={18} />
+            {language === 'ar' ? 'اختر الوحدة واللون' : 'Select Unit & Color'} - {productName}
+          </DialogTitle>
         </DialogHeader>
-
-        <div className="p-4">
-          {!selectedUnitId ? (
-            /* Step 1: Unit Selection */
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">1</Badge>
-                <span className="text-xs font-medium text-foreground">
-                  {language === 'ar' ? 'اختر الوحدة' : 'Select Unit'}
+        
+        <div className="space-y-4">
+          {/* Units Section */}
+          <div>
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Ruler size={14} />
+              {language === 'ar' ? 'الوحدات المتاحة' : 'Available Units'}
+            </h4>
+            <ScrollArea className="h-32 border rounded-md p-2">
+              <div className="space-y-1">
+                {product.units?.map((unit) => (
+                  <button
+                    key={unit.id}
+                    onClick={() => handleUnitSelect(unit)}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                      selectedUnit?.id === unit.id
+                        ? "bg-primary/10 text-primary border border-primary/30"
+                        : "hover:bg-muted border border-transparent"
+                    )}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span>{unit.unit_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {Number(unit.cost_price).toLocaleString()} {language === 'ar' ? 'ر.س' : 'SAR'}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          
+          {/* Colors Section */}
+          {selectedUnit?.colors && selectedUnit.colors.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Palette size={14} />
+                {language === 'ar' ? 'الألوان المتاحة' : 'Available Colors'}
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedUnit.colors.map((color) => (
+                  <button
+                    key={color.id}
+                    onClick={() => handleColorSelect(color)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md text-sm transition-all",
+                      selectedColor?.id === color.id
+                        ? "bg-primary text-white"
+                        : "bg-muted hover:bg-muted/80 border border-border"
+                    )}
+                  >
+                    {color.color}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Price Summary */}
+          {selectedUnit && (
+            <div className="bg-primary/5 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium flex items-center gap-1">
+                  <DollarSign size={14} />
+                  {language === 'ar' ? 'سعر الشراء' : 'Purchase Price'}:
+                </span>
+                <span className="text-lg font-bold text-primary">
+                  {Number(selectedUnit.cost_price).toLocaleString()} {language === 'ar' ? 'ر.س' : 'SAR'}
                 </span>
               </div>
-              
-              <div className="grid grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto">
-                {units.map((unit) => {
-                  const hasColors = unit.colors && unit.colors.length > 0;
-                  const unitCost = parseFloat(unit.cost_price) || 0;
-                  
-                  return (
-                    <button
-                      key={unit.id}
-                      onClick={() => handleUnitSelect(unit)}
-                      className={cn(
-                        'p-3 rounded-lg border transition-all text-start',
-                        'bg-background border-border hover:border-primary hover:bg-primary/5'
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm">{unit.unit_name}</span>
-                        {hasColors && (
-                          <Badge variant="secondary" className="text-[9px] px-1">
-                            {unit.colors?.length} {language === 'ar' ? 'لون' : 'colors'}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs font-semibold text-primary mb-1">
-                        {unitCost.toLocaleString()}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        {unit.barcode}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* Step 2: Color Selection (if available) or Direct Selection */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
-                    {colorsForSelectedUnit.length > 0 ? '2' : '✓'}
-                  </Badge>
-                  <span className="text-xs font-medium text-foreground">
-                    {colorsForSelectedUnit.length > 0 
-                      ? (language === 'ar' ? 'اختر اللون' : 'Select Color')
-                      : (language === 'ar' ? 'تأكيد الوحدة' : 'Confirm Unit')
-                    }
-                  </span>
+              {selectedColor && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {language === 'ar' ? 'اللون:' : 'Color:'} {selectedColor.color}
                 </div>
-                <button
-                  onClick={() => setSelectedUnitId(null)}
-                  className="text-[10px] text-primary hover:underline"
-                >
-                  {language === 'ar' ? 'تغيير' : 'Change'}
-                </button>
-              </div>
-
-              {/* Selected Unit Badge */}
-              {selectedUnit && (
-                <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg mb-3">
-                  <span className="text-[10px] text-muted-foreground">
-                    {language === 'ar' ? 'الوحدة:' : 'Unit:'}
-                  </span>
-                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
-                    {selectedUnit.unit_name}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground ml-auto">
-                    {parseFloat(selectedUnit.cost_price || '0').toLocaleString()}
-                  </span>
-                </div>
-              )}
-
-              {/* Colors Grid */}
-              {colorsForSelectedUnit.length > 0 ? (
-                <div className="grid grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto">
-                  {colorsForSelectedUnit.map((color) => (
-                    <button
-                      key={color.id}
-                      onClick={() => handleColorSelect(color)}
-                      className={cn(
-                        'flex items-center gap-2 p-2 rounded-lg border transition-all text-start',
-                        'bg-background border-border hover:border-primary hover:bg-primary/5'
-                      )}
-                    >
-                      {/* Color Swatch */}
-                      <div 
-                        className="w-8 h-8 rounded border border-border flex-shrink-0"
-                        style={{ backgroundColor: color.color || '#ccc' }}
-                      />
-                      
-                      {/* Color Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs text-foreground truncate">
-                          {color.color}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <Badge variant="outline" className="text-[9px] px-1 py-0">
-                            {color.stock || 0}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <ChevronRight size={12} className="text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                /* No colors - Direct selection button */
-                <button
-                  onClick={handleDefaultSelect}
-                  className="w-full p-4 rounded-lg border-2 border-dashed border-primary/30 hover:border-primary transition-all flex items-center justify-center gap-2"
-                >
-                  <Check size={16} className="text-primary" />
-                  <span className="text-sm font-medium text-primary">
-                    {language === 'ar' ? 'تأكيد الاختيار' : 'Confirm Selection'}
-                  </span>
-                </button>
               )}
             </div>
           )}
+          
+          {/* Actions */}
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={onClose} size="sm">
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              onClick={handleConfirm} 
+              disabled={!selectedUnit}
+              size="sm"
+            >
+              {language === 'ar' ? 'تأكيد' : 'Confirm'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -12,13 +12,14 @@ import { toast } from '@/hooks/use-toast';
 import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe, Upload } from 'lucide-react';
 import { z } from 'zod';
 import logoFull from '@/assets/logo-full.png';
-import FileUploader from '@/components/FileUploader'; // استورد الكمبوننت
+import FileUploader from '@/components/FileUploader';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getAllowedPages } from '@/config/permissions'; // استيراد دالة الصلاحيات
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, { message: 'اسم المستخدم أو البريد الإلكتروني مطلوب' }),
@@ -35,6 +36,30 @@ const signupSchema = z.object({
   path: ['confirmPassword'],
 });
 
+// دالة لتحديد الصفحة الافتراضية بناءً على دور المستخدم
+const getDefaultRoute = (role: string): string => {
+  const allowedPages = getAllowedPages(role as any);
+  
+  // ترتيب الأولويات للصفحات
+  const priorityPages = ['dashboard', 'pos', 'sales', 'inventory'];
+  
+  // البحث عن أول صفحة في قائمة الأولويات مسموحة للمستخدم
+  for (const pageId of priorityPages) {
+    const page = allowedPages.find(p => p.id === pageId);
+    if (page) {
+      return page.path;
+    }
+  }
+  
+  // إذا لم يتم العثور على صفحة من الأولويات، خذ أول صفحة مسموحة
+  if (allowedPages.length > 0) {
+    return allowedPages[0].path;
+  }
+  
+  // في حالة عدم وجود أي صفحة مسموحة (نادراً ما يحدث)
+  return '/';
+};
+
 const Auth = () => {
   const { user, signIn, signUp } = useAuth();
   const { language, direction, setLanguage } = useLanguage();
@@ -43,7 +68,7 @@ const Auth = () => {
   
   const [activeTab, setActiveTab] = useState('login');
   const [loading, setLoading] = useState(false);
-  const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]); // لحفظ IDs للصور
+  const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]);
   
   // Login form
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -57,10 +82,17 @@ const Auth = () => {
 
   const from = (location.state as any)?.from?.pathname || '/';
 
-  // Redirect if already logged in
+  // توجيه المستخدم بعد تسجيل الدخول بناءً على دوره
   useEffect(() => {
     if (user) {
-      navigate(from, { replace: true });
+      // إذا كان هناك صفحة محاولة الدخول إليها، استخدمها
+      if (from !== '/auth' && from !== '/') {
+        navigate(from, { replace: true });
+      } else {
+        // وإلا، استخدم الصفحة الافتراضية بناءً على الدور
+        const defaultRoute = getDefaultRoute(user.role);
+        navigate(defaultRoute, { replace: true });
+      }
     }
   }, [user, navigate, from]);
 
@@ -123,13 +155,11 @@ const Auth = () => {
 
   const t = translations[language];
 
-  // دالة معالجة رفع الصور الناجح
   const handleImageUploadSuccess = (ids: number[]) => {
     setUploadedImageIds(ids);
     console.log('Uploaded image IDs:', ids);
   };
 
-  // دالة معالجة أخطاء الرفع
   const handleImageUploadError = (error: Error) => {
     toast({
       title: t.error,
@@ -186,7 +216,6 @@ const Auth = () => {
     }
 
     setLoading(true);
-    // أرسل أول صورة فقط (إذا وجدت)
     const imageId = uploadedImageIds.length > 0 ? uploadedImageIds[0] : undefined;
     
     const { error } = await signUp(signupEmail, signupPassword, signupName, imageId);
@@ -200,7 +229,6 @@ const Auth = () => {
       toast({ title: t.error, description: message, variant: 'destructive' });
     } else {
       toast({ title: t.signupSuccess });
-      // إعادة تعيين الحقول
       setSignupName('');
       setSignupEmail('');
       setSignupPassword('');
@@ -254,10 +282,6 @@ const Auth = () => {
                 <LogIn size={16} />
                 {t.loginTitle}
               </TabsTrigger>
-              {/* <TabsTrigger value="signup" className="flex items-center gap-2">
-                <UserPlus size={16} />
-                {t.signupTitle}
-              </TabsTrigger> */}
             </TabsList>
 
             {/* Login Tab */}
@@ -302,117 +326,6 @@ const Auth = () => {
                   {t.login}
                 </Button>
               </form>
-              {/* <p className="text-center text-sm text-muted-foreground mt-4">
-                {t.noAccount}{' '}
-                <button 
-                  type="button"
-                  onClick={() => setActiveTab('signup')}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {t.signupTitle}
-                </button>
-              </p> */}
-            </TabsContent>
-
-            {/* Signup Tab */}
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name" className="flex items-center gap-2">
-                    <User size={14} />
-                    {t.fullName}
-                  </Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    placeholder={t.namePlaceholder}
-                    value={signupName}
-                    onChange={(e) => setSignupName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="flex items-center gap-2">
-                    <Mail size={14} />
-                    {t.email}
-                  </Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder={t.emailPlaceholder}
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="flex items-center gap-2">
-                    <Lock size={14} />
-                    {t.password}
-                  </Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder={t.passwordPlaceholder}
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-confirm" className="flex items-center gap-2">
-                    <Lock size={14} />
-                    {t.confirmPassword}
-                  </Label>
-                  <Input
-                    id="signup-confirm"
-                    type="password"
-                    placeholder={t.passwordPlaceholder}
-                    value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                
-                {/* File Uploader Component هنا أضف */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Upload size={14} />
-                    {t.profileImage}
-                  </Label>
-                  <FileUploader
-                    label=""
-                    onUploadSuccess={handleImageUploadSuccess}
-                    onUploadError={handleImageUploadError}
-                    multiple={false}
-                    accept="image/*"
-                    maxFiles={1}
-                    maxSize={5 * 1024 * 1024} // 5MB
-                  />
-                </div>
-
-                <Button type="submit" className="w-full gradient-success" disabled={loading}>
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin me-2" />
-                  ) : (
-                    <UserPlus size={16} className="me-2" />
-                  )}
-                  {t.signup}
-                </Button>
-              </form>
-              <p className="text-center text-sm text-muted-foreground mt-4">
-                {t.hasAccount}{' '}
-                <button 
-                  type="button"
-                  onClick={() => setActiveTab('login')}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {t.loginTitle}
-                </button>
-              </p>
             </TabsContent>
           </Tabs>
         </CardContent>
