@@ -128,7 +128,7 @@ const HR = () => {
   });
 
 
-  const [newDelivery, setNewDelivery] = useState<AddDeliveryPerson>({
+  const [newDelivery, setNewDelivery] = useState<DeliveryPerson>({
     name: '',
     name_ar: '',
     phone: '',
