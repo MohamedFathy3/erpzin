@@ -17,7 +17,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import AdvancedFilter, { FilterValues } from '@/components/ui/advanced-filter';
 import AttendanceManager from '@/components/hr/AttendanceManager';
-import { AddEmployee } from '@/types/Hr';
+import { AddDeliveryPerson, AddEmployee } from '@/types/Hr';
 import {
   Plus,
   Search,
@@ -128,7 +128,7 @@ const HR = () => {
   });
 
 
-  const [newDelivery, setNewDelivery] = useState<DeliveryPerson>({
+  const [newDelivery, setNewDelivery] = useState<AddDeliveryPerson>({
     name: '',
     name_ar: '',
     phone: '',
@@ -201,15 +201,16 @@ const HR = () => {
     queryKey: ['attendance', activeTab, debouncedSearch],
     queryFn: async () => {
       try {
-        const payload: any = {
+        const payload = {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 50,
           paginate: false,
           with: ['employee']
-        };
+        } as Record<string, unknown>;
 
-        const filters: any = {};
+        const filters: Record<string, string> = {};
+
 
         if (debouncedSearch) {
           filters.employee_name = debouncedSearch;
@@ -285,14 +286,15 @@ const HR = () => {
           : 'Employee updated successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error(error);
       toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: (error as any).response?.data?.message || error.message,
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
         variant: 'destructive',
       });
     },
+
   });
 
   // ✅ Delete employee mutation
@@ -309,11 +311,11 @@ const HR = () => {
           : 'Employee deleted successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error(error);
       toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: (error as any).response?.data?.message || error.message,
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
         variant: 'destructive',
       });
     },
@@ -321,9 +323,11 @@ const HR = () => {
 
 
 
+
   // ✅ Add delivery mutation
   const addDeliveryMutation = useMutation({
-    mutationFn: (delivery: DeliveryPerson) => HrServices.createDeliveryPerson(delivery),
+    mutationFn: (delivery: AddDeliveryPerson) => HrServices.createDeliveryPerson(delivery),
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
 
@@ -338,21 +342,23 @@ const HR = () => {
           : 'Delivery person added successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error(error);
       toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: (error as any).response?.data?.message || error.message,
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
         variant: 'destructive',
       });
     },
   });
 
 
+
   // ✅ Update delivery mutation
   const updateDeliveryMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: DeliveryPerson }) =>
+    mutationFn: ({ id, data }: { id: string; data: AddDeliveryPerson }) =>
       HrServices.updateDeliveryPerson(id, data),
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
 
@@ -367,15 +373,16 @@ const HR = () => {
           : 'Delivery person updated successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error(error);
       toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: (error as any).response?.data?.message || error.message,
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
         variant: 'destructive',
       });
     },
   });
+
 
 
   // ✅ Delete delivery mutation
@@ -390,15 +397,16 @@ const HR = () => {
           : 'Delivery person deleted successfully',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error(error);
       toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-        description: (error as any).response?.data?.message || error.message,
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
         variant: 'destructive',
       });
     },
   });
+
 
 
   // ========== Helper Functions ==========
@@ -468,9 +476,9 @@ const HR = () => {
 
       console.log('📦 Employee data from service:', employeeData);
 
-      const roleId = employeeData.role?.id ? parseInt(employeeData.role.id.toString()) : undefined;
-      const treasuryId = employeeData.treasury?.id ? parseInt(employeeData.treasury.id.toString()) : undefined;
-      const branchId = employeeData.branch?.id ? parseInt(employeeData.branch.id.toString()) : undefined;
+      const roleId = employeeData.role?.id ? Number(employeeData.role.id) : undefined;
+      const treasuryId = employeeData.treasury?.id ? Number(employeeData.treasury.id) : undefined;
+      const branchId = employeeData.branch?.id ? Number(employeeData.branch.id) : undefined;
 
       setNewEmployee({
         employee_code: employeeData.employee_code || '',
@@ -479,13 +487,14 @@ const HR = () => {
         position: employeeData.position || '',
         phone: employeeData.phone || '',
         email: employeeData.email || '',
-        salary: typeof employeeData.salary === 'string' ? parseFloat(employeeData.salary) || 0 : employeeData.salary || 0,
+        salary: Number(employeeData.salary) || 0,
         is_active: employeeData.is_active ?? true,
         role_id: roleId,
         treasury_id: treasuryId,
         branch_id: branchId,
         password: ''
       });
+
 
       setIsEditingEmployee(true);
       setCurrentEmployeeId(employee.id.toString());
@@ -559,19 +568,20 @@ const HR = () => {
     updateDeliveryMutation.mutate({ id: currentDeliveryId, data: newDelivery });
   };
 
-  const handleEditDelivery = (person: any) => {
+  const handleEditDelivery = (person: DeliveryPerson) => {
     setIsEditingDelivery(true);
     setCurrentDeliveryId(person.id);
     setNewDelivery({
-      name: person.name || '',
-      name_ar: person.name_ar || '',
-      phone: person.phone || '',
-      vehicle_type: person.vehicle_type || '',
-      vehicle_number: person.vehicle_number || '',
-      is_active: person.is_active ?? true
+      name: person.name,
+      name_ar: person.name_ar,
+      phone: person.phone,
+      vehicle_type: person.vehicle_type,
+      vehicle_number: person.vehicle_number,
+      is_active: person.is_active
     });
     setShowDeliveryDialog(true);
   };
+
 
   const handleDeleteDelivery = (id: string, name: string) => {
     const confirmMessage = language === 'ar'
@@ -592,8 +602,9 @@ const HR = () => {
 
   // ========== Data Processing ==========
 
-  const mergedAttendance = attendance.map((att: any) => {
-    const employee = employees.find((emp: any) => emp.id === att.employee_id);
+  const mergedAttendance = attendance.map((att: Record<string, unknown>) => {
+
+    const employee = employees.find((emp: Employee | undefined) => emp?.id === att.employee_id);
     return {
       ...att,
       name: employee?.name || '',
@@ -601,6 +612,7 @@ const HR = () => {
       employee_code: employee?.employee_code || ''
     };
   });
+
 
   // ========== Translations ==========
   const translations = {
@@ -745,12 +757,12 @@ const HR = () => {
   const t = translations[language];
 
   // ========== Stats ==========
-  const totalSalaries = employees
-    .filter((e: any) => e.is_active === true)
-    .reduce((sum: number, e: any) => {
-      const salary = parseFloat(e.salary) || 0;
-      return sum + salary;
-    }, 0);
+
+  // Calculate total salaries
+  const totalSalaries = employees.reduce((sum: number, e: Employee) => {
+    const salary = parseFloat(e.salary as string) || 0;
+    return sum + salary;
+  }, 0);
 
   const stats = [
     {
@@ -762,14 +774,14 @@ const HR = () => {
     },
     {
       label: t.activeEmployees,
-      value: employees.filter((e: any) => e.is_active === true).length,
+      value: employees.filter((e: Employee) => (e.is_active ?? false) === true).length,
       icon: <UserCheck className="text-accent" size={24} />,
       color: 'bg-accent/10',
       loading: employeesLoading
     },
     {
       label: t.deliveryPersons,
-      value: deliveryPersons.filter((d: any) => d.is_active === true).length,
+      value: deliveryPersons.filter((d: DeliveryPerson) => d.is_active === true).length,
       icon: <Truck className="text-success" size={24} />,
       color: 'bg-success/10',
       loading: deliveryLoading
@@ -782,6 +794,7 @@ const HR = () => {
       loading: employeesLoading
     }
   ];
+
 
   const vehicleTypes = [
     { value: 'motorcycle', label: t.motorcycle },
@@ -1015,11 +1028,12 @@ const HR = () => {
                         onChange={(e) => setNewEmployee(prev => ({ ...prev, role_id: e.target.value }))}
                       >
                         <option value="">{language === 'ar' ? 'بدون دور' : 'No Role'}</option>
-                        {roles.map((role: any) => (
+                        {roles.map((role: Role) => (
                           <option key={role.id} value={role.id.toString()}>
                             {role.name}
                           </option>
                         ))}
+
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -1042,11 +1056,12 @@ const HR = () => {
                         onChange={(e) => setNewEmployee(prev => ({ ...prev, branch_id: e.target.value }))}
                       >
                         <option value="">{language === 'ar' ? 'بدون فرع' : 'No Branch'}</option>
-                        {branches.map((branch: any) => (
+                        {branches.map((branch: Branch) => (
                           <option key={branch.id} value={branch.id.toString()}>
                             {branch.name}
                           </option>
                         ))}
+
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -1057,11 +1072,12 @@ const HR = () => {
                         onChange={(e) => setNewEmployee(prev => ({ ...prev, treasury_id: e.target.value }))}
                       >
                         <option value="">{language === 'ar' ? 'بدون خزينة' : 'No Treasury'}</option>
-                        {treasury.map((treasury: any) => (
-                          <option key={treasury.id} value={treasury.id.toString()}>
-                            {treasury.name}
+                        {treasury.map((treasuryItem: Treasury) => (
+                          <option key={treasuryItem.id} value={treasuryItem.id.toString()}>
+                            {treasuryItem.name}
                           </option>
                         ))}
+
                       </select>
                     </div>
                   </div>
@@ -1197,12 +1213,13 @@ const HR = () => {
                         labelAr: 'المنصب',
                         type: 'select',
                         options: [
-                          ...Array.from(new Set(employees.map((e: any) => e.position))).filter(Boolean).map(pos => ({
-                            value: pos,
-                            label: pos,
-                            labelAr: pos
+                          ...Array.from(new Set(employees.map((e: Employee) => e.position))).filter(Boolean).map(pos => ({
+                            value: pos as string,
+                            label: pos as string,
+                            labelAr: pos as string
                           }))
                         ]
+
                       },
                       {
                         key: 'salary',
