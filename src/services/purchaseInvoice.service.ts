@@ -24,14 +24,14 @@ class PurchaseInvoiceService {
     return response.data;
   }
   
-  async getInvoices(filters?: any): Promise<ApiPurchaseInvoice[]> {
+  async getInvoices(filters?: any): Promise<any> {
     const response = await api.post('/purchases-invoices/index', filters);
-    return response.data.data || [];
+    return response.data;
   }
   
-  async getInvoiceById(id: number): Promise<ApiPurchaseInvoice> {
-    const response = await api.get(`/purchases-invoices/show/${id}`);
-    return response.data;
+  async getInvoiceById(id: number): Promise<any> {
+    const response = await api.get(`/purchases-invoices/${id}`);
+    return response.data; // بيرجع { data, result, message, status }
   }
   
   async deleteInvoice(id: number): Promise<void> {

@@ -13,7 +13,6 @@ class ProductManager {
     return ProductManager.instance;
   }
   
-  // ✅ جعل هذه الدالة عامة (public)
   calculateItemTotals(item: InvoiceItem): InvoiceItem {
     const subtotal = item.quantity * item.unit_cost;
     const discountAmount = (subtotal * item.discount_percent) / 100;
@@ -29,53 +28,48 @@ class ProductManager {
     };
   }
   
-  // ✅ جعل هذه الدالة عامة (public)
   recalculateItem(items: InvoiceItem[], index: number): InvoiceItem[] {
     const newItems = [...items];
     newItems[index] = this.calculateItemTotals(newItems[index]);
     return newItems;
   }
   
-  createItemFromProduct(
-    product: Product,
-    language: string,
-    unitId?: number,
-    colorId?: number,
-    stockOverride?: number
-  ): InvoiceItem {
-    const selectedUnit = unitId 
-      ? product.units?.find(u => u.id === unitId)
-      : product.units?.[0];
-    
-  const selectedColor = colorId && selectedUnit?.colors
-      ? selectedUnit.colors.find(c => c.id === colorId)
-      : null;
-
-    const itemStock = stockOverride ?? selectedColor?.stock ?? (selectedUnit ? 0 : (product.stock ?? 0));
-    
-    const unitCost = selectedUnit 
-      ? Number(selectedUnit.cost_price) 
-      : Number(product.cost) || 0;
-    
-    return {
-      id: crypto.randomUUID(),
-      product_id: product.id,
-      product_name: language === 'ar' ? product.name_ar || product.name : product.name,
-      product_sku: product.sku,
-      quantity: 1,
-      unit_cost: unitCost,
-      discount_percent: 0,
-      discount_amount: 0,
-      tax_percent: 0,
-      tax_amount: 0,
-      total_cost: unitCost,
-      product_unit_id: selectedUnit?.id,
-      color_id: selectedColor?.id,
-      size_name: selectedUnit?.unit_name,
-      color_name: selectedColor?.color,
-      stock: selectedColor?.stock ?? selectedUnit ? 0 : (product.stock ?? 0)
-    };
+createItemFromProduct(product: Product, language: string, unitId?: number, colorId?: number, stockOverride?: number): InvoiceItem {
+  const selectedUnit = unitId 
+    ? product.units?.find(u => u.unit_id === unitId)  // unit_id مش id
+    : product.units?.[0];
+  
+  // ✅ البحث عن اللون باستخدام color_id الحقيقي
+  let selectedColor = null;
+  let colorStock = 0;
+  
+  if (colorId && selectedUnit) {
+    selectedColor = selectedUnit.colors?.find(c => c.color_id === colorId);  // color_id مش id
+    colorStock = selectedColor?.stock || 0;
   }
+  
+  return {
+    id: `temp-${Date.now()}-${Math.random()}`,
+    product_id: product.id,
+    product_variant_id: selectedColor?.id || null,  // id من الجدول (9)
+    product_name: language === 'ar' ? (product.name_ar || product.name) : product.name,
+    product_sku: product.sku,
+    size_name: selectedUnit?.unit_name,
+    size_name_ar: selectedUnit?.unit_name_ar || selectedUnit?.unit_name,
+    color_name: selectedColor?.color,
+    color_name_ar: selectedColor?.color,
+    color_id: colorId || null,  // color_id الحقيقي (1)
+    stock: stockOverride ?? colorStock ?? product.stock ?? 0,
+    quantity: 1,
+    unit_cost: selectedUnit ? Number(selectedUnit.cost_price) : Number(product.cost),
+    discount_percent: 0,
+    discount_amount: 0,
+    tax_percent: product.tax_rate || 0,
+    tax_amount: 0,
+    total_cost: 0,
+    product_unit_id: unitId || null,  // unit_id الحقيقي (1)
+  };
+}
   
   updateItemQuantity(items: InvoiceItem[], index: number, quantity: number): InvoiceItem[] {
     const newItems = [...items];
@@ -105,10 +99,10 @@ class ProductManager {
     return items.filter((_, i) => i !== index);
   }
   
-  checkDuplicateProduct(items: InvoiceItem[], productId: number, variantId?: number): number {
+  checkDuplicateProduct(items: InvoiceItem[], productId: number, colorId?: number): number {
     return items.findIndex(item => 
       item.product_id === productId && 
-      item.product_variant_id === variantId
+      item.color_id === colorId
     );
   }
   
@@ -142,17 +136,17 @@ class ProductManager {
     price: number;
     discount: number;
     tax: number;
-    product_unit_id?: number | null;
+    unit_id?: number | null;  // غيرنا من product_unit_id لـ unit_id
     color_id?: number | null;
   }> {
     return items.map(item => ({
-      product_id: item.product_id!,
+      product_id: item.product_id,
       product_variant_id: item.product_variant_id || null,
       quantity: item.quantity,
       price: item.unit_cost,
       discount: item.discount_percent,
       tax: item.tax_percent,
-      product_unit_id: item.product_unit_id || null,
+      unit_id: item.product_unit_id || null,  // unit_id مش product_unit_id
       color_id: item.color_id || null
     }));
   }

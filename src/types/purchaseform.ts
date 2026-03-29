@@ -16,7 +16,8 @@ export interface InvoiceItem {
   tax_amount: number;
   total_cost: number;
   product_unit_id?: number;
-  color_id?: number;
+    color_id?: number | null;
+
 }
 
 export interface PurchaseInvoicePayload {

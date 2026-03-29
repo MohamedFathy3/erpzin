@@ -1,4 +1,4 @@
-// components/purchase/PurchaseInvoiceForm.tsx (النسخة المعدلة)
+// components/purchase/PurchaseInvoiceForm.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +13,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useReactToPrint } from 'react-to-print';
-import { format, parseISO } from 'date-fns';
 import { Loader2, Package, DollarSign, ArrowLeftRight, BadgeCheck, XCircle, Save, Copy, Printer, Edit2, Landmark, Trash2 } from 'lucide-react';
 
 // Import types
@@ -67,6 +66,10 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const invoicePrintRef = useRef<HTMLDivElement>(null);
   const [showPrint, setShowPrint] = useState(false);
   const [printData, setPrintData] = useState<any>(null);
+  
+  // States for API data fetching
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [fullInvoiceData, setFullInvoiceData] = useState<any>(null);
 
   const isEditMode = !!invoiceToEdit;
 
@@ -100,7 +103,108 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const { data: treasuries = [], isLoading: treasuryLoading } = useTreasuries(formData.branch_id, isOpen);
   const { data: products = [], isLoading: loadingProducts } = useProducts(isOpen);
 
-  // ========== Effects ==========
+  // ========== Fetch Full Invoice Data from API when editing ==========
+  useEffect(() => {
+    if (isEditMode && invoiceToEdit?.id) {
+      const fetchInvoiceDetails = async () => {
+        setLoadingInvoice(true);
+        try {
+          const response = await purchaseInvoiceService.getInvoiceById(invoiceToEdit.id);
+          if (response?.data) {
+            setFullInvoiceData(response.data);
+          } else if (invoiceToEdit) {
+            // fallback للبيانات الموجودة لو الAPI مجابش حاجة
+            setFullInvoiceData(invoiceToEdit);
+          }
+        } catch (error) {
+          console.error('Error fetching invoice details:', error);
+          // use fallback data
+          setFullInvoiceData(invoiceToEdit);
+          toast({
+            title: language === 'ar' ? 'خطأ' : 'Error',
+            description: language === 'ar' 
+              ? 'فشل في تحميل بيانات الفاتورة' 
+              : 'Failed to load invoice data',
+            variant: 'destructive',
+          });
+        } finally {
+          setLoadingInvoice(false);
+        }
+      };
+      
+      fetchInvoiceDetails();
+    } else {
+      setFullInvoiceData(null);
+    }
+  }, [isEditMode, invoiceToEdit?.id, language]);
+
+  // ========== Load invoice data from API response ==========
+  const loadInvoiceDataFromApi = useCallback((invoiceData: any) => {
+    if (!invoiceData) return;
+    
+    console.log('Loading invoice data from API:', invoiceData);
+    
+    // نتأكد من وجود الخيارات المطلوبة قبل تعيين القيم
+    const supplierExists = suppliers.some(s => s.id === invoiceData.supplier_id);
+    const branchExists = branches.some(b => b.id === invoiceData.branch_id);
+    const warehouseExists = warehouses.some(w => w.id === invoiceData.warehouse_id);
+    const currencyExists = currencies.some(c => c.id === invoiceData.currency_id);
+    const treasuryExists = treasuries.some(t => t.id === invoiceData.treasury_id);
+    
+    setFormData({
+      supplier_id: supplierExists ? invoiceData.supplier_id?.toString() || '' : '',
+      branch_id: branchExists ? invoiceData.branch_id?.toString() || '' : '',
+      warehouse_id: warehouseExists ? invoiceData.warehouse_id?.toString() || '' : '',
+      invoice_date: invoiceData.invoice_date || getTodayDate(),
+      due_date: invoiceData.due_date || '',
+      payment_method: invoiceData.payment_method || 'cash',
+      tax_id: invoiceData.tax_id?.toString() || '',
+      currency_id: currencyExists ? invoiceData.currency_id?.toString() || '' : '',
+      notes: invoiceData.note || '',
+      paid_amount: invoiceData.paid_amount || 0,
+      treasury_id: treasuryExists ? invoiceData.treasury_id?.toString() || '' : ''
+    });
+
+    const loadedItems: InvoiceItem[] = (invoiceData.items || []).map((item: any, index: number) => ({
+      id: `edit-${index}-${Date.now()}`,
+      product_id: item.product_id,
+      product_variant_id: item.product_variant_id,
+      product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,
+      product_sku: item.product_sku,
+      size_name: item.variant_details?.size,
+      color_name: item.variant_details?.color,
+      stock: item.stock || 0,
+      quantity: item.quantity,
+      unit_cost: item.price,
+      discount_percent: item.discount || 0,
+      discount_amount: 0,
+      tax_percent: item.tax || 0,
+      tax_amount: 0,
+      total_cost: item.total,
+      product_unit_id: item.product_unit_id,
+      color_id: item.color_id
+    }));
+
+    const recalculatedItems = loadedItems.map(item => productManager.calculateItemTotals(item));
+    setItems(recalculatedItems);
+    
+    if (invoiceData.paid_amount > 0) {
+      setShowPaymentDetails(true);
+    }
+  }, [suppliers, branches, warehouses, currencies, treasuries, language, getTodayDate]);
+
+  // ========== Load data when fullInvoiceData is available ==========
+  useEffect(() => {
+    if (fullInvoiceData && isEditMode && !loadingInvoice) {
+      // Delay to ensure dropdowns are loaded
+      const timer = setTimeout(() => {
+        loadInvoiceDataFromApi(fullInvoiceData);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [fullInvoiceData, isEditMode, loadingInvoice, loadInvoiceDataFromApi]);
+
+  // ========== Set default currency and tax for new invoice ==========
   useEffect(() => {
     if (currencies.length > 0 && !formData.currency_id && !isEditMode) {
       const defaultCurr = currencies.find((c: any) => c.default === true) || currencies[0];
@@ -115,56 +219,28 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   }, [taxes, formData.tax_id, isEditMode]);
 
+  // ========== Set warehouse and treasury after branch change in edit mode ==========
   useEffect(() => {
-    if (isEditMode && invoiceToEdit) {
-      loadInvoiceData();
+    if (isEditMode && fullInvoiceData && formData.branch_id) {
+      const timer = setTimeout(() => {
+        // Set warehouse_id after warehouses are loaded
+        if (warehouses.length > 0 && !formData.warehouse_id && fullInvoiceData.warehouse_id) {
+          const warehouseExists = warehouses.some(w => w.id === fullInvoiceData.warehouse_id);
+          if (warehouseExists) {
+            setFormData(prev => ({ ...prev, warehouse_id: fullInvoiceData.warehouse_id?.toString() || '' }));
+          }
+        }
+        // Set treasury_id after treasuries are loaded
+        if (treasuries.length > 0 && !formData.treasury_id && fullInvoiceData.treasury_id) {
+          const treasuryExists = treasuries.some(t => t.id === fullInvoiceData.treasury_id);
+          if (treasuryExists) {
+            setFormData(prev => ({ ...prev, treasury_id: fullInvoiceData.treasury_id?.toString() || '' }));
+          }
+        }
+      }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [isEditMode, invoiceToEdit]);
-
-  const loadInvoiceData = () => {
-    if (!invoiceToEdit) return;
-    
-    setFormData({
-      supplier_id: invoiceToEdit.supplier?.id?.toString() || '',
-      branch_id: invoiceToEdit.branch?.id?.toString() || '',
-      warehouse_id: invoiceToEdit.warehouse?.id?.toString() || '',
-      invoice_date: invoiceToEdit.invoice_date || getTodayDate(),
-      due_date: invoiceToEdit.due_date || '',
-      payment_method: invoiceToEdit.payment_method || 'cash',
-      tax_id: invoiceToEdit.tax?.id?.toString() || '',
-      currency_id: invoiceToEdit.currency?.id?.toString() || '',
-      notes: invoiceToEdit.note || '',
-      paid_amount: invoiceToEdit.paid_amount || 0,
-      treasury_id: invoiceToEdit.treasury?.id?.toString() || ''
-    });
-
-    const loadedItems: InvoiceItem[] = (invoiceToEdit.items || []).map((item: any, index: number) => ({
-      id: `edit-${index}-${Date.now()}`,
-      product_id: item.product_id,
-      product_variant_id: item.product_variant_id,
-      product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,
-      product_sku: item.product_sku,
-      size_name: item.variant_details?.size,
-      color_name: item.variant_details?.color,
-      stock:item.stock,
-      quantity: item.quantity,
-      unit_cost: item.price,
-      discount_percent: item.discount,
-      discount_amount: 0,
-      tax_percent: item.tax,
-      tax_amount: 0,
-      total_cost: item.total,
-      product_unit_id: item.product_unit_id,
-      color_id: item.color_id
-    }));
-
-    const recalculatedItems = loadedItems.map(item => productManager.calculateItemTotals(item));
-    setItems(recalculatedItems);
-    
-    if (invoiceToEdit.paid_amount > 0) {
-      setShowPaymentDetails(true);
-    }
-  };
+  }, [formData.branch_id, warehouses.length, treasuries.length, isEditMode, fullInvoiceData]);
 
   // ========== Product Management ==========
   const handleProductClick = (product: Product) => {
@@ -176,9 +252,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   };
 
   const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
-    const existingIndex = productManager.checkDuplicateProduct(items, product.id);
+    // Check for duplicate product + color
+    const existingIndex = productManager.checkDuplicateProduct(items, product.id, colorId);
     
     if (existingIndex >= 0) {
+      // Same product and same color - increase quantity
       const newItems = productManager.incrementQuantity(items, existingIndex);
       setItems(newItems);
       toast({
@@ -186,6 +264,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         description: language === 'ar' ? 'تم زيادة الكمية' : 'Quantity increased'
       });
     } else {
+      // New product or same product with new color - add new row
       const newItem = productManager.createItemFromProduct(product, language, unitId, colorId, stockOverride);
       setItems([...items, newItem]);
       toast({
@@ -205,7 +284,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     color_name?: string;
     product_unit_id?: number;
     color_id?: number;
-    stock?:number,
+    stock?: number,
   }) => {
     const product = products.find(p => p.id === Number(variant.product_id));
     if (product) {
@@ -219,18 +298,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     
     switch (field) {
       case 'quantity':
-        // Removed stock blocking for external purchases
-        // if (value > newItems[index].stock) {
-        //   toast({
-        //     title: language === 'ar' ? 'تحذير المخزون' : 'Stock Warning',
-        //     description: language === 'ar' 
-        //       ? `المخزون المتاح لهذا اللون: ${newItems[index].stock}`
-        //       : `Available stock for this color: ${newItems[index].stock}`,
-        //     variant: "destructive"
-        //   });
-        //   return;
-        // }
-
         newItems = productManager.updateItemQuantity(newItems, index, value);
         break;
       case 'unit_cost':
@@ -401,6 +468,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   };
   
   const disabled = loading;
+  const isDataLoading = loadingInvoice || loadingSuppliers || loadingBranches || loadingCurrencies || loadingTaxes;
   
   return (
     <>
@@ -409,303 +477,316 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           <FormHeader isEditMode={isEditMode} invoiceToEdit={invoiceToEdit} />
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <FormFields
-              formData={formData}
-              setFormData={setFormData}
-              errors={errors}
-              suppliers={suppliers}
-              branches={branches}
-              warehouses={warehouses}
-              currencies={currencies}
-              taxes={taxes}
-              loadingStates={{
-                suppliers: loadingSuppliers,
-                branches: loadingBranches,
-                warehouses: loadingWarehouses,
-                currencies: loadingCurrencies,
-                taxes: loadingTaxes
-              }}
-              disabled={disabled}
-            />
-            
-            {/* Products Section */}
-            <Card>
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Package size={14} />
-                  {language === 'ar' ? 'المنتجات' : 'Products'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 space-y-3">
-                <QuickProductSearch
-                  onSelectProduct={handleProductClick}
-                  priceField="cost"
-                  placeholder={language === 'ar' ? 'بحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
-                  autoFocus
-                  showStock
-                  products={products}
-                  disabled={disabled}
+            {isDataLoading && isEditMode ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="mr-2 text-muted-foreground">
+                  {language === 'ar' ? 'جاري تحميل بيانات الفاتورة...' : 'Loading invoice data...'}
+                </span>
+              </div>
+            ) : (
+              <>
+                <FormFields
+                  formData={formData}
+                  setFormData={setFormData}
+                  errors={errors}
+                  suppliers={suppliers}
+                  branches={branches}
+                  warehouses={warehouses}
+                  currencies={currencies}
+                  taxes={taxes}
+                  isEditMode={isEditMode}
+                  loadingStates={{
+                    suppliers: loadingSuppliers,
+                    branches: loadingBranches,
+                    warehouses: loadingWarehouses,
+                    currencies: loadingCurrencies,
+                    taxes: loadingTaxes
+                  }}
+                  disabled={disabled || loadingInvoice}
                 />
                 
-                {/* Items Table */}
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="w-8 py-2 text-xs">#</TableHead>
-                          <TableHead className="py-2 text-xs">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                          <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'المخزون' : 'Stock'}</TableHead>
-                          <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                          <TableHead className="w-20 py-2 text-xs text-center">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
-                          <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'خصم%' : 'Disc%'}</TableHead>
-                          <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'ضريبة%' : 'Tax%'}</TableHead>
-                          <TableHead className="w-20 py-2 text-xs text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                          <TableHead className="w-8 py-2"></TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-6 text-muted-foreground text-sm">
-                            {language === 'ar' ? 'لم يتم إضافة منتجات' : 'No products added'}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        items.map((item, index) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="py-1.5 text-xs text-center">{index + 1}</TableCell>
-                            <TableCell className="py-1.5">
-                              <div>
-                                <p className="font-medium text-xs">{item.product_name}</p>
-                                <p className="text-[10px] text-muted-foreground">{item.product_sku}</p>
-                                {(item.size_name || item.color_name) && (
-                                  <p className="text-[10px] text-muted-foreground">
-                                    {item.size_name && `📏 ${item.size_name}`}
-                                    {item.color_name && ` 🎨 ${item.color_name}`}
-                                  </p>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-1.5 text-center">
-                              <div className={cn(
-                                "text-xs font-mono px-1 py-0.5 rounded",
-                                item.stock === 0 ? "bg-destructive text-destructive" :
-                                item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
-                                "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                              )}>
-                                {item.stock}
-                              </div> {/* Removed quantity comparison for purchases; low stock info only */}
-                            </TableCell>
-                            <TableCell className="py-1.5 text-center">
-                              <Input
-                                type="number"
-                                min="1"
-                                max={99999} // Removed stock limit for purchases
-                                value={item.quantity}
-                                onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                                disabled={disabled}
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-center">
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={item.unit_cost}
-                                onChange={(e) => updateItem(index, 'unit_cost', Number(e.target.value))}
-                                className="w-18 h-7 text-xs text-center mx-auto"
-                                disabled={disabled}
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-center">
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={item.discount_percent}
-                                onChange={(e) => updateItem(index, 'discount_percent', Number(e.target.value))}
-                                className="w-12 h-7 text-xs text-center mx-auto"
-                                disabled={disabled}
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-center">
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={item.tax_percent}
-                                onChange={(e) => updateItem(index, 'tax_percent', Number(e.target.value))}
-                                className="w-12 h-7 text-xs text-center mx-auto"
-                                disabled={disabled}
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-end font-semibold text-xs">
-                              {formatCurrency(item.total_cost)}
-                            </TableCell>
-                            <TableCell className="py-1.5">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-destructive hover:text-destructive"
-                                onClick={() => removeItem(index)}
-                                disabled={disabled}
-                              >
-                                <Trash2 size={12} />
-                              </Button>
-                            </TableCell>
+                {/* Products Section */}
+                <Card>
+                  <CardHeader className="py-2 px-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Package size={14} />
+                      {language === 'ar' ? 'المنتجات' : 'Products'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0 space-y-3">
+                    <QuickProductSearch
+                      onSelectProduct={handleProductClick}
+                      priceField="cost"
+                      placeholder={language === 'ar' ? 'بحث بالاسم أو الباركود...' : 'Search by name or barcode...'}
+                      autoFocus
+                      showStock
+                      products={products}
+                      disabled={disabled || loadingInvoice}
+                    />
+                    
+                    {/* Items Table */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            <TableHead className="w-8 py-2 text-xs">#</TableHead>
+                            <TableHead className="py-2 text-xs">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                            <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'المخزون' : 'Stock'}</TableHead>
+                            <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                            <TableHead className="w-20 py-2 text-xs text-center">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                            <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'خصم%' : 'Disc%'}</TableHead>
+                            <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'ضريبة%' : 'Tax%'}</TableHead>
+                            <TableHead className="w-20 py-2 text-xs text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                            <TableHead className="w-8 py-2"></TableHead>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-                {errors.items && (
-                  <p className="text-[10px] text-destructive text-center">{errors.items}</p>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Payment Section */}
-            <Card className="border-primary/20 bg-primary/5">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPaymentDetails(!showPaymentDetails)}
-                    className="gap-2"
-                    disabled={disabled}
-                  >
-                    <DollarSign size={16} />
-                    {showPaymentDetails 
-                      ? (language === 'ar' ? 'إخفاء تفاصيل الدفع' : 'Hide Payment Details')
-                      : (language === 'ar' ? 'إظهار تفاصيل الدفع' : 'Show Payment Details')
-                    }
-                  </Button>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="text-end">
-                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
-                      <p className="text-lg font-bold text-primary">{formatCurrency(totals.total)}</p>
-                    </div>
-                    <ArrowLeftRight size={20} className="text-muted-foreground" />
-                    <div className="text-end">
-                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'المتبقي للمورد' : 'Remaining'}</p>
-                      <p className={`text-lg font-bold ${remainingAmount > 0 ? 'text-warning' : 'text-success'}`}>
-                        {formatCurrency(remainingAmount)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                {showPaymentDetails && (
-                  <div className="space-y-4 mt-4 pt-4 border-t border-primary/20">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label>{language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount'}</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.paid_amount}
-                          onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: Number(e.target.value) }))}
-                          placeholder="0"
-                          className="text-lg font-bold"
-                          disabled={disabled}
-                        />
-                      </div>
-                      
-                      {(formData.payment_method === 'cash' || formData.payment_method === 'credit') && (
-                        <div>
-                          <Label className="flex items-center gap-1 mb-1.5 font-medium">
-                            <Landmark size={16} className="text-primary" />
-                            {language === 'ar' ? 'الخزينة' : 'Treasury'}
-                            {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
-                          </Label>
-                          
-                          {!formData.branch_id ? (
-                            <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-                              {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
-                            </div>
-                          ) : treasuryLoading ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
-                            </div>
-                          ) : treasuries.length === 0 ? (
-                            <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-                              {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
-                            </div>
+                        </TableHeader>
+                        <TableBody>
+                          {items.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-center py-6 text-muted-foreground text-sm">
+                                {language === 'ar' ? 'لم يتم إضافة منتجات' : 'No products added'}
+                              </TableCell>
+                            </TableRow>
                           ) : (
-                            <select
-                              value={formData.treasury_id}
-                              onChange={(e) => setFormData(prev => ({ ...prev, treasury_id: e.target.value }))}
-                              className={cn(
-                                "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
-                                "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
-                                "transition-all duration-200",
-                                errors.treasury_id 
-                                  ? "border-destructive bg-destructive/5" 
-                                  : "border-input hover:border-primary/50"
-                              )}
-                              disabled={disabled}
-                            >
-                              <option value="" disabled>
-                                {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
-                              </option>
-                              {treasuries.map((treasury: Treasury) => (
-                                <option key={treasury.id} value={treasury.id.toString()}>
-                                  {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
-                                  {treasury.is_main && ` (${language === 'ar' ? 'رئيسية' : 'Main'})`}
-                                </option>
-                              ))}
-                            </select>
+                            items.map((item, index) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="py-1.5 text-xs text-center">{index + 1}</TableCell>
+                                <TableCell className="py-1.5">
+                                  <div>
+                                    <p className="font-medium text-xs">{item.product_name}</p>
+                                    <p className="text-[10px] text-muted-foreground">{item.product_sku}</p>
+                                    {(item.size_name || item.color_name) && (
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {item.size_name && `📏 ${item.size_name}`}
+                                        {item.color_name && ` 🎨 ${item.color_name}`}
+                                      </p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <div className={cn(
+                                    "text-xs font-mono px-1 py-0.5 rounded",
+                                    item.stock === 0 ? "bg-destructive text-destructive" :
+                                    item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
+                                    "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                  )}>
+                                    {item.stock}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2 text-center">
+                                  <Input
+                                  className="w-20"
+                                    type="number"
+                                    min="1"
+                                    max={99999}
+                                    value={item.quantity}
+                                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.unit_cost}
+                                    onChange={(e) => updateItem(index, 'unit_cost', Number(e.target.value))}
+                                    className="w-18 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={item.discount_percent}
+                                    onChange={(e) => updateItem(index, 'discount_percent', Number(e.target.value))}
+                                    className="w-12 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={item.tax_percent}
+                                    onChange={(e) => updateItem(index, 'tax_percent', Number(e.target.value))}
+                                    className="w-12 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-end font-semibold text-xs">
+                                  {formatCurrency(item.total_cost)}
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                    onClick={() => removeItem(index)}
+                                    disabled={disabled || loadingInvoice}
+                                  >
+                                    <Trash2 size={12} />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
                           )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {errors.items && (
+                      <p className="text-[10px] text-destructive text-center">{errors.items}</p>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                {/* Payment Section */}
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowPaymentDetails(!showPaymentDetails)}
+                        className="gap-2"
+                        disabled={disabled || loadingInvoice}
+                      >
+                        <DollarSign size={16} />
+                        {showPaymentDetails 
+                          ? (language === 'ar' ? 'إخفاء تفاصيل الدفع' : 'Hide Payment Details')
+                          : (language === 'ar' ? 'إظهار تفاصيل الدفع' : 'Show Payment Details')
+                        }
+                      </Button>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-end">
+                          <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
+                          <p className="text-lg font-bold text-primary">{formatCurrency(totals.total)}</p>
+                        </div>
+                        <ArrowLeftRight size={20} className="text-muted-foreground" />
+                        <div className="text-end">
+                          <p className="text-xs text-muted-foreground">{language === 'ar' ? 'المتبقي للمورد' : 'Remaining'}</p>
+                          <p className={`text-lg font-bold ${remainingAmount > 0 ? 'text-warning' : 'text-success'}`}>
+                            {formatCurrency(remainingAmount)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {showPaymentDetails && (
+                      <div className="space-y-4 mt-4 pt-4 border-t border-primary/20">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label>{language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount'}</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.paid_amount}
+                              onChange={(e) => setFormData(prev => ({ ...prev, paid_amount: Number(e.target.value) }))}
+                              placeholder="0"
+                              className="text-lg font-bold"
+                              disabled={disabled || loadingInvoice}
+                            />
+                          </div>
                           
-                          {errors.treasury_id && (
-                            <p className="text-xs text-destructive mt-1">{errors.treasury_id}</p>
+                          {(formData.payment_method === 'cash' || formData.payment_method === 'credit') && (
+                            <div>
+                              <Label className="flex items-center gap-1 mb-1.5 font-medium">
+                                <Landmark size={16} className="text-primary" />
+                                {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                                {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
+                              </Label>
+                              
+                              {!formData.branch_id ? (
+                                <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                                  {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
+                                </div>
+                              ) : treasuryLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
+                                </div>
+                              ) : treasuries.length === 0 ? (
+                                <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                                  {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
+                                </div>
+                              ) : (
+                                <select
+                                  value={formData.treasury_id}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, treasury_id: e.target.value }))}
+                                  className={cn(
+                                    "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
+                                    "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
+                                    "transition-all duration-200",
+                                    errors.treasury_id 
+                                      ? "border-destructive bg-destructive/5" 
+                                      : "border-input hover:border-primary/50"
+                                  )}
+                                  disabled={disabled || loadingInvoice}
+                                >
+                                  <option value="" disabled>
+                                    {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
+                                  </option>
+                                  {treasuries.map((treasury: Treasury) => (
+                                    <option key={treasury.id} value={treasury.id.toString()}>
+                                      {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
+                                      {treasury.is_main && ` (${language === 'ar' ? 'رئيسية' : 'Main'})`}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              
+                              {errors.treasury_id && (
+                                <p className="text-xs text-destructive mt-1">{errors.treasury_id}</p>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                    
-                    {remainingAmount > 0 && (
-                      <div className="bg-warning/10 p-3 rounded-lg flex items-center gap-2">
-                        <DollarSign size={18} className="text-warning" />
-                        <p className="text-sm text-warning">
-                          {language === 'ar' 
-                            ? `المتبقي للمورد: ${formatCurrency(remainingAmount)}`
-                            : `Remaining for supplier: ${formatCurrency(remainingAmount)}`
-                          }
-                        </p>
+                        
+                        {remainingAmount > 0 && (
+                          <div className="bg-warning/10 p-3 rounded-lg flex items-center gap-2">
+                            <DollarSign size={18} className="text-warning" />
+                            <p className="text-sm text-warning">
+                              {language === 'ar' 
+                                ? `المتبقي للمورد: ${formatCurrency(remainingAmount)}`
+                                : `Remaining for supplier: ${formatCurrency(remainingAmount)}`
+                              }
+                            </p>
+                          </div>
+                        )}
+                        
+                        {remainingAmount === 0 && totals.total > 0 && (
+                          <div className="bg-success/10 p-3 rounded-lg flex items-center gap-2">
+                            <BadgeCheck size={18} className="text-success" />
+                            <p className="text-sm text-success">
+                              {language === 'ar' ? 'تم الدفع بالكامل' : 'Fully paid'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                    
-                    {remainingAmount === 0 && totals.total > 0 && (
-                      <div className="bg-success/10 p-3 rounded-lg flex items-center gap-2">
-                        <BadgeCheck size={18} className="text-success" />
-                        <p className="text-sm text-success">
-                          {language === 'ar' ? 'تم الدفع بالكامل' : 'Fully paid'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Notes */}
-            <div className="space-y-1">
-              <Label className="text-xs">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder={language === 'ar' ? 'ملاحظات...' : 'Notes...'}
-                rows={2}
-                className="text-sm"
-                disabled={disabled}
-              />
-            </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Notes */}
+                <div className="space-y-1">
+                  <Label className="text-xs">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder={language === 'ar' ? 'ملاحظات...' : 'Notes...'}
+                    rows={2}
+                    className="text-sm"
+                    disabled={disabled || loadingInvoice}
+                  />
+                </div>
+              </>
+            )}
           </div>
           
           <DialogFooter className="p-4 pt-3 border-t bg-muted/30 flex justify-between items-center">
@@ -719,14 +800,14 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
             </div>
             
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} size="sm" disabled={disabled}>
+              <Button variant="outline" onClick={onClose} size="sm" disabled={disabled || loadingInvoice}>
                 <XCircle size={14} className="me-1.5" />
                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
               </Button>
               
               <Button 
                 onClick={() => handleSubmit('save')} 
-                disabled={disabled || !isFormValid} 
+                disabled={disabled || !isFormValid || loadingInvoice} 
                 size="sm" 
                 className="min-w-24"
               >
@@ -743,7 +824,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               {!isEditMode && onSaveAndNew && (
                 <Button 
                   onClick={() => handleSubmit('save_and_new')} 
-                  disabled={disabled || !isFormValid} 
+                  disabled={disabled || !isFormValid || loadingInvoice} 
                   size="sm" 
                   variant="secondary"
                 >
@@ -754,7 +835,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
               
               <Button 
                 onClick={() => handleSubmit('save_and_print')} 
-                disabled={disabled || !isFormValid} 
+                disabled={disabled || !isFormValid || loadingInvoice} 
                 size="sm" 
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Package, Ruler, Palette, DollarSign } from 'lucide-react';
-import { Product, ProductUnit } from '@/types/purchaseform';
+import { Product, ProductUnit, ProductColor } from '@/types/purchaseform';
 import { cn } from '@/lib/utils';
 
 interface PurchaseVariantSelectorProps {
@@ -22,6 +22,7 @@ interface PurchaseVariantSelectorProps {
     color_name?: string;
     product_unit_id?: number;
     color_id?: number;
+    stock?: number;
   }) => void;
 }
 
@@ -33,33 +34,34 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
 }) => {
   const { language } = useLanguage();
   const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
-  const [selectedColor, setSelectedColor] = useState<any>(null);
+  const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
 
   const handleUnitSelect = (unit: ProductUnit) => {
     setSelectedUnit(unit);
     setSelectedColor(null);
   };
 
-  const handleColorSelect = (color: any) => {
+  const handleColorSelect = (color: ProductColor) => {
     setSelectedColor(color);
   };
 
-  const handleConfirm = () => {
-    if (selectedUnit) {
-      onSelectVariant({
-        product_id: product.id.toString(),
-        variant_id: selectedUnit.id.toString(),
-        product_name: language === 'ar' ? product.name_ar || product.name : product.name,
-        product_sku: product.sku,
-        unit_cost: Number(selectedUnit.cost_price),
-        size_name: selectedUnit.unit_name,
-        color_name: selectedColor?.color,
-        product_unit_id: selectedUnit.id,
-        color_id: selectedColor?.id
-      });
-    }
-    onClose();
-  };
+ const handleConfirm = () => {
+  if (selectedUnit) {
+    onSelectVariant({
+      product_id: product.id.toString(),
+      variant_id: selectedUnit.id.toString(),  // id من الجدول (5)
+      product_name: language === 'ar' ? product.name_ar || product.name : product.name,
+      product_sku: product.sku,
+      unit_cost: Number(selectedUnit.cost_price),
+      size_name: selectedUnit.unit_name,
+      color_name: selectedColor?.color,
+      product_unit_id: selectedUnit.unit_id,  // ✅ unit_id الحقيقي (1)
+      color_id: selectedColor?.color_id,      // ✅ color_id الحقيقي (1)
+      stock: selectedColor?.stock || 0
+    });
+  }
+  onClose();
+};
 
   const productName = language === 'ar' ? product.name_ar || product.name : product.name;
 
@@ -112,29 +114,36 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                 <Palette size={14} />
                 {language === 'ar' ? 'الألوان المتاحة' : 'Available Colors'}
               </h4>
-              <div className="flex flex-wrap gap-2">
-                {selectedUnit.colors.map((color) => {
-                  const isLowStock = color.stock <= 5;
-                  const isOutOfStock = color.stock === 0;
-                  
-                  return (
-                    <button
-                      key={color.id}
-                      onClick={() => handleColorSelect(color)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
-                        selectedColor?.id === color.id
-                          ? "bg-primary text-white"
-                          : "border border-border hover:bg-muted/80",
-                      )}
-                      title={isOutOfStock ? "نفد المخزون" : `المخزون: ${color.stock}`}
-                    >
-                      <span>{color.color}</span>
-                      <span className="text-xs font-mono">({color.stock})</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ScrollArea className="h-32 border rounded-md p-2">
+                <div className="flex flex-wrap gap-2">
+                  {selectedUnit.colors.map((color) => {
+                    const isLowStock = color.stock <= 5;
+                    const isOutOfStock = color.stock === 0;
+                    
+                    return (
+                      <button
+                        key={color.id}
+                        onClick={() => handleColorSelect(color)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
+                          selectedColor?.id === color.id
+                            ? "bg-primary text-white"
+                            : "border border-border hover:bg-muted/80",
+                        )}
+                        title={isOutOfStock ? (language === 'ar' ? 'نفد المخزون' : 'Out of stock') : `${language === 'ar' ? 'المخزون' : 'Stock'}: ${color.stock}`}
+                      >
+                        <span>{color.color}</span>
+                        <span className={cn(
+                          "text-xs font-mono",
+                          isLowStock && !isOutOfStock ? "text-destructive" : ""
+                        )}>
+                          ({color.stock})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
           )}
           
@@ -157,7 +166,7 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                   </div>
                   <div className={cn(
                     "text-xs font-mono",
-                    selectedColor.stock <= 5 ? "text-destructive font-bold" : "text-muted-foreground"
+                    selectedColor.stock <= 5 && selectedColor.stock > 0 ? "text-destructive font-bold" : "text-muted-foreground"
                   )}>
                     {language === 'ar' ? `المخزون: ${selectedColor.stock}` : `Stock: ${selectedColor.stock}`}
                   </div>

@@ -926,24 +926,26 @@ const Purchasing = () => {
       )}
 
       {/* ========== Modal تعديل الفاتورة ========== */}
-      {editingInvoice && (
-        <PurchaseInvoiceForm
-          isOpen={showEditInvoiceForm}
-          onClose={() => {
-            setShowEditInvoiceForm(false);
-            setEditingInvoice(null);
-          }}
-          onSave={() => {
-            refetchAll();
-            setShowEditInvoiceForm(false);
-            setEditingInvoice(null);
-          }}
-          onSaveAndNew={() => {
-            refetchAll();
-          }}
-          invoiceToEdit={editingInvoice}
-        />
-      )}
+     {/* ========== Modal تعديل الفاتورة ========== */}
+{editingInvoice && (
+  <PurchaseInvoiceForm
+    key={editingInvoice.id} // مهم جداً لإعادة تحميل المكون
+    isOpen={showEditInvoiceForm}
+    onClose={() => {
+      setShowEditInvoiceForm(false);
+      setEditingInvoice(null);
+    }}
+    onSave={() => {
+      refetchAll();
+      setShowEditInvoiceForm(false);
+      setEditingInvoice(null);
+    }}
+    onSaveAndNew={() => {
+      refetchAll();
+    }}
+    invoiceToEdit={editingInvoice}
+  />
+)}
 
       {/* Modals */}
       <SupplierForm

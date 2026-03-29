@@ -20,7 +20,7 @@ export const useSuppliers = (enabled: boolean = true) => {
   });
 };
 
-export const useBranches = (enabled: boolean = true) => {
+export const useBranches = (isOpen : boolean = true) => {
   return useQuery({
     queryKey: ['branches-active'],
     queryFn: async () => {
@@ -33,11 +33,11 @@ export const useBranches = (enabled: boolean = true) => {
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-    enabled
+     enabled: isOpen,
   });
 };
 
-export const useWarehouses = (branchId: string | null, enabled: boolean = true) => {
+export const useWarehouses = (branchId: string | null, isOpen : boolean = true) => {
   return useQuery({
     queryKey: ['warehouses-active', branchId],
     queryFn: async () => {
@@ -53,7 +53,7 @@ export const useWarehouses = (branchId: string | null, enabled: boolean = true) 
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-    enabled: enabled && !!branchId
+    enabled: isOpen  && !!branchId
   });
 };
 
@@ -91,7 +91,7 @@ export const useTaxes = (enabled: boolean = true) => {
   });
 };
 
-export const useTreasuries = (branchId: string | null, enabled: boolean = true) => {
+export const useTreasuries = (branchId: string | null, isOpen : boolean = true) => {
   return useQuery({
     queryKey: ['treasury', branchId],
     queryFn: async () => {
@@ -107,7 +107,7 @@ export const useTreasuries = (branchId: string | null, enabled: boolean = true) 
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-    enabled: enabled && !!branchId
+    enabled: isOpen  && !!branchId
   });
 };
 
