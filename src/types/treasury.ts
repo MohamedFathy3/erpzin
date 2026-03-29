@@ -13,7 +13,9 @@ export interface TreasuryFormData {
     name: string;
     code: string;
     branch_id: string;
-    currencies: TreasuryCurrency[];
+    currency: string;
+    balance: number;
+    is_main: boolean;
     notes: string;
 }
 
@@ -26,12 +28,22 @@ export interface Treasury {
         id: number;
         name: string;
     };
-    currencies: TreasuryCurrency[];
+    currency: string;
+    balance: number;
     is_main: boolean;
     notes: string | null;
     created_at: string;
     updated_at: string;
     total_balance: number;
+}
+
+export interface TreasuryMeta {
+    current_page: number;
+    last_page: number;
+    from: number;
+    to: number;
+    total: number;
+    per_page: number;
 }
 
 export interface Branch {
@@ -59,20 +71,8 @@ export interface Currency {
 export interface TreasuryResponse {
     data: Treasury[];
     links: Record<string, string>;
-    meta: Record<string, unknown>;
+    meta: TreasuryMeta;
     result: string;
     message: string;
     status: number;
 }
-
-// Response types
-export interface TreasuryResponse {
-    data: Treasury[];
-    links: Record<string, string>;
-    meta: Record<string, unknown>;
-    result: string;
-    message: string;
-    status: number;
-}
-
-
