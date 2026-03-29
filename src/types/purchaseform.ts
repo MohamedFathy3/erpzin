@@ -7,6 +7,7 @@ export interface InvoiceItem {
   product_sku: string;
   size_name?: string;
   color_name?: string;
+  stock: number;
   quantity: number;
   unit_cost: number;
   discount_percent: number;
@@ -43,6 +44,7 @@ export interface PurchaseInvoiceItemPayload {
   tax: number;
   product_unit_id?: number | null;
   color_id?: number | null;
+  store:number,
 }
 
 export interface Supplier {

@@ -113,20 +113,27 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                 {language === 'ar' ? 'الألوان المتاحة' : 'Available Colors'}
               </h4>
               <div className="flex flex-wrap gap-2">
-                {selectedUnit.colors.map((color) => (
-                  <button
-                    key={color.id}
-                    onClick={() => handleColorSelect(color)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-md text-sm transition-all",
-                      selectedColor?.id === color.id
-                        ? "bg-primary text-white"
-                        : "bg-muted hover:bg-muted/80 border border-border"
-                    )}
-                  >
-                    {color.color}
-                  </button>
-                ))}
+                {selectedUnit.colors.map((color) => {
+                  const isLowStock = color.stock <= 5;
+                  const isOutOfStock = color.stock === 0;
+                  
+                  return (
+                    <button
+                      key={color.id}
+                      onClick={() => handleColorSelect(color)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
+                        selectedColor?.id === color.id
+                          ? "bg-primary text-white"
+                          : "border border-border hover:bg-muted/80",
+                      )}
+                      title={isOutOfStock ? "نفد المخزون" : `المخزون: ${color.stock}`}
+                    >
+                      <span>{color.color}</span>
+                      <span className="text-xs font-mono">({color.stock})</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -144,8 +151,16 @@ const PurchaseVariantSelector: React.FC<PurchaseVariantSelectorProps> = ({
                 </span>
               </div>
               {selectedColor && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  {language === 'ar' ? 'اللون:' : 'Color:'} {selectedColor.color}
+                <div className="text-xs mt-1 space-y-0.5">
+                  <div className="text-muted-foreground">
+                    {language === 'ar' ? 'اللون:' : 'Color:'} {selectedColor.color}
+                  </div>
+                  <div className={cn(
+                    "text-xs font-mono",
+                    selectedColor.stock <= 5 ? "text-destructive font-bold" : "text-muted-foreground"
+                  )}>
+                    {language === 'ar' ? `المخزون: ${selectedColor.stock}` : `Stock: ${selectedColor.stock}`}
+                  </div>
                 </div>
               )}
             </div>

@@ -159,20 +159,20 @@ class PurchaseInvoiceService extends BaseService<PurchaseInvoice> {
     /**
      * Create new invoice
      */
-    async createInvoice(data: Partial<PurchaseInvoice>): Promise<PurchaseInvoice> {
-        try {
-            const response = await api.post('/purchases-invoices/create', data);
+    // async createInvoice(data: Partial<PurchaseInvoice>): Promise<PurchaseInvoice> {
+    //     try {
+    //         const response = await api.post('/purchases-invoices/create', data);
             
-            if (response.data.result === 'Success' || response.data.result === 'success') {
-                return response.data.data;
-            }
+    //         if (response.data.result === 'Success' || response.data.result === 'success') {
+    //             return response.data.data;
+    //         }
             
-            throw new Error(response.data.message || 'Failed to create invoice');
-        } catch (error) {
-            console.error('Error creating invoice:', error);
-            throw error;
-        }
-    }
+    //         throw new Error(response.data.message || 'Failed to create invoice');
+    //     } catch (error) {
+    //         console.error('Error creating invoice:', error);
+    //         throw error;
+    //     }
+    // }
 
     /**
      * Update invoice

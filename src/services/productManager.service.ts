@@ -40,15 +40,18 @@ class ProductManager {
     product: Product,
     language: string,
     unitId?: number,
-    colorId?: number
+    colorId?: number,
+    stockOverride?: number
   ): InvoiceItem {
     const selectedUnit = unitId 
       ? product.units?.find(u => u.id === unitId)
       : product.units?.[0];
     
-    const selectedColor = colorId && selectedUnit?.colors
+  const selectedColor = colorId && selectedUnit?.colors
       ? selectedUnit.colors.find(c => c.id === colorId)
       : null;
+
+    const itemStock = stockOverride ?? selectedColor?.stock ?? (selectedUnit ? 0 : (product.stock ?? 0));
     
     const unitCost = selectedUnit 
       ? Number(selectedUnit.cost_price) 
@@ -69,7 +72,8 @@ class ProductManager {
       product_unit_id: selectedUnit?.id,
       color_id: selectedColor?.id,
       size_name: selectedUnit?.unit_name,
-      color_name: selectedColor?.color
+      color_name: selectedColor?.color,
+      stock: selectedColor?.stock ?? selectedUnit ? 0 : (product.stock ?? 0)
     };
   }
   

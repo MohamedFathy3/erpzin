@@ -31,6 +31,15 @@ export class PurchaseInvoiceValidator {
       errors.items = language === 'ar' ? 'يرجى إضافة منتجات' : 'Please add products';
     }
     
+    // Removed stock validation for external purchases (always allow adding to inventory)
+    // const invalidStockItems = items.filter(item => item.quantity > item.stock);
+    // if (invalidStockItems.length > 0) {
+    //   errors.items = language === 'ar' 
+    //     ? `بعض العناصر تتجاوز المخزون المتاح (${invalidStockItems.length} عنصر)`
+    //     : `Some items exceed available stock (${invalidStockItems.length} items)`;
+    // }
+
+    
     if (data.payment_method === 'cash' && data.paid_amount > 0 && !data.treasury_id) {
       errors.treasury_id = language === 'ar' ? 'يرجى اختيار الخزينة' : 'Please select treasury';
     }

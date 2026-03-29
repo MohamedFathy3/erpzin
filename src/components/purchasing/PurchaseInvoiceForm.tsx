@@ -146,6 +146,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       product_sku: item.product_sku,
       size_name: item.variant_details?.size,
       color_name: item.variant_details?.color,
+      stock:item.stock,
       quantity: item.quantity,
       unit_cost: item.price,
       discount_percent: item.discount,
@@ -174,7 +175,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   };
 
-  const addProduct = (product: Product, unitId?: number, colorId?: number) => {
+  const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
     const existingIndex = productManager.checkDuplicateProduct(items, product.id);
     
     if (existingIndex >= 0) {
@@ -185,7 +186,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         description: language === 'ar' ? 'تم زيادة الكمية' : 'Quantity increased'
       });
     } else {
-      const newItem = productManager.createItemFromProduct(product, language, unitId, colorId);
+      const newItem = productManager.createItemFromProduct(product, language, unitId, colorId, stockOverride);
       setItems([...items, newItem]);
       toast({
         title: language === 'ar' ? 'تمت الإضافة' : 'Added',
@@ -204,10 +205,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     color_name?: string;
     product_unit_id?: number;
     color_id?: number;
+    stock?:number,
   }) => {
     const product = products.find(p => p.id === Number(variant.product_id));
     if (product) {
-      addProduct(product, variant.product_unit_id, variant.color_id);
+      addProduct(product!, variant.product_unit_id, variant.color_id, variant.stock);
     }
     setVariantProduct(null);
   };
@@ -217,6 +219,18 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     
     switch (field) {
       case 'quantity':
+        // Removed stock blocking for external purchases
+        // if (value > newItems[index].stock) {
+        //   toast({
+        //     title: language === 'ar' ? 'تحذير المخزون' : 'Stock Warning',
+        //     description: language === 'ar' 
+        //       ? `المخزون المتاح لهذا اللون: ${newItems[index].stock}`
+        //       : `Available stock for this color: ${newItems[index].stock}`,
+        //     variant: "destructive"
+        //   });
+        //   return;
+        // }
+
         newItems = productManager.updateItemQuantity(newItems, index, value);
         break;
       case 'unit_cost':
@@ -437,16 +451,17 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-muted/30">
-                        <TableHead className="w-8 py-2 text-xs">#</TableHead>
-                        <TableHead className="py-2 text-xs">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
-                        <TableHead className="w-20 py-2 text-xs text-center">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
-                        <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'خصم%' : 'Disc%'}</TableHead>
-                        <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'ضريبة%' : 'Tax%'}</TableHead>
-                        <TableHead className="w-20 py-2 text-xs text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
-                        <TableHead className="w-8 py-2"></TableHead>
-                      </TableRow>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="w-8 py-2 text-xs">#</TableHead>
+                          <TableHead className="py-2 text-xs">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'المخزون' : 'Stock'}</TableHead>
+                          <TableHead className="w-16 py-2 text-xs text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                          <TableHead className="w-20 py-2 text-xs text-center">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                          <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'خصم%' : 'Disc%'}</TableHead>
+                          <TableHead className="w-14 py-2 text-xs text-center">{language === 'ar' ? 'ضريبة%' : 'Tax%'}</TableHead>
+                          <TableHead className="w-20 py-2 text-xs text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                          <TableHead className="w-8 py-2"></TableHead>
+                        </TableRow>
                     </TableHeader>
                     <TableBody>
                       {items.length === 0 ? (
@@ -472,12 +487,22 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                               </div>
                             </TableCell>
                             <TableCell className="py-1.5 text-center">
+                              <div className={cn(
+                                "text-xs font-mono px-1 py-0.5 rounded",
+                                item.stock === 0 ? "bg-destructive text-destructive" :
+                                item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
+                                "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                              )}>
+                                {item.stock}
+                              </div> {/* Removed quantity comparison for purchases; low stock info only */}
+                            </TableCell>
+                            <TableCell className="py-1.5 text-center">
                               <Input
                                 type="number"
                                 min="1"
+                                max={99999} // Removed stock limit for purchases
                                 value={item.quantity}
                                 onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                                className="w-14 h-7 text-xs text-center mx-auto"
                                 disabled={disabled}
                               />
                             </TableCell>
