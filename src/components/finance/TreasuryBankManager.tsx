@@ -43,13 +43,14 @@ interface TreasuryBankManagerProps {
   language: string;
 }
 
-interface ApiError {
+type ApiError = {
   response?: {
     data?: {
-      message: string;
+      message?: string;
     };
   };
-}
+  message?: string | undefined;
+};
 
 // TreasuryResponse type moved to src/types/treasury.ts
 
@@ -68,15 +69,15 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
-  // Treasury Form State
-  const [treasuryForm, setTreasuryForm] = useState({
+  const [treasuryForm, setTreasuryForm] = useState<TreasuryFormData>({
     name: '',
     code: '',
     branch_id: '',
-    currencies: [] as { currency_id: number; balance: number; is_main: boolean }[],
+    currency: '',
+    balance: 0,
+    is_main: false,
     notes: ''
   });
-
   // Bank Form State
   const [bankForm, setBankForm] = useState({
     name: '',
@@ -114,12 +115,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     notes: ''
   });
 
-  // Currency selector modal
-  const [showCurrencySelector, setShowCurrencySelector] = useState(false);
-  const [tempCurrency, setTempCurrency] = useState<{ currency_id: number; balance: number }>({
-    currency_id: 0,
-    balance: 0
-  });
+
 
   // ========== Fetch Data ==========
   const { data: currenciesData, isLoading: loadingCurrencies } = useQuery({
@@ -171,12 +167,12 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
 
   // ========== Mutations ==========
   const updateTreasuryColumnMutation = useMutation({
-    mutationFn: ({ id, column, value }) => treasuryService.updateTreasuryColumn(id, column, value),
+    mutationFn: ({ id, column, value }: { id: number; column: string; value: unknown }) => treasuryService.updateTreasuryColumn(id, column, value),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['treasuries'] });
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message);
+    onError: (error: ApiError) => {
+      toast.error(error.response?.data?.message || 'خطأ غير معروف');
     }
   });
 
@@ -191,7 +187,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       queryClient.invalidateQueries({ queryKey: ['banks'] });
     },
     onError: (error: ApiError) => {
-      toast.error(error.response?.data?.message || error.message || 'خطأ غير معروف');
+      toast.error(error.response?.data?.message || 'خطأ غير معروف');
     }
   });
 
@@ -233,7 +229,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       toast.success(language === 'ar' ? 'تم حذف الخزينة' : 'Treasury deleted');
     },
     onError: (error: ApiError) => {
-      toast.error(error.response?.data?.message || error.message || 'خطأ غير معروف');
+      toast.error(error.response?.data?.message || 'خطأ غير معروف');
     }
   });
 
@@ -241,22 +237,26 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   const createBankMutation = useMutation({
     mutationFn: (data: typeof bankForm) => bankService.createBank({
       ...data,
-      branch_id: data.branch_id ? parseInt(data.branch_id) : null,
-      balance: parseFloat(data.balance || '0')
-    } as Partial<Bank>),
+      branch_id: data.branch_id ? parseInt(data.branch_id) || null : null,
+      balance: parseFloat(data.balance || '0'),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
       toast.success(language === 'ar' ? 'تم إضافة البنك بنجاح' : 'Bank added successfully');
       handleCloseBankForm();
     },
     onError: (error: ApiError) => {
-      toast.error(error.response?.data?.message || error.message || 'خطأ غير معروف');
+      toast.error(error.response?.data?.message || 'خطأ غير معروف');
     }
   });
 
   const updateBankMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: typeof bankForm }) =>
-      bankService.updateBank(id, data as Partial<Bank>),  // ← بعّت data مش {}
+      bankService.updateBank(id, {
+        ...data,
+        branch_id: data.branch_id ? Number(data.branch_id) : undefined,
+        balance: data.balance ? Number(data.balance) : undefined
+      } as Partial<Bank>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
       toast.success(language === 'ar' ? 'تم تحديث البنك بنجاح' : 'Bank updated successfully');
@@ -323,7 +323,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   // Transfer mutation
   const transferMutation = useMutation({
     mutationFn: async (data: typeof transferForm) => {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         type: data.type,
         amount: parseFloat(data.amount),
         currency: data.currency,
@@ -367,36 +367,11 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
 
       const newMainStatus = !treasury.is_main;
 
-      // لو بنغير main من treasury
-      if (treasury.currencies && treasury.currencies.length > 0) {
-        // نحدث أول عملة عشان تبقى main أو لا
-        const updatedCurrencies = treasury.currencies.map((curr, index) => ({
-          ...curr,
-          is_main: index === 0 ? newMainStatus : false
-        }));
-
-        await updateTreasuryMutation.mutateAsync({
-          id: treasury.id,
-          data: {
-            name: treasury.name,
-            code: treasury.code,
-            branch_id: treasury.branch_id.toString(),
-            currencies: updatedCurrencies.map(c => ({
-              currency_id: c.currency_id,
-              balance: c.balance,
-              is_main: c.is_main
-            })),
-            notes: treasury.notes
-          }
-        });
-      } else {
-        await updateTreasuryColumnMutation.mutateAsync({
-          id: treasury.id,
-          column: 'is_main',
-          value: newMainStatus
-        });
-      }
-
+      await updateTreasuryColumnMutation.mutateAsync({
+        id: treasury.id,
+        column: 'is_main',
+        value: !treasury.is_main
+      });
       toast.success(
         language === 'ar'
           ? newMainStatus ? 'تم تعيين الخزينة كرئيسية' : 'تم إلغاء تعيين الخزينة كرئيسية'
@@ -488,7 +463,9 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       name: '',
       code: '',
       branch_id: '',
-      currencies: [],
+      currency: '',
+      balance: 0,
+      is_main: false,
       notes: ''
     });
   };
@@ -539,19 +516,13 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
 
   const handleEditTreasury = (treasury: Treasury) => {
     setEditingItem(treasury);
-
-    // تحويل العملات من شكل API لشكل الفورم
-    const currencies = treasury.currencies?.map(c => ({
-      currency_id: c.currency_id,
-      balance: c.balance,
-      is_main: c.is_main
-    })) || [];
-
     setTreasuryForm({
       name: treasury.name,
       code: treasury.code || '',
       branch_id: treasury.branch_id?.toString() || '',
-      currencies: currencies,
+      currency: treasury.currency || '',
+      balance: treasury.balance || 0,
+      is_main: treasury.is_main || false,
       notes: treasury.notes || ''
     });
     setShowTreasuryForm(true);
@@ -575,61 +546,45 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     });
     setShowBankForm(true);
   };
+  // const handleAddCurrency = () => {
+  //   if (!tempCurrency.currency_id) {
+  //     toast.error(language === 'ar' ? 'يرجى اختيار العملة' : 'Please select currency');
+  //     return;
+  //   }
 
-  const handleAddCurrency = () => {
-    if (!tempCurrency.currency_id) {
-      toast.error(language === 'ar' ? 'يرجى اختيار العملة' : 'Please select currency');
-      return;
-    }
+  //   setTreasuryForm(prev => ({
+  //     ...prev,
+  //     currency: tempCurrency.currency_code,  // ✅ "EGP"
+  //     balance: tempCurrency.balance,
+  //     is_main: true
+  //   }));
 
-    // التأكد من عدم تكرار العملة
-    const exists = treasuryForm.currencies.some(c => c.currency_id === tempCurrency.currency_id);
-    if (exists) {
-      toast.error(language === 'ar' ? 'العملة موجودة بالفعل' : 'Currency already exists');
-      return;
-    }
+  //   setTempCurrency({ currency_id: 0, currency_code: '', balance: 0 });
+  //   setShowCurrencySelector(false);
+  // };
 
-    const newCurrencies = [
-      ...treasuryForm.currencies,
-      {
-        currency_id: tempCurrency.currency_id,
-        balance: tempCurrency.balance,
-        is_main: treasuryForm.currencies.length === 0 // أول عملة تكون main
-      }
-    ];
 
-    setTreasuryForm(prev => ({ ...prev, currencies: newCurrencies }));
-    setTempCurrency({ currency_id: 0, balance: 0 });
-    setShowCurrencySelector(false);
-  };
-
-  const handleRemoveCurrency = (currencyId: number) => {
-    const newCurrencies = treasuryForm.currencies.filter(c => c.currency_id !== currencyId);
-
-    // لو شلنا العملة الرئيسية، نخلي أول وحدة main
-    if (newCurrencies.length > 0 && !newCurrencies.some(c => c.is_main)) {
-      newCurrencies[0].is_main = true;
-    }
-
-    setTreasuryForm(prev => ({ ...prev, currencies: newCurrencies }));
-  };
-
-  const handleCurrencyBalanceChange = (currencyId: number, balance: number) => {
-    const newCurrencies = treasuryForm.currencies.map(c =>
-      c.currency_id === currencyId ? { ...c, balance } : c
-    );
-    setTreasuryForm(prev => ({ ...prev, currencies: newCurrencies }));
-  };
-
-  const handleTreasurySubmit = () => {
-    if (!treasuryForm.name || !treasuryForm.branch_id) {
+  const handleTreasurySubmit = async () => {
+    if (!treasuryForm.name || !treasuryForm.branch_id || !treasuryForm.currency) {
       toast.error(language === 'ar' ? 'يرجى ملء الحقول المطلوبة' : 'Please fill required fields');
       return;
     }
 
-    if (treasuryForm.currencies.length === 0) {
-      toast.error(language === 'ar' ? 'يرجى إضافة عملة واحدة على الأقل' : 'Please add at least one currency');
-      return;
+    if (treasuryForm.is_main) {
+      // Unset all other treasuries as main first
+      try {
+        await Promise.all(
+          treasuries.filter(t => t.id !== (editingItem?.id || 0) && t.is_main).map(t =>
+            updateTreasuryColumnMutation.mutateAsync({
+              id: t.id,
+              column: 'is_main',
+              value: false
+            })
+          )
+        );
+      } catch (error) {
+        console.error('Error unsetting other main treasuries:', error);
+      }
     }
 
     if (editingItem) {
@@ -857,24 +812,21 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                           )}
                         </TableCell>
                         <TableCell>{treasury.branch?.name || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            {treasury.currencies?.map((curr) => (
-                              <div key={curr.currency_id} className="flex items-center gap-2 text-xs">
-                                <Badge variant="outline" className="gap-1">
-                                  <Coins size={10} />
-                                  {getCurrencyName(curr.currency_id)}
-                                </Badge>
-                                <span className="font-bold text-amber-600">
-                                  {curr.balance.toLocaleString()}
-                                </span>
-                                {curr.is_main && (
-                                  <Star size={10} className="text-amber-500" />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Badge variant="outline" className="gap-1">
+                            <Coins size={10} />
+                            {treasury.currency || '-'}
+                          </Badge>
+                          <span className="font-bold text-amber-600">
+                            {treasury.balance?.toLocaleString() || '0'}
+                          </span>
+                          {treasury.is_main && (
+                            <Star size={10} className="text-amber-500" />
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          Total: {treasury.total_balance?.toLocaleString() || '0'}
+                        </Badge>
                         <TableCell className="font-bold text-green-600">
                           {treasury.total_balance?.toLocaleString() || 0}
                         </TableCell>
@@ -1139,7 +1091,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 </Table>
               </ScrollArea>
             </CardContent>
-            {treasuryMovementsMeta.last_page > 1 && (
+            {treasuryMovementsMeta.last_page as number > 1 && (
               <CardContent className="border-t py-4">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
@@ -1159,12 +1111,12 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                       {language === 'ar' ? 'السابق' : 'Previous'}
                     </Button>
                     <span className="text-sm">
-                      {currentPage} / {treasuryMovementsMeta.last_page}
+                      {currentPage} / {treasuryMovementsMeta.last_page as number}
                     </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(treasuryMovementsMeta.last_page, prev + 1))}
+                      onClick={() => setCurrentPage(prev => Math.min(treasuryMovementsMeta.last_page as number, prev + 1))}
                       disabled={currentPage === treasuryMovementsMeta.last_page}
                     >
                       {language === 'ar' ? 'التالي' : 'Next'}
@@ -1337,79 +1289,38 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               </Select>
             </div>
 
-            {/* العملات المتعددة */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">
-                  {language === 'ar' ? 'العملات' : 'Currencies'} *
-                </Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCurrencySelector(true)}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
+                <Select
+                  value={treasuryForm.currency}
+                  onValueChange={(value) => setTreasuryForm(prev => ({ ...prev, currency: value }))}
                 >
-                  <Plus size={14} className="me-1" />
-                  {language === 'ar' ? 'إضافة عملة' : 'Add Currency'}
-                </Button>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency: Currency) => (
+                      <SelectItem key={currency.id} value={currency.code}>
+                        {currency.code} - {currency.name} ({currency.symbol})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              {treasuryForm.currencies.length === 0 ? (
-                <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/30">
-                  <Coins className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'لم تضف أي عملة بعد' : 'No currencies added yet'}
-                  </p>
-                  <Button
-                    variant="link"
-                    onClick={() => setShowCurrencySelector(true)}
-                    className="mt-2"
-                  >
-                    {language === 'ar' ? 'أضف عملة الآن' : 'Add currency now'}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {treasuryForm.currencies.map((curr, index) => (
-                    <div key={curr.currency_id} className="flex items-center gap-2 p-3 border rounded-lg bg-muted/20">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="bg-primary/5">
-                            {getCurrencyName(curr.currency_id)}
-                          </Badge>
-                          {curr.is_main && (
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                              <Star size={10} className="me-1" />
-                              {language === 'ar' ? 'رئيسية' : 'Main'}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            value={curr.balance}
-                            onChange={(e) => handleCurrencyBalanceChange(curr.currency_id, parseFloat(e.target.value) || 0)}
-                            className="w-40 h-8 text-left"
-                            min="0"
-                            step="0.01"
-                          />
-                          <span className="text-sm text-muted-foreground">
-                            {language === 'ar' ? 'رصيد' : 'Balance'}
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleRemoveCurrency(curr.currency_id)}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الرصيد' : 'Balance'}</Label>
+                <Input
+                  type="number"
+                  value={treasuryForm.balance}
+                  onChange={(e) => setTreasuryForm(prev => ({ ...prev, balance: parseFloat(e.target.value) || 0 }))}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
             </div>
+
 
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
@@ -1419,6 +1330,30 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                 placeholder={language === 'ar' ? 'أضف ملاحظات...' : 'Add notes...'}
               />
             </div>
+            <div className="flex items-center gap-3 py-3">
+              <Label className="text-sm font-medium flex-shrink-0">{language === 'ar' ? 'خزينة رئيسية' : 'Main Treasury'}</Label>
+              <button
+                type="button"
+                className={cn(
+                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ring-offset-background",
+                  treasuryForm.is_main
+                    ? "bg-green-600 dark:bg-green-700"
+                    : "bg-gray-200 dark:bg-gray-800"
+                )}
+                onClick={() => setTreasuryForm(prev => ({ ...prev, is_main: !prev.is_main }))}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-lg ring-0 transition-transform",
+                    treasuryForm.is_main ? "translate-x-6" : "translate-x-1"
+                  )}
+                />
+              </button>
+              <span className="text-sm text-muted-foreground">
+                {treasuryForm.is_main ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')}
+              </span>
+            </div>
+
           </div>
 
           <DialogFooter>
@@ -1432,65 +1367,13 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               }
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </DialogContent >
+      </Dialog >
 
-      {/* Currency Selector Modal */}
-      <Dialog open={showCurrencySelector} onOpenChange={setShowCurrencySelector}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {language === 'ar' ? 'إضافة عملة' : 'Add Currency'}
-            </DialogTitle>
-          </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'العملة' : 'Currency'} *</Label>
-              <Select
-                value={tempCurrency.currency_id.toString()}
-                onValueChange={(v) => setTempCurrency(prev => ({ ...prev, currency_id: parseInt(v) }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies
-                    .filter((c: Currency) => !treasuryForm.currencies.some(tc => tc.currency_id === c.id))
-                    .map((c: Currency) => (
-                      <SelectItem key={c.id} value={c.id.toString()}>
-                        {c.code} - {c.name} ({c.symbol})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'الرصيد الافتتاحي' : 'Opening Balance'}</Label>
-              <Input
-                type="number"
-                value={tempCurrency.balance}
-                onChange={(e) => setTempCurrency(prev => ({ ...prev, balance: parseFloat(e.target.value) || 0 }))}
-                min="0"
-                step="0.01"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCurrencySelector(false)}>
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </Button>
-            <Button onClick={handleAddCurrency}>
-              {language === 'ar' ? 'إضافة' : 'Add'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Bank Form Dialog (زي ما هو) */}
-      <Dialog open={showBankForm} onOpenChange={handleCloseBankForm}>
+      < Dialog open={showBankForm} onOpenChange={handleCloseBankForm} >
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -1597,10 +1480,10 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Transaction Form Dialog (زي ما هو) */}
-      <Dialog open={showTransactionForm} onOpenChange={handleCloseTransactionForm}>
+      < Dialog open={showTransactionForm} onOpenChange={handleCloseTransactionForm} >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -1615,11 +1498,14 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <Select value={transactionForm.entity_id} onValueChange={(v) => setTransactionForm(prev => ({ ...prev, entity_id: v }))}>
                 <SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر...' : 'Select...'} /></SelectTrigger>
                 <SelectContent>
-                  {(transactionType === 'treasury' ? treasuries : banks).map((item: any) => (
-                    <SelectItem key={item.id} value={item.id.toString()}>
-                      {item.name} ({Number(item.balance || item.total_balance).toLocaleString()})
-                    </SelectItem>
-                  ))}
+                  {(transactionType === 'treasury' ? treasuries : banks).map((item: Treasury | Bank) => {
+                    const balance = 'total_balance' in item ? (item as Treasury).total_balance : (item as Bank).balance;
+                    return (
+                      <SelectItem key={item.id} value={item.id.toString()}>
+                        {item.name} ({Number(balance || 0).toLocaleString()})
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -1676,10 +1562,10 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Transfer Form Dialog (زي ما هو) */}
-      <Dialog open={showTransferForm} onOpenChange={handleCloseTransferForm}>
+      < Dialog open={showTransferForm} onOpenChange={handleCloseTransferForm} >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{language === 'ar' ? 'تحويل أموال' : 'Transfer Funds'}</DialogTitle>
@@ -1891,8 +1777,8 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    </div>
+      </Dialog >
+    </div >
   );
 };
 
