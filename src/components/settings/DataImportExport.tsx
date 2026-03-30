@@ -84,6 +84,7 @@ const DataImportExport: React.FC = () => {
   const [showCustomerImportDialog, setShowCustomerImportDialog] = useState(false);
   const [customerImportProgress, setCustomerImportProgress] = useState(0);
   const [isImportingCustomers, setIsImportingCustomers] = useState(false);
+const [showBalanceForm, setShowBalanceForm] = useState(false);
 
   // Supplier import state
   const supplierFileRef = useRef<HTMLInputElement>(null);
@@ -99,7 +100,7 @@ const DataImportExport: React.FC = () => {
     queryKey: ['customers-export'],
     queryFn: async () => {
       try {
-        const response = await api.get('/customers');
+        const response = await api.post('/customer/index');
         return response.data?.data || [];
       } catch (error) {
         console.error('Error fetching customers:', error);
@@ -122,6 +123,7 @@ const DataImportExport: React.FC = () => {
   });
 
   // Export functions
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exportToExcel = (data: any[], fileName: string, sheetName: string) => {
     setIsExporting(fileName);
     try {
@@ -186,6 +188,7 @@ const DataImportExport: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
         const validData: CustomerImportRow[] = [];
@@ -251,6 +254,7 @@ const DataImportExport: React.FC = () => {
       resetCustomerImport();
       setShowCustomerImportDialog(false);
     },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast({ 
         title: language === 'ar' ? 'خطأ في استيراد العملاء' : 'Error importing customers', 
@@ -305,6 +309,7 @@ const DataImportExport: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
         const validData: SupplierImportRow[] = [];
@@ -371,6 +376,7 @@ const DataImportExport: React.FC = () => {
       resetSupplierImport();
       setShowSupplierImportDialog(false);
     },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast({ 
         title: language === 'ar' ? 'خطأ في استيراد الموردين' : 'Error importing suppliers', 

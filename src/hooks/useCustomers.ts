@@ -21,13 +21,14 @@ export const useCustomers = (language: string, filters?: CustomerFilters, search
     queryKey: ['customers', filters, searchQuery],
     queryFn: async () => {
       try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 100,
           paginate: false
         };
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const apiFilters: any = {};
 
         if (searchQuery) {
@@ -86,6 +87,7 @@ export const useCustomers = (language: string, filters?: CustomerFilters, search
       );
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Error creating customer:', error);
       toast.error(
@@ -113,6 +115,7 @@ export const useCustomers = (language: string, filters?: CustomerFilters, search
       );
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Error updating customer:', error);
       toast.error(
@@ -134,6 +137,7 @@ export const useCustomers = (language: string, filters?: CustomerFilters, search
       );
       queryClient.invalidateQueries({ queryKey: ['customers'] });
     },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       console.error('Error redeeming points:', error);
       toast.error(

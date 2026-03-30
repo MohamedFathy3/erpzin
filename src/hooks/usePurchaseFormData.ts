@@ -41,6 +41,7 @@ export const useWarehouses = (branchId: string | null, isOpen : boolean = true) 
   return useQuery({
     queryKey: ['warehouses-active', branchId],
     queryFn: async () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filters: any = { active: true };
       if (branchId) filters.branch_id = Number(branchId);
       
@@ -95,6 +96,7 @@ export const useTreasuries = (branchId: string | null, isOpen : boolean = true) 
   return useQuery({
     queryKey: ['treasury', branchId],
     queryFn: async () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filters: any = {};
       if (branchId) filters.branch_id = Number(branchId);
       

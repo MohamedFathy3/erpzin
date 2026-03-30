@@ -2,12 +2,13 @@
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ تأكد من استيراد useAuth فقط
 import { getAllowedPages } from '@/config/permissions';
 import { cn } from '@/lib/utils';
 import * as Icons from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
 import logoFull from '@/assets/logo-full.png';
+import { toast } from 'sonner'; // ✅ لإظهار رسالة عند تسجيل الخروج
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -36,6 +37,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, collapsed, onCli
 
 // دالة لجلب الأيقونة المناسبة
 const getIcon = (iconName: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const icons: Record<string, any> = {
     LayoutDashboard: Icons.LayoutDashboard,
     ShoppingCart: Icons.ShoppingCart,
@@ -61,26 +63,26 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
-  // ✅ هنا بنستخدم hooks في بداية المكون
-  const { t, direction, language } = useLanguage(); // ✅ language موجودة هنا
+  const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth(); // ✅ استخدم signOut من useAuth
 
   // جلب الصفحات المسموحة للمستخدم
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allowedPages = getAllowedPages(user?.role as any);
 
-  // ✅ تصفية وبناء عناصر القائمة
+  // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     return allowedPages
       .filter(page => page.id !== 'settings')
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
-        label: language === 'ar' ? page.labelAr : page.label, // ✅ هنا بنستخدم language
+        label: language === 'ar' ? page.labelAr : page.label,
       }));
   }, [allowedPages, language]);
 
-  // ✅ عناصر القائمة السفلية
+  // عناصر القائمة السفلية
   const bottomItems = React.useMemo(() => {
     const items = [];
     
@@ -96,11 +98,42 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     items.push({
       id: 'logout',
       icon: <Icons.LogOut size={20} />,
-      label: t('nav.logout'),
+      label: language === 'ar' ? 'تسجيل الخروج' : 'Logout',
     });
 
     return items;
-  }, [allowedPages, language, t]);
+  }, [allowedPages, language]);
+
+  // ✅ دالة معالجة تسجيل الخروج
+  const handleLogout = async () => {
+    try {
+      // إظهار رسالة تأكيد قبل تسجيل الخروج (اختياري)
+      const confirmLogout = window.confirm(
+        language === 'ar' 
+          ? 'هل أنت متأكد من تسجيل الخروج؟' 
+          : 'Are you sure you want to logout?'
+      );
+      
+      if (!confirmLogout) return;
+      
+      // إظهار رسالة جاري تسجيل الخروج
+      toast.info(
+        language === 'ar' ? 'جاري تسجيل الخروج...' : 'Logging out...'
+      );
+      
+      // استدعاء دالة تسجيل الخروج من الـ context
+      await signOut();
+      
+      // signOut ستقوم بإعادة التوجيه إلى /auth تلقائياً
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error(
+        language === 'ar' 
+          ? 'حدث خطأ أثناء تسجيل الخروج' 
+          : 'An error occurred while logging out'
+      );
+    }
+  };
 
   const CollapseIcon = direction === 'rtl' 
     ? (collapsed ? Icons.ChevronLeft : Icons.ChevronRight)
@@ -181,8 +214,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
               collapsed={collapsed}
               onClick={() => {
                 if (item.id === 'logout') {
-                  // تسجيل الخروج
-                  console.log('Logout clicked');
+                  handleLogout(); // ✅ استدعاء دالة تسجيل الخروج
                 } else {
                   onNavigate?.(item.id);
                 }

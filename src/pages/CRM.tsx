@@ -33,6 +33,7 @@ import {
   Trash2
 } from 'lucide-react';
 import api from '@/lib/api';
+import { Switch } from '@/components/ui/switch';
 
 
 interface LoyaltySettings {
@@ -270,6 +271,7 @@ const [editCustomer, setEditCustomer] = useState({
     queryKey: ['customers', customerFilters, searchQuery],
     queryFn: async () => {
       try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
@@ -278,6 +280,7 @@ const [editCustomer, setEditCustomer] = useState({
         };
 
         // إضافة الفلاتر
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const filters: any = {};
 
         if (searchQuery) {
@@ -510,7 +513,7 @@ const toggleCustomerStatusMutation = useMutation({
       active: isActive
     };
     console.log('📤 Toggling customer status:', id, payload);
-    const response = await api.post(`/customers/${id}/active`, payload);
+    const response = await api.put(`/customer/${id}/active`, payload);
     return response.data;
   },
   onSuccess: () => {
@@ -521,6 +524,7 @@ const toggleCustomerStatusMutation = useMutation({
     );
     queryClient.invalidateQueries({ queryKey: ['customers'] });
   },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError: (error: any) => {
     console.error('Error toggling customer status:', error);
     toast.error(
@@ -548,6 +552,7 @@ const deleteCustomerMutation = useMutation({
     queryClient.invalidateQueries({ queryKey: ['customers'] });
     setShowDeleteDialog(null);
   },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError: (error: any) => {
     console.error('Error deleting customer:', error);
     toast.error(
@@ -573,6 +578,7 @@ const handleConfirmDelete = () => {
 };
 
 const handleToggleStatus = (customer: Customer) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const currentStatus = (customer as any).active !== false; // true if active
   toggleCustomerStatusMutation.mutate({
     id: customer.id,
@@ -818,117 +824,113 @@ const handleToggleStatus = (customer: Customer) => {
                         <TableHead className="text-end">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {isLoading ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                              <p className="text-muted-foreground">{t.loading}</p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : filteredCustomers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            <Users className="mx-auto h-12 w-12 mb-4 opacity-20" />
-                            <p>{t.noCustomers}</p>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredCustomers.map((customer: Customer) => {
-                          const tier = getLoyaltyTier(customer.point || 0);
-                          return (
-                            <TableRow key={customer.id}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                    <span className="text-primary font-semibold">
-                                      {(language === 'ar' ? customer.name_ar || customer.name : customer.name).charAt(0)}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">
-                                      {language === 'ar' ? customer.name_ar || customer.name : customer.name}
-                                    </p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell dir="ltr">{customer.phone || '-'}</TableCell>
-                              <TableCell dir="ltr">{customer.address || '-'}</TableCell>
-                              <TableCell>{customer.email || '-'}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Star size={16} className="text-warning fill-warning" />
-                                  <span className="font-semibold">{customer.point || 0}</span>
-                                  <Badge className={`${tier.color} text-white text-xs flex items-center gap-1`}>
-                                    {tier.icon}
-                                    {tier.label}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {Number(customer.last_paid_amount || 0).toLocaleString()} YER
-                              </TableCell>
-                           
-                              
-<TableCell className="text-end">
-  <div className="flex items-center justify-end gap-2">
-    {/* زر تغيير الحالة */}
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => handleToggleStatus(customer)}
-      className="gap-1"
-      title={(customer as any).is_active !== false ? t.deactivate : t.activate}
-    >
-      {(customer as any).is_active !== false ? (
-        <CheckCircle size={14} className="text-success" />
-      ) : (
-        <XCircle size={14} className="text-destructive" />
-      )}
-      {(customer as any).is_active !== false ? t.active : t.inactive}
-    </Button>
-    
-    {/* زر التعديل */}
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => handleEditCustomer(customer)}
-      className="gap-1"
-    >
-      <Edit size={14} />
-      {language === 'ar' ? 'تعديل' : 'Edit'}
-    </Button>
-    
-    {/* زر استبدال النقاط */}
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => setShowRedeemPoints(customer.id)}
-      disabled={!customer.point || customer.point < 1}
-      className="gap-1"
-    >
-      <Gift size={14} />
-      {t.redeemPoints}
-    </Button>
-    
-    <Button
-      variant="destructive"
-      size="sm"
-      onClick={() => handleDeleteCustomer(customer)}
-      className="gap-1"
-    >
-      <Trash2 size={14} />
-      {t.delete}
-    </Button>
-  </div>
-</TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
+                  <TableBody>
+  {isLoading ? (
+    <TableRow>
+      <TableCell colSpan={7} className="text-center py-8">
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </TableCell>
+    </TableRow>
+  ) : filteredCustomers.length === 0 ? (
+    <TableRow>
+      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+        <Users className="mx-auto h-12 w-12 mb-4 opacity-20" />
+        <p>No customers found</p>
+      </TableCell>
+    </TableRow>
+  ) : (
+    filteredCustomers.map((customer: Customer) => {
+      const tier = getLoyaltyTier(customer.point || 0);
+      return (
+        <TableRow key={customer.id}>
+          <TableCell>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-primary font-semibold">
+                  {(language === 'ar' ? customer.name_ar || customer.name : customer.name).charAt(0)}
+                </span>
+              </div>
+              <div>
+                <p className="font-medium">
+                  {language === 'ar' ? customer.name_ar || customer.name : customer.name}
+                </p>
+              </div>
+            </div>
+          </TableCell>
+          <TableCell dir="ltr">{customer.phone || '-'}</TableCell>
+          <TableCell dir="ltr">{customer.address || '-'}</TableCell>
+          <TableCell>{customer.email || '-'}</TableCell>
+          <TableCell>
+            <div className="flex items-center gap-2">
+              <Star size={16} className="text-warning fill-warning" />
+              <span className="font-semibold">{customer.point || 0}</span>
+              <Badge className={`${tier.color} text-white text-xs flex items-center gap-1`}>
+                {tier.icon}
+                {tier.label}
+              </Badge>
+            </div>
+          </TableCell>
+          <TableCell>
+            {Number(customer.last_paid_amount || 0).toLocaleString()} YER
+          </TableCell>
+          <TableCell className="text-end">
+            <div className="flex items-center justify-end gap-2">
+              {/* Switch Active/Inactive */}
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={customer.active === true}
+                  onCheckedChange={() => handleToggleStatus(customer)}
+                  disabled={toggleCustomerStatusMutation.isPending}
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-500"
+                />
+                <span className={`text-xs font-medium ${customer.active === true ? 'text-green-600' : 'text-red-600'}`}>
+                  {customer.active === true ? 'active' : ' inactive'}
+                </span>
+              </div>
+
+              {/* Edit Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEditCustomer(customer)}
+                className="gap-1"
+              >
+                <Edit size={14} />
+                {language === 'ar' ? 'تعديل' : 'Edit'}
+              </Button>
+
+              {/* Redeem Points Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRedeemPoints(customer.id)}
+                disabled={!customer.point || customer.point < 1}
+                className="gap-1"
+              >
+                <Gift size={14} />
+                {t.redeemPoints}
+              </Button>
+
+              {/* Delete Button */}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDeleteCustomer(customer)}
+                className="gap-1"
+              >
+                <Trash2 size={14} />
+                {language === 'ar' ? 'حذف' : 'Delete'}
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      );
+    })
+  )}
+</TableBody>
                   </Table>
                 </div>
               </CardContent>

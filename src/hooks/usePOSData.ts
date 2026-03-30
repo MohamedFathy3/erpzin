@@ -96,6 +96,7 @@ export interface Product {
 // ========== Categories Hook مع Offline Support ==========
 export const useCategories = () => {
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [offlineCategories, setOfflineCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -127,7 +128,7 @@ export const useCategories = () => {
         });
         
         const categories = response.data?.data || response.data || [];
-        
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const formatted = categories.map((cat: any) => ({
           id: cat.id?.toString() || '',
           name: cat.name || '',
@@ -187,6 +188,7 @@ export const useCategories = () => {
 export const useProducts = (categoryId?: string | null) => {
   const { userBranch, currentBranch } = useApp();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [offlineProducts, setOfflineProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -219,6 +221,7 @@ export const useProducts = (categoryId?: string | null) => {
     queryKey: ['pos-products', categoryId, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
       try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {};
 
         const branchId = userBranch?.id || currentBranch?.id;
@@ -235,6 +238,7 @@ export const useProducts = (categoryId?: string | null) => {
         
         const products = response.data?.data || response.data || [];
         
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const formatted = products.map((prod: any) => ({
           id: prod.id?.toString() || '',
           name: prod.name || '',
@@ -327,6 +331,7 @@ export const useProductByBarcode = (barcode: string) => {
 
       // Online mode
       try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {};
 
         const branchId = userBranch?.id || currentBranch?.id;
