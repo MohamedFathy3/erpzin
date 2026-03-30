@@ -26,11 +26,14 @@ import {
   Search,
   RefreshCw,
   Filter,
-  X
+  X,
+  CheckCircle,
+  XCircle,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import api from '@/lib/api';
 
-// ========== أنواع البيانات ==========
 
 interface LoyaltySettings {
   id?: number;
@@ -53,6 +56,7 @@ interface Customer {
   total_purchases?: number;
   created_at?: string;
   updated_at?: string;
+    active?: boolean
 }
 
 const CRM = () => {
@@ -67,7 +71,16 @@ const CRM = () => {
   const [redeemAmount, setRedeemAmount] = useState('');
   const [customerFilters, setCustomerFilters] = useState<FilterValues>({});
   const [searchQuery, setSearchQuery] = useState('');
-
+const [showEditCustomer, setShowEditCustomer] = useState<Customer | null>(null);
+const [showDeleteDialog, setShowDeleteDialog] = useState<Customer | null>(null);
+const [isDeleting, setIsDeleting] = useState(false);
+const [editCustomer, setEditCustomer] = useState({
+  name: '',
+  name_ar: '',
+  phone: '',
+  email: '',
+  address: ''
+});
   // New customer form state
   const [newCustomer, setNewCustomer] = useState({
     name: '',
@@ -104,6 +117,18 @@ const CRM = () => {
       name: 'Name',
       nameAr: 'Name (Arabic)',
       phone: 'Phone',
+        delete: 'Delete',
+  deleteCustomer: 'Delete Customer',
+  deleteConfirmation: 'Are you sure you want to delete this customer?',
+  deleteWarning: 'This action cannot be undone.',
+  active: 'Active',
+  inactive: 'Inactive',
+  activate: 'Activate',
+  deactivate: 'Deactivate',
+  status: 'Status',
+  confirmDelete: 'Confirm Delete',
+  customerDeleted: 'Customer deleted successfully',
+  customerStatusChanged: 'Customer status changed successfully',
       email: 'Email',
       loyaltyPoints: 'Loyalty Points',
       totalPurchases: 'Total Purchases',
@@ -164,6 +189,18 @@ const CRM = () => {
       silver: 'فضي',
       gold: 'ذهبي',
       platinum: 'بلاتيني',
+       delete: 'حذف',
+  deleteCustomer: 'حذف العميل',
+  deleteConfirmation: 'هل أنت متأكد من حذف هذا العميل؟',
+  deleteWarning: 'هذا الإجراء لا يمكن التراجع عنه.',
+  active: 'نشط',
+  inactive: 'غير نشط',
+  activate: 'تفعيل',
+  deactivate: 'تعطيل',
+  status: 'الحالة',
+  confirmDelete: 'تأكيد الحذف',
+  customerDeleted: 'تم حذف العميل بنجاح',
+  customerStatusChanged: 'تم تغيير حالة العميل بنجاح',
       loyaltySettings: 'إعدادات الولاء',
       pointsPerCurrency: 'نقاط لكل 1000 ريال',
       pointsValuePercent: 'قيمة النقطة (%)',
@@ -393,7 +430,51 @@ const CRM = () => {
     }
   });
 
-  // ✅ 7. استبدال النقاط - PATCH /customer/{id}/redeem-points
+const updateCustomerMutation = useMutation({
+  mutationFn: async ({ id, data }: { id: string; data: any }) => {
+    const payload = {
+      name: data.name,
+      name_ar: data.name_ar || null,
+      phone: data.phone || null,
+      email: data.email || null,
+      address: data.address || null
+    };
+
+    console.log('📤 Updating customer:', id, payload);
+
+    const response = await api.patch(`/customer/${id}`, payload);
+    return response.data;
+  },
+  onSuccess: () => {
+    toast.success(
+      language === 'ar'
+        ? 'تم تحديث العميل بنجاح'
+        : 'Customer updated successfully'
+    );
+    queryClient.invalidateQueries({ queryKey: ['customers'] });
+    setShowEditCustomer(null);
+    setEditCustomer({ name: '', name_ar: '', phone: '', email: '', address: '' });
+  },
+  onError: (error: any) => {
+    console.error('❌ Error updating customer:', error);
+    toast.error(
+      language === 'ar'
+        ? 'حدث خطأ في تحديث العميل'
+        : 'Error updating customer'
+    );
+  }
+});
+const handleEditCustomer = (customer: Customer) => {
+  setEditCustomer({
+    name: customer.name,
+    name_ar: customer.name_ar || '',
+    phone: customer.phone || '',
+    email: customer.email || '',
+    address: customer.address || ''
+  });
+  setShowEditCustomer(customer);
+};
+
   const redeemPointsMutation = useMutation({
     mutationFn: async ({ customerId, points }: { customerId: string; points: number }) => {
       const payload = {
@@ -422,7 +503,82 @@ const CRM = () => {
   });
 
   // ========== Helper Functions ==========
+// ✅ 9. تغيير حالة العميل (Active/Inactive) - POST /customers/{id}/active
+const toggleCustomerStatusMutation = useMutation({
+  mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+    const payload = {
+      active: isActive
+    };
+    console.log('📤 Toggling customer status:', id, payload);
+    const response = await api.post(`/customers/${id}/active`, payload);
+    return response.data;
+  },
+  onSuccess: () => {
+    toast.success(
+      language === 'ar'
+        ? 'تم تغيير حالة العميل بنجاح'
+        : 'Customer status changed successfully'
+    );
+    queryClient.invalidateQueries({ queryKey: ['customers'] });
+  },
+  onError: (error: any) => {
+    console.error('Error toggling customer status:', error);
+    toast.error(
+      language === 'ar'
+        ? 'حدث خطأ في تغيير حالة العميل'
+        : 'Error changing customer status'
+    );
+  }
+});
 
+// ✅ 10. حذف عميل - POST /category/delete
+const deleteCustomerMutation = useMutation({
+  mutationFn: async (customerId: string) => {
+  
+    const response = await api.delete('/customer/delete', {
+        data: { items: [customerId] }    });
+    return response.data;
+  },
+  onSuccess: () => {
+    toast.success(
+      language === 'ar'
+        ? 'تم حذف العميل بنجاح'
+        : 'Customer deleted successfully'
+    );
+    queryClient.invalidateQueries({ queryKey: ['customers'] });
+    setShowDeleteDialog(null);
+  },
+  onError: (error: any) => {
+    console.error('Error deleting customer:', error);
+    toast.error(
+      language === 'ar'
+        ? 'حدث خطأ في حذف العميل'
+        : 'Error deleting customer'
+    );
+  }
+});
+
+
+
+// بعد الـ helper functions الموجودة، أضف:
+const handleDeleteCustomer = (customer: Customer) => {
+  setShowDeleteDialog(customer);
+  handleConfirmDelete()
+};
+
+const handleConfirmDelete = () => {
+  if (showDeleteDialog) {
+    deleteCustomerMutation.mutate(showDeleteDialog.id);
+  }
+};
+
+const handleToggleStatus = (customer: Customer) => {
+  const currentStatus = (customer as any).active !== false; // true if active
+  toggleCustomerStatusMutation.mutate({
+    id: customer.id,
+    isActive: !currentStatus
+  });
+};
   const getLoyaltyTier = (points: number) => {
     if (points >= loyaltySettings.platinum) return {
       label: language === 'ar' ? 'بلاتيني' : 'Platinum',
@@ -714,18 +870,60 @@ const CRM = () => {
                               <TableCell>
                                 {Number(customer.last_paid_amount || 0).toLocaleString()} YER
                               </TableCell>
-                              <TableCell className="text-end">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setShowRedeemPoints(customer.id)}
-                                  disabled={!customer.point || customer.point < 1}
-                                  className="gap-1"
-                                >
-                                  <Gift size={14} />
-                                  {t.redeemPoints}
-                                </Button>
-                              </TableCell>
+                           
+                              
+<TableCell className="text-end">
+  <div className="flex items-center justify-end gap-2">
+    {/* زر تغيير الحالة */}
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => handleToggleStatus(customer)}
+      className="gap-1"
+      title={(customer as any).is_active !== false ? t.deactivate : t.activate}
+    >
+      {(customer as any).is_active !== false ? (
+        <CheckCircle size={14} className="text-success" />
+      ) : (
+        <XCircle size={14} className="text-destructive" />
+      )}
+      {(customer as any).is_active !== false ? t.active : t.inactive}
+    </Button>
+    
+    {/* زر التعديل */}
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => handleEditCustomer(customer)}
+      className="gap-1"
+    >
+      <Edit size={14} />
+      {language === 'ar' ? 'تعديل' : 'Edit'}
+    </Button>
+    
+    {/* زر استبدال النقاط */}
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setShowRedeemPoints(customer.id)}
+      disabled={!customer.point || customer.point < 1}
+      className="gap-1"
+    >
+      <Gift size={14} />
+      {t.redeemPoints}
+    </Button>
+    
+    <Button
+      variant="destructive"
+      size="sm"
+      onClick={() => handleDeleteCustomer(customer)}
+      className="gap-1"
+    >
+      <Trash2 size={14} />
+      {t.delete}
+    </Button>
+  </div>
+</TableCell>
                             </TableRow>
                           );
                         })
@@ -1072,6 +1270,92 @@ const CRM = () => {
             })()}
           </DialogContent>
         </Dialog>
+
+{/* ========== Edit Customer Dialog ========== */}
+<Dialog open={!!showEditCustomer} onOpenChange={() => setShowEditCustomer(null)}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>
+        {language === 'ar' ? 'تعديل بيانات العميل' : 'Edit Customer'}
+      </DialogTitle>
+    </DialogHeader>
+    {showEditCustomer && (
+      <div className="space-y-4 py-4">
+        <div className="space-y-2">
+          <Label>{t.name} *</Label>
+          <Input
+            placeholder={t.name}
+            value={editCustomer.name}
+            onChange={(e) => setEditCustomer({ ...editCustomer, name: e.target.value })}
+          />
+        </div>
+        
+        
+        <div className="space-y-2">
+          <Label>{t.phone}</Label>
+          <Input
+            placeholder={t.phone}
+            value={editCustomer.phone}
+            onChange={(e) => setEditCustomer({ ...editCustomer, phone: e.target.value })}
+            dir="ltr"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>{t.email}</Label>
+          <Input
+            placeholder={t.email}
+            type="email"
+            value={editCustomer.email}
+            onChange={(e) => setEditCustomer({ ...editCustomer, email: e.target.value })}
+            dir="ltr"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>{t.address}</Label>
+          <Input
+            placeholder={t.address}
+            value={editCustomer.address}
+            onChange={(e) => setEditCustomer({ ...editCustomer, address: e.target.value })}
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowEditCustomer(null)}
+            className="flex-1"
+          >
+            {t.cancel}
+          </Button>
+          <Button
+            className="flex-1 bg-primary hover:bg-primary/90"
+            onClick={() => {
+              if (showEditCustomer && editCustomer.name) {
+                updateCustomerMutation.mutate({
+                  id: showEditCustomer.id,
+                  data: editCustomer
+                });
+              }
+            }}
+            disabled={!editCustomer.name || updateCustomerMutation.isPending}
+          >
+            {updateCustomerMutation.isPending ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin me-2" />
+                {language === 'ar' ? 'جاري التحديث...' : 'Updating...'}
+              </>
+            ) : (
+              t.save
+            )}
+          </Button>
+        </div>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
+
       </div>
     </MainLayout>
   );

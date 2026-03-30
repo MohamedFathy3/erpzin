@@ -747,7 +747,7 @@ const InventoryCount = () => {
                             <Button variant="ghost" size="sm" onClick={() => handleEditRecord(record)} className="h-8 w-8 p-0 text-blue-600" title={t.edit}>
                               <Edit2 size={16} />
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={t.view}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={t.view} onClick={() => handleEditRecord(record)}>
                               <Eye size={16} />
                             </Button>
                           </div>

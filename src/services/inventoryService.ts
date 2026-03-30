@@ -57,7 +57,7 @@ class InventoryService {
   // جلب تفاصيل سجل جرد واحد
   async getById(id: number): Promise<SingleInventoryResponse> {
     try {
-      const response = await api.get<SingleInventoryResponse>(`${this.baseUrl}/${id}`);
+      const response = await api.get<SingleInventoryResponse>(`inventory-logs/${id}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching inventory record:', error);
@@ -79,7 +79,7 @@ class InventoryService {
   // تحديث الجرد بالكامل
   async update(id: number, data: UpdateInventoryPayload): Promise<SingleInventoryResponse> {
     try {
-      const response = await api.put<SingleInventoryResponse>(`${this.baseUrl}/${id}`, data);
+      const response = await api.put<SingleInventoryResponse>(`inventory-logs/${id}/counted-stock`, data);
       return response.data;
     } catch (error) {
       console.error('Error updating inventory:', error);
@@ -90,7 +90,7 @@ class InventoryService {
   // تحديث الملاحظة فقط
   async updateNote(id: number, data: UpdateNotePayload): Promise<SingleInventoryResponse> {
     try {
-      const response = await api.put<SingleInventoryResponse>(`${this.baseUrl}/${id}/note`, data);
+      const response = await api.put<SingleInventoryResponse>(`inventory-logs/${id}/counted-stock`, data);
       return response.data;
     } catch (error) {
       console.error('Error updating inventory note:', error);
@@ -101,7 +101,7 @@ class InventoryService {
   // حذف سجل جرد
   async delete(id: number): Promise<{ result: string; message: string }> {
     try {
-      const response = await api.delete(`${this.baseUrl}/${id}`);
+      const response = await api.delete(`inventory-logs/${id}/delete`);
       return response.data;
     } catch (error) {
       console.error('Error deleting inventory:', error);
