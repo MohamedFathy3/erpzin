@@ -1,3 +1,6 @@
+import { branchService } from '@/services/BranchService';
+import { treasuryService } from '@/services/TreasuryService';
+import type { Branch, Treasury } from '@/types/treasury';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,12 +19,12 @@ import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { 
-  Users, 
+import {
+  Users,
   Briefcase,
-  Plus, 
-  Edit, 
-  Trash2, 
+  Plus,
+  Edit,
+  Trash2,
   Search,
   RefreshCw,
   Download,
@@ -43,55 +46,10 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useDebounce } from '@/hooks/use-debounce';
+import type { EmployeeFormData, ApiRole, ApiResponse, Employee } from '@/types/employee';
+import { employeeService } from '@/services/EmployeeService';
 
 // ========== واجهات البيانات ==========
-interface Employee {
-  id: number;
-  employee_code: string;
-  name: string;
-  position: string;
-  department?: string | null;
-  role: string;
-  phone: string;
-  email: string;
-  salary: string;
-  created_at: string;
-}
-
-interface ApiResponse<T> {
-  result: string;
-  data: T[];
-  message: string;
-  status: number;
-  meta?: {
-    current_page: number;
-    last_page: number;
-    total: number;
-    per_page: number;
-    from: number;
-    to: number;
-  };
-  links?: any;
-}
-
-interface ApiRole {
-  id: number;
-  name: string;
-  deleted_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface EmployeeFormData {
-  employee_code: string;
-  name: string;
-  position: string;
-  role_id: number | '';
-  phone: string;
-  email: string;
-  password?: string;
-  salary: number | '';
-}
 
 const Employees = () => {
   const { language, direction } = useLanguage();
@@ -101,12 +59,12 @@ const Employees = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  
+
   // حالات الدايلوجات
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // حالات الفلاتر
   const [filters, setFilters] = useState({
     search: '',
@@ -125,18 +83,21 @@ const Employees = () => {
     email: '',
     password: '',
     salary: '',
+    is_active: true,
+    branch_id: null,
+    treasury_id: null,
   });
 
   // ========== جلب بيانات الموظفين ==========
-  const { 
-    data: employeesResponse, 
+  const {
+    data: employeesResponse,
     isLoading: employeesLoading,
     refetch: refetchEmployees
   } = useQuery<ApiResponse<Employee>>({
     queryKey: ['employees', debouncedSearch, filters.role],
     queryFn: async () => {
       try {
-        const payload: any = {
+        const payload: Record<string, unknown> = {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 100,
@@ -144,7 +105,7 @@ const Employees = () => {
         };
 
         // إضافة فلتر البحث لو موجود
-        const filterConditions: any = {};
+        const filterConditions: Record<string, unknown> = {};
         if (debouncedSearch) {
           filterConditions.name = debouncedSearch;
         }
@@ -159,11 +120,11 @@ const Employees = () => {
         console.log('📦 Fetching employees with payload:', payload);
 
         const response = await api.post<ApiResponse<Employee>>('/employee/index', payload);
-        
+
         if (response.data.result === 'Success') {
           return response.data;
         }
-        
+
         throw new Error(response.data.message || 'Failed to fetch employees');
       } catch (error) {
         console.error('Error fetching employees:', error);
@@ -174,9 +135,9 @@ const Employees = () => {
   });
 
   // ========== جلب أدوار API ==========
-  const { 
-    data: rolesResponse, 
-    isLoading: rolesLoading 
+  const {
+    data: rolesResponse,
+    isLoading: rolesLoading
   } = useQuery<ApiResponse<ApiRole>>({
     queryKey: ['api-roles-employees'],
     queryFn: async () => {
@@ -189,11 +150,11 @@ const Employees = () => {
         };
 
         const response = await api.post<ApiResponse<ApiRole>>('/role/index', payload);
-        
+
         if (response.data.result === 'Success') {
           return response.data;
         }
-        
+
         throw new Error(response.data.message || 'Failed to fetch roles');
       } catch (error) {
         console.error('Error fetching roles:', error);
@@ -201,6 +162,17 @@ const Employees = () => {
       }
     }
   });
+  const { data: branchesResponse } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => branchService.getAllBranches(),
+  });
+  const branches = branchesResponse?.data || [];
+
+  const { data: treasuriesResponse } = useQuery({
+    queryKey: ['treasuries'],
+    queryFn: () => treasuryService.getTreasuries(),
+  });
+  const treasuries = treasuriesResponse?.data || [];
 
   // استخراج البيانات
   const employees = employeesResponse?.data || [];
@@ -208,57 +180,138 @@ const Employees = () => {
   const paginationMeta = employeesResponse?.meta;
 
   // ========== إضافة موظف ==========
+  // const addEmployeeMutation = useMutation({
+  //   mutationFn: async (data: EmployeeFormData) => {
+  //     const response = await api.post('/employee', data);
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم إضافة الموظف بنجاح' : 'Employee added successfully');
+  //     setIsAddDialogOpen(false);
+  //     resetForm();
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في إضافة الموظف' : 'Error adding employee'));
+  //   }
+  // });
+
   const addEmployeeMutation = useMutation({
-    mutationFn: async (data: EmployeeFormData) => {
-      const response = await api.post('/employee/store', data);
-      return response.data;
-    },
+    mutationFn: employeeService.addEmployee,
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      toast.success(language === 'ar' ? 'تم إضافة الموظف بنجاح' : 'Employee added successfully');
+
+      toast.success(
+        language === 'ar'
+          ? 'تم إضافة الموظف بنجاح'
+          : 'Employee added successfully'
+      );
+
       setIsAddDialogOpen(false);
       resetForm();
     },
+
     onError: (error: any) => {
-      toast.error(error.message || (language === 'ar' ? 'خطأ في إضافة الموظف' : 'Error adding employee'));
+      toast.error(
+        error.message ||
+        (language === 'ar'
+          ? 'خطأ في إضافة الموظف'
+          : 'Error adding employee')
+      );
     }
   });
 
   // ========== تحديث موظف ==========
+  // const updateEmployeeMutation = useMutation({
+  //   mutationFn: async ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) => {
+  //     const response = await api.patch(`/employee/${id}`, data);
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم تحديث الموظف بنجاح' : 'Employee updated successfully');
+  //     setIsEditDialogOpen(false);
+  //     setSelectedEmployee(null);
+  //     resetForm();
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في تحديث الموظف' : 'Error updating employee'));
+  //   }
+  // });
+
+
+
   const updateEmployeeMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) => {
-      const response = await api.patch(`/employee/${id}`, data);
-      return response.data;
-    },
+    mutationFn: ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) =>
+      employeeService.updateEmployee(id, data),
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      toast.success(language === 'ar' ? 'تم تحديث الموظف بنجاح' : 'Employee updated successfully');
+
+      toast.success(
+        language === 'ar'
+          ? 'تم تحديث الموظف بنجاح'
+          : 'Employee updated successfully'
+      );
+
       setIsEditDialogOpen(false);
       setSelectedEmployee(null);
       resetForm();
     },
+
     onError: (error: any) => {
-      toast.error(error.message || (language === 'ar' ? 'خطأ في تحديث الموظف' : 'Error updating employee'));
+      console.log('🔥 Full Error Object:', error);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'حدث خطأ أثناء تحديث الموظف';
+
+      toast.error(message);
     }
   });
 
   // ========== حذف موظف ==========
+  // const deleteEmployeeMutation = useMutation({
+  //   mutationFn: async (id: number) => {
+  //     const response = await api.delete(`/employee/delete/${id}`, {
+  //       data: { items: [id] }
+  //     });
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم حذف الموظف بنجاح' : 'Employee deleted successfully');
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في حذف الموظف' : 'Error deleting employee'));
+  //   }
+  // });
+
+
+
   const deleteEmployeeMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await api.delete(`/employee/delete/${id}`, {
-        data: { items: [id] }
-      });
-      return response.data;
-    },
+    mutationFn: (id: number) => employeeService.deleteEmployee(id),
+
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success(language === 'ar' ? 'تم حذف الموظف بنجاح' : 'Employee deleted successfully');
     },
+
     onError: (error: any) => {
-      toast.error(error.message || (language === 'ar' ? 'خطأ في حذف الموظف' : 'Error deleting employee'));
+      console.error('🔥 Full Delete Error:', error);
+      console.log('🔥 Error message:', error.message);
+      console.log('🔥 Error response:', error.response);
+      console.log('🔥 Error data:', error.response?.data);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'حدث خطأ أثناء حذف الموظف';
+      toast.error(message);
     }
   });
-
   // ========== دوال المساعدة ==========
   const resetForm = () => {
     setFormData({
@@ -270,16 +323,19 @@ const Employees = () => {
       email: '',
       password: '',
       salary: '',
+      is_active: true,
+      branch_id: null,
+      treasury_id: null,
     });
     setShowPassword(false);
   };
 
   const handleEdit = (employee: Employee) => {
     setSelectedEmployee(employee);
-    
+
     // البحث عن الـ role_id المناسب
     const role = roles.find(r => r.name === employee.role);
-    
+
     setFormData({
       employee_code: employee.employee_code,
       name: employee.name,
@@ -288,27 +344,30 @@ const Employees = () => {
       phone: employee.phone,
       email: employee.email,
       password: '',
-      salary: parseFloat(employee.salary) || '',
+      salary: employee.salary ?? '',
+      branch_id: employee.branch?.id ?? null,
+      treasury_id: employee.treasury?.id ?? null,
+      is_active: employee.is_active ?? true,
     });
-    
+
     setIsEditDialogOpen(true);
   };
 
   const handleAdd = () => {
     resetForm();
-    
+
     // توليد كود موظف تلقائي (مثال)
-    const lastCode = employees.length > 0 
-      ? employees[0].employee_code 
+    const lastCode = employees.length > 0
+      ? employees[0].employee_code
       : 'EMP-0000';
     const lastNumber = parseInt(lastCode.split('-')[1] || '0');
     const newCode = `EMP-${String(lastNumber + 1).padStart(4, '0')}`;
-    
+
     setFormData(prev => ({
       ...prev,
       employee_code: newCode
     }));
-    
+
     setIsAddDialogOpen(true);
   };
 
@@ -392,23 +451,23 @@ const Employees = () => {
     }
   }[language];
 
+
   // ========== إحصائيات ==========
   const stats = useMemo(() => {
     const total = employees.length;
-    const withSalary = employees.filter(e => parseFloat(e.salary) > 0).length;
-    const avgSalary = total > 0 
-      ? employees.reduce((sum, e) => sum + parseFloat(e.salary), 0) / total 
+    const withSalary = employees.filter(e => e.salary > 0).length;  // ✅ مش محتاج parseFloat
+    const avgSalary = total > 0
+      ? employees.reduce((sum, e) => sum + e.salary, 0) / total   // ✅ مش محتاج parseFloat
       : 0;
-    
+
     return { total, withSalary, avgSalary };
   }, [employees]);
-
   // ========== التصفية المحلية (كمكمل) ==========
   const filteredEmployees = useMemo(() => {
     if (!searchQuery) return employees;
-    
+
     const query = searchQuery.toLowerCase();
-    return employees.filter(emp => 
+    return employees.filter(emp =>
       emp.name.toLowerCase().includes(query) ||
       emp.employee_code.toLowerCase().includes(query) ||
       emp.position.toLowerCase().includes(query) ||
@@ -474,7 +533,7 @@ const Employees = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -488,7 +547,7 @@ const Employees = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -527,27 +586,27 @@ const Employees = () => {
             <Filter size={16} />
           </Button>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 border rounded-lg p-0.5 bg-background">
-            <Button 
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className="h-7 w-7 p-0" 
+            <Button
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 w-7 p-0"
               onClick={() => setViewMode('grid')}
             >
               <LayoutGrid size={14} />
             </Button>
-            <Button 
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className="h-7 w-7 p-0" 
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 w-7 p-0"
               onClick={() => setViewMode('list')}
             >
               <List size={14} />
             </Button>
           </div>
-          
+
           {paginationMeta && (
             <Badge variant="outline" className="text-xs">
               {paginationMeta.from} - {paginationMeta.to} {t.of} {paginationMeta.total}
@@ -565,13 +624,13 @@ const Employees = () => {
                 <Filter size={16} />
                 {t.filter}
               </h3>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setFilters({ search: '', role: '' });
                   setShowFilters(false);
-                }} 
+                }}
                 className="h-8 gap-1"
               >
                 <X size={14} />
@@ -582,8 +641,8 @@ const Employees = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-sm">{t.role}</Label>
-                <Select 
-                  value={filters.role} 
+                <Select
+                  value={filters.role}
                   onValueChange={(v) => setFilters(prev => ({ ...prev, role: v }))}
                 >
                   <SelectTrigger>
@@ -591,7 +650,7 @@ const Employees = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">{language === 'ar' ? 'كل الأدوار' : 'All Roles'}</SelectItem>
-                    {roles.map((role) => (
+                    {roles.map((role) => role.name && (
                       <SelectItem key={role.id} value={role.name}>
                         {role.name}
                       </SelectItem>
@@ -599,10 +658,10 @@ const Employees = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="flex items-end">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => setFilters({ search: '', role: '' })}
                 >
@@ -629,7 +688,7 @@ const Employees = () => {
             const roleLower = employee.role?.toLowerCase() || '';
             let iconColor = '#64748b';
             let IconComponent = Briefcase;
-            
+
             if (roleLower.includes('admin')) {
               iconColor = '#f59e0b';
               IconComponent = Shield;
@@ -657,9 +716,9 @@ const Employees = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold truncate">{employee.name}</h3>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="h-7 w-7 p-0"
                           onClick={() => handleEdit(employee)}
                         >
@@ -678,9 +737,9 @@ const Employees = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <Separator className="my-3" />
-                  
+
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Mail size={14} />
@@ -692,7 +751,7 @@ const Employees = () => {
                     </div>
                     <div className="flex items-center gap-2 text-accent font-semibold">
                       <DollarSign size={14} />
-                      <span>{parseFloat(employee.salary).toLocaleString()}</span>
+                      <span>{employee.salary ? employee.salary.toLocaleString() : 'N/A'}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -735,21 +794,21 @@ const Employees = () => {
                       <TableCell dir="ltr">{employee.phone}</TableCell>
                       <TableCell className="text-xs">{employee.email}</TableCell>
                       <TableCell className="text-right font-semibold text-accent">
-                        {parseFloat(employee.salary).toLocaleString()}
+                        {employee.salary ? employee.salary.toLocaleString() : 'N/A'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="h-7 w-7 p-0"
                             onClick={() => handleEdit(employee)}
                           >
                             <Edit size={14} />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                             onClick={() => {
                               if (confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الموظف؟' : 'Are you sure you want to delete this employee?')) {
@@ -779,12 +838,12 @@ const Employees = () => {
               {t.addEmployee}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.employeeCode}</Label>
-                <Input 
+                <Input
                   value={formData.employee_code}
                   onChange={(e) => setFormData(prev => ({ ...prev, employee_code: e.target.value }))}
                   placeholder="EMP-0001"
@@ -792,10 +851,10 @@ const Employees = () => {
                 />
                 <p className="text-xs text-muted-foreground">{t.employeeCodeAuto}</p>
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.name} *</Label>
-                <Input 
+                <Input
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Ahmed Abdullah"
@@ -806,17 +865,17 @@ const Employees = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.position}</Label>
-                <Input 
+                <Input
                   value={formData.position}
                   onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
                   placeholder="Software Engineer"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.role}</Label>
-                <Select 
-                  value={formData.role_id.toString()} 
+                <Select
+                  value={formData.role_id.toString()}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, role_id: parseInt(v) }))}
                 >
                   <SelectTrigger>
@@ -832,21 +891,72 @@ const Employees = () => {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                <Select
+                  value={formData.branch_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    branch_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون فرع' : 'No branch'}
+                    </SelectItem>
+                    {branches.map((branch: Branch) => (
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label>
+                {/* Treasury */}
+                <Select
+                  value={formData.treasury_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    treasury_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون خزينة' : 'No treasury'}
+                    </SelectItem>
+                    {treasuries.map((treasury: Treasury) => (
+                      <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                        {treasury.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.phone}</Label>
-                <Input 
+                <Input
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                   placeholder="01012345678"
                   dir="ltr"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.email}</Label>
-                <Input 
+                <Input
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="ahmed@email.com"
@@ -860,7 +970,7 @@ const Employees = () => {
               <div className="space-y-2">
                 <Label>{t.password} *</Label>
                 <div className="relative">
-                  <Input 
+                  <Input
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
@@ -878,10 +988,10 @@ const Employees = () => {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.salary}</Label>
-                <Input 
+                <Input
                   type="number"
                   value={formData.salary}
                   onChange={(e) => setFormData(prev => ({ ...prev, salary: e.target.value ? parseFloat(e.target.value) : '' }))}
@@ -896,7 +1006,7 @@ const Employees = () => {
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               {t.cancel}
             </Button>
-            <Button 
+            <Button
               onClick={() => addEmployeeMutation.mutate(formData)}
               disabled={addEmployeeMutation.isPending || !formData.name || !formData.password}
             >
@@ -918,12 +1028,12 @@ const Employees = () => {
               {t.editEmployee}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.employeeCode}</Label>
-                <Input 
+                <Input
                   value={formData.employee_code}
                   onChange={(e) => setFormData(prev => ({ ...prev, employee_code: e.target.value }))}
                   dir="ltr"
@@ -931,10 +1041,10 @@ const Employees = () => {
                   className="bg-muted"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.name} *</Label>
-                <Input 
+                <Input
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 />
@@ -944,16 +1054,16 @@ const Employees = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.position}</Label>
-                <Input 
+                <Input
                   value={formData.position}
                   onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.role}</Label>
-                <Select 
-                  value={formData.role_id.toString()} 
+                <Select
+                  value={formData.role_id.toString()}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, role_id: parseInt(v) }))}
                 >
                   <SelectTrigger>
@@ -972,17 +1082,72 @@ const Employees = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                {/* Branch - Edit Dialog */}
+                <Select
+                  value={formData.branch_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    branch_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون فرع' : 'No branch'}
+                    </SelectItem>
+                    {branches.map((branch: Branch) => (
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label>
+                {/* Treasury - Edit Dialog */}
+                <Select
+                  value={formData.treasury_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    treasury_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون خزينة' : 'No treasury'}
+                    </SelectItem>
+                    {treasuries.map((treasury: Treasury) => (
+                      <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                        {treasury.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label>{t.phone}</Label>
-                <Input 
+                <Input
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                   dir="ltr"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.email}</Label>
-                <Input 
+                <Input
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                   dir="ltr"
@@ -995,7 +1160,7 @@ const Employees = () => {
               <div className="space-y-2">
                 <Label>{t.password}</Label>
                 <div className="relative">
-                  <Input 
+                  <Input
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
@@ -1013,10 +1178,10 @@ const Employees = () => {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label>{t.salary}</Label>
-                <Input 
+                <Input
                   type="number"
                   value={formData.salary}
                   onChange={(e) => setFormData(prev => ({ ...prev, salary: e.target.value ? parseFloat(e.target.value) : '' }))}
@@ -1030,10 +1195,10 @@ const Employees = () => {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               {t.cancel}
             </Button>
-            <Button 
-              onClick={() => selectedEmployee && updateEmployeeMutation.mutate({ 
-                id: selectedEmployee.id, 
-                data: formData 
+            <Button
+              onClick={() => selectedEmployee && updateEmployeeMutation.mutate({
+                id: selectedEmployee.id,
+                data: formData
               })}
               disabled={updateEmployeeMutation.isPending || !formData.name}
             >
