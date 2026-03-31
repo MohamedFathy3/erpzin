@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { 
-  Plus, ChevronRight, ChevronDown, FolderOpen, FileText, 
-  Edit, Trash2, Search, Layers, FolderTree, Users, 
-  Wallet, Building2, Truck, Receipt, Landmark 
+import {
+  Plus, ChevronRight, ChevronDown, FolderOpen, FileText,
+  Edit, Trash2, Search, Layers, FolderTree, Users,
+  Wallet, Building2, Truck, Receipt, Landmark
 } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -233,7 +233,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const handleAccountClick = (account: Account) => {
     setSelectedAccount(account);
     setShowChildrenDetails(true);
-    
+
     // Auto expand this node
     const newExpanded = new Set(expandedNodes);
     newExpanded.add(account.id.toString());
@@ -291,7 +291,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const renderChildrenDetails = (account: Account) => {
     const allChildren = getAllChildren(account);
     const directChildren = account.children || [];
-    
+
     if (allChildren.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -315,8 +315,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                 const childType = getAccountTypeFromCode(child.code);
                 const ChildIcon = childType.icon;
                 return (
-                  <Card 
-                    key={child.id} 
+                  <Card
+                    key={child.id}
                     className="hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => handleAccountClick(child)}
                   >
@@ -326,7 +326,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                           <ChildIcon size={14} className={childType.color.replace('bg-', 'text-')} />
                           <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
                           <span className="text-sm font-medium">{language === 'ar' && child.name_ar ? child.name_ar : child.name}</span>
-             
+
                         </div>
                         <div className="flex items-center gap-2">
                           {child.has_children && (
@@ -361,7 +361,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                   const ChildIcon = childType.icon;
                   const level = child.level - account.level;
                   return (
-                    <div 
+                    <div
                       key={child.id}
                       className="flex items-center justify-between py-1 px-2 hover:bg-muted/50 rounded cursor-pointer text-sm"
                       style={{ paddingInlineStart: `${level * 20 + 8}px` }}
@@ -371,8 +371,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                         <ChildIcon size={12} className={childType.color.replace('bg-', 'text-')} />
                         <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
                         <span>{language === 'ar' && child.name_ar ? child.name_ar : child.name}</span>
-                    
-                        
+
+
                       </div>
                       <Badge variant="outline" className="text-xs">
                         {Number(child.balance || 0).toLocaleString()}
@@ -391,7 +391,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const parentOptions = useMemo(() => {
     if (!editingAccount) return flatAccounts;
     const currentCode = editingAccount.code;
-    return flatAccounts.filter(acc => 
+    return flatAccounts.filter(acc =>
       !acc.code.startsWith(currentCode) && acc.code !== currentCode
     );
   }, [editingAccount, flatAccounts]);
@@ -402,8 +402,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     const accountType = getAccountTypeFromCode(account.code);
     const isSelected = selectedAccount?.id === account.id;
     const Icon = accountType.icon;
-    
-    const matchesSearch = searchQuery === '' || 
+
+    const matchesSearch = searchQuery === '' ||
       account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       account.code.includes(searchQuery);
 
@@ -422,7 +422,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"   
+                className="h-6 w-6"
                 onClick={(e) => toggleNode(account.id, e)}
               >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -447,9 +447,9 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
               {Number(account.balance || 0).toLocaleString()}
             </span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-7 w-7"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -721,7 +721,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                   <SelectValue placeholder={language === 'ar' ? 'اختر الحساب الأب' : 'Select parent'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
+                  <SelectItem value="none">{language === 'ar' ? 'بدون' : 'None'}</SelectItem>
                   {parentOptions.map(acc => (
                     <SelectItem key={acc.id} value={acc.code}>
                       {acc.full_path || `${acc.code} - ${acc.name}`}
