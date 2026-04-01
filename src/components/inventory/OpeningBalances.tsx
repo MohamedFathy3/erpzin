@@ -51,7 +51,7 @@ const OpeningBalances: React.FC = () => {
     queryFn: async () => {
       const response = await api.post('/product/index', {
         filters: { 
-          active: true
+          beginning_balance: true,
         },
         orderBy: 'id',
         orderByDirection: 'desc',
@@ -86,7 +86,6 @@ const OpeningBalances: React.FC = () => {
     }
   });
 
-  // استيراد من Excel
   const importMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -106,30 +105,21 @@ const OpeningBalances: React.FC = () => {
       return response.data;
     },
     onSuccess: (data: ImportResponse) => {
-      if (data.success) {
+      // التحقق من status بدلاً من success
+      if (data.status === true) {
         toast({
           title: language === 'ar' ? 'تم الاستيراد بنجاح' : 'Import successful',
-          description: language === 'ar'
-            ? `تم استيراد ${data.imported_count || 0} منتج بنجاح`
-            : `Successfully imported ${data.imported_count || 0} products`,
+          description: data.message || (language === 'ar' 
+            ? 'تم استيراد المنتجات بنجاح'
+            : 'Products imported successfully'),
         });
-        
-        // عرض الأخطاء إن وجدت
-        if (data.errors && data.errors.length > 0) {
-          console.error('Import errors:', data.errors);
-          toast({
-            title: language === 'ar' ? 'بعض المنتجات لم تستورد' : 'Some products failed to import',
-            description: `${data.errors.length} ${language === 'ar' ? 'خطأ' : 'errors'} occurred`,
-            variant: 'destructive',
-          });
-        }
         
         refetch();
         handleCloseImportDialog();
       } else {
         toast({
           title: language === 'ar' ? 'فشل الاستيراد' : 'Import failed',
-          description: data.errors?.[0]?.error || 'Unknown error',
+          description: data.message || (language === 'ar' ? 'حدث خطأ أثناء الاستيراد' : 'Error during import'),
           variant: 'destructive',
         });
       }
@@ -144,6 +134,7 @@ const OpeningBalances: React.FC = () => {
       handleCloseImportDialog();
     },
   });
+
 
   const handleDelete = (product: Product) => {
     if (window.confirm(
