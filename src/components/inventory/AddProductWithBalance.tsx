@@ -4,10 +4,9 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package, Building2, FolderOpen } from 'lucide-react';
+import { Loader2, Package, Building2, FolderOpen, PackageSearch } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -15,18 +14,24 @@ import api from '@/lib/api';
 interface Warehouse {
   id: number;
   name: string;
-  branch_id?: {
-    id: number;
-    name: string;
-  };
 }
 
-interface Category {
+interface Product {
   id: number;
   name: string;
   name_ar?: string;
-  type?: string;
-  parent_id?: number | null;
+  sku: string;
+  units?: Array<{
+    id: number;           // id بتاع العلاقة (مش هنستخدمه)
+    unit_id: number;      // ده اللي هنبعته للـ API
+    unit_name: string;
+    colors?: Array<{
+      id: number;         // id بتاع العلاقة (مش هنستخدمه)
+      color_id: number;   // ده اللي هنبعته للـ API
+      color: string;
+      hex_code: string;
+    }>;
+  }>;
 }
 
 interface AddProductWithBalanceProps {
@@ -40,19 +45,31 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
   const queryClient = useQueryClient();
   
   const [formData, setFormData] = useState({
-    name: '',
-    name_ar: '',
-    description: '',
-    description_ar: '',
-    sku: '',
-    barcode: '',
-    cost: 0,
-    price: 0,
-    stock: 1, // الحقل الجديد للكمية
-    beginning_balance: true, // ده ثابت true
+    product_id: '',
     warehouse_id: '',
-    category_id: '',
-    reorder_level: 5
+    unit_id: '',      // هنا هنخزن unit_id مش id
+    color_id: '',     // هنا هنخزن color_id مش id
+    stock: 1
+  });
+
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // جلب المنتجات
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ['products-for-opening-balance'],
+    queryFn: async () => {
+      const response = await api.post('/product/index', {
+        filters: { 
+          active: true
+        },
+        orderBy: 'id',
+        orderByDirection: 'desc',
+        perPage: 1000,
+        paginate: false
+      });
+      return response.data?.data || [];
+    },
+    enabled: isOpen
   });
 
   // جلب المستودعات
@@ -71,94 +88,55 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
     enabled: isOpen
   });
 
-  // جلب التصنيفات
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
-    queryKey: ['categories-for-product'],
-    queryFn: async () => {
-      const response = await api.post('/category/index', {
-        "orderBy": "id",
-        "orderByDirection": "asc",
-        "perPage": 1000,
-        "paginate": false
-      });
-      return response.data?.data || [];
-    },
-    enabled: isOpen
-  });
+  // جلب الوحدات بناءً على المنتج المختار - بنستخدم unit_id
+  const availableUnits = selectedProduct?.units || [];
 
-  // توليد SKU تلقائي
-  const generateSKU = () => {
-    const prefix = 'PROD';
-    const randomNum = Math.floor(Math.random() * 9000) + 1000;
-    return `${prefix}-${randomNum}`;
-  };
+  // جلب الألوان بناءً على الوحدة المختارة - بنستخدم color_id
+  const selectedUnit = availableUnits.find(u => u.unit_id.toString() === formData.unit_id);
+  const availableColors = selectedUnit?.colors || [];
 
-  // توليد Barcode تلقائي
-  const generateBarcode = () => {
-    return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
-  };
-
-  // تعبئة الحقول عند فتح المودال
-  useEffect(() => {
-    if (isOpen) {
-      setFormData({
-        name: '',
-        name_ar: '',
-        description: '',
-        description_ar: '',
-        sku: generateSKU(),
-        barcode: generateBarcode(),
-        cost: 0,
-        price: 0,
-        stock: 1, // الكمية الابتدائية
-        beginning_balance: true, // ثابت true
-        warehouse_id: '',
-        category_id: '',
-        reorder_level: 5
-      });
-    }
-  }, [isOpen]);
-
-  // إضافة منتج جديد
-  const addProductMutation = useMutation({
+  // إضافة رصيد للمنتج
+  const addStockMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        name: formData.name,
-        name_ar: formData.name_ar || '',
-        description: formData.description || '',
-        description_ar: formData.description_ar || '',
-        sku: formData.sku,
-        barcode: formData.barcode,
-        cost: formData.cost,
-        price: formData.price,
-        stock: formData.stock, // الكمية اللي دخلها المستخدم
-        beginning_balance: formData.beginning_balance, // true
-        reorder_level: formData.reorder_level,
-        warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
-        category_id: formData.category_id ? parseInt(formData.category_id) : null,
-        status: 'active'
+      const payload: any = {
+        product_id: parseInt(formData.product_id),
+        warehouse_id: parseInt(formData.warehouse_id),
+        stock: formData.stock
       };
 
-      console.log('📤 Adding new product with stock:', payload);
+      // بنبعت unit_id مش id
+      if (formData.unit_id) {
+        payload.unit_id = parseInt(formData.unit_id);
+      }
+
+      // بنبعت color_id مش id
+      if (formData.color_id) {
+        payload.color_id = parseInt(formData.color_id);
+      }
+
+      console.log('📤 Adding stock to existing product:', payload);
       
-      const response = await api.post('/product', payload);
+      const response = await api.post('/products/add-stock', payload);
       return response.data;
     },
     onSuccess: () => {
       toast({ 
-        title: language === 'ar' ? 'تم إضافة المنتج بنجاح' : 'Product added successfully',
+        title: language === 'ar' ? 'تم إضافة الرصيد بنجاح' : 'Stock added successfully',
         description: language === 'ar' 
-          ? `تم إضافة المنتج ${formData.name} بكمية ${formData.stock} قطعة`
-          : `Added product ${formData.name} with ${formData.stock} pieces stock`
+          ? `تم إضافة ${formData.stock} قطعة للمنتج`
+          : `Added ${formData.stock} pieces to product`
       });
-      queryClient.invalidateQueries({ queryKey: ['products-with-opening'] });
+      
+      queryClient.invalidateQueries({ queryKey: ['products-with-balance'] });
       queryClient.invalidateQueries({ queryKey: ['products-for-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['products-with-opening'] });
+      
       onClose();
       if (onSuccess) onSuccess();
     },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      console.error('Error adding product:', error);
+      console.error('Error adding stock:', error);
       toast({ 
         title: language === 'ar' ? 'حدث خطأ' : 'Error', 
         description: error.response?.data?.message || error.message, 
@@ -167,68 +145,98 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
     }
   });
 
-  const handleSubmit = () => {
-    if (!formData.name.trim()) {
-      toast({ 
-        title: language === 'ar' ? 'اسم المنتج مطلوب' : 'Product name is required', 
-        variant: 'destructive' 
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        product_id: '',
+        warehouse_id: '',
+        unit_id: '',
+        color_id: '',
+        stock: 1
       });
-      return;
+      setSelectedProduct(null);
     }
-    if (formData.cost <= 0) {
-      toast({ 
-        title: language === 'ar' ? 'سعر التكلفة مطلوب' : 'Cost price is required', 
-        variant: 'destructive' 
-      });
-      return;
-    }
-    if (formData.price <= 0) {
-      toast({ 
-        title: language === 'ar' ? 'سعر البيع مطلوب' : 'Selling price is required', 
-        variant: 'destructive' 
-      });
-      return;
-    }
-    if (formData.stock < 0) {
-      toast({ 
-        title: language === 'ar' ? 'الكمية غير صالحة' : 'Invalid stock quantity', 
-        variant: 'destructive' 
-      });
-      return;
-    }
-    addProductMutation.mutate();
+  }, [isOpen]);
+
+  const handleProductChange = (productId: string) => {
+    const product = products.find(p => p.id.toString() === productId);
+    setSelectedProduct(product || null);
+    setFormData(prev => ({
+      ...prev,
+      product_id: productId,
+      unit_id: '',  // reset unit
+      color_id: ''  // reset color
+    }));
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // بنخزن unit_id مش id
+  const handleUnitChange = (unitIdValue: string) => {
+    setFormData(prev => ({
+      ...prev,
+      unit_id: unitIdValue,
+      color_id: '' // reset color when unit changes
+    }));
+  };
+
+  // بنخزن color_id مش id
+  const handleColorChange = (colorIdValue: string) => {
+    setFormData(prev => ({
+      ...prev,
+      color_id: colorIdValue
+    }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.product_id) {
+      toast({ 
+        title: language === 'ar' ? 'يرجى اختيار المنتج' : 'Please select a product', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    if (!formData.warehouse_id) {
+      toast({ 
+        title: language === 'ar' ? 'يرجى اختيار المستودع' : 'Please select a warehouse', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    if (formData.stock <= 0) {
+      toast({ 
+        title: language === 'ar' ? 'الكمية يجب أن تكون أكبر من صفر' : 'Stock must be greater than zero', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    addStockMutation.mutate();
+  };
+
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const t = {
-    title: language === 'ar' ? 'إضافة منتج جديد' : 'Add New Product',
-    name: language === 'ar' ? 'اسم المنتج' : 'Product Name',
-    nameAr: language === 'ar' ? 'اسم المنتج (عربي)' : 'Product Name (Arabic)',
-    description: language === 'ar' ? 'الوصف' : 'Description',
-    sku: language === 'ar' ? 'SKU' : 'SKU',
-    barcode: language === 'ar' ? 'الباركود' : 'Barcode',
-    cost: language === 'ar' ? 'سعر التكلفة' : 'Cost Price',
-    price: language === 'ar' ? 'سعر البيع' : 'Selling Price',
-    stock: language === 'ar' ? 'الكمية' : 'Stock Quantity',
+    title: language === 'ar' ? 'إضافة رصيد أول المدة' : 'Add Opening Balance',
+    description: language === 'ar' ? 'إضافة رصيد لمنتج موجود' : 'Add stock to existing product',
+    product: language === 'ar' ? 'المنتج' : 'Product',
     warehouse: language === 'ar' ? 'المستودع' : 'Warehouse',
-    category: language === 'ar' ? 'التصنيف' : 'Category',
-    reorderLevel: language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Level',
+    unit: language === 'ar' ? 'وحدة القياس' : 'Unit',
+    color: language === 'ar' ? 'اللون' : 'Color',
+    stock: language === 'ar' ? 'الكمية' : 'Stock Quantity',
     add: language === 'ar' ? 'إضافة' : 'Add',
     cancel: language === 'ar' ? 'إلغاء' : 'Cancel',
+    selectProduct: language === 'ar' ? 'اختر المنتج' : 'Select product',
     selectWarehouse: language === 'ar' ? 'اختر المستودع' : 'Select warehouse',
-    selectCategory: language === 'ar' ? 'اختر التصنيف' : 'Select category',
-    totalValue: language === 'ar' ? 'القيمة الإجمالية' : 'Total Value',
-    noCategory: language === 'ar' ? 'بدون تصنيف' : 'No category',
-    noWarehouse: language === 'ar' ? 'بدون مستودع' : 'No warehouse'
+    selectUnit: language === 'ar' ? 'اختر الوحدة' : 'Select unit',
+    selectColor: language === 'ar' ? 'اختر اللون' : 'Select color',
+    noUnit: language === 'ar' ? 'لا توجد وحدات' : 'No units available',
+    noColor: language === 'ar' ? 'لا توجد ألوان' : 'No colors available',
+    loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...'
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package size={18} className="text-emerald-500" />
@@ -237,176 +245,133 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Basic Info */}
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <Label>{t.name} *</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                placeholder="Product name"
-              />
-            </div>
-          </div>
-
+          {/* Product Selection */}
           <div className="space-y-2">
-            <Label>{t.description}</Label>
-            <Textarea
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              placeholder="Product description..."
-              rows={2}
+            <Label className="flex items-center gap-2">
+              <PackageSearch size={14} />
+              {t.product} *
+            </Label>
+            <Select 
+              value={formData.product_id} 
+              onValueChange={handleProductChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t.selectProduct} />
+              </SelectTrigger>
+              <SelectContent>
+                {productsLoading ? (
+                  <SelectItem value="loading" disabled>
+                    {t.loading}
+                  </SelectItem>
+                ) : (
+                  products.map((product) => (
+                    <SelectItem key={product.id} value={product.id.toString()}>
+                      <div>
+                        <div>{language === 'ar' && product.name_ar ? product.name_ar : product.name}</div>
+                        <div className="text-xs text-muted-foreground">{product.sku}</div>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Warehouse Selection */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Building2 size={14} />
+              {t.warehouse} *
+            </Label>
+            <Select 
+              value={formData.warehouse_id} 
+              onValueChange={(val) => handleChange('warehouse_id', val)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t.selectWarehouse} />
+              </SelectTrigger>
+              <SelectContent>
+                {warehousesLoading ? (
+                  <SelectItem value="loading" disabled>
+                    {t.loading}
+                  </SelectItem>
+                ) : (
+                  warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
+                      {warehouse.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Unit Selection - بنستخدم unit_id كـ value */}
+          {availableUnits.length > 0 && (
+            <div className="space-y-2">
+              <Label>{t.unit}</Label>
+              <Select 
+                value={formData.unit_id} 
+                onValueChange={handleUnitChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t.selectUnit} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableUnits.map((unit) => (
+                    <SelectItem 
+                      key={unit.id} 
+                      value={unit.unit_id.toString()}  // بنستخدم unit_id مش id
+                    >
+                      {unit.unit_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Color Selection - بنستخدم color_id كـ value */}
+          {availableColors.length > 0 && (
+            <div className="space-y-2">
+              <Label>{t.color}</Label>
+              <Select 
+                value={formData.color_id} 
+                onValueChange={handleColorChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t.selectColor} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableColors.map((color) => (
+                    <SelectItem 
+                      key={color.id} 
+                      value={color.color_id.toString()}  // بنستخدم color_id مش id
+                    >
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-4 h-4 rounded-full border" 
+                          style={{ backgroundColor: color.hex_code }}
+                        />
+                        {color.color}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Stock Quantity */}
+          <div className="space-y-2">
+            <Label>{t.stock} *</Label>
+            <Input
+              type="number"
+              value={formData.stock || ''}
+              onChange={(e) => handleChange('stock', Number(e.target.value))}
+              min={1}
+              placeholder="0"
             />
-          </div>
-
-          {/* SKU & Barcode */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>{t.sku}</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={formData.sku}
-                  onChange={(e) => handleChange('sku', e.target.value)}
-                  className="font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleChange('sku', generateSKU())}
-                >
-                  <Loader2 size={16} className="rotate-90" />
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>{t.barcode}</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={formData.barcode}
-                  onChange={(e) => handleChange('barcode', e.target.value)}
-                  className="font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleChange('barcode', generateBarcode())}
-                >
-                  <Loader2 size={16} className="rotate-90" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Category & Warehouse */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FolderOpen size={14} />
-                {t.category}
-              </Label>
-              <Select 
-                value={formData.category_id || "none"} 
-                onValueChange={(val) => handleChange('category_id', val === "none" ? "" : val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t.selectCategory} />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoriesLoading ? (
-                    <SelectItem value="loading" disabled>جاري التحميل...</SelectItem>
-                  ) : (
-                    <>
-                      <SelectItem value="none">{t.noCategory}</SelectItem>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id.toString()}>
-                          {language === 'ar' && category.name_ar ? category.name_ar : category.name}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Building2 size={14} />
-                {t.warehouse}
-              </Label>
-              <Select 
-                value={formData.warehouse_id || "none"} 
-                onValueChange={(val) => handleChange('warehouse_id', val === "none" ? "" : val)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t.selectWarehouse} />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehousesLoading ? (
-                    <SelectItem value="loading" disabled>جاري التحميل...</SelectItem>
-                  ) : (
-                    <>
-                      <SelectItem value="none">{t.noWarehouse}</SelectItem>
-                      {warehouses.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
-                          {warehouse.name}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Pricing & Stock */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>{t.cost} *</Label>
-              <Input
-                type="number"
-                value={formData.cost || ''}
-                onChange={(e) => handleChange('cost', Number(e.target.value))}
-                min={0}
-                step="0.01"
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t.price} *</Label>
-              <Input
-                type="number"
-                value={formData.price || ''}
-                onChange={(e) => handleChange('price', Number(e.target.value))}
-                min={0}
-                step="0.01"
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t.stock}</Label>
-              <Input
-                type="number"
-                value={formData.stock || ''}
-                onChange={(e) => handleChange('stock', Number(e.target.value))}
-                min={0}
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          {/* Reorder Level */}
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <Label>{t.reorderLevel}</Label>
-              <Input
-                type="number"
-                value={formData.reorder_level || ''}
-                onChange={(e) => handleChange('reorder_level', Number(e.target.value))}
-                min={0}
-                placeholder="5"
-              />
-            </div>
           </div>
         </div>
 
@@ -416,10 +381,10 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={addProductMutation.isPending}
+            disabled={addStockMutation.isPending}
             className="bg-emerald-500 hover:bg-emerald-600"
           >
-            {addProductMutation.isPending ? (
+            {addStockMutation.isPending ? (
               <Loader2 className="animate-spin me-1" size={16} />
             ) : null}
             {t.add}

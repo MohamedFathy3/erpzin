@@ -27,7 +27,7 @@ export class StatsService {
         activeCustomers: 'Active Customers',
         totalPoints: 'Total Points',
         avgPurchase: 'Avg Purchase',
-        totalPurchases:"Total Ptuchases"
+        totalPurchases:"Total purchased"
       },
       ar: {
         totalCustomers: 'إجمالي العملاء',
