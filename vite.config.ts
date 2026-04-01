@@ -54,6 +54,7 @@ export default defineConfig(({ mode }) => ({
       'injazyemen.cloud',
       'localhost',
       '127.0.0.1',
+      
       '::1',
       '.injazyemen.cloud' // للسماح بالنطاقات الفرعية أيضاً
     ]

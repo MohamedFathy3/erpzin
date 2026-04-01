@@ -48,7 +48,8 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
     barcode: '',
     cost: 0,
     price: 0,
-    beginning_balance: 1,
+    stock: 1, // الحقل الجديد للكمية
+    beginning_balance: true, // ده ثابت true
     warehouse_id: '',
     category_id: '',
     reorder_level: 5
@@ -109,7 +110,8 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
         barcode: generateBarcode(),
         cost: 0,
         price: 0,
-        beginning_balance: 0,
+        stock: 1, // الكمية الابتدائية
+        beginning_balance: true, // ثابت true
         warehouse_id: '',
         category_id: '',
         reorder_level: 5
@@ -129,14 +131,15 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
         barcode: formData.barcode,
         cost: formData.cost,
         price: formData.price,
-        beginning_balance: formData.beginning_balance,
+        stock: formData.stock, // الكمية اللي دخلها المستخدم
+        beginning_balance: formData.beginning_balance, // true
         reorder_level: formData.reorder_level,
         warehouse_id: formData.warehouse_id ? parseInt(formData.warehouse_id) : null,
         category_id: formData.category_id ? parseInt(formData.category_id) : null,
         status: 'active'
       };
 
-      console.log('📤 Adding new product with balance:', payload);
+      console.log('📤 Adding new product with stock:', payload);
       
       const response = await api.post('/product', payload);
       return response.data;
@@ -145,8 +148,8 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
       toast({ 
         title: language === 'ar' ? 'تم إضافة المنتج بنجاح' : 'Product added successfully',
         description: language === 'ar' 
-          ? `تم إضافة المنتج ${formData.name} مع رصيد ${formData.beginning_balance} قطعة`
-          : `Added product ${formData.name} with ${formData.beginning_balance} pieces balance`
+          ? `تم إضافة المنتج ${formData.name} بكمية ${formData.stock} قطعة`
+          : `Added product ${formData.name} with ${formData.stock} pieces stock`
       });
       queryClient.invalidateQueries({ queryKey: ['products-with-opening'] });
       queryClient.invalidateQueries({ queryKey: ['products-for-balance'] });
@@ -186,6 +189,13 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
       });
       return;
     }
+    if (formData.stock < 0) {
+      toast({ 
+        title: language === 'ar' ? 'الكمية غير صالحة' : 'Invalid stock quantity', 
+        variant: 'destructive' 
+      });
+      return;
+    }
     addProductMutation.mutate();
   };
 
@@ -195,7 +205,7 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
   };
 
   const t = {
-    title: language === 'ar' ? 'إضافة منتج جديد مع رصيد أول المدة' : 'Add New Product with Opening Balance',
+    title: language === 'ar' ? 'إضافة منتج جديد' : 'Add New Product',
     name: language === 'ar' ? 'اسم المنتج' : 'Product Name',
     nameAr: language === 'ar' ? 'اسم المنتج (عربي)' : 'Product Name (Arabic)',
     description: language === 'ar' ? 'الوصف' : 'Description',
@@ -203,7 +213,7 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
     barcode: language === 'ar' ? 'الباركود' : 'Barcode',
     cost: language === 'ar' ? 'سعر التكلفة' : 'Cost Price',
     price: language === 'ar' ? 'سعر البيع' : 'Selling Price',
-    beginningBalance: language === 'ar' ? 'رصيد أول المدة' : 'Opening Balance',
+    stock: language === 'ar' ? 'الكمية' : 'Stock Quantity',
     warehouse: language === 'ar' ? 'المستودع' : 'Warehouse',
     category: language === 'ar' ? 'التصنيف' : 'Category',
     reorderLevel: language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Level',
@@ -237,7 +247,6 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
                 placeholder="Product name"
               />
             </div>
-          
           </div>
 
           <div className="space-y-2">
@@ -350,7 +359,7 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
             </div>
           </div>
 
-          {/* Pricing */}
+          {/* Pricing & Stock */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>{t.cost} *</Label>
@@ -375,6 +384,20 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
               />
             </div>
             <div className="space-y-2">
+              <Label>{t.stock}</Label>
+              <Input
+                type="number"
+                value={formData.stock || ''}
+                onChange={(e) => handleChange('stock', Number(e.target.value))}
+                min={0}
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          {/* Reorder Level */}
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
               <Label>{t.reorderLevel}</Label>
               <Input
                 type="number"
@@ -385,10 +408,6 @@ const AddProductWithBalance: React.FC<AddProductWithBalanceProps> = ({ isOpen, o
               />
             </div>
           </div>
-
-        
-            
-         
         </div>
 
         <DialogFooter>
