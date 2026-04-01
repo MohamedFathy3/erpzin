@@ -66,10 +66,8 @@ const OpeningBalances: React.FC = () => {
   // حذف الرصيد
   const deleteBalanceMutation = useMutation({
     mutationFn: async (productId: number) => {
-      const response = await api.post('/products/add-stock', {
-        product_id: productId,
-        warehouse_id: 1,
-        stock: 0
+      const response = await api.delete('/product/delete', {
+        data:{items: [productId]},
       });
       return response.data;
     },
