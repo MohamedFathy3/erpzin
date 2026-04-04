@@ -28,10 +28,10 @@ const ITEMS_PER_PAGE = 10;
 
 export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
   console.log('🔧 [TRANSFORM] Input to transform function:', apiProduct);
-  
+
   let imageUrl = '';
   let imageId: number | undefined;
-  
+
   // معالجة الصورة
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
@@ -43,14 +43,14 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
   } else if (apiProduct.image_url) {
     imageUrl = apiProduct.image_url;
   }
-  
+
   // تحويل active (boolean) إلى status (string)
   const status = apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
-  
+
   // تأكد من أن category_id معالج بشكل صحيح
-  const categoryId = apiProduct.category?.id?.toString() || 
-                     apiProduct.category_id?.toString() || 
-                     '';
+  const categoryId = apiProduct.category?.id?.toString() ||
+    apiProduct.category_id?.toString() ||
+    '';
 
   // معالجة المتغيرات من الـ units
   const variants: ProductVariant[] = [];
@@ -59,19 +59,19 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
 
   if (apiProduct.units && Array.isArray(apiProduct.units)) {
     console.log('🔧 [TRANSFORM] Processing units:', apiProduct.units.length);
-    
+
     apiProduct.units.forEach((unit: any, index: number) => {
       if (unit.unit_id) {
         selectedSizes.push(unit.unit_id.toString());
       }
-      
+
       // إذا كان هناك ألوان في الـ unit
       if (unit.colors && Array.isArray(unit.colors)) {
         unit.colors.forEach((color: any) => {
           if (color.color_id) {
             selectedColors.push(color.color_id.toString());
           }
-          
+
           const variant: ProductVariant = {
             id: `${unit.unit_id || index}-${color.color_id || index}`,
             colorId: color.color_id?.toString() || '',
@@ -125,22 +125,22 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     status: status,
     imageId,
     imageUrl,
-    branchIds: Array.isArray(apiProduct.branch_ids) 
+    branchIds: Array.isArray(apiProduct.branch_ids)
       ? apiProduct.branch_ids.map((id: any) => id.toString())
       : [],
-    warehouseIds: Array.isArray(apiProduct.warehouse_ids) 
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids)
       ? apiProduct.warehouse_ids.map((id: any) => id.toString())
       : [],
     valuationMethod: apiProduct.valuation_method || 'fifo'
   };
-  
+
   console.log('✅ Transformed form data:', {
     ...result,
     variantsCount: result.variants.length,
     selectedSizes: result.selectedSizes,
     selectedColors: result.selectedColors
   });
-  
+
   return result;
 };
 
@@ -194,10 +194,11 @@ const Inventory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stockFilter, setStockFilter] = useState<string>('all');
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('created_desc');
   const [isCategoryCollapsed, setIsCategoryCollapsed] = useState(false);
@@ -242,7 +243,7 @@ const Inventory: React.FC = () => {
 
         const response = await api.post('/product/index', payload);
         const products = response.data.data || [];
-        
+
         return products;
       } catch (error) {
         console.error('❌ Error fetching products:', error);
@@ -405,18 +406,18 @@ const Inventory: React.FC = () => {
 
   const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || selectedCategory !== null || searchQuery !== '' || sortBy !== 'created_desc';
 
-  const handleAddProduct = () => { 
-    setEditProduct(null); 
-    setShowProductForm(true); 
+  const handleAddProduct = () => {
+    setEditProduct(null);
+    setShowProductForm(true);
   };
 
   const handleEditProduct = async (product: Product) => {
     try {
       setShowProductForm(true);
-      
+
       const response = await api.get(`/product/${product.id}`);
       const dbProduct = response.data.data;
-      
+
       if (!dbProduct) {
         toast({
           title: language === 'ar' ? 'خطأ' : 'Error',
@@ -425,15 +426,15 @@ const Inventory: React.FC = () => {
         });
         return;
       }
-      
+
       const formData = transformApiProductToFormData(dbProduct);
       setEditProduct(formData);
-      
+
     } catch (error) {
       console.error('❌ Error fetching product details:', error);
       toast({
         title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? 'تم فتح النموذج ولكن بعض البيانات قد لا تكون محدثة'
           : 'Form opened but some data may not be current',
         variant: 'default'
@@ -443,16 +444,16 @@ const Inventory: React.FC = () => {
 
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await api.delete(`/product/delete`,{
+      await api.delete(`/product/delete`, {
         data: { items: [productId] }
       });
-      toast({ 
+      toast({
         title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully',
         variant: 'default'
       });
       refetch();
     } catch (error) {
-      toast({ 
+      toast({
         title: language === 'ar' ? 'خطأ في الحذف' : 'Delete Error',
         variant: 'destructive'
       });
@@ -468,25 +469,25 @@ const Inventory: React.FC = () => {
       sku: `${product.sku}-COPY`,
     });
     setShowProductForm(true);
-    toast({ 
+    toast({
       title: language === 'ar' ? 'تم تجهيز النسخة' : 'Ready to duplicate',
       description: language === 'ar' ? 'قم بتعديل البيانات ثم احفظ' : 'Edit data then save'
     });
   };
 
-  const handleViewProduct = (product: Product) => { 
-    handleEditProduct(product); 
+  const handleViewProduct = (product: Product) => {
+    handleEditProduct(product);
   };
 
   const handlePrintBarcode = (product: Product) => {
-    setSelectedProductForPrint({ 
-      id: product.id, 
-      name: product.name, 
-      name_ar: product.nameAr, 
-      sku: product.sku, 
-      barcode: product.barcode, 
-      price: product.price, 
-      stock: product.stock 
+    setSelectedProductForPrint({
+      id: product.id,
+      name: product.name,
+      name_ar: product.nameAr,
+      sku: product.sku,
+      barcode: product.barcode,
+      price: product.price,
+      stock: product.stock
     });
     setShowBarcodePrinter(true);
   };
@@ -510,92 +511,60 @@ const Inventory: React.FC = () => {
     setShowVariantsModal(true);
   };
 
-const handleSaveProduct = async (formData: ProductFormData) => {
-  try {
-    // Prepare product data for API
-    const productData: any = {
-      name: formData.name,
-      description: formData.description || '',
-      category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
-      sku: formData.sku,
-      barcode: formData.barcode || null,
-      reorder_level: formData.reorderPoint || 5,
-      cost: formData.cost || 0,
-      price: formData.price || 0,
-      stock: formData.stock || 0,
-      active: formData.status === 'active',
-      has_variants: formData.hasVariants || false,
-      branch_ids: formData.branchIds && formData.branchIds.length > 0 
-        ? formData.branchIds.map(id => parseInt(id)) 
-        : [],
-      warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0 
-        ? formData.warehouseIds.map(id => parseInt(id)) 
-        : [],
-      valuation_method: formData.valuationMethod || 'fifo',
-      units: []
-    };
+  const handleSaveProduct = async (formData: ProductFormData) => {
+    try {
+      // Prepare product data for API
+      const productData: any = {
+        name: formData.name,
+        description: formData.description || '',
+        category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
+        sku: formData.sku,
+        barcode: formData.barcode || null,
+        reorder_level: formData.reorderPoint || 5,
+        cost: formData.cost || 0,
+        price: formData.price || 0,
+        stock: formData.stock || 0,
+        active: formData.status === 'active',
+        has_variants: formData.hasVariants || false,
+        branch_ids: formData.branchIds && formData.branchIds.length > 0
+          ? formData.branchIds.map(id => parseInt(id))
+          : [],
+        warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0
+          ? formData.warehouseIds.map(id => parseInt(id))
+          : [],
+        valuation_method: formData.valuationMethod || 'fifo',
+        units: []
+      };
 
-    // إضافة الاسم العربي والوصف العربي
-    if (formData.nameAr && formData.nameAr.trim() !== '') {
-      productData.name_ar = formData.nameAr;
-    }
-    if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
-      productData.description_ar = formData.descriptionAr;
-    }
+      // إضافة الاسم العربي والوصف العربي
+      if (formData.nameAr && formData.nameAr.trim() !== '') {
+        productData.name_ar = formData.nameAr;
+      }
+      if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
+        productData.description_ar = formData.descriptionAr;
+      }
 
-    // معالجة الصورة
-    if (formData.imageId && formData.imageId > 0) {
-      productData.image = formData.imageId;
-    } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
-      productData.image_url = formData.imageUrl;
-    }
+      // معالجة الصورة
+      if (formData.imageId && formData.imageId > 0) {
+        productData.image = formData.imageId;
+      } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
+        productData.image_url = formData.imageUrl;
+      }
 
-    // Handle variants if product has variants
-    if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
-      const enabledVariants = formData.variants.filter(v => v.enabled);
-      
-      if (enabledVariants.length > 0) {
-        // ✅ تجميع المتغيرات حسب unit_id
-        const unitsMap = new Map();
-        
-        enabledVariants.forEach(variant => {
-          const unitId = variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null;
-          if (!unitId) return;
-          
-          if (!unitsMap.has(unitId)) {
-            // إذا كانت الوحدة جديدة، أنشئها
-            unitsMap.set(unitId, {
-              unit_id: unitId,
-              cost_price: variant.cost || formData.cost || 0,
-              sell_price: variant.price || formData.price || 0,
-              barcode: variant.barcode || `${formData.sku}-${unitId}`,
-              colors: []
-            });
-          }
-          
-          // إذا كان فيه لون، أضفه - مع التأكد من عدم التكرار
-          if (variant.colorId && variant.colorId !== '') {
-            const colorId = parseInt(variant.colorId);
-            
-            // ✅ الأهم: التأكد من عدم إضافة نفس اللون مرتين
-            const existingColors = unitsMap.get(unitId).colors;
-            const colorExists = existingColors.some((c: any) => c.color_id === colorId);
-            
-            if (!colorExists) {
-              unitsMap.get(unitId).colors.push({
-                color_id: colorId,
-                stock: variant.stock || formData.stock || 0
-              });
-            } else {
-              console.warn(`⚠️ Skipping duplicate color ${colorId} for unit ${unitId}`);
-            }
-          } else if (variant.noColor) {
-            // حالة "بدون لون" - نضيفها كوحدة بدون ألوان
-            const unitData = unitsMap.get(unitId);
-            if (unitData && unitData.colors.length === 0) {
-              // موجودة بالفعل بدون ألوان
-            } else {
-              // أعد تعيين الوحدة بدون ألوان
+      // Handle variants if product has variants
+      if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
+        const enabledVariants = formData.variants.filter(v => v.enabled);
+
+        if (enabledVariants.length > 0) {
+          // ✅ تجميع المتغيرات حسب unit_id
+          const unitsMap = new Map();
+
+          enabledVariants.forEach(variant => {
+            const unitId = variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null;
+            if (!unitId) return;
+
+            if (!unitsMap.has(unitId)) {
+              // إذا كانت الوحدة جديدة، أنشئها
               unitsMap.set(unitId, {
                 unit_id: unitId,
                 cost_price: variant.cost || formData.cost || 0,
@@ -604,95 +573,127 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                 colors: []
               });
             }
-          }
-        });
-        
-        // ✅ تنظيف إضافي: إزالة أي تكرار متبقي
-        productData.units = Array.from(unitsMap.values()).map(unit => {
-          if (unit.colors && unit.colors.length > 0) {
-            // إزالة الألوان المكررة باستخدام Set
-            const uniqueColors = [];
-            const seenColorIds = new Set();
-            
-            for (const color of unit.colors) {
-              if (!seenColorIds.has(color.color_id)) {
-                seenColorIds.add(color.color_id);
-                uniqueColors.push(color);
+
+            // إذا كان فيه لون، أضفه - مع التأكد من عدم التكرار
+            if (variant.colorId && variant.colorId !== '') {
+              const colorId = parseInt(variant.colorId);
+
+              // ✅ الأهم: التأكد من عدم إضافة نفس اللون مرتين
+              const existingColors = unitsMap.get(unitId).colors;
+              const colorExists = existingColors.some((c: any) => c.color_id === colorId);
+
+              if (!colorExists) {
+                unitsMap.get(unitId).colors.push({
+                  color_id: colorId,
+                  stock: variant.stock || formData.stock || 0
+                });
+              } else {
+                console.warn(`⚠️ Skipping duplicate color ${colorId} for unit ${unitId}`);
+              }
+            } else if (variant.noColor) {
+              // حالة "بدون لون" - نضيفها كوحدة بدون ألوان
+              const unitData = unitsMap.get(unitId);
+              if (unitData && unitData.colors.length === 0) {
+                // موجودة بالفعل بدون ألوان
+              } else {
+                // أعد تعيين الوحدة بدون ألوان
+                unitsMap.set(unitId, {
+                  unit_id: unitId,
+                  cost_price: variant.cost || formData.cost || 0,
+                  sell_price: variant.price || formData.price || 0,
+                  barcode: variant.barcode || `${formData.sku}-${unitId}`,
+                  colors: []
+                });
               }
             }
-            
-            unit.colors = uniqueColors;
-          }
-          return unit;
-        });
+          });
+
+          // ✅ تنظيف إضافي: إزالة أي تكرار متبقي
+          productData.units = Array.from(unitsMap.values()).map(unit => {
+            if (unit.colors && unit.colors.length > 0) {
+              // إزالة الألوان المكررة باستخدام Set
+              const uniqueColors = [];
+              const seenColorIds = new Set();
+
+              for (const color of unit.colors) {
+                if (!seenColorIds.has(color.color_id)) {
+                  seenColorIds.add(color.color_id);
+                  uniqueColors.push(color);
+                }
+              }
+
+              unit.colors = uniqueColors;
+            }
+            return unit;
+          });
+        }
       }
+
+
+      console.log('📦 Final product data units:', JSON.stringify(productData.units, null, 2));
+
+      let productId = formData.id;
+      let response;
+
+      if (productId) {
+        // Update existing product
+        response = await api.put(`/product/${productId}`, productData);
+      } else {
+        // Create new product
+        response = await api.post('/product', productData);
+        productId = response.data.id;
+      }
+
+      // تحديث البيانات
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      refetch();
+
+      // إغلاق النموذج
+      setShowProductForm(false);
+      setEditProduct(null);
+
+      toast({
+        title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
+        description: language === 'ar'
+          ? `تم حفظ المنتج "${formData.name}"`
+          : `Product "${formData.name}" saved`
+      });
+
+    } catch (error: any) {
+      let errorMessage = 'Unknown error';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        errorMessage = Object.values(error.response.data.errors).flat().join(', ');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      console.error('❌ Save error:', errorMessage);
+      console.error('❌ Error details:', error.response?.data);
+
+      toast({
+        title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+      throw error;
     }
-
-
-    console.log('📦 Final product data units:', JSON.stringify(productData.units, null, 2));
-
-    let productId = formData.id;
-    let response;
-
-    if (productId) {
-      // Update existing product
-      response = await api.put(`/product/${productId}`, productData);
-    } else {
-      // Create new product
-      response = await api.post('/product', productData);
-      productId = response.data.id;
-    }
-
-    // تحديث البيانات
-    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-    refetch();
-    
-    // إغلاق النموذج
-    setShowProductForm(false);
-    setEditProduct(null);
-    
-    toast({ 
-      title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
-      description: language === 'ar' 
-        ? `تم حفظ المنتج "${formData.name}"`
-        : `Product "${formData.name}" saved`
-    });
-    
-  } catch (error: any) {
-    let errorMessage = 'Unknown error';
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.response?.data?.errors) {
-      errorMessage = Object.values(error.response.data.errors).flat().join(', ');
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    console.error('❌ Save error:', errorMessage);
-    console.error('❌ Error details:', error.response?.data);
-    
-    toast({ 
-      title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
-      description: errorMessage,
-      variant: 'destructive'
-    });
-    throw error;
-  }
-};
+  };
 
   const handleBarcodeProductFound = (product: any) => {
     const found = products.find(p => p.id === product.id);
     if (found) handleEditProduct(found);
   };
 
-  const barcodeProducts = dbProducts.map((p: any) => ({ 
-    id: p.id, 
-    name: p.name, 
-    name_ar: p.name_ar, 
-    sku: p.sku, 
-    barcode: p.barcode, 
-    price: Number(p.price), 
-    stock: p.stock 
+  const barcodeProducts = dbProducts.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    name_ar: p.name_ar,
+    sku: p.sku,
+    barcode: p.barcode,
+    price: Number(p.price),
+    stock: p.stock
   }));
 
   const isLoading = productsLoading || categoriesLoading;
@@ -797,16 +798,16 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                     </Button>
                   )}
                 </div>
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {/* Search by barcode or name */}
                   <div className="col-span-2">
                     <div className="relative">
                       <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                      <Input 
-                        placeholder={language === 'ar' ? 'بحث بالباركود أو الاسم أو SKU...' : 'Search by barcode, name, or SKU...'} 
-                        value={searchQuery} 
-                        onChange={(e) => setSearchQuery(e.target.value)} 
+                      <Input
+                        placeholder={language === 'ar' ? 'بحث بالباركود أو الاسم أو SKU...' : 'Search by barcode, name, or SKU...'}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         className="ps-9 h-9"
                       />
                     </div>
@@ -846,27 +847,44 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
 
-                {/* Stock Filter */}
-                <div className="mt-3">
+                  {/* Stock Filter */}
                   <Select value={stockFilter} onValueChange={setStockFilter}>
-                    <SelectTrigger className="h-9 w-full md:w-64">
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder={language === 'ar' ? 'المخزون' : 'Stock'} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">
-                        {language === 'ar' ? 'جميع المخزون' : 'All Stock'}
+                        {language === 'ar' ? 'الكل' : 'All'}
                       </SelectItem>
                       <SelectItem value="in_stock">
-                        {language === 'ar' ? 'متوفر (+10)' : 'In Stock (+10)'}
+                        {language === 'ar' ? 'في المخزون (>10)' : 'In Stock (>10)'}
                       </SelectItem>
                       <SelectItem value="low_stock">
-                        {language === 'ar' ? 'منخفض (1-10)' : 'Low (1-10)'}
+                        {language === 'ar' ? 'قليل (1-10)' : 'Low Stock (1-10)'}
                       </SelectItem>
                       <SelectItem value="out_of_stock">
-                        {language === 'ar' ? 'نفذ (0)' : 'Out (0)'}
+                        {language === 'ar' ? 'نفد (0)' : 'Out of Stock (0)'}
                       </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Warehouse Filter */}
+                <div className="mt-3">
+                  <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                    <SelectTrigger className="h-9 w-full md:w-64">
+                      <SelectValue placeholder={language === 'ar' ? 'المستودع' : 'Warehouse'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        {language === 'ar' ? 'جميع المستودعات' : 'All Warehouses'}
+                      </SelectItem>
+                      {warehouses.map((warehouse: any) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
+                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -880,14 +898,14 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                 "flex-shrink-0 hidden lg:block transition-all duration-300",
                 isCategoryCollapsed ? "w-12" : "w-64"
               )}>
-                <CategoryManager 
-                  selectedCategory={selectedCategory} 
+                <CategoryManager
+                  selectedCategory={selectedCategory}
                   onSelectCategory={setSelectedCategory}
                   isCollapsed={isCategoryCollapsed}
                   onCollapseChange={setIsCategoryCollapsed}
                 />
               </div>
-              
+
               {/* Product List */}
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
@@ -896,12 +914,12 @@ const handleSaveProduct = async (formData: ProductFormData) => {
                       <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     </div>
                   ) : (
-                    <ProductList 
-                      products={paginatedProducts} 
-                      onEdit={handleEditProduct} 
-                      onDelete={handleDeleteProduct} 
-                      onDuplicate={handleDuplicateProduct} 
-                      onView={handleViewProduct} 
+                    <ProductList
+                      products={paginatedProducts}
+                      onEdit={handleEditProduct}
+                      onDelete={handleDeleteProduct}
+                      onDuplicate={handleDuplicateProduct}
+                      onView={handleViewProduct}
                       onPrintBarcode={handlePrintBarcode}
                       onViewVariants={handleViewVariants}
                       currentPage={currentPage}
@@ -924,7 +942,7 @@ const handleSaveProduct = async (formData: ProductFormData) => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="alerts" className="flex-1 mt-2">
             <Card className="shadow-md border-border">
               <CardContent className="p-4">
@@ -932,7 +950,7 @@ const handleSaveProduct = async (formData: ProductFormData) => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="count" className="flex-1 mt-2">
             <Card className="shadow-md border-border">
               <CardContent className="p-4">
@@ -940,15 +958,15 @@ const handleSaveProduct = async (formData: ProductFormData) => {
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="variants" className="flex-1 mt-2">
             <UnitsVariantsManager />
           </TabsContent>
-          
+
           <TabsContent value="barcode" className="flex-1 mt-2">
             <BarcodePrintingCenter />
           </TabsContent>
-          
+
           <TabsContent value="promotions" className="flex-1 mt-2">
             <PromotionsManager />
           </TabsContent>
@@ -956,14 +974,14 @@ const handleSaveProduct = async (formData: ProductFormData) => {
       </div>
 
       {/* Modals */}
-      <ProductForm 
-        isOpen={showProductForm} 
+      <ProductForm
+        isOpen={showProductForm}
         onClose={() => {
           setShowProductForm(false);
           setEditProduct(null);
-        }} 
-        onSave={handleSaveProduct} 
-        editProduct={editProduct} 
+        }}
+        onSave={handleSaveProduct}
+        editProduct={editProduct}
         branches={branches}
         warehouses={warehouses}
         categories={dbCategories}
@@ -971,30 +989,30 @@ const handleSaveProduct = async (formData: ProductFormData) => {
         isLoadingWarehouses={loadingWarehouses}
         isLoadingCategories={categoriesLoading}
       />
-      
-      <BarcodeScanner 
-        isOpen={showBarcodeScanner} 
-        onClose={() => setShowBarcodeScanner(false)} 
-        onProductFound={handleBarcodeProductFound} 
-        products={barcodeProducts} 
+
+      <BarcodeScanner
+        isOpen={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onProductFound={handleBarcodeProductFound}
+        products={barcodeProducts}
       />
-      
-      <BarcodeLabelPrinter 
-        isOpen={showBarcodePrinter} 
-        onClose={() => { 
-          setShowBarcodePrinter(false); 
-          setSelectedProductForPrint(null); 
-        }} 
-        products={barcodeProducts} 
-        selectedProduct={selectedProductForPrint} 
+
+      <BarcodeLabelPrinter
+        isOpen={showBarcodePrinter}
+        onClose={() => {
+          setShowBarcodePrinter(false);
+          setSelectedProductForPrint(null);
+        }}
+        products={barcodeProducts}
+        selectedProduct={selectedProductForPrint}
       />
-      
-      <ProductVariantsModal 
-        isOpen={showVariantsModal} 
-        onClose={() => { 
-          setShowVariantsModal(false); 
-          setSelectedProductForVariants(null); 
-        }} 
+
+      <ProductVariantsModal
+        isOpen={showVariantsModal}
+        onClose={() => {
+          setShowVariantsModal(false);
+          setSelectedProductForVariants(null);
+        }}
         product={selectedProductForVariants}
         onEditProduct={() => {
           setShowVariantsModal(false);

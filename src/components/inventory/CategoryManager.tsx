@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
-import { 
+import {
   Plus, Edit2, Trash2, ChevronDown, ChevronRight, Package,
   Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
   Footprints, Baby, Home, Utensils, Smartphone, Laptop, Headphones,
@@ -115,11 +115,11 @@ const getIconColor = (iconName: string): string => {
   return icon?.color || 'blue';
 };
 
-const IconComponent: React.FC<{ iconName: string; size?: number; className?: string; showBackground?: boolean }> = ({ 
-  iconName, 
-  size = 18, 
+const IconComponent: React.FC<{ iconName: string; size?: number; className?: string; showBackground?: boolean }> = ({
+  iconName,
+  size = 18,
   className,
-  showBackground = false 
+  showBackground = false
 }) => {
   const icons: Record<string, React.ElementType> = {
     Package, Shirt, ShoppingBag, Gift, Box, Archive, Watch, Gem, Glasses,
@@ -129,7 +129,7 @@ const IconComponent: React.FC<{ iconName: string; size?: number; className?: str
   };
   const Icon = icons[iconName] || Package;
   const colorClass = ICON_COLORS[getIconColor(iconName)] || ICON_COLORS.blue;
-  
+
   if (showBackground) {
     return (
       <div className={cn('p-1.5 rounded-lg transition-all duration-200', colorClass, className)}>
@@ -137,7 +137,7 @@ const IconComponent: React.FC<{ iconName: string; size?: number; className?: str
       </div>
     );
   }
-  
+
   return <Icon size={size} className={cn(colorClass.split(' ')[0], className)} />;
 };
 
@@ -159,8 +159,8 @@ const CategoryNode: React.FC<{
       <div
         className={cn(
           'flex items-center gap-2 py-2.5 px-2 rounded-lg cursor-pointer transition-all duration-200 group hover:translate-x-1 rtl:hover:-translate-x-1',
-          isSelected 
-            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md' 
+          isSelected
+            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md'
             : 'hover:bg-muted/80'
         )}
         style={{ paddingInlineStart: `${level * 16 + 8}px` }}
@@ -183,22 +183,22 @@ const CategoryNode: React.FC<{
         ) : (
           <span className="w-5" />
         )}
-        
-        <IconComponent 
-          iconName={category.icon || 'Package'} 
-          size={16} 
+
+        <IconComponent
+          iconName={category.icon || 'Package'}
+          size={16}
           showBackground={!isSelected}
-          className={isSelected ? '!text-primary-foreground !bg-white/20' : ''} 
+          className={isSelected ? '!text-primary-foreground !bg-white/20' : ''}
         />
-        
+
         <span className="flex-1 font-medium text-sm truncate">
           {language === 'ar' ? (category.name_ar || category.name) : category.name}
         </span>
-        
+
         <span className={cn(
           'text-xs px-2 py-0.5 rounded-full font-medium transition-all duration-200',
-          isSelected 
-            ? 'bg-white/20 text-primary-foreground' 
+          isSelected
+            ? 'bg-white/20 text-primary-foreground'
             : 'bg-primary/10 text-primary'
         )}>
           {category.productCount}
@@ -230,14 +230,14 @@ const CategoryNode: React.FC<{
           )}
         </div>
       </div>
-      
+
       <div className={cn(
         'overflow-hidden transition-all duration-300',
         expanded && hasChildren ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
       )}>
         {category.children.map((child, index) => (
-          <div 
-            key={child.id} 
+          <div
+            key={child.id}
             style={{ animationDelay: `${index * 50}ms` }}
             className="animate-slide-up"
           >
@@ -269,7 +269,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   const [editingCategory, setEditingCategory] = useState<DbCategory | null>(null);
   const [deleteCategory, setDeleteCategory] = useState<DbCategory | null>(null);
   const [internalCollapsed, setInternalCollapsed] = useState(false);
-  
+
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
   const setIsCollapsed = (value: boolean) => {
     if (onCollapseChange) {
@@ -297,7 +297,7 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
           perPage: 100,
           paginate: false
         });
-        
+
         return response.data.data || [];
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -311,37 +311,37 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({
   });
 
   // Fetch product counts per category
-// Fetch product counts per category
-const { data: productCounts = {} } = useQuery({
-  queryKey: ['category-product-counts'],
-  queryFn: async () => {
-    try {
-      const response = await api.post('/product/index', {
-        filters: {},
-        orderBy: 'id',
-        orderByDirection: 'asc',
-        perPage: 1000,
-        paginate: false
-      });
-      
-      const products = response.data.data || [];
-      const counts: Record<string, number> = {};
-      
-      products.forEach((p: any) => {
-        // ✅ استخدام category.id بدل category_id
-        if (p.category?.id) {
-          const catId = p.category.id.toString();
-          counts[catId] = (counts[catId] || 0) + 1;
-        }
-      });
-      
-      return counts;
-    } catch (error) {
-      console.error('Error fetching product counts:', error);
-      return {};
-    }
-  },
-});
+  // Fetch product counts per category
+  const { data: productCounts = {} } = useQuery({
+    queryKey: ['category-product-counts'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/product/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+
+        const products = response.data.data || [];
+        const counts: Record<string, number> = {};
+
+        products.forEach((p: any) => {
+          // ✅ استخدام category.id بدل category_id
+          if (p.category?.id) {
+            const catId = p.category.id.toString();
+            counts[catId] = (counts[catId] || 0) + 1;
+          }
+        });
+
+        return counts;
+      } catch (error) {
+        console.error('Error fetching product counts:', error);
+        return {};
+      }
+    },
+  });
 
   // Build category tree
   const buildTree = (cats: DbCategory[]): CategoryWithCount[] => {
@@ -372,19 +372,20 @@ const { data: productCounts = {} } = useQuery({
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: async (data: { 
-      name: string; 
-      name_ar?: string; 
-      parent_id?: number; 
-      icon: string 
+    mutationFn: async (data: {
+      name: string;
+      name_ar?: string;
+      parent_id?: number;
+      icon: string
     }) => {
       const response = await api.post('/category', data);
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
-      toast({ 
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
+      toast({
         title: language === 'ar' ? 'تم إضافة التصنيف' : 'Category added',
         variant: 'default'
       });
@@ -392,30 +393,31 @@ const { data: productCounts = {} } = useQuery({
     },
     onError: (error: any) => {
       console.error('Error creating category:', error);
-      toast({ 
-        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred', 
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
         description: error.response?.data?.message || 'Failed to create category',
-        variant: 'destructive' 
+        variant: 'destructive'
       });
     },
   });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: async (data: { 
-      id: number; 
-      name: string; 
-      name_ar?: string; 
-      parent_id?: number; 
-      icon: string 
+    mutationFn: async (data: {
+      id: number;
+      name: string;
+      name_ar?: string;
+      parent_id?: number;
+      icon: string
     }) => {
       const response = await api.put(`/category/${data.id}`, data);
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
-      toast({ 
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
+      toast({
         title: language === 'ar' ? 'تم تحديث التصنيف' : 'Category updated',
         variant: 'default'
       });
@@ -423,10 +425,10 @@ const { data: productCounts = {} } = useQuery({
     },
     onError: (error: any) => {
       console.error('Error updating category:', error);
-      toast({ 
+      toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
         description: error.response?.data?.message || 'Failed to update category',
-        variant: 'destructive' 
+        variant: 'destructive'
       });
     },
   });
@@ -439,14 +441,15 @@ const { data: productCounts = {} } = useQuery({
           items: [id],
         },
       })
-      
+
       return response.data
-      
+
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] }); // For Inventory page
-      toast({ 
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-filter'] });
+      toast({
         title: language === 'ar' ? 'تم حذف التصنيف' : 'Category deleted',
         variant: 'default'
       });
@@ -454,10 +457,10 @@ const { data: productCounts = {} } = useQuery({
     },
     onError: (error: any) => {
       console.error('Error deleting category:', error);
-      toast({ 
+      toast({
         title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
         description: error.response?.data?.message || 'Failed to delete category',
-        variant: 'destructive' 
+        variant: 'destructive'
       });
     },
   });
@@ -487,9 +490,9 @@ const { data: productCounts = {} } = useQuery({
 
   const handleSubmit = () => {
     if (!formData.name.trim()) {
-      toast({ 
-        title: language === 'ar' ? 'اسم التصنيف مطلوب' : 'Category name is required', 
-        variant: 'destructive' 
+      toast({
+        title: language === 'ar' ? 'اسم التصنيف مطلوب' : 'Category name is required',
+        variant: 'destructive'
       });
       return;
     }
@@ -514,9 +517,9 @@ const { data: productCounts = {} } = useQuery({
   if (isCollapsed) {
     return (
       <div className="bg-card rounded-xl border border-border overflow-hidden h-full flex flex-col items-center py-4 panel-transition animate-fade-in">
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="h-10 w-10 p-0 mb-2 hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:scale-110"
           onClick={() => setIsCollapsed(false)}
         >
@@ -535,9 +538,9 @@ const { data: productCounts = {} } = useQuery({
       {/* Header */}
       <div className="p-4 border-b border-border bg-gradient-to-r from-muted/50 to-muted/30 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-all duration-200"
             onClick={() => setIsCollapsed(true)}
           >
@@ -547,10 +550,10 @@ const { data: productCounts = {} } = useQuery({
             {language === 'ar' ? 'التصنيفات' : 'Categories'}
           </h3>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={handleAdd} 
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleAdd}
           className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-all duration-200 hover:rotate-90"
           disabled={createMutation.isPending || updateMutation.isPending}
         >
@@ -562,16 +565,16 @@ const { data: productCounts = {} } = useQuery({
       <div
         className={cn(
           'flex items-center gap-3 py-3 px-4 cursor-pointer transition-all duration-200 border-b border-border group',
-          selectedCategory === null 
-            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md' 
+          selectedCategory === null
+            ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-md'
             : 'hover:bg-muted/80 hover:translate-x-1 rtl:hover:-translate-x-1'
         )}
         onClick={() => onSelectCategory(null)}
       >
         <div className={cn(
           'p-1.5 rounded-lg transition-all duration-200',
-          selectedCategory === null 
-            ? 'bg-white/20' 
+          selectedCategory === null
+            ? 'bg-white/20'
             : 'bg-primary/10 text-primary group-hover:bg-primary/20'
         )}>
           <Package size={16} />
@@ -581,8 +584,8 @@ const { data: productCounts = {} } = useQuery({
         </span>
         <span className={cn(
           'text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-200',
-          selectedCategory === null 
-            ? 'bg-white/20 text-primary-foreground' 
+          selectedCategory === null
+            ? 'bg-white/20 text-primary-foreground'
             : 'bg-primary/10 text-primary'
         )}>
           {totalProducts}
@@ -605,8 +608,8 @@ const { data: productCounts = {} } = useQuery({
         ) : (
           <div className="space-y-0.5">
             {categoryTree.map((category, index) => (
-              <div 
-                key={category.id} 
+              <div
+                key={category.id}
                 style={{ animationDelay: `${index * 50}ms` }}
                 className="animate-slide-up"
               >
@@ -700,8 +703,8 @@ const { data: productCounts = {} } = useQuery({
             <Button variant="outline" onClick={resetForm}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button 
-              onClick={handleSubmit} 
+            <Button
+              onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               {(createMutation.isPending || updateMutation.isPending) ? (
