@@ -849,25 +849,7 @@ const Inventory: React.FC = () => {
                   </Select>
 
                   {/* Stock Filter */}
-                  <Select value={stockFilter} onValueChange={setStockFilter}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder={language === 'ar' ? 'المخزون' : 'Stock'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">
-                        {language === 'ar' ? 'الكل' : 'All'}
-                      </SelectItem>
-                      <SelectItem value="in_stock">
-                        {language === 'ar' ? 'في المخزون (>10)' : 'In Stock (>10)'}
-                      </SelectItem>
-                      <SelectItem value="low_stock">
-                        {language === 'ar' ? 'قليل (1-10)' : 'Low Stock (1-10)'}
-                      </SelectItem>
-                      <SelectItem value="out_of_stock">
-                        {language === 'ar' ? 'نفد (0)' : 'Out of Stock (0)'}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+
                 </div>
 
                 {/* Warehouse Filter */}
@@ -878,7 +860,7 @@ const Inventory: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">
-                        {language === 'ar' ? 'جميع المستودعات' : 'All Warehouses'}
+                        {language === 'ar' ? 'جميع المحازن ' : 'All Warehouses'}
                       </SelectItem>
                       {warehouses.map((warehouse: any) => (
                         <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
