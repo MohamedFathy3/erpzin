@@ -4,7 +4,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Package, Plus, Trash2, Loader2, Upload, Download, X } from 'lucide-react';
+import { Package, Plus, Trash2, Loader2, Upload, Download, X, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -19,6 +19,8 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import * as XLSX from 'xlsx';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 interface Product {
   id: number;
@@ -31,18 +33,22 @@ interface Product {
 
 interface ImportResponse {
   success: boolean;
+  status?: boolean;
   imported_count?: number;
   failed_count?: number;
+  message?: string;
   errors?: Array<{ row: number; error: string }>;
 }
 
 const OpeningBalances: React.FC = () => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // جلب المنتجات اللي ليها رصيد
@@ -62,6 +68,67 @@ const OpeningBalances: React.FC = () => {
       return allProducts.filter(p => p.stock && p.stock > 0);
     }
   });
+
+  // ✅ دالة تصدير البيانات إلى Excel
+  const handleExport = () => {
+    if (products.length === 0) {
+      toast({
+        title: language === 'ar' ? 'لا توجد بيانات' : 'No data',
+        description: language === 'ar' ? 'لا توجد بضاعة أول مدة للتصدير' : 'No opening balances to export',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // تحويل البيانات إلى صيغة مناسبة للتصدير
+      const exportData = products.map(product => ({
+        [language === 'ar' ? 'معرف المنتج' : 'Product ID']: product.id,
+        [language === 'ar' ? 'اسم المنتج' : 'Product Name']: language === 'ar' ? (product.name_ar || product.name) : product.name,
+        [language === 'ar' ? 'SKU' : 'SKU']: product.sku,
+        [language === 'ar' ? 'الكمية' : 'Quantity']: product.stock || 0,
+        [language === 'ar' ? 'سعر التكلفة' : 'Cost Price']: product.cost,
+        [language === 'ar' ? 'القيمة الإجمالية' : 'Total Value']: (product.stock || 0) * product.cost,
+      }));
+
+      // إنشاء ورقة عمل
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // ضبط عرض الأعمدة
+      const colWidths = [
+        { wch: 15 },  // ID
+        { wch: 30 },  // Name
+        { wch: 20 },  // SKU
+        { wch: 12 },  // Quantity
+        { wch: 15 },  // Cost Price
+        { wch: 18 },  // Total Value
+      ];
+      ws['!cols'] = colWidths;
+
+      // إنشاء المصنف
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, language === 'ar' ? 'بضاعة أول المدة' : 'Opening Balances');
+      
+      // تصدير الملف
+      XLSX.writeFile(wb, `opening_balances_${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+      toast({
+        title: language === 'ar' ? 'تم التصدير بنجاح' : 'Export successful',
+        description: language === 'ar' 
+          ? `تم تصدير ${products.length} صنف`
+          : `Exported ${products.length} items`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في التصدير' : 'Export error',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // حذف الرصيد
   const deleteBalanceMutation = useMutation({
@@ -105,8 +172,7 @@ const OpeningBalances: React.FC = () => {
       return response.data;
     },
     onSuccess: (data: ImportResponse) => {
-      // التحقق من status بدلاً من success
-      if (data.status === true) {
+      if (data.status === true || data.success === true) {
         toast({
           title: language === 'ar' ? 'تم الاستيراد بنجاح' : 'Import successful',
           description: data.message || (language === 'ar' 
@@ -135,7 +201,6 @@ const OpeningBalances: React.FC = () => {
     },
   });
 
-
   const handleDelete = (product: Product) => {
     if (window.confirm(
       language === 'ar' 
@@ -149,7 +214,6 @@ const OpeningBalances: React.FC = () => {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // التحقق من نوع الملف
       const validTypes = [
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -194,15 +258,22 @@ const OpeningBalances: React.FC = () => {
   };
 
   const handleDownloadTemplate = () => {
-    // يمكن إضافة رابط لتحميل القالب
-    const templateLink = '/templates/opening_balances_template.xlsx';
-    window.open(templateLink, '_blank');
+    const template = [
+      {
+        [language === 'ar' ? 'اسم المنتج' : 'Product Name']: 'Example Product',
+        [language === 'ar' ? 'SKU' : 'SKU']: 'PRD-001',
+        [language === 'ar' ? 'الكمية' : 'Quantity']: 100,
+        [language === 'ar' ? 'سعر التكلفة' : 'Cost Price']: 50,
+      }
+    ];
+    
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, 'opening_balances_template.xlsx');
     
     toast({
-      title: language === 'ar' ? 'جاري تحميل القالب' : 'Downloading template',
-      description: language === 'ar'
-        ? 'سيتم تحميل قالب Excel للرصيد الافتتاحي'
-        : 'Excel template for opening balances will be downloaded',
+      title: language === 'ar' ? 'تم تحميل القالب' : 'Template downloaded',
     });
   };
 
@@ -216,6 +287,7 @@ const OpeningBalances: React.FC = () => {
     actions: language === 'ar' ? 'إجراءات' : 'Actions',
     add: language === 'ar' ? 'إضافة رصيد' : 'Add Balance',
     import: language === 'ar' ? 'استيراد من Excel' : 'Import from Excel',
+    export: language === 'ar' ? 'تصدير إلى Excel' : 'Export to Excel',
     delete: language === 'ar' ? 'حذف' : 'Delete',
     noData: language === 'ar' ? 'لا توجد منتجات لها رصيد أول مدة' : 'No products with opening balance',
     loading: language === 'ar' ? 'جاري التحميل...' : 'Loading...',
@@ -244,6 +316,20 @@ const OpeningBalances: React.FC = () => {
               <CardDescription className="mt-1">{t.description}</CardDescription>
             </div>
             <div className="flex gap-2">
+              {/* ✅ زر التصدير */}
+              <Button 
+                onClick={handleExport} 
+                variant="outline"
+                className="gap-2"
+                disabled={isExporting || products.length === 0}
+              >
+                {isExporting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <FileSpreadsheet size={16} />
+                )}
+                {t.export}
+              </Button>
               <Button 
                 onClick={handleOpenImportDialog} 
                 variant="outline"
@@ -296,9 +382,9 @@ const OpeningBalances: React.FC = () => {
                         <div className="text-xs text-muted-foreground">{product.sku}</div>
                       </TableCell>
                       <TableCell className="text-right font-mono">{product.stock}</TableCell>
-                      <TableCell className="text-right font-mono">{Number(product.cost).toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatCurrency(product.cost)}</TableCell>
                       <TableCell className="text-right font-mono font-semibold">
-                        {(Number(product.stock) * Number(product.cost)).toFixed(2)}
+                        {formatCurrency((product.stock || 0) * product.cost)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
@@ -339,7 +425,14 @@ const OpeningBalances: React.FC = () => {
 
           <div className="space-y-4 py-4">
             {/* Download Template Button */}
-          
+            <Button 
+              variant="outline" 
+              onClick={handleDownloadTemplate}
+              className="w-full gap-2"
+            >
+              <Download size={16} />
+              {t.downloadTemplate}
+            </Button>
 
             {/* File Input */}
             <div className="space-y-2">
