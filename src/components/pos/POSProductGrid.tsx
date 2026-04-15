@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 interface Product {
   id: string;
@@ -41,6 +42,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
   selectedCategory
 }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
 
   const getProductImageUrl = (product: Product): string | null => {
     if (product.image?.fullUrl) {
@@ -184,7 +186,7 @@ const filteredProducts = useMemo(() => {
                     {language === 'ar' ? product.nameAr : product.name}
                   </p>
                   <p className="font-bold text-primary mt-1 text-sm">
-                    {product.price.toLocaleString()} {language === 'ar' ? 'ر.ي' : 'YER'}
+                    {formatCurrency(product.price)}
                   </p>
                   
                   {product.stock > 0 && product.stock < 10 && (
