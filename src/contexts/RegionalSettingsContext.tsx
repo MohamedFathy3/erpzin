@@ -1,58 +1,37 @@
 // contexts/RegionalSettingsContext.tsx
-/**
- * RegionalSettingsContext - Global Regional Settings Management
- * Dynamic version - Uses API for currency data
- */
-
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ar, enUS, type Locale } from 'date-fns/locale';
 import { useLanguage } from './LanguageContext';
-import { currencyService } from '@/lib/currency.service';
-import type { Currency } from '@/lib/currency.service'; // ✅ تعديل المسار هنا
-
-interface RegionalSettings {
-  country: string;
-  countryName: string;
-  countryNameAr: string;
-  currency: Currency;
-  dateFormat: string;
-}
+import { useAuth } from './AuthContext';
 
 interface RegionalSettingsContextType {
-  settings: RegionalSettings;
-  currencies: Currency[];
+  currency: string;
+  country: string;
   isLoading: boolean;
-  refreshCurrencies: () => Promise<void>;
-  
-  // Currency utilities
-  formatCurrency: (amount: number, showSymbol?: boolean, currencyCode?: string) => string;
-  getCurrencySymbol: (currencyCode?: string) => string;
-  convertAmount: (amount: number, fromCurrencyCode: string, toCurrencyCode: string) => number;
-  getCurrencyByCode: (code: string) => Currency | undefined;
-  
-  // Date utilities
+  formatCurrency: (amount: number, showSymbol?: boolean) => string;
+  getCurrencySymbol: () => string;
   formatDate: (date: Date | string, formatStr?: string) => string;
   formatDateTime: (date: Date | string) => string;
   getCalendarLocale: () => Locale;
+  refresh: () => void;
 }
 
-const defaultCurrency: Currency = {
-  id: 2,
-  name: 'YER',
-  code: 'YER',
-  symbol: 'YER',
-  exchange_rate: '1',
-  active: true,
-  default: true
-};
-
-const defaultSettings: RegionalSettings = {
-  country: 'YE',
-  countryName: 'Yemen',
-  countryNameAr: 'اليمن',
-  currency: defaultCurrency,
-  dateFormat: 'dd/MM/yyyy',
+const getSymbol = (currencyCode: string): string => {
+  const symbols: Record<string, string> = {
+    'EGP': 'ج.م',
+    'USD': '$',
+    'SAR': '﷼',
+    'AED': 'د.إ',
+    'KWD': 'د.ك',
+    'QAR': '﷼',
+    'BHD': 'د.ب',
+    'OMR': '﷼',
+    'EUR': '€',
+    'GBP': '£',
+    'YER': '﷼',
+  };
+  return symbols[currencyCode] || currencyCode;
 };
 
 const RegionalSettingsContext = createContext<RegionalSettingsContextType | undefined>(undefined);
@@ -67,126 +46,93 @@ export const useRegionalSettings = () => {
 
 export const RegionalSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language } = useLanguage();
-  const [settings, setSettings] = useState<RegionalSettings>(defaultSettings);
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Load currencies on mount
-  useEffect(() => {
-    loadCurrencies();
+  // Force refresh
+  const refresh = useCallback(() => {
+    setRefreshKey(prev => prev + 1);
   }, []);
 
-  const loadCurrencies = async (forceRefresh = false) => {
-    try {
-      setIsLoading(true);
-      const currenciesData = await currencyService.getActiveCurrencies(forceRefresh);
-      setCurrencies(currenciesData);
-      
-      const defaultCurr = await currencyService.getDefaultCurrency(forceRefresh);
-      if (defaultCurr) {
-        setSettings(prev => ({
-          ...prev,
-          currency: defaultCurr
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading currencies:', error);
-    } finally {
+  // تحديث كل مرة يتغير فيها user أو language أو refreshKey
+  useEffect(() => {
+    if (user !== undefined) {
       setIsLoading(false);
     }
-  };
+  }, [user, refreshKey]);
 
-  const refreshCurrencies = async () => {
-    await loadCurrencies(true);
-  };
+  // استخدام useMemo عشان القيم تتحديث تلقائياً
+  const currency = user?.currency || 'EGP';
+  const country = user?.country || 'EG';
 
-  const getCurrencyByCode = (code: string): Currency | undefined => {
-    return currencies.find(c => c.code === code) || settings.currency;
-  };
-
-  const convertAmount = (amount: number, fromCurrencyCode: string, toCurrencyCode: string): number => {
-    const fromCurrency = getCurrencyByCode(fromCurrencyCode);
-    const toCurrency = getCurrencyByCode(toCurrencyCode);
-    
-    if (!fromCurrency || !toCurrency) return amount;
-    
-    return currencyService.convertAmount(amount, fromCurrency, toCurrency);
-  };
-
-  const formatCurrency = (amount: number, showSymbol = true, currencyCode?: string): string => {
-    const targetCurrency = currencyCode ? getCurrencyByCode(currencyCode) : settings.currency;
-    
-    if (!targetCurrency) {
-      return amount.toString();
-    }
-
+  // دالة formatCurrency معمولة useCallback عشان تسمع للتغيرات
+  const formatCurrency = useCallback((amount: number, showSymbol = true): string => {
     const numAmount = Number(amount) || 0;
+    const symbol = getSymbol(currency);
     
-    const formattedNumber = new Intl.NumberFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
+    const locale = language === 'ar' ? 'ar-EG' : 'en-US';
+    const formattedNumber = new Intl.NumberFormat(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(numAmount);
 
-    if (showSymbol) {
-      return language === 'ar' 
-        ? `${formattedNumber} ${targetCurrency.symbol}`
-        : `${targetCurrency.symbol} ${formattedNumber}`;
+    if (!showSymbol) {
+      return formattedNumber;
     }
-    return formattedNumber;
-  };
 
-  const getCurrencySymbol = (currencyCode?: string): string => {
-    const currency = currencyCode ? getCurrencyByCode(currencyCode) : settings.currency;
-    return currency?.symbol || settings.currency.symbol;
-  };
+    if (language === 'ar') {
+      return `${formattedNumber} ${symbol}`;
+    }
+    return `${symbol} ${formattedNumber}`;
+  }, [currency, language]);
 
-  const getCalendarLocale = (): Locale => {
+  const getCurrencySymbol = useCallback((): string => {
+    return getSymbol(currency);
+  }, [currency]);
+
+  const getCalendarLocale = useCallback((): Locale => {
     return language === 'ar' ? ar : enUS;
-  };
+  }, [language]);
 
-  const formatDate = (date: Date | string, formatStr?: string): string => {
+  const formatDate = useCallback((date: Date | string, formatStr?: string): string => {
     try {
       if (!date) return '';
-      
       const dateObj = typeof date === 'string' ? new Date(date) : date;
       if (isNaN(dateObj.getTime())) return '';
-      
-      const pattern = formatStr || settings.dateFormat;
+      const pattern = formatStr || 'dd/MM/yyyy';
       return format(dateObj, pattern, { locale: getCalendarLocale() });
     } catch {
       return '';
     }
-  };
+  }, [getCalendarLocale]);
 
-  const formatDateTime = (date: Date | string): string => {
+  const formatDateTime = useCallback((date: Date | string): string => {
     try {
       if (!date) return '';
-      
       const dateObj = typeof date === 'string' ? new Date(date) : date;
       if (isNaN(dateObj.getTime())) return '';
-      
-      return format(dateObj, `${settings.dateFormat} hh:mm a`, { locale: getCalendarLocale() });
+      const timeFormat = language === 'ar' ? 'hh:mm ص' : 'hh:mm a';
+      return format(dateObj, `dd/MM/yyyy ${timeFormat}`, { locale: getCalendarLocale() });
     } catch {
       return '';
     }
-  };
+  }, [language, getCalendarLocale]);
+
+  const value = useMemo(() => ({
+    currency,
+    country,
+    isLoading,
+    formatCurrency,
+    getCurrencySymbol,
+    formatDate,
+    formatDateTime,
+    getCalendarLocale,
+    refresh,
+  }), [currency, country, isLoading, formatCurrency, getCurrencySymbol, formatDate, formatDateTime, getCalendarLocale, refresh]);
 
   return (
-    <RegionalSettingsContext.Provider
-      value={{
-        settings,
-        currencies,
-        isLoading,
-        refreshCurrencies,
-        formatCurrency,
-        getCurrencySymbol,
-        convertAmount,
-        getCurrencyByCode,
-        formatDate,
-        formatDateTime,
-        getCalendarLocale,
-      }}
-    >
+    <RegionalSettingsContext.Provider value={value}>
       {children}
     </RegionalSettingsContext.Provider>
   );

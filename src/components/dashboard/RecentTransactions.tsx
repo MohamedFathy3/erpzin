@@ -7,28 +7,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
-// أنواع المعاملات المدعومة
-interface BaseTransaction {
-  id: string;
-  type: 'sale' | 'purchase';
-  reference: string;
-  amount: number;
-  date: string;
-  branch: string;
-}
-
-interface SaleTransaction extends BaseTransaction {
-  type: 'sale';
-  customer: string;
+// واجهة موحدة للمعاملات (مبيعات ومشتريات)
+interface Transaction {
+  id: number;
+  invoice_number: string;
+  party_name: string; // اسم العميل أو المورد
+  branch_name: string;
   payment_method: string;
+  total_amount: number;
+  created_at: string;
+  type: 'sale' | 'purchase';
 }
-
-interface PurchaseTransaction extends BaseTransaction {
-  type: 'purchase';
-  supplier: string;
-}
-
-type Transaction = SaleTransaction | PurchaseTransaction;
 
 interface RecentTransactionsProps {
   transactions?: Transaction[];
@@ -39,9 +28,37 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
   transactions = [], 
   isLoading = false 
 }) => {
-  const { t, language } = useLanguage();
+  const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const navigate = useNavigate();
+
+  // دالة الترجمة المحلية
+  const t = (key: string): string => {
+    const translations: Record<string, Record<string, string>> = {
+      en: {
+        'dashboard.recentTransactions': 'Recent Transactions',
+        'dashboard.viewAll': 'View All',
+        'dashboard.sale': 'Sale',
+        'dashboard.purchase': 'Purchase',
+        'dashboard.cash': 'Cash',
+        'dashboard.card': 'Card',
+        'dashboard.wallet': 'Wallet',
+        'dashboard.bankTransfer': 'Bank Transfer',
+      },
+      ar: {
+        'dashboard.recentTransactions': 'أحدث المعاملات',
+        'dashboard.viewAll': 'عرض الكل',
+        'dashboard.sale': 'بيع',
+        'dashboard.purchase': 'شراء',
+        'dashboard.cash': 'كاش',
+        'dashboard.card': 'بطاقة',
+        'dashboard.wallet': 'محفظة',
+        'dashboard.bankTransfer': 'تحويل بنكي',
+      },
+    };
+
+    return translations[language]?.[key] || key;
+  };
 
   const getPaymentBadge = (method: string | null) => {
     const methodLower = method?.toLowerCase() || 'cash';
@@ -59,16 +76,23 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
     }
   };
 
-  const getTransactionTypeBadge = (type: 'sale' | 'purchase') => {
+  const getTypeBadge = (type: 'sale' | 'purchase') => {
     if (type === 'sale') {
-      return <Badge variant="outline" className="text-success border-success/50 bg-success/5">{t('dashboard.sale')}</Badge>;
-    } else {
-      return <Badge variant="outline" className="text-info border-info/50 bg-info/5">{t('dashboard.purchase')}</Badge>;
+      return (
+        <Badge variant="outline" className="text-success border-success/50 bg-success/5">
+          {t('dashboard.sale')}
+        </Badge>
+      );
     }
+    return (
+      <Badge variant="outline" className="text-info border-info/50 bg-info/5">
+        {t('dashboard.purchase')}
+      </Badge>
+    );
   };
 
   const getInitials = (name: string | null | undefined) => {
-    if (!name) return '??';
+    if (!name) return language === 'ar' ? 'عميل' : 'CU';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
@@ -80,20 +104,12 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
     });
   };
 
-  const getDisplayName = (transaction: Transaction): string => {
-    if (transaction.type === 'sale') {
-      return transaction.customer || (language === 'ar' ? 'عميل نقدي' : 'Walk-in Customer');
-    } else {
-      return transaction.supplier || (language === 'ar' ? 'مورد' : 'Supplier');
-    }
-  };
-
-  const getSecondaryInfo = (transaction: Transaction): string => {
-    if (transaction.type === 'sale') {
-      return `${transaction.reference} • ${formatTime(transaction.date)} • ${transaction.branch}`;
-    } else {
-      return `${transaction.reference} • ${formatTime(transaction.date)} • ${transaction.branch}`;
-    }
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+    });
   };
 
   if (isLoading) {
@@ -135,38 +151,39 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
 
       <div className="space-y-3">
         {transactions.length > 0 ? (
-          transactions.map((tx) => {
-            const displayName = getDisplayName(tx);
-            
-            return (
-              <div
-                key={tx.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => navigate(tx.type === 'sale' ? '/sales' : '/purchasing')}
-              >
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                    {getInitials(displayName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{displayName}</p>
-                    {getTransactionTypeBadge(tx.type)}
-                    {tx.type === 'sale' && 'payment_method' in tx && getPaymentBadge(tx.payment_method)}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{getSecondaryInfo(tx)}</span>
-                  </div>
+          transactions.map((tx) => (
+            <div
+              key={tx.id}
+              className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+            >
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                  {getInitials(tx.party_name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium truncate">{tx.party_name}</p>
+                  {getTypeBadge(tx.type)}
+                  {getPaymentBadge(tx.payment_method)}
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-foreground">
-                    {formatCurrency(tx.amount)}
-                  </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{tx.invoice_number}</span>
+                  <span>•</span>
+                  <span>{formatDate(tx.created_at)}</span>
+                  <span>•</span>
+                  <span>{formatTime(tx.created_at)}</span>
+                  <span>•</span>
+                  <span>{tx.branch_name}</span>
                 </div>
               </div>
-            );
-          })
+              <div className="text-right">
+                <p className="text-sm font-bold text-foreground">
+                  {formatCurrency(tx.total_amount)}
+                </p>
+              </div>
+            </div>
+          ))
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             {language === 'ar' ? 'لا توجد معاملات حديثة' : 'No recent transactions'}

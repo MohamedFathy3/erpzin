@@ -1,3 +1,4 @@
+// BarcodePrintingCenter.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,11 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import JsBarcode from 'jsbarcode';
 import api from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 import {
   Printer,
@@ -25,15 +28,54 @@ import {
   Search,
   Settings2,
   Eye,
-  Download,
-  LayoutGrid,
-  Type,
   Barcode,
   Tag,
   Package,
-  Save,
-  RotateCcw
+  RotateCcw,
+  Ruler,
+  Palette,
+  DollarSign,
+  Check
 } from 'lucide-react';
+
+// ==================== Types ====================
+interface ProductColor {
+  id: number;
+  color_id: number;
+  color: string;
+  stock: number;
+  hex_code: string;
+}
+
+interface ProductUnit {
+  id: number;
+  unit_id: number;
+  unit_name: string;
+  cost_price: string;
+  sell_price: string;
+  barcode: string;
+  sku?: string;
+  colors?: ProductColor[];
+}
+
+interface APIProduct {
+  id: number;
+  name: string;
+  name_ar?: string;
+  description: string | null;
+  image_url: string | null;
+  imageUrl: string;
+  sku: string;
+  barcode: string;
+  stock: number;
+  reorder_level: number;
+  price: string;
+  cost: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  units?: ProductUnit[];
+}
 
 interface PrintProduct {
   id: string;
@@ -46,62 +88,8 @@ interface PrintProduct {
   isVariant?: boolean;
   variantInfo?: string;
   variantInfoAr?: string;
-}
-
-interface ProductVariant {
-  id: string;
-  sku: string;
-  barcode: string | null;
-  stock: number;
-  price_adjustment: number | null;
-  size?: { id: string; name: string; name_ar: string | null; code: string } | null;
-  color?: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
-}
-
-interface VariantType {
-  id: string;
-  sku: string;
-  barcode: string | null;
-  stock: number;
-  price_adjustment: number | null;
-  size?: { id: string; name: string; name_ar: string | null; code: string } | null;
-  color?: { id: string; name: string; name_ar: string | null; hex_code: string | null } | null;
-}
-
-interface APIProduct {
-  id: number;
-  name: string;
-  description: string | null;
-  image_url: string | null;
-  imageUrl: string;
-  image: {
-    id: number;
-    name: string;
-    mimeType: string;
-    size: number;
-    authorId: number | null;
-    previewUrl: string;
-    fullUrl: string;
-    createdAt: string;
-  };
-  category: {
-    id: number;
-    name: string;
-    icon: string;
-    parent_id: number | null;
-    type: string;
-    createdAt: string;
-    updatedAt: string;
-  };
-  sku: string;
-  barcode: string;
-  stock: number;
-  reorder_level: number;
-  price: string;
-  cost: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
+  selectedUnit?: ProductUnit;
+  selectedColor?: ProductColor;
 }
 
 interface LabelDesign {
@@ -168,23 +156,202 @@ const printerPresets = {
   a4_laser: { type: 'laser' as const, paperWidth: 210, paperHeight: 297, dpi: 600, labelsPerRow: 3, marginTop: 10, marginLeft: 10, gapX: 5, gapY: 5 }
 };
 
+// ==================== Variant Selector Modal ====================
+interface VariantSelectorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  product: APIProduct;
+  onSelect: (product: APIProduct, variant: ProductUnit, color?: ProductColor) => void;
+}
+
+const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
+  isOpen,
+  onClose,
+  product,
+  onSelect
+}) => {
+  const { language } = useLanguage();
+    const { formatCurrency } = useRegionalSettings()
+  const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
+  const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
+  if (!product) {
+    return null;
+  }
+  const handleUnitSelect = (unit: ProductUnit) => {
+    setSelectedUnit(unit);
+    setSelectedColor(null);
+  };
+
+  const handleColorSelect = (color: ProductColor) => {
+    setSelectedColor(color);
+  };
+
+  const handleConfirm = () => {
+    if (selectedUnit) {
+      onSelect(product, selectedUnit, selectedColor);
+      onClose();
+      setSelectedUnit(null);
+      setSelectedColor(null);
+    }
+  };
+
+  const productName = language === 'ar' ? product.name_ar || product.name : product.name;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package size={18} />
+            {language === 'ar' ? 'اختر المقاس واللون' : 'Select Unit & Color'} - {productName}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Units Section */}
+          <div>
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Ruler size={14} />
+              {language === 'ar' ? 'المقاسات المتاحة' : 'Available Units'}
+            </h4>
+            <ScrollArea className="h-32 border rounded-md p-2">
+              <div className="space-y-1">
+                {product.units?.map((unit) => (
+                  <button
+                    key={unit.id}
+                    onClick={() => handleUnitSelect(unit)}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                      selectedUnit?.id === unit.id
+                        ? "bg-primary/10 text-primary border border-primary/30"
+                        : "hover:bg-muted border border-transparent"
+                    )}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span>{unit.unit_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatCurrency(Number(unit.sell_price))}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Colors Section */}
+          {selectedUnit?.colors && selectedUnit.colors.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Palette size={14} />
+                {language === 'ar' ? 'الألوان المتاحة' : 'Available Colors'}
+              </h4>
+              <ScrollArea className="h-32 border rounded-md p-2">
+                <div className="flex flex-wrap gap-2">
+                  {selectedUnit.colors.map((color) => {
+                    const isLowStock = color.stock <= 5;
+                    const isOutOfStock = color.stock === 0;
+
+                    return (
+                      <button
+                        key={color.id}
+                        onClick={() => handleColorSelect(color)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
+                          selectedColor?.id === color.id
+                            ? "bg-primary text-white"
+                            : "border border-border hover:bg-muted/80",
+                        )}
+                        title={isOutOfStock ? (language === 'ar' ? 'نفد المخزون' : 'Out of stock') : `${language === 'ar' ? 'المخزون' : 'Stock'}: ${color.stock}`}
+                      >
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: color.hex_code || '#000' }}
+                        />
+                        <span>{color.color}</span>
+                        <span className={cn(
+                          "text-xs font-mono",
+                          isLowStock && !isOutOfStock ? "text-destructive" : ""
+                        )}>
+                          ({color.stock})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
+          {/* Price Summary */}
+          {selectedUnit && (
+            <div className="bg-primary/5 rounded-lg p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium flex items-center gap-1">
+                  <DollarSign size={14} />
+                  {language === 'ar' ? 'سعر البيع' : 'Sell Price'}:
+                </span>
+                <span className="text-lg font-bold text-primary">
+                  {Number(selectedUnit.sell_price).toLocaleString()} {language === 'ar' ? 'ر.س' : 'SAR'}
+                </span>
+              </div>
+              {selectedColor && (
+                <div className="text-xs mt-1 space-y-0.5">
+                  <div className="text-muted-foreground">
+                    {language === 'ar' ? 'اللون:' : 'Color:'} {selectedColor.color}
+                  </div>
+                  <div className={cn(
+                    "text-xs font-mono",
+                    selectedColor.stock <= 5 && selectedColor.stock > 0 ? "text-destructive font-bold" : "text-muted-foreground"
+                  )}>
+                    {language === 'ar' ? `المخزون: ${selectedColor.stock}` : `Stock: ${selectedColor.stock}`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={onClose} size="sm">
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              onClick={handleConfirm} 
+              disabled={!selectedUnit}
+              size="sm"
+            >
+              {language === 'ar' ? 'تأكيد' : 'Confirm'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ==================== Main Component ====================
 const BarcodePrintingCenter: React.FC = () => {
   const { language } = useLanguage();
   const isRTL = language === 'ar';
+  const { formatCurrency } = useRegionalSettings();
 
   const [selectedProducts, setSelectedProducts] = useState<PrintProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [design, setDesign] = useState<LabelDesign>(defaultDesign);
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(defaultPrinterConfig);
   const [activeTab, setActiveTab] = useState('products');
+  const [variantModalOpen, setVariantModalOpen] = useState(false);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<APIProduct | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const { data: products = [] } = useQuery({
+  // Fetch products from API
+  const { data: products = [], isLoading } = useQuery({
     queryKey: ['barcode-products'],
     queryFn: async () => {
       try {
-        const response = await api.post('/product/index');
+        const response = await api.post('/product/index', { paginate: false });
         console.log('Products response:', response);
         if (response.data.result === 'Success') {
           return response.data.data as APIProduct[];
@@ -202,88 +369,69 @@ const BarcodePrintingCenter: React.FC = () => {
     }
   });
 
-  // Fetch product variants
-  const { data: productVariants = [] } = useQuery({
-    queryKey: ['barcode-product-variants'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_variants')
-        .select(`
-          id,
-          product_id,
-          sku,
-          barcode,
-          stock,
-          price_adjustment,
-          size:sizes(id, name, name_ar, code),
-          color:colors(id, name, name_ar, hex_code)
-        `)
-        .eq('is_active', true);
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Create a map of product id to its variants
-  const productVariantsMap = React.useMemo(() => {
-    const map = new Map<string, VariantType[]>();
-    productVariants.forEach(v => {
-      const list = map.get(v.product_id) || [];
-      list.push(v);
-      map.set(v.product_id, list);
-    });
-    return map;
-  }, [productVariants]);
-
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.name_ar && p.name_ar.toLowerCase().includes(searchQuery.toLowerCase())) ||
     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.barcode && p.barcode.includes(searchQuery))
   );
 
-  const handleAddProduct = (product: APIProduct, variant?: VariantType) => {
-    const productId = variant ? `${product.id}-${variant.id}` : String(product.id);
-    const existing = selectedProducts.find(p => p.id === productId);
+  const handleAddProduct = (product: APIProduct, variant?: ProductUnit, color?: ProductColor) => {
+    const variantId = variant ? `${product.id}-${variant.id}` : String(product.id);
+    const existing = selectedProducts.find(p => p.id === variantId);
+
+    const price = variant 
+      ? Number(variant.sell_price) 
+      : Number(product.price);
+
+    let variantInfo = '';
+    let variantInfoAr = '';
+    
+    if (variant) {
+      variantInfo = variant.unit_name;
+      variantInfoAr = variant.unit_name;
+      if (color) {
+        variantInfo += ` - ${color.color}`;
+        variantInfoAr += ` - ${color.color}`;
+      }
+    }
+
+    const barcodeValue = variant?.barcode || variant?.sku || product.barcode || product.sku;
 
     if (existing) {
       setSelectedProducts(prev =>
-        prev.map(p => p.id === productId ? { ...p, quantity: p.quantity + 1 } : p)
+        prev.map(p => p.id === variantId ? { ...p, quantity: p.quantity + 1 } : p)
       );
     } else {
-      const variantInfo = variant
-        ? [variant.size?.name, variant.color?.name].filter(Boolean).join(' - ')
-        : undefined;
-      const variantInfoAr = variant
-        ? [variant.size?.name, variant.color?.name].filter(Boolean).join(' - ')
-        : undefined;
-
-      const price = variant
-        ? parseFloat(product.price) + (variant.price_adjustment || 0)
-        : parseFloat(product.price);
-
       setSelectedProducts(prev => [...prev, {
-        id: productId,
+        id: variantId,
         name: product.name,
-        nameAr: product.name,
+        nameAr: product.name_ar || product.name,
         sku: variant?.sku || product.sku,
-        barcode: variant?.barcode || variant?.sku || product.barcode || product.sku,
+        barcode: barcodeValue,
         price: price,
         quantity: 1,
         isVariant: !!variant,
         variantInfo,
-        variantInfoAr
+        variantInfoAr,
+        selectedUnit: variant,
+        selectedColor: color
       }]);
     }
 
-    const displayName = product.name;
-    const variantDisplay = variant
-      ? ` (${variant.size?.name || ''} ${variant.color?.name || ''})`
-      : '';
-
     toast({
       title: isRTL ? 'تمت الإضافة' : 'Added',
-      description: `${displayName}${variantDisplay}`
+      description: `${product.name}${variantInfo ? ` (${variantInfo})` : ''}`
     });
+  };
+
+  const handleOpenVariantModal = (product: APIProduct) => {
+    if (product.units && product.units.length > 0) {
+      setSelectedProductForVariant(product);
+      setVariantModalOpen(true);
+    } else {
+      handleAddProduct(product);
+    }
   };
 
   const handleRemoveProduct = (id: string) => {
@@ -321,110 +469,113 @@ const BarcodePrintingCenter: React.FC = () => {
     toast({ title: isRTL ? 'تم إعادة التصميم' : 'Design Reset' });
   };
 
-  const handlePrint = () => {
-    if (selectedProducts.length === 0) {
-      toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
-      return;
+const handlePrint = () => {
+  if (selectedProducts.length === 0) {
+    toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
+    return;
+  }
+
+  const printWindow = window.open('', '', 'height=800,width=1000');
+  if (!printWindow) return;
+
+  const labels: string[] = [];
+  selectedProducts.forEach((product, idx) => {
+    for (let i = 0; i < product.quantity; i++) {
+      const productLabel = product.isVariant
+        ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
+        : (isRTL ? product.nameAr : product.name);
+
+      const formattedPrice = formatCurrency(product.price);
+
+      labels.push(`
+        <div class="label" style="
+          width: ${design.width}mm;
+          height: ${design.height}mm;
+          padding: ${design.padding}mm;
+          border: ${design.borderEnabled ? '1px solid #333' : 'none'};
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          page-break-inside: avoid;
+          box-sizing: border-box;
+          margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
+        ">
+          ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
+          ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
+          ${design.showBarcode ? `<canvas id="bc-${idx}-${i}"></canvas>` : ''}
+          ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
+          ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${formattedPrice}</div>` : ''}
+        </div>
+      `);
     }
+  });
 
-    const printWindow = window.open('', '', 'height=800,width=1000');
-    if (!printWindow) return;
+  const labelsHtml = labels.join('');
 
-    const labels: string[] = [];
-    selectedProducts.forEach(product => {
-      for (let i = 0; i < product.quantity; i++) {
-        const productLabel = product.isVariant
-          ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
-          : (isRTL ? product.nameAr : product.name);
+  // ✅ أكتب في نافذة الطباعة
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html dir="${isRTL ? 'rtl' : 'ltr'}">
+      <head>
+        <title>${isRTL ? 'طباعة الباركود' : 'Print Barcodes'}</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, sans-serif; 
+            padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm;
+          }
+          .labels-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+          }
+          @media print {
+            .no-print { display: none !important; }
+            body { padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px; text-align: center;">
+          <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+            ${isRTL ? '🖨️ طباعة الملصقات' : '🖨️ Print Labels'}
+          </button>
+          <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
+        </div>
+        <div class="labels-container">
+          ${labelsHtml}
+        </div>
+        <script>
+          ${selectedProducts.map((product, idx) =>
+            Array.from({ length: product.quantity }, (_, i) => `
+              try {
+                JsBarcode("#bc-${idx}-${i}", "${product.barcode}", {
+                  format: "CODE128",
+                  width: ${design.barcodeWidth},
+                  height: ${design.barcodeHeight},
+                  displayValue: true,
+                  fontSize: ${design.fontSize - 2},
+                  margin: 2,
+                  textMargin: 1
+                });
+              } catch(e) { console.error(e); }
+            `).join('')
+          ).join('')}
+        </script>
+      </body>
+    </html>
+  `);
+  
+  printWindow.document.close();
 
-        labels.push(`
-          <div class="label" style="
-            width: ${design.width}mm;
-            height: ${design.height}mm;
-            padding: ${design.padding}mm;
-            border: ${design.borderEnabled ? '1px solid #333' : 'none'};
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            page-break-inside: avoid;
-            box-sizing: border-box;
-            margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
-          ">
-            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
-            ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
-            ${design.showBarcode ? `<canvas id="bc-${product.id.replace(/-/g, '_')}-${i}"></canvas>` : ''}
-            ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${product.price.toLocaleString()} YER</div>` : ''}
-          </div>
-        `);
-      }
-    });
-
-    const labelsHtml = labels.join('');
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html dir="${isRTL ? 'rtl' : 'ltr'}">
-        <head>
-          <title>${isRTL ? 'طباعة الباركود' : 'Print Barcodes'}</title>
-          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: Arial, sans-serif; 
-              padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm;
-            }
-            .labels-container {
-              display: flex;
-              flex-wrap: wrap;
-              justify-content: flex-start;
-            }
-            @media print {
-              .no-print { display: none !important; }
-              body { padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
-            <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
-              ${isRTL ? '🖨️ طباعة الملصقات' : '🖨️ Print Labels'}
-            </button>
-            <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
-          </div>
-          <div class="labels-container">
-            ${labelsHtml}
-          </div>
-          <script>
-            ${selectedProducts.map((product, pIndex) =>
-      Array.from({ length: product.quantity }, (_, i) => `
-                try {
-                  JsBarcode("#bc-${product.id.replace(/-/g, '_')}-${i}", "${product.barcode}", {
-                    format: "CODE128",
-                    width: ${design.barcodeWidth},
-                    height: ${design.barcodeHeight},
-                    displayValue: true,
-                    fontSize: ${design.fontSize - 2},
-                    margin: 2,
-                    textMargin: 1
-                  });
-                } catch(e) { console.error(e); }
-              `).join('')
-    ).join('')}
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-
-    toast({
-      title: isRTL ? 'جاري الطباعة' : 'Printing',
-      description: isRTL ? `${totalLabels} ملصق` : `${totalLabels} labels`
-    });
-  };
-
+  toast({
+    title: isRTL ? 'جاري الطباعة' : 'Printing',
+    description: isRTL ? `${totalLabels} ملصق` : `${totalLabels} labels`
+  });
+};
   // Generate preview barcode
   useEffect(() => {
     if (canvasRef.current && selectedProducts.length > 0) {
@@ -480,13 +631,25 @@ const BarcodePrintingCenter: React.FC = () => {
     gaps: isRTL ? 'الفجوات' : 'Gaps',
     reset: isRTL ? 'إعادة تعيين' : 'Reset',
     mm: isRTL ? 'مم' : 'mm',
-    px: isRTL ? 'بكسل' : 'px'
+    px: isRTL ? 'بكسل' : 'px',
+    variants: isRTL ? 'متغيرات' : 'Variants'
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">{isRTL ? 'جاري التحميل...' : 'Loading...'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10">
             <Printer className="h-6 w-6 text-primary" />
@@ -524,7 +687,7 @@ const BarcodePrintingCenter: React.FC = () => {
                 {t.products}
               </TabsTrigger>
               <TabsTrigger value="design" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <LayoutGrid className="h-4 w-4 me-2" />
+                <Settings2 className="h-4 w-4 me-2" />
                 {t.design}
               </TabsTrigger>
               <TabsTrigger value="printer" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
@@ -551,8 +714,7 @@ const BarcodePrintingCenter: React.FC = () => {
                   <ScrollArea className="h-[350px]">
                     <div className="divide-y divide-border">
                       {filteredProducts.map(product => {
-                        const variants = productVariantsMap.get(String(product.id)) || [];
-                        const hasVariants = variants.length > 0;
+                        const hasVariants = product.units && product.units.length > 0;
 
                         return (
                           <div key={product.id} className="border-b border-border last:border-0">
@@ -561,71 +723,28 @@ const BarcodePrintingCenter: React.FC = () => {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <p className="font-medium text-foreground truncate">
-                                    {product.name}
+                                    {isRTL ? (product.name_ar || product.name) : product.name}
                                   </p>
                                   {hasVariants && (
                                     <Badge variant="secondary" className="text-xs">
-                                      {variants.length} {isRTL ? 'متغيرات' : 'variants'}
+                                      {product.units!.length} {t.variants}
                                     </Badge>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                   <span className="font-mono">{product.sku}</span>
-                                  <span>{parseFloat(product.price).toLocaleString()} YER</span>
+                                  <span>{formatCurrency(Number(product.price))}</span>
                                 </div>
                               </div>
-                              {!hasVariants && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleAddProduct(product)}
-                                  className="shrink-0"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenVariantModal(product)}
+                                className="shrink-0"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
                             </div>
-
-                            {/* Variants List */}
-                            {hasVariants && (
-                              <div className="ps-6 pe-3 pb-2 space-y-1">
-                                {variants.map((variant: VariantType) => {
-                                  const variantName = [
-                                    variant.size?.name,
-                                    variant.color?.name
-                                  ].filter(Boolean).join(' - ');
-
-                                  return (
-                                    <div
-                                      key={variant.id}
-                                      className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg hover:bg-muted/60 transition-colors"
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        {variant.color?.hex_code && (
-                                          <div
-                                            className="w-4 h-4 rounded-full border border-border"
-                                            style={{ backgroundColor: variant.color.hex_code }}
-                                          />
-                                        )}
-                                        <div>
-                                          <p className="text-sm font-medium">{variantName || variant.sku}</p>
-                                          <p className="text-xs text-muted-foreground font-mono">{variant.sku}</p>
-                                        </div>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleAddProduct(product, variant)}
-                                        className="h-7"
-                                      >
-                                        <Plus className="h-3 w-3 me-1" />
-                                        {isRTL ? 'إضافة' : 'Add'}
-                                      </Button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -658,11 +777,11 @@ const BarcodePrintingCenter: React.FC = () => {
                             className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
                           >
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-medium truncate">
                                   {isRTL ? product.nameAr : product.name}
                                 </p>
-                                {product.isVariant && (
+                                {product.isVariant && product.variantInfo && (
                                   <Badge variant="outline" className="text-xs">
                                     {isRTL ? product.variantInfoAr : product.variantInfo}
                                   </Badge>
@@ -1037,6 +1156,11 @@ const BarcodePrintingCenter: React.FC = () => {
                     {design.showProductName && (
                       <p style={{ fontSize: `${design.fontSize}px`, fontWeight: 600, marginBottom: '4px' }}>
                         {isRTL ? selectedProducts[0].nameAr : selectedProducts[0].name}
+                        {selectedProducts[0].isVariant && selectedProducts[0].variantInfo && (
+                          <span className="text-xs text-muted-foreground block">
+                            {isRTL ? selectedProducts[0].variantInfoAr : selectedProducts[0].variantInfo}
+                          </span>
+                        )}
                       </p>
                     )}
                     {design.showBarcode && (
@@ -1047,11 +1171,11 @@ const BarcodePrintingCenter: React.FC = () => {
                         {selectedProducts[0].sku}
                       </p>
                     )}
-                    {design.showPrice && (
-                      <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 'bold', marginTop: '4px' }}>
-                        {selectedProducts[0].price.toLocaleString()} YER
-                      </p>
-                    )}
+                  {design.showPrice && (
+  <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 'bold', marginTop: '4px' }}>
+    {formatCurrency(selectedProducts[0].price)}
+  </p>
+)}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground">
@@ -1079,6 +1203,17 @@ const BarcodePrintingCenter: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Variant Selector Modal */}
+      <VariantSelectorModal
+        isOpen={variantModalOpen}
+        onClose={() => {
+          setVariantModalOpen(false);
+          setSelectedProductForVariant(null);
+        }}
+        product={selectedProductForVariant!}
+        onSelect={handleAddProduct}
+      />
     </div>
   );
 };

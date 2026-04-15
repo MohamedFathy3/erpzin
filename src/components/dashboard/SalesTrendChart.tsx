@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // components/dashboard/SalesTrendChart.tsx
 import React, { useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -18,18 +19,31 @@ import { RevenueReport } from '@/hooks/useDashboardData';
 
 interface SalesTrendChartProps {
   branchId?: number;
-  data?: any; // البيانات المباشرة من API
-  reportData?: RevenueReport; // 👈 أضف reportData
+  data?: any;
+  reportData?: RevenueReport;
 }
 
-interface SalesInvoice {
+interface Invoice {
   id: number;
-  total_amount: string;
+  invoice_number: string;
+  status: string;
+  customer: {
+    id: number;
+    name: string;
+  };
+  amounts: {
+    total: number;
+    paid: number;
+    remaining: number;
+  };
   created_at: string;
 }
 
-interface SalesInvoiceResponse {
-  data: SalesInvoice[];
+interface InvoicesResponse {
+  data: Invoice[];
+  result: string;
+  message: string;
+  status: number;
 }
 
 const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -39,21 +53,14 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
   const { t, language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
 
-  // استخدم propData لو موجود، وإلا جيب من API
+  // جلب البيانات من API /invoices/index
   const { data: salesData, isLoading } = useQuery({
     queryKey: ['sales-trend-chart', branchId],
     queryFn: async () => {
       const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth();
       const months = language === 'ar' ? monthsAr : monthsEn;
       
-      // جلب كل مبيعات السنة الحالية
-      const startOfYear = `${currentYear}-01-01 00:00:00`;
-      const endOfYear = `${currentYear}-12-31 23:59:59`;
-      
       const params: any = {
-        date_from: startOfYear,
-        date_to: endOfYear,
         paginate: false
       };
       
@@ -61,27 +68,44 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
         params.branch_id = branchId;
       }
 
-      const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', params);
-      const allSales = response.data.data || [];
+      const response = await api.post<InvoicesResponse>('/invoices/index', params);
+      const allInvoices = response.data.data || [];
       
-      // Generate data for each month
+      // فلترة الفواتير المدفوعة فقط (paid)
+      const paidInvoices = allInvoices.filter(invoice => invoice.status === 'paid');
+      
+      // تجميع المبيعات حسب الشهر
       const monthlyData = months.map((month, index) => {
         const monthStart = new Date(currentYear, index, 1);
         const monthEnd = new Date(currentYear, index + 1, 0);
         
-        // فلترة مبيعات هذا الشهر
-        const monthSales = allSales.filter(sale => {
-          const saleDate = new Date(sale.created_at);
-          return saleDate >= monthStart && saleDate <= monthEnd;
+        // فلترة فواتير هذا الشهر
+        const monthInvoices = paidInvoices.filter(invoice => {
+          const invoiceDate = new Date(invoice.created_at);
+          return invoiceDate >= monthStart && invoiceDate <= monthEnd;
         });
         
+        const currentMonth = new Date().getMonth();
         const actual = index <= currentMonth 
-          ? monthSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
+          ? monthInvoices.reduce((sum, inv) => sum + Number(inv.amounts.total), 0)
           : null;
         
-        // Simple prediction based on trend
-        const baseValue = 100000 + (index * 15000);
-        const predicted = Math.round(baseValue + (Math.random() * 20000 - 10000));
+        // توقع بسيط (تقديري)
+        let predicted = null;
+        if (actual !== null && index === currentMonth) {
+          // توقع باقي الشهر الحالي
+          predicted = actual * 1.2;
+        } else if (index > currentMonth) {
+          // توقع للأشهر القادمة بناءً على متوسط الأشهر السابقة
+          const previousMonths = paidInvoices.filter(inv => {
+            const invDate = new Date(inv.created_at);
+            return invDate.getFullYear() === currentYear && invDate.getMonth() < index;
+          });
+          const avgPrevious = previousMonths.length > 0 
+            ? previousMonths.reduce((sum, inv) => sum + Number(inv.amounts.total), 0) / previousMonths.length
+            : 50000;
+          predicted = Math.round(avgPrevious * (1 + (index * 0.05)));
+        }
         
         return {
           month,
@@ -92,10 +116,10 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
       
       return monthlyData;
     },
-    enabled: !propData && !reportData, // 👈 شغال بس لو مفيش propData ولا reportData
+    enabled: !propData && !reportData,
   });
 
-  // تحويل reportData إلى تنسيق المخطط إذا كان موجوداً
+  // تحويل reportData إلى تنسيق المخطط
   const chartDataFromReport = useMemo(() => {
     if (!reportData) return null;
     
@@ -103,38 +127,24 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
     
-    // لو عندنا بيانات من الـ report، نحاول نستخدمها
-    // ملاحظة: reportData لا يحتوي على بيانات شهرية تفصيلية،
-    // لذلك سنقوم بإنشاء بيانات تقديرية بناءً على الإيرادات الكلية
-    
-    const monthlyRevenue = reportData.month_revenue;
-    const threeMonthsRevenue = reportData.three_months_revenue;
-    
-    // توزيع الإيرادات على الأشهر بشكل تقديري
     return months.map((month, index) => {
       let actual = null;
       
       if (index === currentMonth) {
-        // الشهر الحالي: نستخدم الإيرادات الشهرية
-        actual = monthlyRevenue;
+        actual = reportData.month_revenue;
       } else if (index >= currentMonth - 2 && index <= currentMonth) {
-        // الأشهر الثلاثة الماضية: نوزع الإيرادات بشكل تقديري
-        actual = threeMonthsRevenue / 3;
+        actual = reportData.three_months_revenue / 3;
       } else if (index < currentMonth) {
-        // أشهر سابقة: قيمة تقديرية
-        actual = monthlyRevenue * 0.8;
+        actual = reportData.month_revenue * 0.8;
       }
       
       return {
         month,
         actual,
-        predicted: actual ? actual * 1.1 : null, // توقع بزيادة 10%
+        predicted: actual ? actual * 1.1 : null,
       };
     });
   }, [reportData, language]);
-
-  // استخدم البيانات المتاحة: propData > chartDataFromReport > salesData
-  const chartData = propData || chartDataFromReport || salesData;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -149,7 +159,7 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
               />
               <span className="text-muted-foreground">{entry.name}:</span>
               <span className="font-medium">
-                {entry.value ? formatCurrency(entry.value) : '-'}
+                {entry.value !== null && entry.value !== undefined ? formatCurrency(entry.value) : '-'}
               </span>
             </div>
           ))}
@@ -158,6 +168,27 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
     }
     return null;
   };
+
+  // دالة الترجمة المحلية للمفاتيح الناقصة
+  const localT = (key: string): string => {
+    const translations: Record<string, Record<string, string>> = {
+      en: {
+        'dashboard.salesTrend': 'Sales Trend',
+        'dashboard.actualSales': 'Actual Sales',
+        'dashboard.aiPrediction': 'AI Prediction',
+        'common.noData': 'No data available',
+      },
+      ar: {
+        'dashboard.salesTrend': 'اتجاه المبيعات',
+        'dashboard.actualSales': 'المبيعات الفعلية',
+        'dashboard.aiPrediction': 'توقع الذكاء الاصطناعي',
+        'common.noData': 'لا توجد بيانات',
+      },
+    };
+    return translations[language]?.[key] || key;
+  };
+
+  const chartData = propData || chartDataFromReport || salesData;
 
   const isLoadingData = !propData && !reportData && isLoading;
 
@@ -176,14 +207,14 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
     );
   }
 
-  if (!chartData || chartData.length === 0) {
+  if (!chartData || chartData.length === 0 || chartData.every(item => item.actual === null && item.predicted === null)) {
     return (
       <div className="card-elevated p-5">
         <h3 className="text-lg font-semibold text-foreground mb-6">
-          {t('dashboard.salesTrend')}
+          {localT('dashboard.salesTrend')}
         </h3>
         <div className="h-72 flex items-center justify-center">
-          <p className="text-muted-foreground">{t('common.noData')}</p>
+          <p className="text-muted-foreground">{localT('common.noData')}</p>
         </div>
       </div>
     );
@@ -193,16 +224,16 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
     <div className="card-elevated p-5">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-foreground">
-          {t('dashboard.salesTrend')}
+          {localT('dashboard.salesTrend')}
         </h3>
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary" />
-            <span className="text-muted-foreground">{t('dashboard.actualSales')}</span>
+            <span className="text-muted-foreground">{localT('dashboard.actualSales')}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full gradient-success" />
-            <span className="text-muted-foreground">{t('dashboard.aiPrediction')}</span>
+            <div className="w-3 h-3 rounded-full bg-emerald-500" />
+            <span className="text-muted-foreground">{localT('dashboard.aiPrediction')}</span>
           </div>
         </div>
       </div>
@@ -216,8 +247,8 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
                 <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(134, 61%, 41%)" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(162, 63%, 46%)" stopOpacity={0} />
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -235,7 +266,7 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
             <Area
               type="monotone"
               dataKey="actual"
-              name={t('dashboard.actualSales')}
+              name={localT('dashboard.actualSales')}
               stroke="hsl(var(--primary))"
               strokeWidth={2}
               fill="url(#colorActual)"
@@ -244,8 +275,8 @@ const SalesTrendChart: React.FC<SalesTrendChartProps> = ({ branchId, data: propD
             <Area
               type="monotone"
               dataKey="predicted"
-              name={t('dashboard.aiPrediction')}
-              stroke="hsl(134, 61%, 41%)"
+              name={localT('dashboard.aiPrediction')}
+              stroke="#10b981"
               strokeWidth={2}
               strokeDasharray="5 5"
               fill="url(#colorPredicted)"

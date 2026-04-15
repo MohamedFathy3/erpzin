@@ -42,7 +42,6 @@ const Dashboard: React.FC = () => {
         <DashboardKPIs metrics={dashboardMetrics} isLoading={isLoading} />
 
         {/* Low Stock Alert */}
-        <LowStockAlert lowStockProducts={lowStockProducts} />
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

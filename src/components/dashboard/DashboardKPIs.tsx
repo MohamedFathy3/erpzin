@@ -14,8 +14,34 @@ interface DashboardKPIsProps {
 }
 
 const DashboardKPIs: React.FC<DashboardKPIsProps> = ({ metrics, isLoading }) => {
-  const { t } = useLanguage();
+  const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
+
+  // الترجمات مباشرة في الملف
+  const t = (key: string): string => {
+    const translations: Record<string, Record<string, string>> = {
+      en: {
+        'dashboard.todaySales': "Today's Sales",
+        'dashboard.vsYesterday': 'vs yesterday',
+        'dashboard.totalRevenue': 'Total Revenue',
+        'dashboard.thisMonth': 'this month',
+        'dashboard.threeMonthsRevenue': 'Revenue (3 Months)',
+        'dashboard.lastThreeMonths': 'last 3 months',
+        'dashboard.totalOrders': 'Total Orders',
+      },
+      ar: {
+        'dashboard.todaySales': 'مبيعات اليوم',
+        'dashboard.vsYesterday': 'مقابل الأمس',
+        'dashboard.totalRevenue': 'إجمالي الإيرادات',
+        'dashboard.thisMonth': 'هذا الشهر',
+        'dashboard.threeMonthsRevenue': 'الإيرادات (٣ أشهر)',
+        'dashboard.lastThreeMonths': 'آخر ٣ أشهر',
+        'dashboard.totalOrders': 'إجمالي الطلبات',
+      },
+    };
+
+    return translations[language]?.[key] || key;
+  };
 
   if (isLoading) {
     return (
@@ -36,7 +62,6 @@ const DashboardKPIs: React.FC<DashboardKPIsProps> = ({ metrics, isLoading }) => 
       <KPICard
         title={t('dashboard.todaySales')}
         value={formatCurrency(metrics.todaySales)}
-        currency={t('common.currency')}
         change={metrics.salesChange}
         changeLabel={t('dashboard.vsYesterday')}
         icon={<Wallet size={20} />}
@@ -45,7 +70,6 @@ const DashboardKPIs: React.FC<DashboardKPIsProps> = ({ metrics, isLoading }) => 
       <KPICard
         title={t('dashboard.totalRevenue')}
         value={formatCurrency(metrics.totalRevenue)}
-        currency={t('common.currency')}
         subtitle={t('dashboard.thisMonth')}
         icon={<TrendingUp size={20} />}
         variant="primary"
@@ -53,7 +77,6 @@ const DashboardKPIs: React.FC<DashboardKPIsProps> = ({ metrics, isLoading }) => 
       <KPICard
         title={t('dashboard.threeMonthsRevenue')}
         value={formatCurrency(metrics.threeMonthsRevenue)}
-        currency={t('common.currency')}
         subtitle={t('dashboard.lastThreeMonths')}
         icon={<DollarSign size={20} />}
         variant="default"
