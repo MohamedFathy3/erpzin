@@ -443,7 +443,7 @@ const paymentShortcuts = getPaymentShortcuts({
             <p className="text-sm mb-1">
               {language === 'ar' ? 'المتبقي للتقسيم' : 'Remaining to split'}
             </p>
-            <p className="text-xl font-bold">{getSplitRemaining().toLocaleString()} YER</p>
+            <p className="text-xl font-bold">{formatCurrency(getSplitRemaining())}</p>
           </div>
 
           {/* Split inputs for all 3 methods */}
@@ -545,7 +545,7 @@ const paymentShortcuts = getPaymentShortcuts({
           }
         </p>
         <p className="text-3xl font-bold text-primary mt-4">
-          {total.toLocaleString()} YER
+         {formatCurrency(total)} 
         </p>
       </div>
     );
@@ -669,7 +669,7 @@ const paymentShortcuts = getPaymentShortcuts({
                 {language === 'ar' ? 'الباقي' : 'Change'}
               </p>
               <p className="text-2xl font-bold text-success">
-                {calculateChange().toLocaleString()} YER
+                {formatCurrency(calculateChange())}
               </p>
             </div>
           )}
