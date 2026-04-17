@@ -352,35 +352,36 @@ const CustomerSupplierMovement: React.FC = () => {
   // ==================== Enrich Suppliers with Purchase Data ====================
   const enrichedSuppliers = useMemo<EnrichedSupplier[]>(() => {
     // Group purchases by supplier
-    const purchasesBySupplier = purchaseInvoices.reduce((acc, invoice) => {
-      const supplierId = invoice.supplier.id;
-      if (!supplierId) return acc;
-      
-      if (!acc[supplierId]) {
-        acc[supplierId] = {
-          totalAmount: 0,
-          invoiceCount: 0,
-          paidAmount: 0,
-          remainingAmount: 0,
-          lastDate: null
-        };
-      }
-      
-      const amount = Number(invoice.total_amount) || 0;
-      acc[supplierId].totalAmount += amount;
-      acc[supplierId].invoiceCount += 1;
-      
-      // Since API doesn't have paid/remaining, we'll use total for now
-      acc[supplierId].paidAmount += amount;
-      acc[supplierId].remainingAmount += 0;
-      
-      const invoiceDate = new Date(invoice.invoice_date);
-      if (!acc[supplierId].lastDate || invoiceDate > new Date(acc[supplierId].lastDate!)) {
-        acc[supplierId].lastDate = invoice.invoice_date;
-      }
-      
-      return acc;
-    }, {} as Record<number, { totalAmount: number; invoiceCount: number; paidAmount: number; remainingAmount: number; lastDate: string | null }>);
+ const purchasesBySupplier = purchaseInvoices.reduce((acc, invoice) => {
+  // Add optional chaining operator ?. to safely access supplier.id
+  const supplierId = invoice.supplier?.id;
+  if (!supplierId) return acc;
+  
+  if (!acc[supplierId]) {
+    acc[supplierId] = {
+      totalAmount: 0,
+      invoiceCount: 0,
+      paidAmount: 0,
+      remainingAmount: 0,
+      lastDate: null
+    };
+  }
+  
+  const amount = Number(invoice.total_amount) || 0;
+  acc[supplierId].totalAmount += amount;
+  acc[supplierId].invoiceCount += 1;
+  
+  // Since API doesn't have paid/remaining, we'll use total for now
+  acc[supplierId].paidAmount += amount;
+  acc[supplierId].remainingAmount += 0;
+  
+  const invoiceDate = new Date(invoice.invoice_date);
+  if (!acc[supplierId].lastDate || invoiceDate > new Date(acc[supplierId].lastDate!)) {
+    acc[supplierId].lastDate = invoice.invoice_date;
+  }
+  
+  return acc;
+}, {} as Record<number, { totalAmount: number; invoiceCount: number; paidAmount: number; remainingAmount: number; lastDate: string | null }>);
 
     // Enrich suppliers with purchase data
     return suppliers.map(supplier => {

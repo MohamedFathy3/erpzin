@@ -187,6 +187,7 @@ const filteredProducts = useMemo(() => {
                   </p>
                   <p className="font-bold text-primary mt-1 text-sm">
                     {formatCurrency(product.price)}
+                    
                   </p>
                   
                   {product.stock > 0 && product.stock < 10 && (

@@ -878,7 +878,7 @@ const Inventory: React.FC = () => {
               {/* Category Manager Sidebar */}
               <div className={cn(
                 "flex-shrink-0 hidden lg:block transition-all duration-300",
-                isCategoryCollapsed ? "w-12" : "w-64"
+                isCategoryCollapsed ? "w-12" : "w-66"
               )}>
                 <CategoryManager
                   selectedCategory={selectedCategory}

@@ -202,8 +202,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     queryFn: async () => {
       try {
         const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
-          date_from: `${currentMonthStart} 00:00:00`,
-          date_to: `${currentMonthEnd} 23:59:59`,
+          date_from: `${currentMonthStart}`,
+          date_to: `${currentMonthEnd}`,
           paginate: false
         });
         return response.data.data || [];
@@ -222,8 +222,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     queryFn: async () => {
       try {
         const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
-          date_from: `${lastMonthStartStr} 00:00:00`,
-          date_to: `${lastMonthEndStr} 23:59:59`,
+          date_from: `${lastMonthStartStr}`,
+          date_to: `${lastMonthEndStr}`,
           paginate: false
         });
         return response.data.data || [];
@@ -241,9 +241,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     queryKey: ['finance-expenses-current', currentMonthStart, currentMonthEnd],
     queryFn: async () => {
       try {
-        const response = await api.post<ExpenseResponse>('/finance/index', {
-          date_from: currentMonthStart,
-          date_to: currentMonthEnd
+        const response = await api.post<ExpenseResponse>('/revenue/index', {
         });
         return response.data.data || [];
       } catch (error) {
