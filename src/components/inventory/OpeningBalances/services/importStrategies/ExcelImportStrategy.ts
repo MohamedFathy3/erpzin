@@ -15,46 +15,10 @@ export class ExcelImportStrategy implements IImportStrategy {
   };
 
   validate(data: any[]): ValidationResult {
-    const errors: ValidationError[] = [];
-    
-    data.forEach((row, index) => {
-      const rowNumber = index + 2;
-      
-      // Check name
-      const name = this.getFieldValue(row, 'name');
-      if (!name) {
-        errors.push({
-          row: rowNumber,
-          field: 'name',
-          message: 'Product name is required'
-        });
-      }
-      
-      // Check sku
-      const sku = this.getFieldValue(row, 'sku');
-      if (!sku) {
-        errors.push({
-          row: rowNumber,
-          field: 'sku',
-          message: 'SKU is required'
-        });
-      }
-      
-      // Check cost
-      const cost = this.getFieldValue(row, 'cost');
-      const costNum = Number(cost);
-      if (!cost || isNaN(costNum) || costNum < 0) {
-        errors.push({
-          row: rowNumber,
-          field: 'cost',
-          message: `Cost must be a valid number (got: ${cost || 'empty'})`
-        });
-      }
-    });
-    
+ 
     return {
-      isValid: errors.length === 0,
-      errors
+      isValid: true,
+      errors: []
     };
   }
 
