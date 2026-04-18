@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import api from '@/lib/api';
 import { X, Upload, Barcode, RefreshCw, Link, ImageIcon, Loader2, Building2, Warehouse, Calculator, Eye, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import VariantMatrix, { ProductVariant } from './VariantMatrix';
 import { toast } from '@/hooks/use-toast';
 import FileUploader from '@/components/FileUploader';
+
+interface UnitOption {
+  id: string;
+  name: string;
+  nameAr: string;
+  code: string;
+}
 
 interface ProductFormProps {
   isOpen: boolean;
@@ -42,6 +51,7 @@ export interface ProductFormData {
   sku: string;
   barcode: string;
   categoryId: string;
+  main_unit_id: string;
   price: number;
   cost: number;
   hasVariants: boolean;
@@ -59,10 +69,10 @@ export interface ProductFormData {
 }
 
 export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
-  
+
   let imageUrl = '';
   let imageId: number | undefined;
-  
+
   // معالجة الصورة
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
@@ -74,18 +84,18 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
   } else if (apiProduct.image_url) {
     imageUrl = apiProduct.image_url;
   }
-  
+
   // تحويل active (boolean) إلى status (string)
   const status = apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
-  
+
   // تأكد من أن category_id معالج بشكل صحيح
-  const categoryId = apiProduct.category?.id?.toString() || 
-                     apiProduct.category_id?.toString() || 
-                     '';
+  const categoryId = apiProduct.category?.id?.toString() ||
+    apiProduct.category_id?.toString() ||
+    '';
 
   // معالجة المتغيرات
   let variants = [];
-  
+
   if (apiProduct.variants && apiProduct.variants.length > 0) {
     variants = apiProduct.variants;
   } else if (apiProduct.units && apiProduct.units.length > 0) {
@@ -101,6 +111,7 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || '',
     categoryId: categoryId,
+    main_unit_id: apiProduct.main_unit_id?.toString() || '',
     price: Number(apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
@@ -112,15 +123,15 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     status: status,
     imageId,
     imageUrl,
-    branchIds: Array.isArray(apiProduct.branch_ids) 
+    branchIds: Array.isArray(apiProduct.branch_ids)
       ? apiProduct.branch_ids.map((id: any) => id.toString())
       : [],
-    warehouseIds: Array.isArray(apiProduct.warehouse_ids) 
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids)
       ? apiProduct.warehouse_ids.map((id: any) => id.toString())
       : [],
     valuationMethod: apiProduct.valuation_method || 'fifo'
   };
-  
+
   return result;
 };
 
@@ -147,11 +158,11 @@ interface DbCategory {
 
 const flattenDbCategories = (categories: DbCategory[]): { id: string; name: string; nameAr: string }[] => {
   const result: { id: string; name: string; nameAr: string }[] = [];
-  
+
   // Filter out categories without valid ID
   const validCategories = categories.filter(cat => {
     if (cat.id === undefined || cat.id === null) return false;
-    
+
     if (typeof cat.id === 'number') {
       return !isNaN(cat.id) && cat.id > 0;
     } else if (typeof cat.id === 'string') {
@@ -163,10 +174,10 @@ const flattenDbCategories = (categories: DbCategory[]): { id: string; name: stri
   const buildPath = (category: DbCategory, path: string = '', pathAr: string = ''): void => {
     const currentName = category.name || 'Unnamed';
     const currentNameAr = category.name_ar || currentName;
-    
+
     const newPath = path ? `${currentName} > ${path}` : currentName;
     const newPathAr = pathAr ? `${currentNameAr} > ${pathAr}` : currentNameAr;
-    
+
     result.push({
       id: category.id.toString(),
       name: newPath,
@@ -177,7 +188,7 @@ const flattenDbCategories = (categories: DbCategory[]): { id: string; name: stri
   // Main categories
   const mainCategories = validCategories.filter(cat => !cat.parent_id || cat.type === 'category');
   mainCategories.forEach(cat => buildPath(cat));
-  
+
   // Sub-categories
   const subCategories = validCategories.filter(cat => cat.parent_id && cat.type === 'sub_category');
   subCategories.forEach(subCat => {
@@ -190,8 +201,35 @@ const flattenDbCategories = (categories: DbCategory[]): { id: string; name: stri
       buildPath(subCat);
     }
   });
-  
+
   return result.sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const useUnitsForm = () => {
+  return useQuery({
+    queryKey: ['units-product-form'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/unit/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        const units = response.data.data || [];
+        return units.map((unit: any) => ({
+          id: unit.id.toString(),
+          name: unit.name,
+          nameAr: unit.name_ar || unit.name,
+          code: unit.code
+        }));
+      } catch (error) {
+        console.error('Error fetching units:', error);
+        return [];
+      }
+    }
+  });
 };
 
 const ProductForm: React.FC<ProductFormProps> = ({
@@ -208,7 +246,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const { language } = useLanguage();
   const [uploadedImageIds, setUploadedImageIds] = useState<number[]>([]);
-  
+
   // تأكد أن categories مصفوفة وليست undefined
   const flatCategories = flattenDbCategories(categories || []);
 
@@ -221,6 +259,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       sku: generateSKU(),
       barcode: generateBarcode(),
       categoryId: '',
+      main_unit_id: '',
       price: 0,
       cost: 0,
       hasVariants: false,
@@ -236,19 +275,21 @@ const ProductForm: React.FC<ProductFormProps> = ({
       warehouseIds: [],
       valuationMethod: 'fifo' as const
     };
-    
+
     return data;
   };
+
+  const { data: unitsData = [], isLoading: unitsLoading } = useUnitsForm();
 
   const [formData, setFormData] = useState<ProductFormData>(getInitialFormData());
 
 
   useEffect(() => {
-    
+
     if (isOpen) {
       if (editProduct) {
-     
-        
+
+
         // تأكد أن الأرقام تتحول بشكل صحيح
         const processedEditData = {
           ...editProduct,
@@ -257,9 +298,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
           stock: Number(editProduct.stock) || 0,
           reorderPoint: Number(editProduct.reorderPoint) || 5
         };
-        
+
         setFormData(processedEditData);
-        
+
       } else {
         const initialData = getInitialFormData();
         setFormData(initialData);
@@ -276,14 +317,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
       handleChange(field, value);
       return;
     }
-    
+
     if (value === '' || value === undefined || value === null) {
       handleChange(field, 0);
       return;
     }
-    
+
     const numValue = parseFloat(value);
-    
+
     if (isNaN(numValue)) {
       handleChange(field, 0);
     } else {
@@ -297,11 +338,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
       handleChange('imageId', ids[0]);
       handleChange('imageUrl', '');
     }
-    
+
     toast({
       title: language === 'ar' ? 'تم الرفع بنجاح' : 'Upload successful',
-      description: language === 'ar' 
-        ? `تم رفع ${ids.length} صورة` 
+      description: language === 'ar'
+        ? `تم رفع ${ids.length} صورة`
         : `${ids.length} image(s) uploaded`,
     });
   };
@@ -309,8 +350,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const handleImageUploadError = (error: Error) => {
     toast({
       title: language === 'ar' ? 'خطأ' : 'Error',
-      description: language === 'ar' 
-        ? 'فشل رفع الصورة' 
+      description: language === 'ar'
+        ? 'فشل رفع الصورة'
         : 'Failed to upload image',
       variant: 'destructive'
     });
@@ -319,7 +360,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
   const handleBranchWarehouseConnection = () => {
     toast({
       title: language === 'ar' ? 'تحذير' : 'Warning',
-      description: language === 'ar' 
+      description: language === 'ar'
         ? 'يرجى توصيل الفروع بالمستودعات من لوحة التحكم الرئيسية'
         : 'Please connect branches to warehouses from the main dashboard',
       variant: 'default'
@@ -337,7 +378,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     handleChange('imageId', undefined);
     handleChange('imageUrl', '');
     setUploadedImageIds([]);
-    
+
     toast({
       title: language === 'ar' ? 'تم الحذف' : 'Removed',
       description: language === 'ar' ? 'تم إزالة الصورة' : 'Image removed',
@@ -346,31 +387,31 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-   
-    
+
+
+
     if (!formData.name.trim()) {
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' 
-          ? 'اسم المنتج مطلوب' 
+        description: language === 'ar'
+          ? 'اسم المنتج مطلوب'
           : 'Product name is required',
         variant: 'destructive'
       });
       return;
     }
-    
+
     if (!formData.sku.trim()) {
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' 
-          ? 'SKU مطلوب' 
+        description: language === 'ar'
+          ? 'SKU مطلوب'
           : 'SKU is required',
         variant: 'destructive'
       });
       return;
     }
-    
+
     const productFormData: ProductFormData = {
       ...formData,
       price: Number(formData.price) || 0,
@@ -390,15 +431,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       <div className="relative w-full max-w-4xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
           <h2 className="text-xl font-bold text-foreground">
-            {editProduct 
+            {editProduct
               ? (language === 'ar' ? 'تعديل المنتج' : 'Edit Product')
               : (language === 'ar' ? 'إضافة منتج جديد' : 'Add New Product')
             }
@@ -415,7 +456,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           {/* Product Image */}
           <div className="space-y-3">
             <Label>{language === 'ar' ? 'صورة المنتج' : 'Product Image'}</Label>
-            
+
             {(formData.imageUrl || formData.imageId) && (
               <div className="mb-4">
                 <Label className="mb-2 block">
@@ -424,13 +465,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <div className="relative w-32 h-32 border-2 border-border rounded-lg overflow-hidden bg-muted/30">
                   {getCurrentImage() ? (
                     <>
-                      <img 
-                        src={getCurrentImage()} 
-                        alt="Product" 
+                      <img
+                        src={getCurrentImage()}
+                        alt="Product"
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).parentElement!.innerHTML = 
+                          (e.target as HTMLImageElement).parentElement!.innerHTML =
                             '<div class="w-full h-full flex items-center justify-center"><ImageIcon class="w-10 h-10 text-muted-foreground" /></div>';
                         }}
                       />
@@ -441,9 +482,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
                       >
                         <X size={14} />
                       </button>
-                      <a 
-                        href={getCurrentImage()} 
-                        target="_blank" 
+                      <a
+                        href={getCurrentImage()}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="absolute bottom-1 right-1 p-1 bg-primary text-primary-foreground rounded-full hover:bg-primary/90"
                       >
@@ -458,7 +499,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </div>
               </div>
             )}
-            
+
             <FileUploader
               label={language === 'ar' ? 'رفع صورة جديدة' : 'Upload New Image'}
               onUploadSuccess={handleImageUploadSuccess}
@@ -470,11 +511,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
               preview={true}
               uniqueId="product-image-upload"
             />
-            
-            
-            
+
+
+
             <p className="text-xs text-muted-foreground">
-              {language === 'ar' 
+              {language === 'ar'
                 ? 'الحد الأقصى: 5 ميجابايت - الصيغ: JPG, PNG, GIF, WEBP. يمكنك رفع صورة أو إدخال رابط.'
                 : 'Max: 5MB - Formats: JPG, PNG, GIF, WEBP. You can upload an image or enter a URL.'
               }
@@ -485,7 +526,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <Label>{language === 'ar' ? 'اسم المنتج (إنجليزي)' : 'Product Name (English)'}</Label>
+                <Label>{language === 'ar' ? 'اسم المنتج ' : 'Product Name '}</Label>
                 <Input
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
@@ -493,10 +534,27 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   required
                 />
               </div>
-           
+
             </div>
-            
-            <div className="space-y-4">
+            <div>
+              <Label>{language === 'ar' ? 'الباركود' : 'Barcode'}</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.barcode}
+                  onChange={(e) => handleChange('barcode', e.target.value)}
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleChange('barcode', generateBarcode())}
+                >
+                  <Barcode size={16} />
+                </Button>
+              </div>
+            </div>
+            {/* <div className="space-y-4">
               <div>
                 <Label>{language === 'ar' ? 'الوصف (إنجليزي)' : 'Description (English)'}</Label>
                 <Textarea
@@ -506,16 +564,16 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   rows={2}
                 />
               </div>
-           
-            </div>
+
+            </div> */}
           </div>
 
           {/* SKU & Barcode */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>{language === 'ar' ? 'التصنيف' : 'Category'}</Label>
-              <Select 
-                value={formData.categoryId || "none"} 
+              <Select
+                value={formData.categoryId || "none"}
                 onValueChange={(val) => handleChange('categoryId', val === "none" ? "" : val)}
               >
                 <SelectTrigger>
@@ -528,6 +586,21 @@ const ProductForm: React.FC<ProductFormProps> = ({
                   {flatCategories.map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {language === 'ar' ? cat.nameAr : cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>{language === 'ar' ? 'الوحدة الرئيسية' : 'Main Unit'}</Label>
+              <Select value={formData.main_unit_id} onValueChange={(val) => handleChange('main_unit_id', val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر الوحدة الرئيسية' : 'Select main unit'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {unitsData.map((unit: UnitOption) => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {language === 'ar' ? unit.nameAr : unit.name} ({unit.code})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -552,24 +625,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 </Button>
               </div>
             </div>
-            <div>
-              <Label>{language === 'ar' ? 'الباركود' : 'Barcode'}</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={formData.barcode}
-                  onChange={(e) => handleChange('barcode', e.target.value)}
-                  className="font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleChange('barcode', generateBarcode())}
-                >
-                  <Barcode size={16} />
-                </Button>
-              </div>
-            </div>
+
           </div>
 
           {/* Pricing */}
@@ -609,12 +665,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
             </div>
           </div>
 
-         
+
 
           {/* Branches & Warehouses */}
-        
 
-        
+
+
 
           {/* Variants Toggle */}
           <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
@@ -663,7 +719,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 {language === 'ar' ? 'حالة المنتج' : 'Product Status'}
               </p>
               <p className="text-sm text-muted-foreground">
-                {formData.status === 'active' 
+                {formData.status === 'active'
                   ? (language === 'ar' ? 'المنتج متاح للبيع' : 'Product is available for sale')
                   : (language === 'ar' ? 'المنتج غير متاح' : 'Product is not available')
                 }
@@ -682,7 +738,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button type="submit" onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
-            {editProduct 
+            {editProduct
               ? (language === 'ar' ? 'حفظ التغييرات' : 'Save Changes')
               : (language === 'ar' ? 'إضافة المنتج' : 'Add Product')
             }

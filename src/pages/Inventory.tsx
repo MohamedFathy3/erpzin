@@ -428,6 +428,7 @@ const Inventory: React.FC = () => {
       }
 
       const formData = transformApiProductToFormData(dbProduct);
+      formData.main_unit_id = dbProduct.main_unit_id?.toString() || '';
       setEditProduct(formData);
 
     } catch (error) {
@@ -520,6 +521,7 @@ const Inventory: React.FC = () => {
         category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
         sku: formData.sku,
         barcode: formData.barcode || null,
+        main_unit_id: formData.main_unit_id ? parseInt(formData.main_unit_id) : null,
         reorder_level: formData.reorderPoint || 5,
         cost: formData.cost || 0,
         price: formData.price || 0,
