@@ -66,26 +66,28 @@ export const RegionalSettingsProvider: React.FC<{ children: React.ReactNode }> =
   const currency = user?.currency || 'EGP';
   const country = user?.country || 'EG';
 
-  // دالة formatCurrency معمولة useCallback عشان تسمع للتغيرات
-  const formatCurrency = useCallback((amount: number, showSymbol = true): string => {
-    const numAmount = Number(amount) || 0;
-    const symbol = getSymbol(currency);
-    
-    const locale = language === 'ar' ? 'ar-EG' : 'en-US';
-    const formattedNumber = new Intl.NumberFormat(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numAmount);
-
-    if (!showSymbol) {
-      return formattedNumber;
-    }
-
-    if (language === 'ar') {
-      return `${formattedNumber} ${symbol}`;
-    }
-    return `${symbol} ${formattedNumber}`;
-  }, [currency, language]);
+const formatCurrency = useCallback((amount: number, showSymbol = true): string => {
+  const numAmount = Number(amount) || 0;
+  const symbol = getSymbol(currency);
+  
+  // تقريب لأقرب رقم صحيح
+  const roundedAmount = Math.round(numAmount);
+  
+  // تنسيق الرقم بدون كسور عشرية
+  const formattedNumber = new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(roundedAmount);
+  
+  if (!showSymbol) {
+    return formattedNumber;
+  }
+  
+  if (language === 'ar') {
+    return `${formattedNumber} ${symbol}`;
+  }
+  return `${symbol} ${formattedNumber}`;
+}, [currency, language]);
 
   const getCurrencySymbol = useCallback((): string => {
     return getSymbol(currency);
