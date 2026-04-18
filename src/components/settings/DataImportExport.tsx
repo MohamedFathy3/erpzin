@@ -25,7 +25,7 @@ import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
-import OpeningBalances from '@/components/inventory/OpeningBalances';
+import OpeningBalances from '@/components/inventory/OpeningBalances/OpeningBalances';
 
 interface CustomerImportRow {
   name: string;
