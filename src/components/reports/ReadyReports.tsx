@@ -120,8 +120,8 @@ const ReadyReports = () => {
     queryKey: ['sales-invoices', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/sales-invoices/index', {
-        date_from: `${dateFrom} ${timeFrom}:00`,
-        date_to: `${dateTo} ${timeTo}:59`,
+        date_from: `${dateFrom}`,
+        date_to: `${dateTo}`,
         branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
         user_id: selectedUser === 'all' ? undefined : selectedUser
       });
@@ -134,8 +134,8 @@ const ReadyReports = () => {
     queryKey: ['sales-returns', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/sales-return/index', {
-        date_from: `${dateFrom} ${timeFrom}:00`,
-        date_to: `${dateTo} ${timeTo}:59`,
+        date_from: `${dateFrom}`,
+        date_to: `${dateTo}`,
         branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
         user_id: selectedUser === 'all' ? undefined : selectedUser
       });
@@ -149,8 +149,8 @@ const ReadyReports = () => {
     queryKey: ['purchase-invoices', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/purchases-invoices/index', {
-        date_from: `${dateFrom} ${timeFrom}:00`,
-        date_to: `${dateTo} ${timeTo}:59`,
+        date_from: `${dateFrom} `,
+        date_to: `${dateTo}`,
         branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
         user_id: selectedUser === 'all' ? undefined : selectedUser
       });
@@ -163,8 +163,8 @@ const ReadyReports = () => {
     queryKey: ['purchase-returns', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/purchase-returns/index', {
-        date_from: `${dateFrom} ${timeFrom}:00`,
-        date_to: `${dateTo} ${timeTo}:59`,
+        date_from: `${dateFrom} `,
+        date_to: `${dateTo}`,
         branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
         user_id: selectedUser === 'all' ? undefined : selectedUser
       });
