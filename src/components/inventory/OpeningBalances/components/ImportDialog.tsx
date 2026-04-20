@@ -123,16 +123,12 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
   const handleDownloadTemplate = () => {
     const template = [
       {
-        'اسم المنتج': 'قميص قطني',
-        'اسم المنتج (عربي)': 'قميص قطني',
-        'الوصف': 'قميص قطني 100%',
-        'القسم': 'ملابس',
+        'name': 'T-Shirt',
         'SKU': 'PRD-001',
-        'الباركود': '123456789',
-        'الكمية': 100,
-        'سعر التكلفة': 50,
-        'سعر البيع': 80,
-        'الحد الأدنى': 10
+        'barcode': '123456789',
+        'stock': 100,
+        'cost': 50,
+        'price': 80,
       }
     ];
     

@@ -43,11 +43,12 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
   
-  const { data: products = [] } = useProducts({
-    searchQuery: searchQuery || '___empty___',
-    selectedBranch,
-    selectedWarehouse
-  });
+ const { data: products = [] } = useProducts({
+  searchQuery: searchQuery || '___empty___',
+  selectedBranch,
+  selectedWarehouse
+},); // ✅ كده مش هيبعت beginning_balance
+
 
   const handleAddProduct = (product: Product) => {
     if (product.units && product.units.length > 0) {

@@ -21,12 +21,18 @@ export const useProducts = (filters: UseProductsFilters) => {
       searchQuery: filters.searchQuery,
       branchId: filters.selectedBranch,
       warehouseId: filters.selectedWarehouse,
-      hasBalance: filters.hasBalance ?? false // Default to false to get all products
+      hasBalance: filters.hasBalance ?? false,
     }),
     enabled: true
   });
 };
-
+export const useSearchProducts = (searchQuery: string) => {
+  return useQuery<Product[]>({
+    queryKey: ['search-products', searchQuery],
+    queryFn: () => productService.searchProducts(searchQuery),
+    enabled: searchQuery.length > 0 && searchQuery !== '___empty___',
+  });
+};
 // Separate hook for products with balance only (for main list)
 export const useProductsWithBalance = (filters: {
   searchQuery: string;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // OpeningBalances.tsx - المكون الرئيسي المعدل
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,6 +14,8 @@ import { ProductGrid } from './components/ProductGrid';
 import { AddBalanceModal } from './components/AddBalanceModal';
 import { ImportDialog } from './components/ImportDialog';
 import { SelectedProduct } from './types';
+import { toast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 const OpeningBalances: React.FC = () => {
   const { language } = useLanguage();
@@ -40,9 +43,80 @@ const OpeningBalances: React.FC = () => {
   const saveBalances = useSaveOpeningBalances();
   const deleteBalance = useDeleteOpeningBalance();
   
-  const handleExport = () => {
-    // Export logic...
-  };
+ // أضف هذه الدالة في ملف OpeningBalances.tsx
+const handleExport = () => {
+  if (products.length === 0) {
+    toast({
+      title: language === 'ar' ? 'لا توجد بيانات للتصدير' : 'No data to export',
+      variant: 'destructive'
+    });
+    return;
+  }
+
+  // تحويل البيانات إلى الصيغة المطلوبة للـ Excel
+  const exportData = products.map((product, index) => ({
+    '#': index + 1,
+    [language === 'ar' ? 'اسم المنتج' : 'Product Name']: language === 'ar' 
+      ? (product.name_ar || product.name || 'N/A')
+      : (product.name || 'N/A'),
+    'SKU': product.sku || 'N/A',
+    [language === 'ar' ? 'الباركود' : 'Barcode']: product.barcode || 'N/A',
+    [language === 'ar' ? 'التصنيف' : 'Category']: getCategoryName(product.category),
+    [language === 'ar' ? 'الرصيد الافتتاحي' : 'Opening Balance']: product.beginning_balance || 0,
+    [language === 'ar' ? 'المخزون الحالي' : 'Current Stock']: product.stock || 0,
+    [language === 'ar' ? 'سعر التكلفة' : 'Cost Price']: product.cost || 0,
+    [language === 'ar' ? 'سعر البيع' : 'Selling Price']: product.price || 0,
+    [language === 'ar' ? 'الحد الأدنى' : 'Min Stock']: product.reorder_level || 0,
+    [language === 'ar' ? 'الحالة' : 'Status']: product.active 
+      ? (language === 'ar' ? 'نشط' : 'Active')
+      : (language === 'ar' ? 'غير نشط' : 'Inactive'),
+  }));
+
+  // إنشاء ورقة العمل
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  
+  // ضبط عرض الأعمدة (اختياري)
+  const colWidths = [
+    { wch: 5 },   // #
+    { wch: 30 },  // اسم المنتج
+    { wch: 15 },  // SKU
+    { wch: 15 },  // الباركود
+    { wch: 20 },  // التصنيف
+    { wch: 15 },  // الرصيد الافتتاحي
+    { wch: 15 },  // المخزون الحالي
+    { wch: 15 },  // سعر التكلفة
+    { wch: 15 },  // سعر البيع
+    { wch: 12 },  // الحد الأدنى
+    { wch: 10 },  // الحالة
+  ];
+  ws['!cols'] = colWidths;
+
+  // إنشاء المصنف
+  const wb = XLSX.utils.book_new();
+  const sheetName = language === 'ar' ? 'بضاعة أول المدة' : 'Opening Balances';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  
+  // تحميل الملف
+  const fileName = `opening_balances_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+  
+  // إشعار نجاح
+  toast({
+    title: language === 'ar' ? 'تم التصدير بنجاح' : 'Export successful',
+    description: language === 'ar' 
+      ? `تم تصدير ${products.length} منتج`
+      : `Exported ${products.length} products`,
+  });
+};
+
+// دالة مساعدة لجلب اسم التصنيف (لأن الـ category يمكن أن يكون object)
+const getCategoryName = (category: any): string => {
+  if (!category) return 'N/A';
+  if (typeof category === 'string') return category;
+  if (category.name) return category.name;
+  if (category.name_ar) return category.name_ar;
+  return 'N/A';
+};
   
   const t = {
     title: language === 'ar' ? 'بضاعة أول المدة' : 'Opening Balances',
@@ -110,7 +184,7 @@ const OpeningBalances: React.FC = () => {
           
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="animate-spin" size={32} className="text-primary" />
+              <Loader2 className="animate-spin text-primary" size={32} />
             </div>
           ) : activeView === 'list' ? (
             <ProductList products={products} onDelete={deleteBalance.mutate} />

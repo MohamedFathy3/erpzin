@@ -9,9 +9,13 @@ export class ProductService {
     branchId?: string;
     warehouseId?: string;
     hasBalance?: boolean;
+    beginning_balance?: boolean; // Add this for backward compatibility
   }): Promise<Product[]> {
     const apiFilters: any = {};
     
+   if (filters.beginning_balance === true) {
+  apiFilters.beginning_balance = 1;
+}
     if (filters.hasBalance === true) {
       apiFilters.beginning_balance = 1; // Use 1 instead of true
     }
@@ -27,7 +31,9 @@ export class ProductService {
     }
     
     const response = await api.post('/product/index', {
-      filters: apiFilters,
+      filters: {...apiFilters,
+         beginning_balance: 1 
+      },
       orderBy: 'id',
       orderByDirection: 'desc',
       perPage: 100,
@@ -136,33 +142,34 @@ export class ProductService {
     return response.data;
   }
 
-  // Create new product with opening balance
-  async createProductWithBalance(data: {
-    name: string;
-    name_ar?: string;
-    description?: string;
-    category_id: number;
-    sku: string;
+async createProductWithBalance(data: {
+  name: string;
+  name_ar?: string;
+  description?: string;
+  category_id: number;
+  sku: string;
+  barcode?: string;
+  reorder_level?: number;
+  cost: number;
+  price: number;
+  stock: number;
+  beginning_balance: number; // 1 for true
+  active?: boolean;
+  units?: Array<{
+    unit_id: number;
+    cost_price: number;
+    sell_price: number;
     barcode?: string;
-    reorder_level?: number;
-    cost: number;
-    price: number;
-    stock: number;
-    units?: Array<{
-      unit_id: number;
-      cost_price: number;
-      sell_price: number;
-      barcode?: string;
-      colors?: Array<{ color_id: number; stock: number }>;
-    }>;
-  }): Promise<Product> {
-    const response = await api.post('/product', {
-      ...data,
-      beginning_balance: 1, // Important: set to 1 for opening balance
-      active: true
-    });
-    return response.data?.data || response.data;
-  }
+    colors?: Array<{ color_id: number; stock: number }>;
+  }>;
+}): Promise<Product> {
+  const response = await api.post('/product', {
+    ...data,
+    beginning_balance: 1, // تأكيد
+    active: data.active ?? true
+  });
+  return response.data?.data || response.data;
+}
 }
 
 export interface ImportResult {

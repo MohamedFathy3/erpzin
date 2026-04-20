@@ -480,10 +480,7 @@ const addDeliveryMutation = useMutation({
 const handleEditEmployee = async (employee: Employee) => {
   try {
     const employeeData = await HrServices.getEmployeeById(employee.id);
-
     console.log('📦 Employee data from service:', employeeData);
-
-    // استخراج role_id بأمان
     let roleId: number | undefined = undefined;
     
     if (employeeData.role) {
@@ -496,10 +493,8 @@ const handleEditEmployee = async (employee: Employee) => {
         }
       }
     }
-
     const treasuryId = employeeData.treasury?.id ? Number(employeeData.treasury.id) : undefined;
     const branchId = employeeData.branch?.id ? Number(employeeData.branch.id) : undefined;
-
     setNewEmployee({
       employee_code: employeeData.employee_code || '',
       name: employeeData.name || '',
