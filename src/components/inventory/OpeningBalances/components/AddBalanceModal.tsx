@@ -1,4 +1,3 @@
-// components/AddBalanceModal.tsx
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -31,9 +30,9 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   onOpenChange,
   selectedProducts,
   onProductsChange,
-  branches,
-  warehouses,
   selectedBranch,
+  branches = [], 
+  warehouses = [], 
   selectedWarehouse,
   onSave,
   isSaving
@@ -58,7 +57,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
         product,
         quantity: 1,
         cost: product.cost,
-        price: product.price || product.cost * 1.3
+        price: product.price || (product.cost || 0) * 1.3
       };
       onProductsChange([...selectedProducts, newProduct]);
     }
@@ -86,7 +85,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   };
 
   const totalQuantity = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
-  const totalValue = selectedProducts.reduce((sum, p) => sum + (p.quantity * p.cost), 0);
+  const totalValue = selectedProducts.reduce((sum, p) => sum + (p.quantity * (p.cost || 0)), 0);
 
   const t = {
     addBalance: language === 'ar' ? 'إضافة رصيد أول المدة' : 'Add Opening Balance',
@@ -105,11 +104,22 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     selectWarehouse: language === 'ar' ? 'اختر المستودع' : 'Select warehouse'
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.name_ar?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 10);
+  // ✅ الحل: تصفية المنتجات مع التحقق من القيم الفارغة
+  const filteredProducts = products.filter(p => {
+    if (!p) return false;
+    
+    const searchLower = searchQuery.toLowerCase();
+    
+    const includesSearch = (value: string | null | undefined): boolean => {
+      return value ? value.toLowerCase().includes(searchLower) : false;
+    };
+    
+    return (
+      includesSearch(p.name) ||
+      includesSearch(p.name_ar) ||
+      includesSearch(p.sku)
+    );
+  }).slice(0, 10);
 
   return (
     <>
@@ -206,17 +216,27 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                       onClick={() => handleAddProduct(product)}
                     >
                       <div>
-                        <p className="font-medium text-sm">{language === 'ar' ? (product.name_ar || product.name) : product.name}</p>
-                        <p className="text-xs text-muted-foreground">{product.sku}</p>
+                        <p className="font-medium text-sm">
+                          {language === 'ar' 
+                            ? (product.name_ar || product.name || 'غير معروف') 
+                            : (product.name || 'Unknown')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{product.sku || 'N/A'}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-mono">{formatCurrency(product.cost)}</p>
+                        <p className="text-sm font-mono">{formatCurrency(product.cost || 0)}</p>
                         {product.stock && product.stock > 0 && (
                           <p className="text-xs text-muted-foreground">Stock: {product.stock}</p>
                         )}
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {searchQuery && filteredProducts.length === 0 && products.length > 0 && (
+                <div className="text-center py-4 text-muted-foreground">
+                  {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products'}
                 </div>
               )}
 
@@ -270,8 +290,8 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
             colorId: color?.color_id,
             colorName: color?.color,
             quantity,
-            cost: unit ? parseFloat(unit.cost_price) : product.cost,
-            price: unit ? parseFloat(unit.sell_price) : (product.price || product.cost * 1.3)
+            cost: unit ? parseFloat(unit.cost_price) : (product.cost || 0),
+            price: unit ? parseFloat(unit.sell_price) : (product.price || (product.cost || 0) * 1.3)
           };
           
           const existingIndex = selectedProducts.findIndex(p => 

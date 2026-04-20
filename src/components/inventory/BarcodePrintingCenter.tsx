@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import JsBarcode from 'jsbarcode';
@@ -35,7 +35,6 @@ import {
   Ruler,
   Palette,
   DollarSign,
-  Check
 } from 'lucide-react';
 
 // ==================== Types ====================
@@ -171,12 +170,14 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
   onSelect
 }) => {
   const { language } = useLanguage();
-    const { formatCurrency } = useRegionalSettings()
+  const { formatCurrency } = useRegionalSettings();
   const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
+  
   if (!product) {
     return null;
   }
+  
   const handleUnitSelect = (unit: ProductUnit) => {
     setSelectedUnit(unit);
     setSelectedColor(null);
@@ -195,7 +196,9 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
     }
   };
 
-  const productName = language === 'ar' ? product.name_ar || product.name : product.name;
+  const productName = language === 'ar' 
+    ? (product.name_ar || product.name || '') 
+    : (product.name || '');
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -369,12 +372,24 @@ const BarcodePrintingCenter: React.FC = () => {
     }
   });
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.name_ar && p.name_ar.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.barcode && p.barcode.includes(searchQuery))
+ const filteredProducts = products.filter(p => {
+  // تحقق من وجود المنتج نفسه
+  if (!p) return false;
+  
+  const searchLower = searchQuery.toLowerCase();
+  
+  // دالة مساعدة للتحقق من القيمة
+  const includesSearch = (value: string | null | undefined): boolean => {
+    return value ? value.toLowerCase().includes(searchLower) : false;
+  };
+  
+  return (
+    includesSearch(p.name) ||
+    includesSearch(p.name_ar) ||
+    includesSearch(p.sku) ||
+    includesSearch(p.barcode)
   );
+});
 
   const handleAddProduct = (product: APIProduct, variant?: ProductUnit, color?: ProductColor) => {
     const variantId = variant ? `${product.id}-${variant.id}` : String(product.id);
@@ -396,7 +411,7 @@ const BarcodePrintingCenter: React.FC = () => {
       }
     }
 
-    const barcodeValue = variant?.barcode || variant?.sku || product.barcode || product.sku;
+    const barcodeValue = variant?.barcode || variant?.sku || product.barcode || product.sku || 'NO_BARCODE';
 
     if (existing) {
       setSelectedProducts(prev =>
@@ -469,116 +484,129 @@ const BarcodePrintingCenter: React.FC = () => {
     toast({ title: isRTL ? 'تم إعادة التصميم' : 'Design Reset' });
   };
 
-const handlePrint = () => {
-  if (selectedProducts.length === 0) {
-    toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
-    return;
-  }
-
-  const printWindow = window.open('', '', 'height=800,width=1000');
-  if (!printWindow) return;
-
-  const labels: string[] = [];
-  selectedProducts.forEach((product, idx) => {
-    for (let i = 0; i < product.quantity; i++) {
-      const productLabel = product.isVariant
-        ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
-        : (isRTL ? product.nameAr : product.name);
-
-      const formattedPrice = formatCurrency(product.price);
-
-      labels.push(`
-        <div class="label" style="
-          width: ${design.width}mm;
-          height: ${design.height}mm;
-          padding: ${design.padding}mm;
-          border: ${design.borderEnabled ? '1px solid #333' : 'none'};
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          page-break-inside: avoid;
-          box-sizing: border-box;
-          margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
-        ">
-          ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
-          ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
-          ${design.showBarcode ? `<canvas id="bc-${idx}-${i}"></canvas>` : ''}
-          ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
-          ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${formattedPrice}</div>` : ''}
-        </div>
-      `);
+  const handlePrint = () => {
+    if (selectedProducts.length === 0) {
+      toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
+      return;
     }
-  });
 
-  const labelsHtml = labels.join('');
+    // التحقق من وجود باركود لجميع المنتجات
+    const productsWithoutBarcode = selectedProducts.filter(p => !p.barcode || p.barcode === 'NO_BARCODE');
+    if (productsWithoutBarcode.length > 0) {
+      toast({
+        title: isRTL ? 'باركود مفقود' : 'Missing Barcode',
+        description: isRTL 
+          ? `المنتجات التالية لا تحتوي على باركود: ${productsWithoutBarcode.map(p => p.name).join(', ')}`
+          : `The following products have no barcode: ${productsWithoutBarcode.map(p => p.name).join(', ')}`,
+        variant: 'destructive'
+      });
+      return;
+    }
 
-  // ✅ أكتب في نافذة الطباعة
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html dir="${isRTL ? 'rtl' : 'ltr'}">
-      <head>
-        <title>${isRTL ? 'طباعة الباركود' : 'Print Barcodes'}</title>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { 
-            font-family: Arial, sans-serif; 
-            padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm;
-          }
-          .labels-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-start;
-          }
-          @media print {
-            .no-print { display: none !important; }
-            body { padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px; text-align: center;">
-          <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
-            ${isRTL ? '🖨️ طباعة الملصقات' : '🖨️ Print Labels'}
-          </button>
-          <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
-        </div>
-        <div class="labels-container">
-          ${labelsHtml}
-        </div>
-        <script>
-          ${selectedProducts.map((product, idx) =>
-            Array.from({ length: product.quantity }, (_, i) => `
-              try {
-                JsBarcode("#bc-${idx}-${i}", "${product.barcode}", {
-                  format: "CODE128",
-                  width: ${design.barcodeWidth},
-                  height: ${design.barcodeHeight},
-                  displayValue: true,
-                  fontSize: ${design.fontSize - 2},
-                  margin: 2,
-                  textMargin: 1
-                });
-              } catch(e) { console.error(e); }
-            `).join('')
-          ).join('')}
-        </script>
-      </body>
-    </html>
-  `);
-  
-  printWindow.document.close();
+    const printWindow = window.open('', '', 'height=800,width=1000');
+    if (!printWindow) return;
 
-  toast({
-    title: isRTL ? 'جاري الطباعة' : 'Printing',
-    description: isRTL ? `${totalLabels} ملصق` : `${totalLabels} labels`
-  });
-};
+    const labels: string[] = [];
+    selectedProducts.forEach((product, idx) => {
+      for (let i = 0; i < product.quantity; i++) {
+        const productLabel = product.isVariant
+          ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
+          : (isRTL ? product.nameAr : product.name);
+
+        const formattedPrice = formatCurrency(product.price);
+
+        labels.push(`
+          <div class="label" style="
+            width: ${design.width}mm;
+            height: ${design.height}mm;
+            padding: ${design.padding}mm;
+            border: ${design.borderEnabled ? '1px solid #333' : 'none'};
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            page-break-inside: avoid;
+            box-sizing: border-box;
+            margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
+          ">
+            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
+            ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
+            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}"></canvas>` : ''}
+            ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
+            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${formattedPrice}</div>` : ''}
+          </div>
+        `);
+      }
+    });
+
+    const labelsHtml = labels.join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="${isRTL ? 'rtl' : 'ltr'}">
+        <head>
+          <title>${isRTL ? 'طباعة الباركود' : 'Print Barcodes'}</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: Arial, sans-serif; 
+              padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm;
+            }
+            .labels-container {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-start;
+            }
+            @media print {
+              .no-print { display: none !important; }
+              body { padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px; text-align: center;">
+            <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+              ${isRTL ? '🖨️ طباعة الملصقات' : '🖨️ Print Labels'}
+            </button>
+            <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
+          </div>
+          <div class="labels-container">
+            ${labelsHtml}
+          </div>
+          <script>
+            ${selectedProducts.map((product, idx) =>
+              Array.from({ length: product.quantity }, (_, i) => `
+                try {
+                  JsBarcode("#bc-${idx}-${i}", "${product.barcode}", {
+                    format: "CODE128",
+                    width: ${design.barcodeWidth},
+                    height: ${design.barcodeHeight},
+                    displayValue: true,
+                    fontSize: ${design.fontSize - 2},
+                    margin: 2,
+                    textMargin: 1
+                  });
+                } catch(e) { console.error(e); }
+              `).join('')
+            ).join('')}
+          </script>
+        </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+
+    toast({
+      title: isRTL ? 'جاري الطباعة' : 'Printing',
+      description: isRTL ? `${totalLabels} ملصق` : `${totalLabels} labels`
+    });
+  };
+
   // Generate preview barcode
   useEffect(() => {
-    if (canvasRef.current && selectedProducts.length > 0) {
+    if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE') {
       try {
         JsBarcode(canvasRef.current, selectedProducts[0].barcode, {
           format: 'CODE128',
@@ -781,6 +809,11 @@ const handlePrint = () => {
                                 <p className="font-medium truncate">
                                   {isRTL ? product.nameAr : product.name}
                                 </p>
+                                {(!product.barcode || product.barcode === 'NO_BARCODE') && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    {isRTL ? 'بدون باركود' : 'No Barcode'}
+                                  </Badge>
+                                )}
                                 {product.isVariant && product.variantInfo && (
                                   <Badge variant="outline" className="text-xs">
                                     {isRTL ? product.variantInfoAr : product.variantInfo}
@@ -1164,18 +1197,22 @@ const handlePrint = () => {
                       </p>
                     )}
                     {design.showBarcode && (
-                      <canvas ref={canvasRef} className="mx-auto" />
+                      selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' ? (
+                        <canvas ref={canvasRef} className="mx-auto" />
+                      ) : (
+                        <div className="text-xs text-red-500">No barcode</div>
+                      )
                     )}
                     {design.showSku && !design.showBarcode && (
                       <p style={{ fontSize: `${design.fontSize - 1}px`, fontFamily: 'monospace' }}>
                         {selectedProducts[0].sku}
                       </p>
                     )}
-                  {design.showPrice && (
-  <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 'bold', marginTop: '4px' }}>
-    {formatCurrency(selectedProducts[0].price)}
-  </p>
-)}
+                    {design.showPrice && (
+                      <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 'bold', marginTop: '4px' }}>
+                        {formatCurrency(selectedProducts[0].price)}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground">

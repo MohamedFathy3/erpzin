@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +52,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   }, [isOpen]);
 
@@ -59,7 +62,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     if (!barcode.trim()) return;
 
     const product = products.find(
-      p => p.barcode === barcode || p.sku.toLowerCase() === barcode.toLowerCase()
+      p => p.barcode === barcode || p.sku?.toLowerCase() === barcode.toLowerCase()
     );
 
     if (product) {
@@ -98,7 +101,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       price: 'Price',
       stock: 'Stock'
     },
-
     ar: {
       title: 'قارئ الباركود',
       scanPrompt: 'امسح الباركود أو أدخله يدوياً',
@@ -112,7 +114,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
   };
 
-  const t = translations[language];
+  const t = translations[language as keyof typeof translations] || translations.en;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -159,7 +161,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-semibold text-lg">
-                    {language === 'ar' ? foundProduct.name_ar || foundProduct.name : foundProduct.name}
+                    {language === 'ar' ? (foundProduct.name_ar || foundProduct.name) : foundProduct.name}
                   </h3>
                   <div className="flex flex-wrap gap-4 text-sm">
                     <div>
@@ -178,7 +180,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                     </div>
                   </div>
                 </div>
-                <Button className="w-full mt-4 gradient-success" onClick={handleSelect}>
+                <Button className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white" onClick={handleSelect}>
                   {t.select}
                 </Button>
               </CardContent>
@@ -204,6 +206,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
   selectedProduct
 }) => {
   const { language } = useLanguage();
+  const { formatCurrency } = useRegionalSettings();
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [labelSize, setLabelSize] = useState<'small' | 'medium' | 'large'>('medium');
@@ -219,16 +222,19 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
   }, [selectedProduct]);
 
   useEffect(() => {
-    if (currentProduct && canvasRef.current) {
+    if (currentProduct?.barcode && canvasRef.current) {
       try {
-        JsBarcode(canvasRef.current, currentProduct.barcode || currentProduct.sku, {
-          format: 'CODE128',
-          width: labelSize === 'small' ? 1 : labelSize === 'medium' ? 2 : 3,
-          height: labelSize === 'small' ? 40 : labelSize === 'medium' ? 60 : 80,
-          displayValue: true,
-          fontSize: labelSize === 'small' ? 10 : labelSize === 'medium' ? 14 : 18,
-          margin: 10
-        });
+        const barcodeValue = currentProduct.barcode || currentProduct.sku;
+        if (barcodeValue) {
+          JsBarcode(canvasRef.current, barcodeValue, {
+            format: 'CODE128',
+            width: labelSize === 'small' ? 1 : labelSize === 'medium' ? 2 : 3,
+            height: labelSize === 'small' ? 40 : labelSize === 'medium' ? 60 : 80,
+            displayValue: true,
+            fontSize: labelSize === 'small' ? 10 : labelSize === 'medium' ? 14 : 18,
+            margin: 10
+          });
+        }
       } catch (e) {
         console.error('Barcode generation error:', e);
       }
@@ -236,60 +242,105 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
   }, [currentProduct, labelSize]);
 
   const handlePrint = () => {
-    if (!currentProduct) return;
+    if (!currentProduct) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'الرجاء اختيار منتج' : 'Please select a product',
+        variant: 'destructive'
+      });
+      return;
+    }
 
-    const printWindow = window.open('', '', 'height=400,width=600');
+    const barcodeValue = currentProduct.barcode || currentProduct.sku;
+    if (!barcodeValue) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'المنتج لا يحتوي على باركود' : 'Product has no barcode',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const printWindow = window.open('', '', 'height=800,width=1000');
     if (!printWindow) return;
 
     const labelWidth = labelSize === 'small' ? '50mm' : labelSize === 'medium' ? '70mm' : '100mm';
     const labelHeight = labelSize === 'small' ? '30mm' : labelSize === 'medium' ? '40mm' : '60mm';
+    const fontSize = labelSize === 'small' ? 8 : labelSize === 'medium' ? 10 : 12;
+    const barcodeWidth = labelSize === 'small' ? 1 : labelSize === 'medium' ? 2 : 3;
+    const barcodeHeight = labelSize === 'small' ? 30 : labelSize === 'medium' ? 45 : 60;
 
     let labelsHtml = '';
     for (let i = 0; i < quantity; i++) {
       labelsHtml += `
-        <div class="label" style="width: ${labelWidth}; height: ${labelHeight}; border: 1px dashed #ccc; padding: 5px; margin: 5px; display: inline-block; text-align: center; page-break-inside: avoid;">
-          <div style="font-size: ${labelSize === 'small' ? '8px' : labelSize === 'medium' ? '10px' : '12px'}; font-weight: bold; margin-bottom: 3px;">
-            ${language === 'ar' ? currentProduct.name_ar || currentProduct.name : currentProduct.name}
+        <div class="label" style="
+          width: ${labelWidth}; 
+          height: ${labelHeight}; 
+          border: 1px dashed #ccc; 
+          padding: 5px; 
+          margin: 5px; 
+          display: inline-block; 
+          text-align: center; 
+          page-break-inside: avoid;
+          box-sizing: border-box;
+        ">
+          <div style="font-size: ${fontSize}px; font-weight: bold; margin-bottom: 3px;">
+            ${language === 'ar' ? (currentProduct.name_ar || currentProduct.name) : currentProduct.name}
           </div>
           <canvas id="barcode-${i}"></canvas>
-          ${showPrice ? `<div style="font-size: ${labelSize === 'small' ? '10px' : labelSize === 'medium' ? '12px' : '14px'}; font-weight: bold; margin-top: 3px;">${currentProduct.price.toLocaleString()} YER</div>` : ''}
+          ${showPrice ? `<div style="font-size: ${fontSize + 2}px; font-weight: bold; margin-top: 3px;">${formatCurrency(currentProduct.price)}</div>` : ''}
         </div>
       `;
     }
 
     printWindow.document.write(`
-      <html>
+      <!DOCTYPE html>
+      <html dir="${language === 'ar' ? 'rtl' : 'ltr'}">
         <head>
-          <title>Barcode Labels</title>
+          <title>${language === 'ar' ? 'ملصقات الباركود' : 'Barcode Labels'}</title>
           <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
           <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+            .labels-container {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-start;
+            }
             @media print {
               .label { border: none !important; }
-              .no-print { display: none; }
+              .no-print { display: none !important; }
             }
           </style>
         </head>
         <body>
-          <div class="no-print" style="margin-bottom: 10px;">
-            <button onclick="window.print()" style="padding: 10px 20px; cursor: pointer;">Print Labels</button>
+          <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px; text-align: center;">
+            <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
+              🖨️ ${language === 'ar' ? 'طباعة الملصقات' : 'Print Labels'}
+            </button>
+            <span style="margin: 0 15px; color: #666;">${language === 'ar' ? `الكمية: ${quantity}` : `Quantity: ${quantity}`}</span>
           </div>
-          ${labelsHtml}
+          <div class="labels-container">
+            ${labelsHtml}
+          </div>
           <script>
-            document.querySelectorAll('canvas[id^="barcode-"]').forEach(canvas => {
-              JsBarcode(canvas, "${currentProduct.barcode || currentProduct.sku}", {
-                format: "CODE128",
-                width: ${labelSize === 'small' ? 1 : labelSize === 'medium' ? 2 : 3},
-                height: ${labelSize === 'small' ? 30 : labelSize === 'medium' ? 45 : 60},
-                displayValue: true,
-                fontSize: ${labelSize === 'small' ? 8 : labelSize === 'medium' ? 10 : 12},
-                margin: 5
-              });
-            });
+            ${Array.from({ length: quantity }, (_, i) => `
+              try {
+                JsBarcode("#barcode-${i}", "${barcodeValue}", {
+                  format: "CODE128",
+                  width: ${barcodeWidth},
+                  height: ${barcodeHeight},
+                  displayValue: true,
+                  fontSize: ${fontSize},
+                  margin: 5
+                });
+              } catch(e) { console.error(e); }
+            `).join('')}
           </script>
         </body>
       </html>
     `);
+    
     printWindow.document.close();
 
     toast({
@@ -311,7 +362,6 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
       preview: 'Preview',
       print: 'Print Labels'
     },
-
     ar: {
       title: 'طباعة ملصقات الباركود',
       selectProduct: 'اختر المنتج',
@@ -326,7 +376,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
     }
   };
 
-  const t = translations[language];
+  const t = translations[language as keyof typeof translations] || translations.en;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -349,7 +399,7 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
                 <SelectContent>
                   {products.map(product => (
                     <SelectItem key={product.id} value={product.id}>
-                      {language === 'ar' ? product.name_ar || product.name : product.name} - {product.sku}
+                      {language === 'ar' ? (product.name_ar || product.name) : product.name} - {product.sku}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -401,18 +451,24 @@ export const BarcodeLabelPrinter: React.FC<BarcodeLabelPrinterProps> = ({
               <Label>{t.preview}</Label>
               <Card className="p-4 text-center bg-white">
                 <p className="text-sm font-semibold mb-2">
-                  {language === 'ar' ? currentProduct.name_ar || currentProduct.name : currentProduct.name}
+                  {language === 'ar' ? (currentProduct.name_ar || currentProduct.name) : currentProduct.name}
                 </p>
-                <canvas ref={canvasRef} className="mx-auto" />
+                {currentProduct.barcode ? (
+                  <canvas ref={canvasRef} className="mx-auto" />
+                ) : (
+                  <div className="text-red-500 text-sm py-4">
+                    {language === 'ar' ? 'لا يوجد باركود' : 'No barcode'}
+                  </div>
+                )}
                 {showPrice && (
-                  <p className="text-sm font-bold mt-2">{currentProduct.price.toLocaleString()} YER</p>
+                  <p className="text-sm font-bold mt-2">{formatCurrency(currentProduct.price)}</p>
                 )}
               </Card>
             </div>
           )}
 
           <Button
-            className="w-full gradient-success"
+            className="w-full bg-green-600 hover:bg-green-700 text-white"
             onClick={handlePrint}
             disabled={!currentProduct}
           >

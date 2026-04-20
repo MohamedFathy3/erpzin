@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useForm } from 'react-hook-form';
 import { HrServices } from '@/services/HrService';
 import { useState } from 'react';
@@ -70,7 +71,7 @@ interface Employee {
   name_ar?: string;
   position?: string;
   department?: string;
-  role: Role;
+  role: Role | string | null; 
   branch: Branch | null;
   treasury: Treasury | null;
   phone?: string;
@@ -263,13 +264,7 @@ const HR = () => {
       });
     },
   });
-
-
-
   // ✅ Update employee mutation
-
-
-
   const updateEmployeeMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<AddEmployee> }) => HrServices.updateEmployee(id, data),
     onSuccess: () => {
@@ -322,10 +317,22 @@ const HR = () => {
   });
 
 
+const getRoleName = (role: Role | string | null | undefined): string => {
+  if (!role) return '-';
+  
+  if (typeof role === 'object' && 'name' in role) {
+    return role.name;
+  }
+  
+  if (typeof role === 'string') {
+    return role;
+  }
+  
+  return '-';
+};
 
 
-  // ✅ Add delivery mutation
-  const addDeliveryMutation = useMutation({
+const addDeliveryMutation = useMutation({
     mutationFn: (delivery: AddDeliveryPerson) => HrServices.createDeliveryPerson(delivery),
 
     onSuccess: () => {
@@ -470,44 +477,55 @@ const HR = () => {
     addEmployeeMutation.mutate(newEmployee);
   };
 
-  const handleEditEmployee = async (employee: Employee) => {
-    try {
-      const employeeData = await HrServices.getEmployeeById(employee.id);
+const handleEditEmployee = async (employee: Employee) => {
+  try {
+    const employeeData = await HrServices.getEmployeeById(employee.id);
 
-      console.log('📦 Employee data from service:', employeeData);
+    console.log('📦 Employee data from service:', employeeData);
 
-      const roleId = employeeData.role?.id ? Number(employeeData.role.id) : undefined;
-      const treasuryId = employeeData.treasury?.id ? Number(employeeData.treasury.id) : undefined;
-      const branchId = employeeData.branch?.id ? Number(employeeData.branch.id) : undefined;
-
-      setNewEmployee({
-        employee_code: employeeData.employee_code || '',
-        name: employeeData.name || '',
-        name_ar: employeeData.name_ar || '',
-        position: employeeData.position || '',
-        phone: employeeData.phone || '',
-        email: employeeData.email || '',
-        salary: Number(employeeData.salary) || 0,
-        is_active: employeeData.is_active ?? true,
-        role_id: roleId,
-        treasury_id: treasuryId,
-        branch_id: branchId,
-        password: ''
-      });
-
-
-      setIsEditingEmployee(true);
-      setCurrentEmployeeId(employee.id.toString());
-      setShowEmployeeDialog(true);
-    } catch (error: unknown) {
-      console.error('Error fetching employee details:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
-        variant: 'destructive'
-      });
+    // استخراج role_id بأمان
+    let roleId: number | undefined = undefined;
+    
+    if (employeeData.role) {
+      if (typeof employeeData.role === 'object' && 'id' in employeeData.role) {
+        roleId = Number(employeeData.role.id);
+      } else if (typeof employeeData.role === 'string') {
+        const foundRole = roles.find((r: Role) => r.name === employeeData.role);
+        if (foundRole) {
+          roleId = foundRole.id;
+        }
+      }
     }
-  };
 
+    const treasuryId = employeeData.treasury?.id ? Number(employeeData.treasury.id) : undefined;
+    const branchId = employeeData.branch?.id ? Number(employeeData.branch.id) : undefined;
+
+    setNewEmployee({
+      employee_code: employeeData.employee_code || '',
+      name: employeeData.name || '',
+      name_ar: employeeData.name_ar || '',
+      position: employeeData.position || '',
+      phone: employeeData.phone || '',
+      email: employeeData.email || '',
+      salary: Number(employeeData.salary) || 0,
+      is_active: employeeData.is_active ?? true,
+      role_id: roleId,
+      treasury_id: treasuryId,
+      branch_id: branchId,
+      password: ''
+    });
+
+    setIsEditingEmployee(true);
+    setCurrentEmployeeId(employee.id.toString());
+    setShowEmployeeDialog(true);
+  } catch (error: unknown) {
+    console.error('Error fetching employee details:', error);
+    toast({
+      title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
+      variant: 'destructive'
+    });
+  }
+};
 
   const handleUpdateEmployee = () => {
     if (!newEmployee.employee_code || !newEmployee.name) {
@@ -1304,7 +1322,7 @@ const HR = () => {
                               {employee.role ? (
                                 <div className="flex items-center gap-1">
                                   <Shield size={14} className="text-muted-foreground" />
-                                  {employee.role.name}
+                                   {getRoleName(employee.role)}
                                 </div>
                               ) : (
                                 '-'
