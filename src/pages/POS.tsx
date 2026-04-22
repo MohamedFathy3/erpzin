@@ -351,15 +351,11 @@ const POS: React.FC = () => {
   const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
   const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(selectedCategory);
   
-  // ✅ فقط نبحث عن الباركود عندما يكون مسح باركود فعلي
-  const { data: barcodeProduct } = useProductByBarcode(
-    isBarcodeScanning ? searchQuery : ''
-  );
+const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
-  // ✅ معالج تغيير حقل البحث - للتمييز بين مسح الباركود والبحث اليدوي
-// POS.tsx - استبدل دالة handleSearchChange بهذه النسخة
 
-// ✅ معالج تغيير حقل البحث - يضيف المنتج فوراً إذا كان باركود صحيح
+
+
 const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   const value = e.target.value;
   setSearchQuery(value);
@@ -376,52 +372,26 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   }
 };
 
-  // ✅ تأثير إضافة المنتج إلى السلة عند مسح الباركود
-  useEffect(() => {
-    console.log('🔍 Barcode scan result:', { 
-      barcodeProduct, 
-      isBarcodeScanning, 
-      searchQuery,
-      lastScanned: lastScannedBarcode.current 
-    });
+useEffect(() => {
+  console.log('🔍 Barcode scan result:', { 
+    barcodeProduct, 
+    searchQuery,
+  });
+  
+  if (barcodeProduct && barcodeProduct.id) {
+    console.log('✅ Adding product to cart:', barcodeProduct.name);
     
-    // ✅ فقط إذا كان مسح باركود ووجد منتج ولم يتم معالجته من قبل
-    if (isBarcodeScanning && barcodeProduct && barcodeProduct.id) {
-      const currentBarcode = searchQuery;
-      
-      // منع إضافة نفس المنتج مرتين لنفس الباركود
-      if (lastScannedBarcode.current !== currentBarcode) {
-        lastScannedBarcode.current = currentBarcode;
-        
-        console.log('✅ Adding barcode product to cart:', barcodeProduct.name);
-        
-        // إضافة المنتج إلى السلة
-        addToCart(barcodeProduct as Product);
-        
-        // تفريغ حقل البحث
-        setSearchQuery('');
-        setIsBarcodeScanning(false);
-        
-        // إعادة التركيز على حقل البحث
-        setTimeout(() => {
-          searchInputRef.current?.focus();
-        }, 100);
-        
-        // إشعار للمستخدم
-        toast({
-          title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
-          description: language === 'ar' 
-            ? (barcodeProduct.name_ar || barcodeProduct.name)
-            : barcodeProduct.name,
-        });
-        
-        // إعادة تعيين الـ ref بعد فترة
-        setTimeout(() => {
-          lastScannedBarcode.current = '';
-        }, 1000);
-      }
-    }
-  }, [barcodeProduct, isBarcodeScanning, searchQuery]);
+    addToCart(barcodeProduct as Product);
+    setSearchQuery('');
+    
+    toast({
+      title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
+      description: language === 'ar' 
+        ? (barcodeProduct.name_ar || barcodeProduct.name)
+        : barcodeProduct.name,
+    });
+  }
+}, [barcodeProduct]);
 
   // ==================== Data Transformation ====================
   const transformedCategories = useMemo(() => [

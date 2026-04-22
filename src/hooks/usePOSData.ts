@@ -303,8 +303,11 @@ export const useProducts = (categoryId?: string | null) => {
   };
 };
 
-// ========== Product by Barcode with Offline Support ==========
-// usePOSData.ts - تعديل useProductByBarcode
+
+
+// usePOSData.ts - استبدل useProductByBarcode بالكامل
+
+
 
 export const useProductByBarcode = (barcode: string) => {
   const { userBranch, currentBranch } = useApp();
@@ -323,34 +326,48 @@ export const useProductByBarcode = (barcode: string) => {
     };
   }, []);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['product-barcode', barcode, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
-      // ✅ إذا كان الباركود فارغاً أو قصيراً، لا تبحث
-      if (!barcode || barcode.length < 3) {
+      console.log('🔍 useProductByBarcode queryFn executing for:', barcode);
+      
+      if (!barcode || barcode.length < 2) {
+        console.log('❌ Barcode too short, skipping');
         return null;
       }
 
-      console.log('🔍 Searching for barcode:', barcode);
-
       // Offline mode
       if (isOfflineMode || !navigator.onLine) {
-        return await getProductByBarcodeOffline(barcode);
+        console.log('📱 Offline mode, searching in local DB');
+        const result = await getProductByBarcodeOffline(barcode);
+        console.log('📱 Offline result:', result);
+        return result;
       }
 
       // Online mode
       try {
-        const payload: any = {};
         const branchId = userBranch?.id || currentBranch?.id;
-        if (branchId) {
-          payload.branch_id = branchId;
-        }
+        
+        console.log('🔍 Searching by BARCODE:', barcode);
+        const payload: any = {};
+        if (branchId) payload.branch_id = branchId;
         payload.barcode = barcode;
-
+        
         const response = await api.post('/products/by-branch', payload);
-        const product = response.data?.data?.[0] || null;
+        console.log('📦 API response:', response.data);
+        
+        const products = response.data?.data || [];
+        
+        // البحث عن المنتج بالباركود
+        let product = products.find((p: any) => p.barcode === barcode);
+        
+        if (!product) {
+          console.log('🔍 Not found by barcode, trying SKU:', barcode);
+          product = products.find((p: any) => p.sku === barcode);
+        }
         
         if (product) {
+          console.log('✅ Product found:', product.name, product.sku, product.barcode);
           return {
             id: product.id?.toString() || '',
             name: product.name || '',
@@ -372,17 +389,23 @@ export const useProductByBarcode = (barcode: string) => {
             category: product.category || null
           };
         }
+        
+        console.log('❌ No product found for:', barcode);
         return null;
       } catch (error) {
-        console.error('Error fetching product by barcode:', error);
+        console.error('❌ Error fetching product by barcode:', error);
         if (!navigator.onLine) {
           return await getProductByBarcodeOffline(barcode);
         }
         return null;
       }
     },
-    enabled: !!barcode && barcode.length > 5, // ✅ فقط يبحث عندما يكون الباركود طويلاً بما يكفي
+    // ✅ تأكد من أن enabled هو boolean دائماً
+    enabled: barcode ? barcode.length >= 2 : false,
+    retry: 1,
   });
+
+  return query;
 };
 // ========== Helper Functions (بدون تغيير) ==========
 export const getProductColors = (product: Product): string[] => {
