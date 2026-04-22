@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // hooks/usePOSData.ts
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -323,27 +324,28 @@ export const useProductByBarcode = (barcode: string) => {
   return useQuery({
     queryKey: ['product-barcode', barcode, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
-      // Offline mode - search in local DB
+      // ✅ إذا كان الباركود فارغاً أو قصيراً، لا تبحث
+      if (!barcode || barcode.length < 3) {
+        return null;
+      }
+
+      console.log('🔍 Searching for barcode:', barcode);
+
+      // Offline mode
       if (isOfflineMode || !navigator.onLine) {
-        console.log('🔍 Searching offline for barcode:', barcode);
         return await getProductByBarcodeOffline(barcode);
       }
 
       // Online mode
       try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {};
-
         const branchId = userBranch?.id || currentBranch?.id;
         if (branchId) {
           payload.branch_id = branchId;
         }
-
         payload.barcode = barcode;
 
-        console.log('📦 Fetching product by barcode:', payload);
         const response = await api.post('/products/by-branch', payload);
-        
         const product = response.data?.data?.[0] || null;
         
         if (product) {
@@ -368,27 +370,18 @@ export const useProductByBarcode = (barcode: string) => {
             category: product.category || null
           };
         }
-        
         return null;
       } catch (error) {
         console.error('Error fetching product by barcode:', error);
-        
-        // If online fetch fails and we're offline, try offline
         if (!navigator.onLine) {
           return await getProductByBarcodeOffline(barcode);
         }
-        
-        toast({
-          title: 'خطأ في البحث عن المنتج',
-          variant: 'destructive'
-        });
         return null;
       }
     },
-    enabled: barcode.length > 5,
+    enabled: !!barcode && barcode.length > 5, // ✅ فقط يبحث عندما يكون الباركود طويلاً بما يكفي
   });
 };
-
 // ========== Helper Functions (بدون تغيير) ==========
 export const getProductColors = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];

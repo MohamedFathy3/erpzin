@@ -738,6 +738,7 @@ const BarcodePrintingCenter: React.FC = () => {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={saveSettings} title={t.saveSettings}>
               <Save className="h-4 w-4" />
+              <span>{t.saveSettings}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={loadSettings} title={t.loadSettings}>
               <Download className="h-4 w-4" />
