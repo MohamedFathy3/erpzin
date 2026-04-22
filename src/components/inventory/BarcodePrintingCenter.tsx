@@ -1,4 +1,4 @@
-// BarcodePrintingCenter.tsx - النسخة المعدلة بالكامل
+// BarcodePrintingCenter.tsx - النسخة الكاملة مع إضافة اختيار نوع الباركود
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -126,9 +126,32 @@ interface PrinterConfig {
 interface BarcodeSettings {
   design: LabelDesign;
   printer: PrinterConfig;
+  barcodeFormat: BarcodeFormat; // ✅ إضافة تنسيق الباركود
 }
 
-// ========== إعدادات فارغة (كلها zeros) ==========
+// ✅ أنواع الترميز المدعومة
+type BarcodeFormat = 'CODE128' | 'CODE39' | 'EAN13' | 'UPC' | 'ITF14' | 'MSI' | 'Pharmacode' | 'CODABAR';
+
+interface BarcodeFormatOption {
+  value: BarcodeFormat;
+  label: string;
+  labelAr: string;
+  description: string;
+  needsEvenLength?: boolean;
+}
+
+const barcodeFormats: BarcodeFormatOption[] = [
+  { value: 'CODE128', label: 'Code 128', labelAr: 'كود 128', description: 'يدعم أرقام وحروف - الأكثر شيوعاً' },
+  { value: 'CODE39', label: 'Code 39', labelAr: 'كود 39', description: 'يدعم أرقام وحروف - مناسب للأجهزة القديمة' },
+  { value: 'EAN13', label: 'EAN-13', labelAr: 'EAN-13', description: '13 رقم - للمنتجات العالمية' },
+  { value: 'UPC', label: 'UPC-A', labelAr: 'UPC-A', description: '12 رقم - للمنتجات في أمريكا' },
+  { value: 'ITF14', label: 'ITF-14', labelAr: 'ITF-14', description: '14 رقم - للكرتون والعروض' },
+  { value: 'MSI', label: 'MSI', labelAr: 'MSI', description: 'للمخازن والمستودعات' },
+  { value: 'Pharmacode', label: 'Pharmacode', labelAr: 'فارماكود', description: 'للصناعات الدوائية' },
+  { value: 'CODABAR', label: 'Codabar', labelAr: 'كودابار', description: 'للمكتبات وشركات الدم' },
+];
+
+// ========== إعدادات فارغة ==========
 const emptyDesign: LabelDesign = {
   width: 0,
   height: 0,
@@ -316,16 +339,16 @@ const BarcodePrintingCenter: React.FC = () => {
 
   const [selectedProducts, setSelectedProducts] = useState<PrintProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  // ✅ استخدام الإعدادات الفارغة كقيم أولية
   const [design, setDesign] = useState<LabelDesign>(emptyDesign);
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(emptyPrinterConfig);
+  const [barcodeFormat, setBarcodeFormat] = useState<BarcodeFormat>('EAN13');
   const [activeTab, setActiveTab] = useState('products');
   const [variantModalOpen, setVariantModalOpen] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<APIProduct | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ✅ فقط تحميل الإعدادات من localStorage عند تحميل الصفحة (بدون حفظ تلقائي)
+  // ✅ فقط تحميل الإعدادات من localStorage
   useEffect(() => {
     const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (savedSettings) {
@@ -333,25 +356,25 @@ const BarcodePrintingCenter: React.FC = () => {
         const parsedSettings = JSON.parse(savedSettings);
         if (parsedSettings.design) setDesign(parsedSettings.design);
         if (parsedSettings.printer) setPrinterConfig(parsedSettings.printer);
+        if (parsedSettings.barcodeFormat) setBarcodeFormat(parsedSettings.barcodeFormat);
         console.log('✅ Settings loaded from localStorage');
       } catch (e) {
         console.error('Error loading settings:', e);
       }
     }
-    // ❌ لا يوجد حفظ تلقائي هنا
   }, []);
 
-  // ✅ دالة حفظ الإعدادات (تضغط على الزر)
+  // ✅ دالة حفظ الإعدادات
   const saveSettings = () => {
-    const settings: BarcodeSettings = { design, printer: printerConfig };
+    const settings: BarcodeSettings = { design, printer: printerConfig, barcodeFormat };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     toast({
       title: isRTL ? 'تم حفظ الإعدادات' : 'Settings Saved',
-      description: isRTL ? 'تم حفظ إعدادات الطباعة والتصميم بنجاح' : 'Printing and design settings saved successfully',
+      description: isRTL ? 'تم حفظ إعدادات الطباعة والتصميم ونوع الباركود بنجاح' : 'Printing, design and barcode type saved successfully',
     });
   };
 
-  // ✅ دالة تحميل الإعدادات (تضغط على الزر)
+  // ✅ دالة تحميل الإعدادات
   const loadSettings = () => {
     const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (savedSettings) {
@@ -359,6 +382,7 @@ const BarcodePrintingCenter: React.FC = () => {
         const parsedSettings = JSON.parse(savedSettings);
         setDesign(parsedSettings.design || emptyDesign);
         setPrinterConfig(parsedSettings.printer || emptyPrinterConfig);
+        setBarcodeFormat(parsedSettings.barcodeFormat || 'CODE128');
         toast({
           title: isRTL ? 'تم تحميل الإعدادات' : 'Settings Loaded',
           description: isRTL ? 'تم تحميل آخر الإعدادات المحفوظة' : 'Last saved settings loaded',
@@ -380,21 +404,23 @@ const BarcodePrintingCenter: React.FC = () => {
     }
   };
 
-  // ✅ دالة مسح الإعدادات من localStorage وإعادة تعيين القيم إلى صفر
+  // ✅ دالة مسح الإعدادات
   const clearAllSettings = () => {
     localStorage.removeItem(SETTINGS_STORAGE_KEY);
     setDesign(emptyDesign);
     setPrinterConfig(emptyPrinterConfig);
+    setBarcodeFormat('CODE128');
     toast({
       title: isRTL ? 'تم مسح الإعدادات' : 'Settings Cleared',
       description: isRTL ? 'تم مسح جميع الإعدادات المحفوظة' : 'All saved settings have been cleared',
     });
   };
 
-  // ✅ دالة إعادة تعيين القيم إلى صفر (بدون مسح localStorage)
+  // ✅ دالة إعادة تعيين القيم إلى صفر
   const resetAllSettings = () => {
     setDesign(emptyDesign);
     setPrinterConfig(emptyPrinterConfig);
+    setBarcodeFormat('CODE128');
     toast({
       title: isRTL ? 'تم إعادة التعيين' : 'Reset Complete',
       description: isRTL ? 'تم إعادة جميع الإعدادات إلى الصفر' : 'All settings reset to zero',
@@ -526,6 +552,39 @@ const BarcodePrintingCenter: React.FC = () => {
 
   const totalLabels = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
 
+  // ✅ دالة للحصول على إعدادات الباركود حسب النوع المختار
+  const getBarcodeOptions = () => {
+    const baseOptions = {
+      width: design.barcodeWidth || 2,
+      height: design.barcodeHeight || 50,
+      displayValue: true,
+      fontSize: (design.fontSize || 10) - 2,
+      margin: 5,
+      textMargin: 2,
+    };
+
+    switch (barcodeFormat) {
+      case 'CODE128':
+        return { ...baseOptions, format: "CODE128" };
+      case 'CODE39':
+        return { ...baseOptions, format: "CODE39" };
+      case 'EAN13':
+        return { ...baseOptions, format: "EAN13", flat: true, textMargin: 4 };
+      case 'UPC':
+        return { ...baseOptions, format: "UPC", flat: true };
+      case 'ITF14':
+        return { ...baseOptions, format: "ITF14" };
+      case 'MSI':
+        return { ...baseOptions, format: "MSI" };
+      case 'Pharmacode':
+        return { ...baseOptions, format: "pharmacode" };
+      case 'CODABAR':
+        return { ...baseOptions, format: "codabar" };
+      default:
+        return { ...baseOptions, format: "CODE128" };
+    }
+  };
+
   const handlePrint = () => {
     if (selectedProducts.length === 0) {
       toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
@@ -547,7 +606,9 @@ const BarcodePrintingCenter: React.FC = () => {
     const printWindow = window.open('', '', 'height=800,width=1000');
     if (!printWindow) return;
 
+    const barcodeOptions = getBarcodeOptions();
     const labels: string[] = [];
+    
     selectedProducts.forEach((product, idx) => {
       for (let i = 0; i < product.quantity; i++) {
         const productLabel = product.isVariant
@@ -557,9 +618,9 @@ const BarcodePrintingCenter: React.FC = () => {
 
         labels.push(`
           <div class="label" style="
-            width: ${design.width}mm;
-            height: ${design.height}mm;
-            padding: ${design.padding}mm;
+            width: ${design.width || 60}mm;
+            height: ${design.height || 40}mm;
+            padding: ${design.padding || 4}mm;
             border: ${design.borderEnabled ? '1px solid #333' : 'none'};
             display: inline-flex;
             flex-direction: column;
@@ -569,18 +630,20 @@ const BarcodePrintingCenter: React.FC = () => {
             page-break-inside: avoid;
             box-sizing: border-box;
             margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
+            background: white;
           ">
-            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${design.fontSize - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
-            ${design.showProductName ? `<div style="font-size: ${design.fontSize}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
-            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}"></canvas>` : ''}
-            ${design.showSku && !design.showBarcode ? `<div style="font-size: ${design.fontSize - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${design.fontSize + 2}px; font-weight: bold; margin-top: 2px;">${formattedPrice}</div>` : ''}
+            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${(design.fontSize || 12) - 2}px; font-weight: 600; margin-bottom: 2px;">${design.companyName}</div>` : ''}
+            ${design.showProductName ? `<div style="font-size: ${design.fontSize || 12}px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;">${productLabel}</div>` : ''}
+            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${(design.width || 60) - 10}mm;"></canvas>` : ''}
+            ${design.showSku && !design.showBarcode ? `<div style="font-size: ${(design.fontSize || 12) - 1}px; font-family: monospace;">${product.sku}</div>` : ''}
+            ${design.showPrice ? `<div style="font-size: ${(design.fontSize || 12) + 2}px; font-weight: bold; margin-top: 2px;">${formattedPrice}</div>` : ''}
           </div>
         `);
       }
     });
 
     const labelsHtml = labels.join('');
+    const barcodeOptionsStr = JSON.stringify(barcodeOptions);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -592,16 +655,24 @@ const BarcodePrintingCenter: React.FC = () => {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
               font-family: Arial, sans-serif; 
-              padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm;
+              padding: ${printerConfig.marginTop || 5}mm ${printerConfig.marginLeft || 5}mm;
+              background: white;
             }
             .labels-container {
               display: flex;
               flex-wrap: wrap;
               justify-content: flex-start;
             }
+            .label {
+              background: white;
+            }
             @media print {
               .no-print { display: none !important; }
-              body { padding: ${printerConfig.marginTop}mm ${printerConfig.marginLeft}mm; }
+              body { padding: ${printerConfig.marginTop || 5}mm ${printerConfig.marginLeft || 5}mm; }
+              .label { 
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
             }
           </style>
         </head>
@@ -611,23 +682,23 @@ const BarcodePrintingCenter: React.FC = () => {
               🖨️ ${isRTL ? 'طباعة الملصقات' : 'Print Labels'}
             </button>
             <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
+            <span style="margin: 0 15px; color: #666; font-family: monospace;">
+              📷 ${isRTL ? 'نوع الباركود:' : 'Barcode Type:'} ${barcodeFormat}
+            </span>
           </div>
           <div class="labels-container">
             ${labelsHtml}
           </div>
           <script>
+            const barcodeOptions = ${barcodeOptionsStr};
+            
             ${selectedProducts.map((product, idx) =>
               Array.from({ length: product.quantity }, (_, i) => `
                 try {
-                  JsBarcode("#bc-${idx}-${i}", "${product.barcode}", {
-                    format: "CODE128",
-                    width: ${design.barcodeWidth},
-                    height: ${design.barcodeHeight},
-                    displayValue: true,
-                    fontSize: ${design.fontSize - 2},
-                    margin: 2,
-                    textMargin: 1
-                  });
+                  const canvas = document.getElementById("bc-${idx}-${i}");
+                  if (canvas && "${product.barcode}") {
+                    JsBarcode(canvas, "${product.barcode}", barcodeOptions);
+                  }
                 } catch(e) { console.error(e); }
               `).join('')
             ).join('')}
@@ -640,7 +711,7 @@ const BarcodePrintingCenter: React.FC = () => {
 
     toast({
       title: isRTL ? 'جاري الطباعة' : 'Printing',
-      description: isRTL ? `${totalLabels} ملصق` : `${totalLabels} labels`
+      description: isRTL ? `${totalLabels} ملصق بنوع ${barcodeFormat}` : `${totalLabels} labels with ${barcodeFormat} format`
     });
   };
 
@@ -648,19 +719,13 @@ const BarcodePrintingCenter: React.FC = () => {
   useEffect(() => {
     if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' && design.barcodeWidth > 0 && design.barcodeHeight > 0) {
       try {
-        JsBarcode(canvasRef.current, selectedProducts[0].barcode, {
-          format: 'CODE128',
-          width: design.barcodeWidth,
-          height: design.barcodeHeight,
-          displayValue: true,
-          fontSize: design.fontSize - 2,
-          margin: 2
-        });
+        const options = getBarcodeOptions();
+        JsBarcode(canvasRef.current, selectedProducts[0].barcode, options);
       } catch (e) {
         console.error('Barcode preview error:', e);
       }
     }
-  }, [selectedProducts, design]);
+  }, [selectedProducts, design, barcodeFormat]);
 
   const t = {
     title: isRTL ? 'مركز طباعة الباركود' : 'Barcode Printing Center',
@@ -705,6 +770,7 @@ const BarcodePrintingCenter: React.FC = () => {
     loadSettings: isRTL ? 'تحميل الإعدادات' : 'Load Settings',
     clearSettings: isRTL ? 'مسح الإعدادات' : 'Clear Settings',
     resetAll: isRTL ? 'إعادة الكل' : 'Reset All',
+    barcodeType: isRTL ? 'نوع الباركود' : 'Barcode Type',
   };
 
   if (isLoading) {
@@ -734,7 +800,6 @@ const BarcodePrintingCenter: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Settings Action Buttons */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={saveSettings} title={t.saveSettings}>
               <Save className="h-4 w-4" />
@@ -1034,6 +1099,38 @@ const BarcodePrintingCenter: React.FC = () => {
 
                   <Separator />
 
+                  {/* ✅ Barcode Type Selection */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2">
+                      <Barcode size={14} />
+                      {t.barcodeType}
+                    </Label>
+                    <Select
+                      value={barcodeFormat}
+                      onValueChange={(value) => setBarcodeFormat(value as BarcodeFormat)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {barcodeFormats.map((format) => (
+                          <SelectItem key={format.value} value={format.value}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {language === 'ar' ? format.labelAr : format.label}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format.description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator />
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <Label>{t.showCompany}</Label>
@@ -1267,6 +1364,10 @@ const BarcodePrintingCenter: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t.labelSize}:</span>
                   <span className="font-medium">{design.width} × {design.height} {t.mm}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t.barcodeType}:</span>
+                  <span className="font-medium font-mono">{barcodeFormat}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{t.printerType}:</span>

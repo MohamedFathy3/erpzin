@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight, X, Filter, Search } from "lucide-react";
+import { Plus, Eye, Receipt, RotateCcw, ArrowLeftRight, X, Filter, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
 import InvoiceDetails from "./InvoiceDetails";
@@ -137,6 +137,9 @@ const SalesInvoiceList = () => {
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<any>(null);
   
+  // ✅ State للـ collapse - الفلاتر تكون مطوية افتراضياً
+  const [filtersCollapsed, setFiltersCollapsed] = useState(true);
+  
   // ========== Filter State للباك اند ==========
   const [filters, setFilters] = useState({
     search: '',
@@ -200,7 +203,7 @@ const SalesInvoiceList = () => {
       apiFilters.date_to = filters.date_to;
     }
 
-    // فلاتر المبلغ (لو الباك اند بيدعمها)
+    // فلاتر المبلغ
     if (filters.amount_min) {
       apiFilters.amount_min = Number(filters.amount_min);
     }
@@ -363,7 +366,7 @@ const SalesInvoiceList = () => {
 
   // ✅ جلب فواتير المبيعات - مع الفلاتر من الباك اند
   const { data: responseData, isLoading, refetch } = useQuery({
-    queryKey: ['sales-invoices', buildFilters()], // الفلاتر كـ query key عشان يعمل refetch لو اتغيرت
+    queryKey: ['sales-invoices', buildFilters()],
     queryFn: async () => {
       try {
         const apiFilters = buildFilters();
@@ -373,7 +376,7 @@ const SalesInvoiceList = () => {
           orderBy: 'id',
           orderByDirection: 'desc',
           perPage: 50,
-          paginate: true, // نشغل pagination عشان أحسن
+          paginate: true,
           with: ['customer', 'sales_representative', 'branch', 'warehouse', 'currency', 'tax']
         };
 
@@ -397,7 +400,7 @@ const SalesInvoiceList = () => {
   const invoices = responseData?.data || [];
   const totalInvoices = responseData?.meta?.total || 0;
 
-  // ✅ جلب فاتورة محددة للمرتجع - GET /sales-invoices/{id}
+  // ✅ جلب فاتورة محددة للمرتجع
   const fetchInvoiceForReturn = async (invoiceId: number) => {
     try {
       console.log(`📦 Fetching invoice #${invoiceId} for return...`);
@@ -589,7 +592,7 @@ const SalesInvoiceList = () => {
           </div>
         </div>
 
-        {/* Stats Cards - إحصائيات سريعة */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
             <CardContent className="p-4 flex items-center justify-between">
@@ -662,33 +665,62 @@ const SalesInvoiceList = () => {
           </Card>
         </div>
 
-        {/* Filter Bar - Filters from Backend */}
+        {/* ✅ Filter Bar - مع زر الطي */}
         <Card className="border-primary/20 shadow-sm">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div 
+                className="flex items-center gap-2 cursor-pointer select-none"
+                onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+              >
                 <div className="w-1 h-5 bg-primary rounded-full" />
                 <Filter className="h-4 w-4" />
-                {language === 'ar' ? 'بحث وتصفية' : 'Search & Filter'}
+                <CardTitle className="text-lg">
+                  {language === 'ar' ? 'بحث وتصفية' : 'Search & Filter'}
+                </CardTitle>
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="ml-2">
                     {activeFiltersCount}
                   </Badge>
                 )}
-              </CardTitle>
+                {/* سهم الطي */}
+                {filtersCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </div>
               
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleResetFilters}
-                className="h-8 px-2 text-xs"
-              >
-                <X className="h-3 w-3 ml-1" />
-                {language === 'ar' ? 'مسح الكل' : 'Clear all'}
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* زر طي/فتح سريع */}
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+                  className="h-8 px-2 text-xs"
+                >
+                  {filtersCollapsed ? (
+                    <>{language === 'ar' ? 'فتح الفلاتر' : 'Expand filters'}</>
+                  ) : (
+                    <>{language === 'ar' ? 'طي الفلاتر' : 'Collapse filters'}</>
+                  )}
+                </Button>
+                
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleResetFilters}
+                  className="h-8 px-2 text-xs"
+                >
+                  <X className="h-3 w-3 ml-1" />
+                  {language === 'ar' ? 'مسح الكل' : 'Clear all'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
-          <CardContent>
+          
+          {/* ✅ محتوى الفلاتر - يتغير حسب حالة الطي */}
+          <CardContent className={filtersCollapsed ? "hidden" : "block"}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Search Input */}
               <div className="space-y-2">
@@ -704,9 +736,6 @@ const SalesInvoiceList = () => {
                   onChange={(e) => handleFilterChange('search', e.target.value)}
                 />
               </div>
-
-              {/* Payment Status Filter */}
-            
 
               {/* Customer Filter */}
               <div className="space-y-2">
@@ -875,6 +904,55 @@ const SalesInvoiceList = () => {
               </div>
             </div>
           </CardContent>
+          
+          {/* ✅ عرض ملخص الفلاتر النشطة عندما تكون مطوية */}
+          {filtersCollapsed && activeFiltersCount > 0 && (
+            <div className="px-6 pb-3 pt-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium">{language === 'ar' ? 'الفلاتر النشطة:' : 'Active filters:'}</span>
+                {filters.search && (
+                  <Badge variant="secondary" className="text-xs">
+                    🔍 {filters.search}
+                  </Badge>
+                )}
+                {filters.customer_id !== 'all' && customers.find((c: any) => c.id === Number(filters.customer_id)) && (
+                  <Badge variant="secondary" className="text-xs">
+                    👤 {customers.find((c: any) => c.id === Number(filters.customer_id))?.name}
+                  </Badge>
+                )}
+                {filters.branch_id !== 'all' && branches.find((b: any) => b.id === Number(filters.branch_id)) && (
+                  <Badge variant="secondary" className="text-xs">
+                    🏢 {branches.find((b: any) => b.id === Number(filters.branch_id))?.name}
+                  </Badge>
+                )}
+                {filters.salesman_id !== 'all' && salesmen.find((s: any) => s.id === Number(filters.salesman_id)) && (
+                  <Badge variant="secondary" className="text-xs">
+                    👨‍💼 {salesmen.find((s: any) => s.id === Number(filters.salesman_id))?.name}
+                  </Badge>
+                )}
+                {filters.warehouse_id !== 'all' && warehouses.find((w: any) => w.id === Number(filters.warehouse_id)) && (
+                  <Badge variant="secondary" className="text-xs">
+                    📦 {warehouses.find((w: any) => w.id === Number(filters.warehouse_id))?.name}
+                  </Badge>
+                )}
+                {filters.date_from && (
+                  <Badge variant="secondary" className="text-xs">
+                    📅 من {filters.date_from}
+                  </Badge>
+                )}
+                {filters.date_to && (
+                  <Badge variant="secondary" className="text-xs">
+                    📅 إلى {filters.date_to}
+                  </Badge>
+                )}
+                {activeFiltersCount > 6 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{activeFiltersCount - 6} {language === 'ar' ? 'أخرى' : 'more'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* Table Card */}
@@ -912,7 +990,6 @@ const SalesInvoiceList = () => {
                         </span>
                       </div>
                     </TableHead>
-                   
                     <TableHead className="min-w-[120px] font-bold">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -934,7 +1011,7 @@ const SalesInvoiceList = () => {
                     // Skeleton loading
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        {Array.from({ length: 7 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <TableCell key={j}>
                             <div className="h-5 bg-muted rounded animate-pulse" />
                           </TableCell>
@@ -943,7 +1020,7 @@ const SalesInvoiceList = () => {
                     ))
                   ) : invoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-[400px] text-center">
+                      <TableCell colSpan={6} className="h-[400px] text-center">
                         <div className="flex flex-col items-center justify-center h-full">
                           <div className="p-4 bg-muted/30 rounded-full mb-4">
                             <Receipt className="h-12 w-12 text-muted-foreground/50" />
@@ -1016,7 +1093,7 @@ const SalesInvoiceList = () => {
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium">
-                              {formatDate(invoice.due_date)}
+                              {formatDate(invoice.due_date || invoice.invoice_date)}
                             </span>
                             <span className="text-xs text-muted-foreground">
                               {new Date(invoice.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1033,7 +1110,6 @@ const SalesInvoiceList = () => {
                             </span>
                           </div>
                         </TableCell>
-                       
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {getPaymentMethodBadge(invoice.payment_method)}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -804,6 +805,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
               {/* Product Search & Items */}
            {/* Product Search & Items */}
+{/* Product Search & Items */}
 <Card>
   <CardHeader className="pb-3">
     <CardTitle className="text-lg flex items-center gap-2">
@@ -812,8 +814,21 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     </CardTitle>
   </CardHeader>
   <CardContent className="space-y-4">
-    {/* ✅ Product Search Button */}
-    <div className="flex gap-2">
+    
+    {/* ✅ Product Search - نسختين: مدمجة للموبيل و Modal للديسكتوب */}
+    
+    {/* للشاشات الصغيرة (موبايل) - بحث مدمج */}
+    <div className="block lg:hidden">
+      <ProductSearch
+        isOpen={true}
+        onClose={() => {}}
+        onSelectProduct={addProduct}
+        embedded={true}
+      />
+    </div>
+
+    {/* للشاشات الكبيرة (ديسكتوب) - زر يفتح Modal */}
+    <div className="hidden lg:block">
       <Button
         type="button"
         variant="outline"
@@ -825,28 +840,31 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       </Button>
     </div>
 
-    {/* ✅ Product Search Dialog */}
-    <ProductSearch
-      isOpen={showProductSearch}
-      onClose={() => setShowProductSearch(false)}
-      onSelectProduct={addProduct}
-    />
+    {/* Product Search Dialog (للديسكتوب فقط) */}
+    <div className="hidden lg:block">
+      <ProductSearch
+        isOpen={showProductSearch}
+        onClose={() => setShowProductSearch(false)}
+        onSelectProduct={addProduct}
+        embedded={false}
+      />
+    </div>
 
     {/* Items Table */}
     <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader className="bg-muted/50">
           <TableRow>
-            <TableHead className="min-w-[250px]">
+            <TableHead className="min-w-[200px]">
               {language === 'ar' ? 'المنتج' : 'Product'}
             </TableHead>
-            <TableHead className="w-24 text-center">
+            <TableHead className="w-20 text-center">
               {language === 'ar' ? 'الكمية' : 'Qty'}
             </TableHead>
             <TableHead className="w-28 text-right">
               {language === 'ar' ? 'السعر' : 'Price'}
             </TableHead>
-            <TableHead className="w-24 text-center">
+            <TableHead className="w-20 text-center">
               {language === 'ar' ? 'خصم %' : 'Disc %'}
             </TableHead>
             <TableHead className="w-32 text-right">
@@ -864,14 +882,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                   <span className="text-sm">
                     {language === 'ar' ? 'لا توجد أصناف' : 'No items added'}
                   </span>
-                  <Button
-                    variant="link"
-                    onClick={() => setShowProductSearch(true)}
-                    className="gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
-                  </Button>
                 </div>
               </TableCell>
             </TableRow>
@@ -879,7 +889,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
             items.map((item) => (
               <TableRow key={item.id} className="hover:bg-muted/30">
                 <TableCell>
-                  <div className="font-medium">{item.product_name}</div>
+                  <div className="font-medium text-sm">{item.product_name}</div>
                   <div className="text-xs text-muted-foreground font-mono">
                     {item.sku}
                   </div>
@@ -890,7 +900,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     min="1"
                     value={item.quantity}
                     onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                    className="w-20 text-center mx-auto"
+                    className="w-20 text-center mx-auto h-8"
                   />
                 </TableCell>
                 <TableCell>
@@ -900,7 +910,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     step="0.01"
                     value={item.unit_price}
                     onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                    className="w-24 text-right"
+                    className="w-24 text-right h-8"
                   />
                 </TableCell>
                 <TableCell>
@@ -910,10 +920,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     max="100"
                     value={item.discount_percent}
                     onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                    className="w-20 text-center mx-auto"
+                    className="w-20 text-center mx-auto h-8"
                   />
                 </TableCell>
-                <TableCell className="font-medium text-right">
+                <TableCell className="font-medium text-right text-sm">
                   {item.total_price.toLocaleString()}
                 </TableCell>
                 <TableCell>
@@ -933,13 +943,21 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       </Table>
     </div>
 
-    {/* ✅ Shortcut buttons for quick add (اختياري) */}
+    {/* زر إضافة منتج آخر */}
     {items.length > 0 && (
       <div className="flex justify-end">
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setShowProductSearch(true)}
+          onClick={() => {
+            if (window.innerWidth < 1024) {
+              // في الموبيل، التركيز على حقل البحث المدمج
+              const searchInput = document.querySelector('.lg\\:hidden input');
+              if (searchInput) (searchInput as HTMLInputElement).focus();
+            } else {
+              setShowProductSearch(true);
+            }
+          }}
           className="gap-2"
         >
           <Plus className="h-4 w-4" />
