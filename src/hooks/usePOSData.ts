@@ -304,6 +304,8 @@ export const useProducts = (categoryId?: string | null) => {
 };
 
 // ========== Product by Barcode with Offline Support ==========
+// usePOSData.ts - تعديل useProductByBarcode
+
 export const useProductByBarcode = (barcode: string) => {
   const { userBranch, currentBranch } = useApp();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);

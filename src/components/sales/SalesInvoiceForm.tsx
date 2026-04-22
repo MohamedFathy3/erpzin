@@ -315,7 +315,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen && !!formData.warehouse_id // 🔴 شغال بس لما يختار مخزن
   });
 
-  // ✅ 7. جلب المنتجات
   const { data: products = [] } = useQuery({
     queryKey: ['products-form'],
     queryFn: async () => {

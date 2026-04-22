@@ -357,26 +357,24 @@ const POS: React.FC = () => {
   );
 
   // ✅ معالج تغيير حقل البحث - للتمييز بين مسح الباركود والبحث اليدوي
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
+// POS.tsx - استبدل دالة handleSearchChange بهذه النسخة
+
+// ✅ معالج تغيير حقل البحث - يضيف المنتج فوراً إذا كان باركود صحيح
+const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const value = e.target.value;
+  setSearchQuery(value);
+  
+  if (value.length >= 3) {
+    setIsBarcodeScanning(true);
     
-    // ✅ إذا كان النص طويلاً ويحتوي على أرقام فقط (غالباً باركود)
-    // أو إذا كان طوله مناسب للباركود (أكثر من 5 أرقام)
-    if (value.length > 5 && /^\d+$/.test(value)) {
-      // هذا غالباً باركود (أرقام فقط)
-      setIsBarcodeScanning(true);
-      
-      // إعادة تعيين الحالة بعد 500ms
-      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      scanTimeoutRef.current = setTimeout(() => {
-        setIsBarcodeScanning(false);
-      }, 500);
-    } else {
-      // كتابة يدوية عادية
+    if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+    scanTimeoutRef.current = setTimeout(() => {
       setIsBarcodeScanning(false);
-    }
-  };
+    }, 1000);
+  } else {
+    setIsBarcodeScanning(false);
+  }
+};
 
   // ✅ تأثير إضافة المنتج إلى السلة عند مسح الباركود
   useEffect(() => {
@@ -1032,18 +1030,42 @@ const POS: React.FC = () => {
           {/* Products Section */}
           <div className="flex-1 flex flex-col p-4 overflow-hidden">
             <div className="space-y-3 mb-4 flex-shrink-0">
-              <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                <Input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  className="ps-10 pe-10 h-12 text-base"
-                />
-                <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-              </div>
+             // POS.tsx - أضف زر بجانب حقل البحث
+
+<div className="relative flex gap-2">
+  <div className="relative flex-1">
+    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+    <Input
+      ref={searchInputRef}
+      type="text"
+      placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
+      value={searchQuery}
+      onChange={handleSearchChange}
+      onKeyDown={(e) => {
+        // إذا ضغط Enter وكان النص باركود محتمل
+        if (e.key === 'Enter' && searchQuery.length >= 3) {
+          setIsBarcodeScanning(true);
+        }
+      }}
+      className="ps-10 pe-10 h-12 text-base"
+    />
+    <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+  </div>
+  
+  {/* زر إضافة الباركود مباشرة */}
+  {searchQuery.length >= 3 && (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={() => setIsBarcodeScanning(true)}
+      className="h-12 px-4"
+    >
+      <Barcode size={18} className="me-1" />
+      {language === 'ar' ? 'إضافة' : 'Add'}
+    </Button>
+  )}
+</div>
               
               {/* مؤشر مسح الباركود */}
               {isBarcodeScanning && (
