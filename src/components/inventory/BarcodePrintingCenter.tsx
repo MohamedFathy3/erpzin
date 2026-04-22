@@ -1,4 +1,5 @@
-// BarcodePrintingCenter.tsx
+// BarcodePrintingCenter.tsx - النسخة المعدلة بالكامل
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,9 @@ import {
   Ruler,
   Palette,
   DollarSign,
+  Save,
+  Download,
+  RefreshCw,
 } from 'lucide-react';
 
 // ==================== Types ====================
@@ -119,32 +123,38 @@ interface PrinterConfig {
   gapY: number;
 }
 
-const defaultDesign: LabelDesign = {
-  width: 50,
-  height: 30,
-  showProductName: true,
-  showPrice: true,
-  showSku: true,
-  showBarcode: true,
-  fontSize: 10,
-  barcodeHeight: 40,
-  barcodeWidth: 1.5,
-  padding: 4,
+interface BarcodeSettings {
+  design: LabelDesign;
+  printer: PrinterConfig;
+}
+
+// ========== إعدادات فارغة (كلها zeros) ==========
+const emptyDesign: LabelDesign = {
+  width: 0,
+  height: 0,
+  showProductName: false,
+  showPrice: false,
+  showSku: false,
+  showBarcode: false,
+  fontSize: 0,
+  barcodeHeight: 0,
+  barcodeWidth: 0,
+  padding: 0,
   borderEnabled: false,
   companyName: '',
   showCompanyName: false
 };
 
-const defaultPrinterConfig: PrinterConfig = {
+const emptyPrinterConfig: PrinterConfig = {
   type: 'thermal',
-  paperWidth: 100,
-  paperHeight: 150,
-  dpi: 203,
-  labelsPerRow: 2,
-  marginTop: 5,
-  marginLeft: 5,
-  gapX: 3,
-  gapY: 3
+  paperWidth: 0,
+  paperHeight: 0,
+  dpi: 0,
+  labelsPerRow: 0,
+  marginTop: 0,
+  marginLeft: 0,
+  gapX: 0,
+  gapY: 0
 };
 
 const printerPresets = {
@@ -174,9 +184,7 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
   const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   
-  if (!product) {
-    return null;
-  }
+  if (!product) return null;
   
   const handleUnitSelect = (unit: ProductUnit) => {
     setSelectedUnit(unit);
@@ -211,7 +219,6 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Units Section */}
           <div>
             <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
               <Ruler size={14} />
@@ -242,7 +249,6 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
             </ScrollArea>
           </div>
 
-          {/* Colors Section */}
           {selectedUnit?.colors && selectedUnit.colors.length > 0 && (
             <div>
               <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
@@ -251,42 +257,27 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
               </h4>
               <ScrollArea className="h-32 border rounded-md p-2">
                 <div className="flex flex-wrap gap-2">
-                  {selectedUnit.colors.map((color) => {
-                    const isLowStock = color.stock <= 5;
-                    const isOutOfStock = color.stock === 0;
-
-                    return (
-                      <button
-                        key={color.id}
-                        onClick={() => handleColorSelect(color)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
-                          selectedColor?.id === color.id
-                            ? "bg-primary text-white"
-                            : "border border-border hover:bg-muted/80",
-                        )}
-                        title={isOutOfStock ? (language === 'ar' ? 'نفد المخزون' : 'Out of stock') : `${language === 'ar' ? 'المخزون' : 'Stock'}: ${color.stock}`}
-                      >
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: color.hex_code || '#000' }}
-                        />
-                        <span>{color.color}</span>
-                        <span className={cn(
-                          "text-xs font-mono",
-                          isLowStock && !isOutOfStock ? "text-destructive" : ""
-                        )}>
-                          ({color.stock})
-                        </span>
-                      </button>
-                    );
-                  })}
+                  {selectedUnit.colors.map((color) => (
+                    <button
+                      key={color.id}
+                      onClick={() => handleColorSelect(color)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-all flex items-center gap-1",
+                        selectedColor?.id === color.id
+                          ? "bg-primary text-white"
+                          : "border border-border hover:bg-muted/80",
+                      )}
+                    >
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color.hex_code || '#000' }} />
+                      <span>{color.color}</span>
+                      <span className="text-xs font-mono">({color.stock})</span>
+                    </button>
+                  ))}
                 </div>
               </ScrollArea>
             </div>
           )}
 
-          {/* Price Summary */}
           {selectedUnit && (
             <div className="bg-primary/5 rounded-lg p-3">
               <div className="flex justify-between items-center">
@@ -298,32 +289,14 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
                   {Number(selectedUnit.sell_price).toLocaleString()} {language === 'ar' ? 'ر.س' : 'SAR'}
                 </span>
               </div>
-              {selectedColor && (
-                <div className="text-xs mt-1 space-y-0.5">
-                  <div className="text-muted-foreground">
-                    {language === 'ar' ? 'اللون:' : 'Color:'} {selectedColor.color}
-                  </div>
-                  <div className={cn(
-                    "text-xs font-mono",
-                    selectedColor.stock <= 5 && selectedColor.stock > 0 ? "text-destructive font-bold" : "text-muted-foreground"
-                  )}>
-                    {language === 'ar' ? `المخزون: ${selectedColor.stock}` : `Stock: ${selectedColor.stock}`}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="outline" onClick={onClose} size="sm">
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
-            <Button 
-              onClick={handleConfirm} 
-              disabled={!selectedUnit}
-              size="sm"
-            >
+            <Button onClick={handleConfirm} disabled={!selectedUnit} size="sm">
               {language === 'ar' ? 'تأكيد' : 'Confirm'}
             </Button>
           </div>
@@ -339,15 +312,104 @@ const BarcodePrintingCenter: React.FC = () => {
   const isRTL = language === 'ar';
   const { formatCurrency } = useRegionalSettings();
 
+  const SETTINGS_STORAGE_KEY = 'barcode_printing_settings';
+
   const [selectedProducts, setSelectedProducts] = useState<PrintProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [design, setDesign] = useState<LabelDesign>(defaultDesign);
-  const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(defaultPrinterConfig);
+  // ✅ استخدام الإعدادات الفارغة كقيم أولية
+  const [design, setDesign] = useState<LabelDesign>(emptyDesign);
+  const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(emptyPrinterConfig);
   const [activeTab, setActiveTab] = useState('products');
   const [variantModalOpen, setVariantModalOpen] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<APIProduct | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // ✅ فقط تحميل الإعدادات من localStorage عند تحميل الصفحة (بدون حفظ تلقائي)
+  useEffect(() => {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        if (parsedSettings.design) setDesign(parsedSettings.design);
+        if (parsedSettings.printer) setPrinterConfig(parsedSettings.printer);
+        console.log('✅ Settings loaded from localStorage');
+      } catch (e) {
+        console.error('Error loading settings:', e);
+      }
+    }
+    // ❌ لا يوجد حفظ تلقائي هنا
+  }, []);
+
+  // ✅ دالة حفظ الإعدادات (تضغط على الزر)
+  const saveSettings = () => {
+    const settings: BarcodeSettings = { design, printer: printerConfig };
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    toast({
+      title: isRTL ? 'تم حفظ الإعدادات' : 'Settings Saved',
+      description: isRTL ? 'تم حفظ إعدادات الطباعة والتصميم بنجاح' : 'Printing and design settings saved successfully',
+    });
+  };
+
+  // ✅ دالة تحميل الإعدادات (تضغط على الزر)
+  const loadSettings = () => {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        setDesign(parsedSettings.design || emptyDesign);
+        setPrinterConfig(parsedSettings.printer || emptyPrinterConfig);
+        toast({
+          title: isRTL ? 'تم تحميل الإعدادات' : 'Settings Loaded',
+          description: isRTL ? 'تم تحميل آخر الإعدادات المحفوظة' : 'Last saved settings loaded',
+        });
+      } catch (e) {
+        console.error('Error loading settings:', e);
+        toast({
+          title: isRTL ? 'خطأ' : 'Error',
+          description: isRTL ? 'فشل في تحميل الإعدادات' : 'Failed to load settings',
+          variant: 'destructive'
+        });
+      }
+    } else {
+      toast({
+        title: isRTL ? 'لا توجد إعدادات' : 'No Settings',
+        description: isRTL ? 'لا توجد إعدادات محفوظة مسبقاً' : 'No previously saved settings',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // ✅ دالة مسح الإعدادات من localStorage وإعادة تعيين القيم إلى صفر
+  const clearAllSettings = () => {
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    setDesign(emptyDesign);
+    setPrinterConfig(emptyPrinterConfig);
+    toast({
+      title: isRTL ? 'تم مسح الإعدادات' : 'Settings Cleared',
+      description: isRTL ? 'تم مسح جميع الإعدادات المحفوظة' : 'All saved settings have been cleared',
+    });
+  };
+
+  // ✅ دالة إعادة تعيين القيم إلى صفر (بدون مسح localStorage)
+  const resetAllSettings = () => {
+    setDesign(emptyDesign);
+    setPrinterConfig(emptyPrinterConfig);
+    toast({
+      title: isRTL ? 'تم إعادة التعيين' : 'Reset Complete',
+      description: isRTL ? 'تم إعادة جميع الإعدادات إلى الصفر' : 'All settings reset to zero',
+    });
+  };
+
+  const applyPreset = (preset: keyof typeof printerPresets) => {
+    setPrinterConfig(printerPresets[preset]);
+    toast({ title: isRTL ? 'تم تطبيق الإعداد' : 'Preset Applied' });
+  };
+
+  const resetDesign = () => {
+    setDesign(emptyDesign);
+    toast({ title: isRTL ? 'تم إعادة التصميم' : 'Design Reset' });
+  };
 
   // Fetch products from API
   const { data: products = [], isLoading } = useQuery({
@@ -355,7 +417,6 @@ const BarcodePrintingCenter: React.FC = () => {
     queryFn: async () => {
       try {
         const response = await api.post('/product/index', { paginate: false });
-        console.log('Products response:', response);
         if (response.data.result === 'Success') {
           return response.data.data as APIProduct[];
         } else {
@@ -372,36 +433,27 @@ const BarcodePrintingCenter: React.FC = () => {
     }
   });
 
- const filteredProducts = products.filter(p => {
-  // تحقق من وجود المنتج نفسه
-  if (!p) return false;
-  
-  const searchLower = searchQuery.toLowerCase();
-  
-  // دالة مساعدة للتحقق من القيمة
-  const includesSearch = (value: string | null | undefined): boolean => {
-    return value ? value.toLowerCase().includes(searchLower) : false;
-  };
-  
-  return (
-    includesSearch(p.name) ||
-    includesSearch(p.name_ar) ||
-    includesSearch(p.sku) ||
-    includesSearch(p.barcode)
-  );
-});
+  const filteredProducts = products.filter(p => {
+    if (!p) return false;
+    const searchLower = searchQuery.toLowerCase();
+    const includesSearch = (value: string | null | undefined): boolean => {
+      return value ? value.toLowerCase().includes(searchLower) : false;
+    };
+    return (
+      includesSearch(p.name) ||
+      includesSearch(p.name_ar) ||
+      includesSearch(p.sku) ||
+      includesSearch(p.barcode)
+    );
+  });
 
   const handleAddProduct = (product: APIProduct, variant?: ProductUnit, color?: ProductColor) => {
     const variantId = variant ? `${product.id}-${variant.id}` : String(product.id);
     const existing = selectedProducts.find(p => p.id === variantId);
-
-    const price = variant 
-      ? Number(variant.sell_price) 
-      : Number(product.price);
+    const price = variant ? Number(variant.sell_price) : Number(product.price);
 
     let variantInfo = '';
     let variantInfoAr = '';
-    
     if (variant) {
       variantInfo = variant.unit_name;
       variantInfoAr = variant.unit_name;
@@ -474,23 +526,12 @@ const BarcodePrintingCenter: React.FC = () => {
 
   const totalLabels = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
 
-  const applyPreset = (preset: keyof typeof printerPresets) => {
-    setPrinterConfig(printerPresets[preset]);
-    toast({ title: isRTL ? 'تم تطبيق الإعداد' : 'Preset Applied' });
-  };
-
-  const resetDesign = () => {
-    setDesign(defaultDesign);
-    toast({ title: isRTL ? 'تم إعادة التصميم' : 'Design Reset' });
-  };
-
   const handlePrint = () => {
     if (selectedProducts.length === 0) {
       toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
       return;
     }
 
-    // التحقق من وجود باركود لجميع المنتجات
     const productsWithoutBarcode = selectedProducts.filter(p => !p.barcode || p.barcode === 'NO_BARCODE');
     if (productsWithoutBarcode.length > 0) {
       toast({
@@ -512,7 +553,6 @@ const BarcodePrintingCenter: React.FC = () => {
         const productLabel = product.isVariant
           ? `${isRTL ? product.nameAr : product.name} (${isRTL ? product.variantInfoAr : product.variantInfo})`
           : (isRTL ? product.nameAr : product.name);
-
         const formattedPrice = formatCurrency(product.price);
 
         labels.push(`
@@ -568,7 +608,7 @@ const BarcodePrintingCenter: React.FC = () => {
         <body>
           <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px; text-align: center;">
             <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600;">
-              ${isRTL ? '🖨️ طباعة الملصقات' : '🖨️ Print Labels'}
+              🖨️ ${isRTL ? 'طباعة الملصقات' : 'Print Labels'}
             </button>
             <span style="margin: 0 15px; color: #666;">${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}</span>
           </div>
@@ -606,7 +646,7 @@ const BarcodePrintingCenter: React.FC = () => {
 
   // Generate preview barcode
   useEffect(() => {
-    if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE') {
+    if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' && design.barcodeWidth > 0 && design.barcodeHeight > 0) {
       try {
         JsBarcode(canvasRef.current, selectedProducts[0].barcode, {
           format: 'CODE128',
@@ -660,7 +700,11 @@ const BarcodePrintingCenter: React.FC = () => {
     reset: isRTL ? 'إعادة تعيين' : 'Reset',
     mm: isRTL ? 'مم' : 'mm',
     px: isRTL ? 'بكسل' : 'px',
-    variants: isRTL ? 'متغيرات' : 'Variants'
+    variants: isRTL ? 'متغيرات' : 'Variants',
+    saveSettings: isRTL ? 'حفظ الإعدادات' : 'Save Settings',
+    loadSettings: isRTL ? 'تحميل الإعدادات' : 'Load Settings',
+    clearSettings: isRTL ? 'مسح الإعدادات' : 'Clear Settings',
+    resetAll: isRTL ? 'إعادة الكل' : 'Reset All',
   };
 
   if (isLoading) {
@@ -690,6 +734,21 @@ const BarcodePrintingCenter: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Settings Action Buttons */}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={saveSettings} title={t.saveSettings}>
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={loadSettings} title={t.loadSettings}>
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={clearAllSettings} title={t.clearSettings}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={resetAllSettings} title={t.resetAll}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
           <Badge variant="outline" className="text-base px-3 py-1.5">
             <Tag className="h-4 w-4 me-2" />
             {t.totalLabels}: <span className="font-bold ms-1">{totalLabels}</span>
@@ -743,10 +802,8 @@ const BarcodePrintingCenter: React.FC = () => {
                     <div className="divide-y divide-border">
                       {filteredProducts.map(product => {
                         const hasVariants = product.units && product.units.length > 0;
-
                         return (
                           <div key={product.id} className="border-b border-border last:border-0">
-                            {/* Main Product Row */}
                             <div className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
@@ -800,10 +857,7 @@ const BarcodePrintingCenter: React.FC = () => {
                     <ScrollArea className="h-[200px]">
                       <div className="space-y-2">
                         {selectedProducts.map(product => (
-                          <div
-                            key={product.id}
-                            className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
-                          >
+                          <div key={product.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-medium truncate">
@@ -823,12 +877,7 @@ const BarcodePrintingCenter: React.FC = () => {
                               <p className="text-sm text-muted-foreground font-mono">{product.sku}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-8 w-8"
-                                onClick={() => handleQuantityChange(product.id, -1)}
-                              >
+                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, -1)}>
                                 <Minus className="h-3 w-3" />
                               </Button>
                               <Input
@@ -838,20 +887,10 @@ const BarcodePrintingCenter: React.FC = () => {
                                 onChange={(e) => handleQuantityInput(product.id, e.target.value)}
                                 className="w-16 h-8 text-center"
                               />
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-8 w-8"
-                                onClick={() => handleQuantityChange(product.id, 1)}
-                              >
+                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, 1)}>
                                 <Plus className="h-3 w-3" />
                               </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => handleRemoveProduct(product.id)}
-                              >
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleRemoveProduct(product.id)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
@@ -946,7 +985,7 @@ const BarcodePrintingCenter: React.FC = () => {
                       <Slider
                         value={[design.fontSize]}
                         onValueChange={([v]) => setDesign(d => ({ ...d, fontSize: v }))}
-                        min={6}
+                        min={0}
                         max={20}
                         step={1}
                       />
@@ -959,7 +998,7 @@ const BarcodePrintingCenter: React.FC = () => {
                       <Slider
                         value={[design.barcodeHeight]}
                         onValueChange={([v]) => setDesign(d => ({ ...d, barcodeHeight: v }))}
-                        min={20}
+                        min={0}
                         max={100}
                         step={5}
                       />
@@ -972,7 +1011,7 @@ const BarcodePrintingCenter: React.FC = () => {
                       <Slider
                         value={[design.barcodeWidth * 10]}
                         onValueChange={([v]) => setDesign(d => ({ ...d, barcodeWidth: v / 10 }))}
-                        min={5}
+                        min={0}
                         max={30}
                         step={1}
                       />
@@ -1085,7 +1124,7 @@ const BarcodePrintingCenter: React.FC = () => {
                       <Label>{t.labelsPerRow}</Label>
                       <Input
                         type="number"
-                        min={1}
+                        min={0}
                         max={10}
                         value={printerConfig.labelsPerRow}
                         onChange={(e) => setPrinterConfig(c => ({ ...c, labelsPerRow: Number(e.target.value) }))}
@@ -1101,6 +1140,7 @@ const BarcodePrintingCenter: React.FC = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="0">0 DPI</SelectItem>
                           <SelectItem value="203">203 DPI</SelectItem>
                           <SelectItem value="300">300 DPI</SelectItem>
                           <SelectItem value="600">600 DPI</SelectItem>
@@ -1167,7 +1207,7 @@ const BarcodePrintingCenter: React.FC = () => {
                 ref={previewRef}
                 className="bg-white border-2 border-dashed border-border rounded-lg p-4 flex items-center justify-center min-h-[200px]"
               >
-                {selectedProducts.length > 0 ? (
+                {selectedProducts.length > 0 && design.width > 0 && design.height > 0 ? (
                   <div
                     className="text-center"
                     style={{
@@ -1197,7 +1237,7 @@ const BarcodePrintingCenter: React.FC = () => {
                       </p>
                     )}
                     {design.showBarcode && (
-                      selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' ? (
+                      selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' && design.barcodeWidth > 0 ? (
                         <canvas ref={canvasRef} className="mx-auto" />
                       ) : (
                         <div className="text-xs text-red-500">No barcode</div>
