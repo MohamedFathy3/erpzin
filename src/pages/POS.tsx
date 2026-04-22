@@ -1030,7 +1030,6 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           {/* Products Section */}
           <div className="flex-1 flex flex-col p-4 overflow-hidden">
             <div className="space-y-3 mb-4 flex-shrink-0">
-             // POS.tsx - أضف زر بجانب حقل البحث
 
 <div className="relative flex gap-2">
   <div className="relative flex-1">
