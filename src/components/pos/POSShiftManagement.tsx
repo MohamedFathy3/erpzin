@@ -314,22 +314,27 @@ const handleOpenShift = () => {
   });
 };
 
-  const handleCloseShift = () => {
-    const amount = parseFloat(closingAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error(t.validAmount);
-      return;
-    }
+const handleCloseShift = () => {
+  const amount = parseFloat(closingAmount);
+  // السماح بالقيمة 0 مع التأكد أنها رقم صحيح
+  if (isNaN(amount) || amount < 0) {
+    toast.error(t.validAmount);
+    return;
+  }
 
-    if (!window.confirm(t.confirmClose)) return;
-
-    closeShiftMutation.mutate({
-      actual_amount: amount,
-      notes: closingNotes || undefined
+  if (amount === 0) {
+    toast.warning(language === 'ar' ? 'الرصيد الفعلي صفر، هل أنت متأكد؟' : 'Actual amount is zero, are you sure?', {
+      duration: 3000,
     });
-  };
+  }
 
-  // ========== طباعة تقرير Z ==========
+  if (!window.confirm(t.confirmClose)) return;
+
+  closeShiftMutation.mutate({
+    actual_amount: amount,
+    notes: closingNotes || undefined
+  });
+};
   const printZReport = () => {
     if (!currentShift) return;
 

@@ -825,10 +825,10 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                           )}
                         </div>
                         <Badge variant="secondary" className="text-xs">
-                          Total: {treasury.total_balance?.toLocaleString() || '0'}
+                          Total: {treasury.balance?.toLocaleString() || '0'}
                         </Badge>
                         <TableCell className="font-bold text-green-600">
-                          {treasury.total_balance?.toLocaleString() || 0}
+  {treasury.balance?.toLocaleString() || 0}
                         </TableCell>
                         <TableCell>
                           <button
@@ -1764,11 +1764,6 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               disabled={
                 !transferForm.amount ||
                 !transferForm.currency ||
-                (transferForm.type.includes('treasury') && !transferForm.from_treasury_id) ||
-                (transferForm.type.includes('bank') && !transferForm.from_bank_id) ||
-                (transferForm.type === 'treasury_to_treasury' && !transferForm.to_treasury_id) ||
-                (transferForm.type === 'treasury_to_bank' && !transferForm.to_bank_id) ||
-                (transferForm.type === 'bank_to_treasury' && !transferForm.to_treasury_id) ||
                 (transferForm.type === 'bank_to_bank' && !transferForm.to_bank_id)
               }
               className="bg-green-600 hover:bg-green-700"

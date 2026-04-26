@@ -1,5 +1,3 @@
-// BarcodePrintingCenter.tsx - النسخة الكاملة مع إضافة اختيار نوع الباركود
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

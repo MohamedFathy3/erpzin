@@ -526,7 +526,9 @@
       queryKey: ['products'],
       queryFn: async () => {
         try {
-          const response = await api.post<ProductResponse>('/product/index');
+          const response = await api.post<ProductResponse>('/product/index',{
+            perPage: 2000,
+          });
           return response.data.data || [];
         } catch (error) {
           console.error('Error fetching products:', error);
