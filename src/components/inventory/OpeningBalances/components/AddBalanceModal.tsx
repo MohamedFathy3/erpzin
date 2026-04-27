@@ -4,10 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Building2, Package, Search, X, Save, Loader2 } from 'lucide-react';
+import { Calendar, Building2, Package, Search, X, Save, Loader2, Barcode, Hash } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useProducts } from '../hooks/useProducts';
+import { useProducts, useSearchProductsByName, useSearchProductsBySku, useSearchProductsByBarcode } from '../hooks/useProducts';
 import { SelectedProductsTable } from './SelectedProductsTable';
 import { VariantSelectionModal } from './VariantSelectionModal';
 import { Product, Branch, Warehouse, SelectedProduct } from '../types';
@@ -25,6 +25,8 @@ interface AddBalanceModalProps {
   isSaving: boolean;
 }
 
+type SearchType = 'name' | 'sku' | 'barcode';
+
 export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   open,
   onOpenChange,
@@ -40,15 +42,68 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState<SearchType>('name');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
   
- const { data: products = [] } = useProducts({
-  searchQuery: searchQuery || '___empty___',
-  selectedBranch,
-  selectedWarehouse
-},); // ✅ كده مش هيبعت beginning_balance
+  // ✅ هوك البحث العام (لما ميكونش في بحث محدد)
+  const { data: generalProducts = [] } = useProducts({
+    searchQuery: searchQuery || '___empty___',
+    selectedBranch,
+    selectedWarehouse
+  });
 
+  // ✅ هوكات البحث المنفصلة
+  const { data: nameResults = [], isLoading: nameLoading } = useSearchProductsByName(
+    searchType === 'name' ? searchQuery : '',
+    searchType === 'name' && searchQuery.length > 0
+  );
+
+  const { data: skuResults = [], isLoading: skuLoading } = useSearchProductsBySku(
+    searchType === 'sku' ? searchQuery : '',
+    searchType === 'sku' && searchQuery.length > 0
+  );
+
+  const { data: barcodeResults = [], isLoading: barcodeLoading } = useSearchProductsByBarcode(
+    searchType === 'barcode' ? searchQuery : '',
+    searchType === 'barcode' && searchQuery.length > 0
+  );
+
+  // ✅ اختيار النتائج حسب نوع البحث
+  const getFilteredProducts = (): Product[] => {
+    if (!searchQuery) return [];
+    
+    switch (searchType) {
+      case 'name':
+        return nameResults;
+      case 'sku':
+        return skuResults;
+      case 'barcode':
+        return barcodeResults;
+      default:
+        return generalProducts.filter(p => {
+          const searchLower = searchQuery.toLowerCase();
+          return (
+            (p.name && p.name.toLowerCase().includes(searchLower)) ||
+            (p.name_ar && p.name_ar.toLowerCase().includes(searchLower)) ||
+            (p.sku && p.sku.toLowerCase().includes(searchLower)) ||
+            (p.barcode && p.barcode.toLowerCase().includes(searchLower))
+          );
+        });
+    }
+  };
+
+  const isLoading = () => {
+    if (!searchQuery) return false;
+    switch (searchType) {
+      case 'name': return nameLoading;
+      case 'sku': return skuLoading;
+      case 'barcode': return barcodeLoading;
+      default: return false;
+    }
+  };
+
+  const filteredProducts = getFilteredProducts().slice(0, 10);
 
   const handleAddProduct = (product: Product) => {
     if (product.units && product.units.length > 0) {
@@ -88,13 +143,20 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   const totalQuantity = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
   const totalValue = selectedProducts.reduce((sum, p) => sum + (p.quantity * (p.cost || 0)), 0);
 
+  const handleSearchTypeChange = (type: SearchType) => {
+    setSearchType(type);
+    setSearchQuery('');
+  };
+
   const t = {
     addBalance: language === 'ar' ? 'إضافة رصيد أول المدة' : 'Add Opening Balance',
     date: language === 'ar' ? 'التاريخ' : 'Date',
     branch: language === 'ar' ? 'الفرع' : 'Branch',
     warehouse: language === 'ar' ? 'المستودع' : 'Warehouse',
     products: language === 'ar' ? 'المنتجات' : 'Products',
-    search: language === 'ar' ? 'ابحث عن منتج...' : 'Search for product...',
+    searchByName: language === 'ar' ? 'ابحث باسم المنتج...' : 'Search by product name...',
+    searchBySku: language === 'ar' ? 'ابحث بالرقم التسلسلي (SKU)...' : 'Search by SKU...',
+    searchByBarcode: language === 'ar' ? 'ابحث بالباركود...' : 'Search by barcode...',
     totalQuantity: language === 'ar' ? 'إجمالي الكمية' : 'Total Quantity',
     totalValue: language === 'ar' ? 'القيمة الإجمالية' : 'Total Value',
     cancel: language === 'ar' ? 'إلغاء' : 'Cancel',
@@ -102,25 +164,22 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     allBranches: language === 'ar' ? 'جميع الفروع' : 'All Branches',
     allWarehouses: language === 'ar' ? 'جميع المستودعات' : 'All Warehouses',
     selectBranch: language === 'ar' ? 'اختر الفرع' : 'Select branch',
-    selectWarehouse: language === 'ar' ? 'اختر المستودع' : 'Select warehouse'
+    selectWarehouse: language === 'ar' ? 'اختر المستودع' : 'Select warehouse',
+    sku: language === 'ar' ? 'الرقم التسلسلي' : 'SKU',
+    barcode: language === 'ar' ? 'الباركود' : 'Barcode',
+    stock: language === 'ar' ? 'المخزون' : 'Stock',
+    searchBy: language === 'ar' ? 'نوع البحث' : 'Search Type',
+    name: language === 'ar' ? 'الاسم' : 'Name',
   };
 
-  // ✅ الحل: تصفية المنتجات مع التحقق من القيم الفارغة
-  const filteredProducts = products.filter(p => {
-    if (!p) return false;
-    
-    const searchLower = searchQuery.toLowerCase();
-    
-    const includesSearch = (value: string | null | undefined): boolean => {
-      return value ? value.toLowerCase().includes(searchLower) : false;
-    };
-    
-    return (
-      includesSearch(p.name) ||
-      includesSearch(p.name_ar) ||
-      includesSearch(p.sku)
-    );
-  }).slice(0, 10);
+  const getPlaceholder = () => {
+    switch (searchType) {
+      case 'name': return t.searchByName;
+      case 'sku': return t.searchBySku;
+      case 'barcode': return t.searchByBarcode;
+      default: return t.searchByName;
+    }
+  };
 
   return (
     <>
@@ -193,41 +252,103 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
 
             {/* Product Search Section */}
             <div className="border rounded-lg p-4">
-              <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                <Package size={14} />
-                {t.products}
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <Package size={14} />
+                  {t.products}
+                </h3>
+                
+                {/* ✅ أزرار تبديل نوع البحث */}
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={searchType === 'name' ? 'default' : 'outline'}
+                    onClick={() => handleSearchTypeChange('name')}
+                    className="h-8 px-3"
+                  >
+                    <Package size={12} className="me-1" />
+                    {t.name}
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={searchType === 'sku' ? 'default' : 'outline'}
+                    onClick={() => handleSearchTypeChange('sku')}
+                    className="h-8 px-3"
+                  >
+                    <Hash size={12} className="me-1" />
+                    SKU
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={searchType === 'barcode' ? 'default' : 'outline'}
+                    onClick={() => handleSearchTypeChange('barcode')}
+                    className="h-8 px-3"
+                  >
+                    <Barcode size={12} className="me-1" />
+                    {language === 'ar' ? 'باركود' : 'Barcode'}
+                  </Button>
+                </div>
+              </div>
               
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                 <Input
-                  placeholder={t.search}
+                  placeholder={getPlaceholder()}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 bg-background"
+                  autoFocus
                 />
               </div>
 
-              {searchQuery && filteredProducts.length > 0 && (
+              {isLoading() && (
+                <div className="text-center py-4">
+                  <Loader2 className="animate-spin mx-auto text-primary" size={24} />
+                </div>
+              )}
+
+              {searchQuery && !isLoading() && filteredProducts.length > 0 && (
                 <div className="border rounded-lg overflow-hidden max-h-[250px] overflow-y-auto mb-4">
                   {filteredProducts.map((product) => (
                     <div
                       key={product.id}
-                      className="p-2 cursor-pointer hover:bg-muted/50 border-b last:border-b-0 flex items-center justify-between"
+                      className="p-3 cursor-pointer hover:bg-muted/50 border-b last:border-b-0 flex items-center justify-between transition-colors"
                       onClick={() => handleAddProduct(product)}
                     >
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-sm">
                           {language === 'ar' 
                             ? (product.name_ar || product.name || 'غير معروف') 
                             : (product.name || 'Unknown')}
                         </p>
-                        <p className="text-xs text-muted-foreground">{product.sku || 'N/A'}</p>
+                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1">
+                          {product.sku && (
+                            <span className="font-mono flex items-center gap-1">
+                              <span className="font-medium">{t.sku}:</span> {product.sku}
+                            </span>
+                          )}
+                          {product.barcode && (
+                            <span className="font-mono flex items-center gap-1">
+                              <Barcode size={10} />
+                              <span className="font-medium">{t.barcode}:</span> {product.barcode}
+                            </span>
+                          )}
+                          {product.units && product.units.length > 0 && (
+                            <span className="text-emerald-600">
+                              {product.units.length} {language === 'ar' ? 'مقاس' : 'units'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-mono">{formatCurrency(product.cost || 0)}</p>
+                        <p className="text-sm font-mono font-semibold">{formatCurrency(product.cost || 0)}</p>
                         {product.stock && product.stock > 0 && (
-                          <p className="text-xs text-muted-foreground">Stock: {product.stock}</p>
+                          <p className="text-xs text-muted-foreground">{t.stock}: {product.stock}</p>
                         )}
                       </div>
                     </div>
@@ -235,9 +356,9 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                 </div>
               )}
 
-              {searchQuery && filteredProducts.length === 0 && products.length > 0 && (
-                <div className="text-center py-4 text-muted-foreground">
-                  {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products'}
+              {searchQuery && !isLoading() && filteredProducts.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground border rounded-lg">
+                  {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products found'}
                 </div>
               )}
 
