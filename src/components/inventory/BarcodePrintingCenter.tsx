@@ -516,7 +516,7 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
                           <span className="text-xs text-muted-foreground">
                             {language === 'ar' ? 'السعر' : 'Price'}:
                           </span>
-                          <span className="text-xl font-bold text-green-600">
+                          <span className="text-xl font-bold text-black">
                             {formatCurrency(Number(selectedUnit.sell_price))}
                           </span>
                         </div>
@@ -845,7 +845,7 @@ const BarcodePrintingCenter: React.FC = () => {
             ${design.showCompanyName && design.companyName ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-weight: 600; margin-bottom: 3px;">${design.companyName}</div>` : ''}
             ${design.showProductName ? `<div style="font-size: ${scaledFontSize}px; font-weight: 700; margin-bottom: 4px;">${productLabel}</div>` : ''}
             ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${scaledWidth - 10}mm;"></canvas>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${scaledFontSize + 3}px; font-weight: bold; margin-top: 4px; color: #22c55e;">${formattedPrice}</div>` : ''}
+            ${design.showPrice ? `<div style="font-size: ${scaledFontSize + 3}px; font-weight: bold; margin-top: 4px; color: #0000;">${formattedPrice}</div>` : ''}
           </div>
         `);
       }
@@ -879,7 +879,7 @@ const BarcodePrintingCenter: React.FC = () => {
         <body>
           <div class="no-print" style="margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-radius: 12px; text-align: center;">
             <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
-              <button onclick="window.print()" style="padding: 12px 24px; background: #22c55e; color: white; border: none; border-radius: 8px; cursor: pointer;">🖨️ ${isRTL ? 'طباعة' : 'Print'}</button>
+              <button onclick="window.print()" style="padding: 12px 24px; background: #000; color: white; border: none; border-radius: 8px; cursor: pointer;">🖨️ ${isRTL ? 'طباعة' : 'Print'}</button>
               <span style="padding: 8px 16px; background: white; border-radius: 8px;">📊 ${totalLabels} ${isRTL ? 'ملصق' : 'labels'}</span>
               <span style="padding: 8px 16px; background: white; border-radius: 8px;">🔢 ${isRTL ? 'حجم الأرقام:' : 'Text size:'} ${variantDisplaySettings.barcodeTextSize}px</span>
               <span style="padding: 8px 16px; background: white; border-radius: 8px;">🔍 ${isRTL ? 'نوع الباركود:' : 'Type:'} ${barcodeFormat}</span>
@@ -1221,7 +1221,7 @@ const BarcodePrintingCenter: React.FC = () => {
                   <div className="text-center" style={{ width: `${design.width * 3}px`, padding: `${design.padding * 3}px`, border: design.borderEnabled ? '1px solid #333' : 'none' }}>
                     {design.showProductName && <p style={{ fontSize: `${design.fontSize}px`, fontWeight: 600 }}>{isRTL ? selectedProducts[0].nameAr : selectedProducts[0].name}</p>}
                     {design.showBarcode && (selectedProducts[0].barcode !== 'NO_BARCODE' ? <canvas ref={canvasRef} className="mx-auto" /> : <div className="text-red-500 text-xs">No barcode</div>)}
-                    {design.showPrice && <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 700, marginTop: '4px', color: '#22c55e' }}>{formatCurrency(selectedProducts[0].price)}</p>}
+                    {design.showPrice && <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 700, marginTop: '4px', color: '#000' }}>{formatCurrency(selectedProducts[0].price)}</p>}
                   </div>
                 ) : (<div className="text-center text-muted-foreground"><Barcode className="h-16 w-16 mx-auto mb-3 opacity-20" /><p>{isRTL ? 'اختر منتج للمعاينة' : 'Select a product'}</p></div>)}
               </div>
