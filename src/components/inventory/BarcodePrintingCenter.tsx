@@ -42,7 +42,7 @@ import {
   ZoomIn,
   ZoomOut,
   Monitor,
-  Link,
+  Hash,
 } from 'lucide-react';
 
 // ==================== Types ====================
@@ -142,9 +142,10 @@ interface VariantDisplaySettings {
   fontSize: number;
   compactMode: boolean;
   showLivePreview: boolean;
-  // ✅ إعدادات جديدة للطباعة
   applyToPrint: boolean;
   printScale: number;
+  // ✅ حجم أرقام الباركود (زي 0001)
+  barcodeTextSize: number;
 }
 
 type BarcodeFormat = 'CODE128' | 'CODE39' | 'EAN13' | 'UPC' | 'ITF14' | 'MSI' | 'Pharmacode' | 'CODABAR';
@@ -154,17 +155,14 @@ interface BarcodeFormatOption {
   label: string;
   labelAr: string;
   description: string;
-  needsEvenLength?: boolean;
 }
 
 const barcodeFormats: BarcodeFormatOption[] = [
   { value: 'CODE128', label: 'Code 128', labelAr: 'كود 128', description: 'يدعم أرقام وحروف - الأكثر شيوعاً' },
-  { value: 'CODE39', label: 'Code 39', labelAr: 'كود 39', description: 'يدعم أرقام وحروف - مناسب للأجهزة القديمة' },
+  { value: 'CODE39', label: 'Code 39', labelAr: 'كود 39', description: 'يدعم أرقام وحروف' },
   { value: 'EAN13', label: 'EAN-13', labelAr: 'EAN-13', description: '13 رقم - للمنتجات العالمية' },
   { value: 'UPC', label: 'UPC-A', labelAr: 'UPC-A', description: '12 رقم - للمنتجات في أمريكا' },
-  { value: 'ITF14', label: 'ITF-14', labelAr: 'ITF-14', description: '14 رقم - للكرتون والعروض' },
-  { value: 'MSI', label: 'MSI', labelAr: 'MSI', description: 'للمخازن والمستودعات' },
-  { value: 'Pharmacode', label: 'Pharmacode', labelAr: 'فارماكود', description: 'للصناعات الدوائية' },
+  { value: 'ITF14', label: 'ITF-14', labelAr: 'ITF-14', description: '14 رقم - للكرتون' },
   { value: 'CODABAR', label: 'Codabar', labelAr: 'كودابار', description: 'للمكتبات وشركات الدم' },
 ];
 
@@ -206,25 +204,25 @@ const defaultVariantDisplaySettings: VariantDisplaySettings = {
   fontSize: 14,
   compactMode: false,
   showLivePreview: true,
-  applyToPrint: true,  // ✅ تطبيق الإعدادات على الطباعة
-  printScale: 100,     // ✅ نسبة التكبير في الطباعة
+  applyToPrint: true,
+  printScale: 100,
+  barcodeTextSize: 14,
 };
 
 const printerPresets = {
   thermal_58mm: { type: 'thermal' as const, paperWidth: 58, paperHeight: 40, dpi: 203, labelsPerRow: 1, marginTop: 2, marginLeft: 2, gapX: 0, gapY: 2 },
   thermal_80mm: { type: 'thermal' as const, paperWidth: 80, paperHeight: 50, dpi: 203, labelsPerRow: 1, marginTop: 3, marginLeft: 3, gapX: 0, gapY: 3 },
-  thermal_100mm: { type: 'thermal' as const, paperWidth: 100, paperHeight: 60, dpi: 300, labelsPerRow: 2, marginTop: 5, marginLeft: 5, gapX: 5, gapY: 5 },
   a4_inkjet: { type: 'inkjet' as const, paperWidth: 210, paperHeight: 297, dpi: 300, labelsPerRow: 3, marginTop: 10, marginLeft: 10, gapX: 5, gapY: 5 },
-  a4_laser: { type: 'laser' as const, paperWidth: 210, paperHeight: 297, dpi: 600, labelsPerRow: 3, marginTop: 10, marginLeft: 10, gapX: 5, gapY: 5 }
 };
 
-// ==================== Variant Selector Modal مع معاينة حية ====================
+// ==================== Variant Selector Modal ====================
 interface VariantSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
   product: APIProduct;
   onSelect: (product: APIProduct, variant: ProductUnit, color?: ProductColor) => void;
   displaySettings: VariantDisplaySettings;
+  barcodeFormat: BarcodeFormat;
 }
 
 const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
@@ -232,7 +230,8 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
   onClose,
   product,
   onSelect,
-  displaySettings
+  displaySettings,
+  barcodeFormat,
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
@@ -299,22 +298,34 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
     ? (product.name_ar || product.name || '') 
     : (product.name || '');
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // معاينة الباركود مع حجم النص المخصص ونوع الباركود
   useEffect(() => {
     if (previewCanvasRef.current && selectedUnit?.barcode && selectedUnit.barcode !== 'NO_BARCODE') {
       try {
+        let format = "CODE128";
+        switch (barcodeFormat) {
+          case 'CODE128': format = "CODE128"; break;
+          case 'CODE39': format = "CODE39"; break;
+          case 'EAN13': format = "EAN13"; break;
+          case 'UPC': format = "UPC"; break;
+          case 'ITF14': format = "ITF14"; break;
+          case 'CODABAR': format = "codabar"; break;
+          default: format = "CODE128";
+        }
+        
         JsBarcode(previewCanvasRef.current, selectedUnit.barcode, {
-          format: "CODE128",
+          format: format,
           width: 2,
-          height: 50,
+          height: 40,
           displayValue: true,
-          fontSize: 12,
+          fontSize: displaySettings.barcodeTextSize,
+          textMargin: 2,
         });
       } catch (e) {
         console.error('Preview barcode error:', e);
       }
     }
-  }, [selectedUnit]);
+  }, [selectedUnit, displaySettings.barcodeTextSize, barcodeFormat]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -322,7 +333,6 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
         className="max-w-5xl" 
         style={{ 
           maxWidth: displaySettings.compactMode ? '800px' : '1000px',
-          transition: 'all 0.2s ease-in-out'
         }}
       >
         <DialogHeader>
@@ -496,7 +506,7 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
                         {selectedUnit.barcode && selectedUnit.barcode !== 'NO_BARCODE' && (
                           <div className="bg-white p-2 rounded-lg border border-gray-200">
                             <canvas ref={previewCanvasRef} className="mx-auto" style={{ maxWidth: '100%', height: 'auto' }} />
-                            <p className="text-[9px] text-muted-foreground mt-1 font-mono truncate">
+                            <p className="text-xs font-mono text-gray-600 mt-1">
                               {selectedUnit.barcode}
                             </p>
                           </div>
@@ -513,7 +523,7 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
                         
                         {displaySettings.showStock && selectedUnit.colors && (
                           <div className="text-xs text-muted-foreground">
-                            {language === 'ar' ? 'المخزون المتاح:' : 'Available stock:'}{' '}
+                            {language === 'ar' ? 'المخزون:' : 'Stock:'}{' '}
                             {selectedUnit.colors.reduce((sum, c) => sum + (c.stock || 0), 0)}
                           </div>
                         )}
@@ -523,7 +533,7 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
                     <div className="text-center py-12 text-muted-foreground bg-white rounded-lg">
                       <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">
-                        {language === 'ar' ? 'اختر مقاس لمعاينة الملصق' : 'Select a unit to preview label'}
+                        {language === 'ar' ? 'اختر مقاس لمعاينة الملصق' : 'Select a unit to preview'}
                       </p>
                     </div>
                   )}
@@ -568,45 +578,30 @@ const BarcodePrintingCenter: React.FC = () => {
   const previewRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // تحميل إعدادات عرض المتغيرات
+  // تحميل إعدادات
   useEffect(() => {
     const savedVariantSettings = localStorage.getItem(VARIANT_SETTINGS_KEY);
     if (savedVariantSettings) {
       try {
         const parsed = JSON.parse(savedVariantSettings);
         setVariantDisplaySettings(prev => ({ ...prev, ...parsed }));
-        console.log('✅ Loaded variant settings:', parsed);
       } catch (e) {
         console.error('Error loading variant settings:', e);
       }
     }
   }, []);
 
-  // حفظ إعدادات عرض المتغيرات فوراً عند التغيير
   const updateVariantSettings = (updates: Partial<VariantDisplaySettings>) => {
     const newSettings = { ...variantDisplaySettings, ...updates };
     setVariantDisplaySettings(newSettings);
     localStorage.setItem(VARIANT_SETTINGS_KEY, JSON.stringify(newSettings));
     
-    // ✅ إذا كان التطبيق على الطباعة مفعل، نحدث تصميم الطباعة تلقائياً
-    if (newSettings.applyToPrint) {
-      const scale = newSettings.printScale / 100;
-      setDesign(prev => ({
-        ...prev,
-        fontSize: Math.max(8, Math.min(24, Math.floor(newSettings.fontSize * scale))),
-        barcodeHeight: Math.max(30, Math.min(80, Math.floor(40 * (newSettings.unitCardSize === 'xl' ? 1.5 : newSettings.unitCardSize === 'lg' ? 1.3 : newSettings.unitCardSize === 'sm' ? 0.8 : 1)))),
-        padding: Math.max(2, Math.min(10, Math.floor(4 * scale))),
-      }));
-    }
-    
     toast({
       title: isRTL ? 'تم تحديث العرض' : 'Display Updated',
-      description: isRTL ? 'تغيرت إعدادات العرض' : 'Display settings updated',
       duration: 1000,
     });
   };
 
-  // فقط تحميل الإعدادات من localStorage
   useEffect(() => {
     const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (savedSettings) {
@@ -626,7 +621,6 @@ const BarcodePrintingCenter: React.FC = () => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     toast({
       title: isRTL ? 'تم حفظ الإعدادات' : 'Settings Saved',
-      description: isRTL ? 'تم حفظ إعدادات الطباعة والتصميم ونوع الباركود بنجاح' : 'Printing, design and barcode type saved successfully',
     });
   };
 
@@ -638,24 +632,10 @@ const BarcodePrintingCenter: React.FC = () => {
         setDesign(parsedSettings.design || emptyDesign);
         setPrinterConfig(parsedSettings.printer || emptyPrinterConfig);
         setBarcodeFormat(parsedSettings.barcodeFormat || 'CODE128');
-        toast({
-          title: isRTL ? 'تم تحميل الإعدادات' : 'Settings Loaded',
-          description: isRTL ? 'تم تحميل آخر الإعدادات المحفوظة' : 'Last saved settings loaded',
-        });
+        toast({ title: isRTL ? 'تم تحميل الإعدادات' : 'Settings Loaded' });
       } catch (e) {
-        console.error('Error loading settings:', e);
-        toast({
-          title: isRTL ? 'خطأ' : 'Error',
-          description: isRTL ? 'فشل في تحميل الإعدادات' : 'Failed to load settings',
-          variant: 'destructive'
-        });
+        toast({ title: isRTL ? 'خطأ' : 'Error', variant: 'destructive' });
       }
-    } else {
-      toast({
-        title: isRTL ? 'لا توجد إعدادات' : 'No Settings',
-        description: isRTL ? 'لا توجد إعدادات محفوظة مسبقاً' : 'No previously saved settings',
-        variant: 'destructive'
-      });
     }
   };
 
@@ -664,20 +644,14 @@ const BarcodePrintingCenter: React.FC = () => {
     setDesign(emptyDesign);
     setPrinterConfig(emptyPrinterConfig);
     setBarcodeFormat('CODE128');
-    toast({
-      title: isRTL ? 'تم مسح الإعدادات' : 'Settings Cleared',
-      description: isRTL ? 'تم مسح جميع الإعدادات المحفوظة' : 'All saved settings have been cleared',
-    });
+    toast({ title: isRTL ? 'تم مسح الإعدادات' : 'Settings Cleared' });
   };
 
   const resetAllSettings = () => {
     setDesign(emptyDesign);
     setPrinterConfig(emptyPrinterConfig);
     setBarcodeFormat('CODE128');
-    toast({
-      title: isRTL ? 'تم إعادة التعيين' : 'Reset Complete',
-      description: isRTL ? 'تم إعادة جميع الإعدادات إلى الصفر' : 'All settings reset to zero',
-    });
+    toast({ title: isRTL ? 'تم إعادة التعيين' : 'Reset Complete' });
   };
 
   const applyPreset = (preset: keyof typeof printerPresets) => {
@@ -690,7 +664,7 @@ const BarcodePrintingCenter: React.FC = () => {
     toast({ title: isRTL ? 'تم إعادة التصميم' : 'Design Reset' });
   };
 
-  // Fetch products from API
+  // Fetch products
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['barcode-products'],
     queryFn: async () => {
@@ -703,10 +677,7 @@ const BarcodePrintingCenter: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching products:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
-          variant: 'destructive'
-        });
+        toast({ title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products', variant: 'destructive' });
         return [];
       }
     }
@@ -765,10 +736,7 @@ const BarcodePrintingCenter: React.FC = () => {
       }]);
     }
 
-    toast({
-      title: isRTL ? 'تمت الإضافة' : 'Added',
-      description: `${product.name}${variantInfo ? ` (${variantInfo})` : ''}`
-    });
+    toast({ title: isRTL ? 'تمت الإضافة' : 'Added' });
   };
 
   const handleOpenVariantModal = (product: APIProduct) => {
@@ -808,36 +776,24 @@ const BarcodePrintingCenter: React.FC = () => {
   const getBarcodeOptions = () => {
     const baseOptions = {
       width: design.barcodeWidth || 2,
-      height: design.barcodeHeight || 50,
+      height: design.barcodeHeight || 40,
       displayValue: true,
-      fontSize: (design.fontSize || 10) - 2,
+      fontSize: variantDisplaySettings.barcodeTextSize,
       margin: 5,
       textMargin: 2,
     };
 
     switch (barcodeFormat) {
-      case 'CODE128':
-        return { ...baseOptions, format: "CODE128" };
-      case 'CODE39':
-        return { ...baseOptions, format: "CODE39" };
-      case 'EAN13':
-        return { ...baseOptions, format: "EAN13", flat: true, textMargin: 4 };
-      case 'UPC':
-        return { ...baseOptions, format: "UPC", flat: true };
-      case 'ITF14':
-        return { ...baseOptions, format: "ITF14" };
-      case 'MSI':
-        return { ...baseOptions, format: "MSI" };
-      case 'Pharmacode':
-        return { ...baseOptions, format: "pharmacode" };
-      case 'CODABAR':
-        return { ...baseOptions, format: "codabar" };
-      default:
-        return { ...baseOptions, format: "CODE128" };
+      case 'CODE128': return { ...baseOptions, format: "CODE128" };
+      case 'CODE39': return { ...baseOptions, format: "CODE39" };
+      case 'EAN13': return { ...baseOptions, format: "EAN13", flat: true, textMargin: 4 };
+      case 'UPC': return { ...baseOptions, format: "UPC", flat: true };
+      case 'ITF14': return { ...baseOptions, format: "ITF14" };
+      case 'CODABAR': return { ...baseOptions, format: "codabar" };
+      default: return { ...baseOptions, format: "CODE128" };
     }
   };
 
-  // ✅ دالة الطباعة المعدلة - تدعم التكبير
   const handlePrint = () => {
     if (selectedProducts.length === 0) {
       toast({ title: isRTL ? 'لا توجد منتجات' : 'No products selected', variant: 'destructive' });
@@ -846,13 +802,7 @@ const BarcodePrintingCenter: React.FC = () => {
 
     const productsWithoutBarcode = selectedProducts.filter(p => !p.barcode || p.barcode === 'NO_BARCODE');
     if (productsWithoutBarcode.length > 0) {
-      toast({
-        title: isRTL ? 'باركود مفقود' : 'Missing Barcode',
-        description: isRTL 
-          ? `المنتجات التالية لا تحتوي على باركود: ${productsWithoutBarcode.map(p => p.name).join(', ')}`
-          : `The following products have no barcode: ${productsWithoutBarcode.map(p => p.name).join(', ')}`,
-        variant: 'destructive'
-      });
+      toast({ title: isRTL ? 'باركود مفقود' : 'Missing Barcode', variant: 'destructive' });
       return;
     }
 
@@ -862,7 +812,6 @@ const BarcodePrintingCenter: React.FC = () => {
     const barcodeOptions = getBarcodeOptions();
     const labels: string[] = [];
     
-    // ✅ الحصول على نسبة التكبير من الإعدادات
     const scale = variantDisplaySettings.applyToPrint ? variantDisplaySettings.printScale / 100 : 1;
     const scaledFontSize = Math.floor((design.fontSize || 12) * scale);
     const scaledPadding = Math.floor((design.padding || 4) * scale);
@@ -892,12 +841,10 @@ const BarcodePrintingCenter: React.FC = () => {
             margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
             background: white;
             border-radius: ${design.borderEnabled ? '4px' : '0'};
-            box-shadow: ${design.borderEnabled ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};
           ">
-            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-weight: 600; margin-bottom: 3px; color: #333;">${design.companyName}</div>` : ''}
-            ${design.showProductName ? `<div style="font-size: ${scaledFontSize}px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; color: #1a1a1a;">${productLabel}</div>` : ''}
-            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${scaledWidth - 10}mm; margin: 3px 0;"></canvas>` : ''}
-            ${design.showSku && !design.showBarcode ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-family: monospace; color: #666; margin: 2px 0;">${product.sku}</div>` : ''}
+            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-weight: 600; margin-bottom: 3px;">${design.companyName}</div>` : ''}
+            ${design.showProductName ? `<div style="font-size: ${scaledFontSize}px; font-weight: 700; margin-bottom: 4px;">${productLabel}</div>` : ''}
+            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${scaledWidth - 10}mm;"></canvas>` : ''}
             ${design.showPrice ? `<div style="font-size: ${scaledFontSize + 3}px; font-weight: bold; margin-top: 4px; color: #22c55e;">${formattedPrice}</div>` : ''}
           </div>
         `);
@@ -906,7 +853,6 @@ const BarcodePrintingCenter: React.FC = () => {
 
     const labelsHtml = labels.join('');
     const barcodeOptionsStr = JSON.stringify(barcodeOptions);
-    const applyToPrint = variantDisplaySettings.applyToPrint;
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -921,51 +867,27 @@ const BarcodePrintingCenter: React.FC = () => {
               padding: ${printerConfig.marginTop || 5}mm ${printerConfig.marginLeft || 5}mm;
               background: white;
             }
-            .labels-container {
-              display: flex;
-              flex-wrap: wrap;
-              justify-content: flex-start;
-            }
-            .label {
-              background: white;
-              transition: all 0.2s ease;
-            }
+            .labels-container { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+            .label { background: white; }
             @media print {
               .no-print { display: none !important; }
-              body { 
-                padding: ${printerConfig.marginTop || 5}mm ${printerConfig.marginLeft || 5}mm;
-                margin: 0;
-              }
-              .label { 
-                break-inside: avoid;
-                page-break-inside: avoid;
-              }
+              body { padding: ${printerConfig.marginTop || 5}mm ${printerConfig.marginLeft || 5}mm; margin: 0; }
+              .label { break-inside: avoid; page-break-inside: avoid; }
             }
           </style>
         </head>
         <body>
-          <div class="no-print" style="margin-bottom: 15px; padding: 12px; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border-radius: 12px; text-align: center; border: 1px solid #bae6fd;">
-            <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; align-items: center;">
-              <button onclick="window.print()" style="padding: 12px 24px; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600;">
-                🖨️ ${isRTL ? 'طباعة الملصقات' : 'Print Labels'}
-              </button>
-              <span style="padding: 8px 16px; background: white; border-radius: 8px; color: #166534; font-weight: 500;">
-                📊 ${isRTL ? `إجمالي الملصقات: ${totalLabels}` : `Total Labels: ${totalLabels}`}
-              </span>
-              <span style="padding: 8px 16px; background: white; border-radius: 8px; color: #166534; font-weight: 500;">
-                🔍 ${isRTL ? 'نوع الباركود:' : 'Barcode Type:'} ${barcodeFormat}
-              </span>
-              ${applyToPrint ? `<span style="padding: 8px 16px; background: #dcfce7; border-radius: 8px; color: #166534; font-weight: 500;">
-                🔬 ${isRTL ? `مكبر بنسبة: ${variantDisplaySettings.printScale}%` : `Scaled: ${variantDisplaySettings.printScale}%`}
-              </span>` : ''}
+          <div class="no-print" style="margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-radius: 12px; text-align: center;">
+            <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+              <button onclick="window.print()" style="padding: 12px 24px; background: #22c55e; color: white; border: none; border-radius: 8px; cursor: pointer;">🖨️ ${isRTL ? 'طباعة' : 'Print'}</button>
+              <span style="padding: 8px 16px; background: white; border-radius: 8px;">📊 ${totalLabels} ${isRTL ? 'ملصق' : 'labels'}</span>
+              <span style="padding: 8px 16px; background: white; border-radius: 8px;">🔢 ${isRTL ? 'حجم الأرقام:' : 'Text size:'} ${variantDisplaySettings.barcodeTextSize}px</span>
+              <span style="padding: 8px 16px; background: white; border-radius: 8px;">🔍 ${isRTL ? 'نوع الباركود:' : 'Type:'} ${barcodeFormat}</span>
             </div>
           </div>
-          <div class="labels-container">
-            ${labelsHtml}
-          </div>
+          <div class="labels-container">${labelsHtml}</div>
           <script>
             const barcodeOptions = ${barcodeOptionsStr};
-            
             ${selectedProducts.map((product, idx) =>
               Array.from({ length: product.quantity }, (_, i) => `
                 try {
@@ -976,26 +898,18 @@ const BarcodePrintingCenter: React.FC = () => {
                 } catch(e) { console.error(e); }
               `).join('')
             ).join('')}
-            
-            console.log('${isRTL ? 'تم تحميل الملصقات بنجاح' : 'Labels loaded successfully'}');
           </script>
         </body>
       </html>
     `);
     
     printWindow.document.close();
-
-    toast({
-      title: isRTL ? 'تم فتح نافذة الطباعة' : 'Print Window Opened',
-      description: isRTL 
-        ? `${totalLabels} ملصق - نسبة التكبير ${variantDisplaySettings.printScale}%`
-        : `${totalLabels} labels - Scale ${variantDisplaySettings.printScale}%`,
-    });
+    toast({ title: isRTL ? 'تم فتح نافذة الطباعة' : 'Print Window Opened' });
   };
 
   // Generate preview barcode
   useEffect(() => {
-    if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' && design.barcodeWidth > 0 && design.barcodeHeight > 0) {
+    if (canvasRef.current && selectedProducts.length > 0 && selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE') {
       try {
         const options = getBarcodeOptions();
         JsBarcode(canvasRef.current, selectedProducts[0].barcode, options);
@@ -1003,7 +917,7 @@ const BarcodePrintingCenter: React.FC = () => {
         console.error('Barcode preview error:', e);
       }
     }
-  }, [selectedProducts, design, barcodeFormat]);
+  }, [selectedProducts, design, barcodeFormat, variantDisplaySettings.barcodeTextSize]);
 
   const t = {
     title: isRTL ? 'مركز طباعة الباركود' : 'Barcode Printing Center',
@@ -1015,7 +929,6 @@ const BarcodePrintingCenter: React.FC = () => {
     search: isRTL ? 'بحث عن منتج...' : 'Search products...',
     selectedProducts: isRTL ? 'المنتجات المختارة' : 'Selected Products',
     noProducts: isRTL ? 'لم يتم اختيار منتجات' : 'No products selected',
-    addProducts: isRTL ? 'أضف منتجات من القائمة' : 'Add products from the list',
     totalLabels: isRTL ? 'إجمالي الملصقات' : 'Total Labels',
     print: isRTL ? 'طباعة' : 'Print',
     labelSize: isRTL ? 'حجم الملصق' : 'Label Size',
@@ -1023,13 +936,11 @@ const BarcodePrintingCenter: React.FC = () => {
     height: isRTL ? 'الارتفاع' : 'Height',
     showName: isRTL ? 'إظهار الاسم' : 'Show Name',
     showPrice: isRTL ? 'إظهار السعر' : 'Show Price',
-    showSku: isRTL ? 'إظهار الرمز' : 'Show SKU',
     showBarcode: isRTL ? 'إظهار الباركود' : 'Show Barcode',
+    border: isRTL ? 'إطار' : 'Border',
     fontSize: isRTL ? 'حجم الخط' : 'Font Size',
     barcodeHeight: isRTL ? 'ارتفاع الباركود' : 'Barcode Height',
-    barcodeWidth: isRTL ? 'عرض الخط' : 'Line Width',
     padding: isRTL ? 'الهوامش' : 'Padding',
-    border: isRTL ? 'إطار' : 'Border',
     companyName: isRTL ? 'اسم الشركة' : 'Company Name',
     showCompany: isRTL ? 'إظهار الشركة' : 'Show Company',
     printerType: isRTL ? 'نوع الطابعة' : 'Printer Type',
@@ -1050,74 +961,55 @@ const BarcodePrintingCenter: React.FC = () => {
     clearSettings: isRTL ? 'مسح الإعدادات' : 'Clear Settings',
     resetAll: isRTL ? 'إعادة الكل' : 'Reset All',
     barcodeType: isRTL ? 'نوع الباركود' : 'Barcode Type',
-    unitCardSize: isRTL ? 'حجم بطاقة المقاس' : 'Unit Card Size',
+    unitCardSize: isRTL ? 'حجم البطاقة' : 'Card Size',
     small: isRTL ? 'صغير' : 'Small',
     medium: isRTL ? 'متوسط' : 'Medium',
     large: isRTL ? 'كبير' : 'Large',
     extraLarge: isRTL ? 'كبير جداً' : 'Extra Large',
     showStock: isRTL ? 'إظهار المخزون' : 'Show Stock',
-    showPriceInUnits: isRTL ? 'إظهار السعر في المقاسات' : 'Show Price in Units',
-    colorButtonSize: isRTL ? 'حجم زر اللون' : 'Color Button Size',
+    showPriceInUnits: isRTL ? 'إظهار السعر' : 'Show Price',
+    colorButtonSize: isRTL ? 'حجم زر اللون' : 'Color Size',
     gridColumns: isRTL ? 'عدد الأعمدة' : 'Grid Columns',
     compactMode: isRTL ? 'وضع مضغوط' : 'Compact Mode',
-    saveVariantSettings: isRTL ? 'حفظ إعدادات العرض' : 'Save Display Settings',
     showLivePreview: isRTL ? 'معاينة حية' : 'Live Preview',
     applyToPrint: isRTL ? 'تطبيق على الطباعة' : 'Apply to Print',
-    printScale: isRTL ? 'نسبة تكبير الطباعة' : 'Print Scale',
-    scalePercent: isRTL ? '% نسبة التكبير' : 'Scale %',
+    printScale: isRTL ? 'نسبة التكبير' : 'Print Scale',
+    barcodeTextSize: isRTL ? 'حجم أرقام الباركود' : 'Barcode Text Size',
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">{isRTL ? 'جاري التحميل...' : 'Loading...'}</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/10 to-accent/10">
+          <div className="p-2.5 rounded-xl bg-primary/10">
             <Printer className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">{t.title}</h2>
-            <p className="text-sm text-muted-foreground">
-              {isRTL ? 'إنشاء وطباعة ملصقات الباركود للمنتجات' : 'Create and print barcode labels for products'}
-            </p>
+            <h2 className="text-xl font-bold">{t.title}</h2>
+            <p className="text-sm text-muted-foreground">{isRTL ? 'إنشاء وطباعة ملصقات الباركود' : 'Create and print barcode labels'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={saveSettings} title={t.saveSettings}>
-              <Save className="h-4 w-4" />
-              <span>{t.saveSettings}</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={loadSettings} title={t.loadSettings}>
-              <Download className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={clearAllSettings} title={t.clearSettings}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={resetAllSettings} title={t.resetAll}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+            <Button variant="outline" size="sm" onClick={saveSettings}><Save className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" onClick={loadSettings}><Download className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" onClick={clearAllSettings}><Trash2 className="h-4 w-4" /></Button>
+            <Button variant="outline" size="sm" onClick={resetAllSettings}><RefreshCw className="h-4 w-4" /></Button>
           </div>
-          <Badge variant="outline" className="text-base px-3 py-1.5">
+          <Badge variant="outline" className="px-3 py-1.5">
             <Tag className="h-4 w-4 me-2" />
             {t.totalLabels}: <span className="font-bold ms-1">{totalLabels}</span>
           </Badge>
-          <Button
-            onClick={handlePrint}
-            disabled={selectedProducts.length === 0}
-            className="gradient-success text-white"
-          >
+          <Button onClick={handlePrint} disabled={selectedProducts.length === 0}>
             <Printer className="h-4 w-4 me-2" />
             {t.print}
           </Button>
@@ -1127,70 +1019,37 @@ const BarcodePrintingCenter: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4 h-11 bg-muted/60">
-              <TabsTrigger value="products">
-                <Package className="h-4 w-4 me-2" />
-                {t.products}
-              </TabsTrigger>
-              <TabsTrigger value="design">
-                <Settings2 className="h-4 w-4 me-2" />
-                {t.design}
-              </TabsTrigger>
-              <TabsTrigger value="printer">
-                <Settings2 className="h-4 w-4 me-2" />
-                {t.printer}
-              </TabsTrigger>
-              <TabsTrigger value="variantDisplay">
-                <Maximize2 className="h-4 w-4 me-2" />
-                {t.variantDisplay}
-              </TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="products"><Package className="h-4 w-4 me-2" />{t.products}</TabsTrigger>
+              <TabsTrigger value="design"><Settings2 className="h-4 w-4 me-2" />{t.design}</TabsTrigger>
+              <TabsTrigger value="printer"><Printer className="h-4 w-4 me-2" />{t.printer}</TabsTrigger>
+              <TabsTrigger value="variantDisplay"><Maximize2 className="h-4 w-4 me-2" />{t.variantDisplay}</TabsTrigger>
             </TabsList>
 
+            {/* Products Tab */}
             <TabsContent value="products" className="mt-4 space-y-4">
               <div className="relative">
                 <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder={t.search}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="ps-10"
-                />
+                <Input placeholder={t.search} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-10" />
               </div>
-
               <Card>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[350px]">
-                    <div className="divide-y divide-border">
+                    <div className="divide-y">
                       {filteredProducts.map(product => {
                         const hasVariants = product.units && product.units.length > 0;
                         return (
-                          <div key={product.id} className="border-b border-border last:border-0">
-                            <div className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-foreground truncate">
-                                    {isRTL ? (product.name_ar || product.name) : product.name}
-                                  </p>
-                                  {hasVariants && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {product.units!.length} {t.variants}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                                  <span className="font-mono">{product.sku}</span>
-                                  <span>{formatCurrency(Number(product.price))}</span>
-                                </div>
+                          <div key={product.id} className="p-3 hover:bg-muted/50 flex justify-between items-center">
+                            <div>
+                              <p className="font-medium">{isRTL ? (product.name_ar || product.name) : product.name}</p>
+                              <div className="flex gap-3 text-sm text-muted-foreground">
+                                <span className="font-mono">{product.sku}</span>
+                                <span>{formatCurrency(Number(product.price))}</span>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenVariantModal(product)}
-                                className="shrink-0"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
                             </div>
+                            <Button size="sm" variant="outline" onClick={() => handleOpenVariantModal(product)}>
+                              <Plus className="h-4 w-4" />
+                            </Button>
                           </div>
                         );
                       })}
@@ -1200,59 +1059,27 @@ const BarcodePrintingCenter: React.FC = () => {
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Tag className="h-4 w-4" />
-                    {t.selectedProducts} ({selectedProducts.length})
-                  </CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-base">{t.selectedProducts} ({selectedProducts.length})</CardTitle></CardHeader>
                 <CardContent>
                   {selectedProducts.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
                       <p>{t.noProducts}</p>
-                      <p className="text-sm">{t.addProducts}</p>
                     </div>
                   ) : (
                     <ScrollArea className="h-[200px]">
                       <div className="space-y-2">
                         {selectedProducts.map(product => (
                           <div key={product.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-medium truncate">
-                                  {isRTL ? product.nameAr : product.name}
-                                </p>
-                                {(!product.barcode || product.barcode === 'NO_BARCODE') && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    {isRTL ? 'بدون باركود' : 'No Barcode'}
-                                  </Badge>
-                                )}
-                                {product.isVariant && product.variantInfo && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {isRTL ? product.variantInfoAr : product.variantInfo}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground font-mono">{product.sku}</p>
+                            <div className="flex-1">
+                              <p className="font-medium">{isRTL ? product.nameAr : product.name}</p>
+                              <p className="text-sm font-mono">{product.sku}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, -1)}>
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={product.quantity}
-                                onChange={(e) => handleQuantityInput(product.id, e.target.value)}
-                                className="w-16 h-8 text-center"
-                              />
-                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, 1)}>
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleRemoveProduct(product.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, -1)}><Minus className="h-3 w-3" /></Button>
+                              <Input type="number" min={1} value={product.quantity} onChange={(e) => handleQuantityInput(product.id, e.target.value)} className="w-16 h-8 text-center" />
+                              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => handleQuantityChange(product.id, 1)}><Plus className="h-3 w-3" /></Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleRemoveProduct(product.id)}><Trash2 className="h-4 w-4" /></Button>
                             </div>
                           </div>
                         ))}
@@ -1263,79 +1090,30 @@ const BarcodePrintingCenter: React.FC = () => {
               </Card>
             </TabsContent>
 
+            {/* Design Tab - فيها اختيار نوع الباركود */}
             <TabsContent value="design" className="mt-4 space-y-4">
               <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{t.labelSize}</CardTitle>
-                    <Button variant="ghost" size="sm" onClick={resetDesign}>
-                      <RotateCcw className="h-4 w-4 me-1" />
-                      {t.reset}
-                    </Button>
-                  </div>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-base">{t.labelSize}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>{t.width} ({t.mm})</Label>
-                      <Input
-                        type="number"
-                        value={design.width}
-                        onChange={(e) => setDesign(d => ({ ...d, width: Number(e.target.value) }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>{t.height} ({t.mm})</Label>
-                      <Input
-                        type="number"
-                        value={design.height}
-                        onChange={(e) => setDesign(d => ({ ...d, height: Number(e.target.value) }))}
-                      />
-                    </div>
+                    <div><Label>{t.width} ({t.mm})</Label><Input type="number" value={design.width} onChange={(e) => setDesign(d => ({ ...d, width: Number(e.target.value) }))} /></div>
+                    <div><Label>{t.height} ({t.mm})</Label><Input type="number" value={design.height} onChange={(e) => setDesign(d => ({ ...d, height: Number(e.target.value) }))} /></div>
                   </div>
                   <Separator />
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>{t.showName}</Label>
-                      <Switch checked={design.showProductName} onCheckedChange={(v) => setDesign(d => ({ ...d, showProductName: v }))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label>{t.showPrice}</Label>
-                      <Switch checked={design.showPrice} onCheckedChange={(v) => setDesign(d => ({ ...d, showPrice: v }))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label>{t.showSku}</Label>
-                      <Switch checked={design.showSku} onCheckedChange={(v) => setDesign(d => ({ ...d, showSku: v }))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label>{t.showBarcode}</Label>
-                      <Switch checked={design.showBarcode} onCheckedChange={(v) => setDesign(d => ({ ...d, showBarcode: v }))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <Label>{t.border}</Label>
-                      <Switch checked={design.borderEnabled} onCheckedChange={(v) => setDesign(d => ({ ...d, borderEnabled: v }))} />
-                    </div>
+                    <div className="flex justify-between"><Label>{t.showName}</Label><Switch checked={design.showProductName} onCheckedChange={(v) => setDesign(d => ({ ...d, showProductName: v }))} /></div>
+                    <div className="flex justify-between"><Label>{t.showPrice}</Label><Switch checked={design.showPrice} onCheckedChange={(v) => setDesign(d => ({ ...d, showPrice: v }))} /></div>
+                    <div className="flex justify-between"><Label>{t.showBarcode}</Label><Switch checked={design.showBarcode} onCheckedChange={(v) => setDesign(d => ({ ...d, showBarcode: v }))} /></div>
+                    <div className="flex justify-between"><Label>{t.border}</Label><Switch checked={design.borderEnabled} onCheckedChange={(v) => setDesign(d => ({ ...d, borderEnabled: v }))} /></div>
                   </div>
                   <Separator />
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between"><Label>{t.fontSize}</Label><span>{design.fontSize}{t.px}</span></div>
-                      <Slider value={[design.fontSize]} onValueChange={([v]) => setDesign(d => ({ ...d, fontSize: v }))} min={8} max={24} step={1} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between"><Label>{t.barcodeHeight}</Label><span>{design.barcodeHeight}{t.px}</span></div>
-                      <Slider value={[design.barcodeHeight]} onValueChange={([v]) => setDesign(d => ({ ...d, barcodeHeight: v }))} min={30} max={80} step={5} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between"><Label>{t.barcodeWidth}</Label><span>{design.barcodeWidth}</span></div>
-                      <Slider value={[design.barcodeWidth * 10]} onValueChange={([v]) => setDesign(d => ({ ...d, barcodeWidth: v / 10 }))} min={0} max={30} step={1} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between"><Label>{t.padding}</Label><span>{design.padding}{t.mm}</span></div>
-                      <Slider value={[design.padding]} onValueChange={([v]) => setDesign(d => ({ ...d, padding: v }))} min={2} max={10} step={1} />
-                    </div>
+                    <div><Label>{t.fontSize}</Label><Slider value={[design.fontSize]} onValueChange={([v]) => setDesign(d => ({ ...d, fontSize: v }))} min={8} max={24} step={1} /></div>
+                    <div><Label>{t.barcodeHeight}</Label><Slider value={[design.barcodeHeight]} onValueChange={([v]) => setDesign(d => ({ ...d, barcodeHeight: v }))} min={30} max={80} step={5} /></div>
+                    <div><Label>{t.padding}</Label><Slider value={[design.padding]} onValueChange={([v]) => setDesign(d => ({ ...d, padding: v }))} min={2} max={10} step={1} /></div>
                   </div>
                   <Separator />
+                  {/* ✅ اختيار نوع الباركود */}
                   <div className="space-y-3">
                     <Label className="flex items-center gap-2"><Barcode size={14} />{t.barcodeType}</Label>
                     <Select value={barcodeFormat} onValueChange={(value) => setBarcodeFormat(value as BarcodeFormat)}>
@@ -1343,9 +1121,9 @@ const BarcodePrintingCenter: React.FC = () => {
                       <SelectContent>
                         {barcodeFormats.map((format) => (
                           <SelectItem key={format.value} value={format.value}>
-                            <div className="flex flex-col">
+                            <div>
                               <span className="font-medium">{language === 'ar' ? format.labelAr : format.label}</span>
-                              <span className="text-xs text-muted-foreground">{format.description}</span>
+                              <p className="text-xs text-muted-foreground">{format.description}</p>
                             </div>
                           </SelectItem>
                         ))}
@@ -1353,163 +1131,79 @@ const BarcodePrintingCenter: React.FC = () => {
                     </Select>
                   </div>
                   <Separator />
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between"><Label>{t.showCompany}</Label><Switch checked={design.showCompanyName} onCheckedChange={(v) => setDesign(d => ({ ...d, showCompanyName: v }))} /></div>
-                    {design.showCompanyName && <Input placeholder={t.companyName} value={design.companyName} onChange={(e) => setDesign(d => ({ ...d, companyName: e.target.value }))} />}
+                  <div>
+                    <div className="flex justify-between"><Label>{t.showCompany}</Label><Switch checked={design.showCompanyName} onCheckedChange={(v) => setDesign(d => ({ ...d, showCompanyName: v }))} /></div>
+                    {design.showCompanyName && <Input placeholder={t.companyName} value={design.companyName} onChange={(e) => setDesign(d => ({ ...d, companyName: e.target.value }))} className="mt-2" />}
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
+            {/* Printer Tab */}
             <TabsContent value="printer" className="mt-4 space-y-4">
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base">{t.presets}</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <Button variant="outline" size="sm" onClick={() => applyPreset('thermal_58mm')}>{isRTL ? 'حرارية 58مم' : 'Thermal 58mm'}</Button>
-                    <Button variant="outline" size="sm" onClick={() => applyPreset('thermal_80mm')}>{isRTL ? 'حرارية 80مم' : 'Thermal 80mm'}</Button>
-                    <Button variant="outline" size="sm" onClick={() => applyPreset('thermal_100mm')}>{isRTL ? 'حرارية 100مم' : 'Thermal 100mm'}</Button>
-                    <Button variant="outline" size="sm" onClick={() => applyPreset('a4_inkjet')}>{isRTL ? 'A4 نافثة' : 'A4 Inkjet'}</Button>
-                    <Button variant="outline" size="sm" onClick={() => applyPreset('a4_laser')}>{isRTL ? 'A4 ليزر' : 'A4 Laser'}</Button>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base">{t.printerType}</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <Select value={printerConfig.type} onValueChange={(v) => setPrinterConfig(c => ({ ...c, type: v as PrinterConfig['type'] }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="thermal">{t.thermal}</SelectItem><SelectItem value="inkjet">{t.inkjet}</SelectItem><SelectItem value="laser">{t.laser}</SelectItem></SelectContent>
-                  </Select>
-                  <Separator />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>{t.paperSize} ({t.width})</Label><Input type="number" value={printerConfig.paperWidth} onChange={(e) => setPrinterConfig(c => ({ ...c, paperWidth: Number(e.target.value) }))} /></div>
-                    <div className="space-y-2"><Label>{t.paperSize} ({t.height})</Label><Input type="number" value={printerConfig.paperHeight} onChange={(e) => setPrinterConfig(c => ({ ...c, paperHeight: Number(e.target.value) }))} /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>{t.labelsPerRow}</Label><Input type="number" min={0} max={10} value={printerConfig.labelsPerRow} onChange={(e) => setPrinterConfig(c => ({ ...c, labelsPerRow: Number(e.target.value) }))} /></div>
-                    <div className="space-y-2"><Label>DPI</Label><Select value={String(printerConfig.dpi)} onValueChange={(v) => setPrinterConfig(c => ({ ...c, dpi: Number(v) }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">0 DPI</SelectItem><SelectItem value="203">203 DPI</SelectItem><SelectItem value="300">300 DPI</SelectItem><SelectItem value="600">600 DPI</SelectItem></SelectContent></Select></div>
-                  </div>
-                  <Separator />
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>{t.margins} (Top/Left)</Label><div className="flex gap-2"><Input type="number" placeholder="Top" value={printerConfig.marginTop} onChange={(e) => setPrinterConfig(c => ({ ...c, marginTop: Number(e.target.value) }))} /><Input type="number" placeholder="Left" value={printerConfig.marginLeft} onChange={(e) => setPrinterConfig(c => ({ ...c, marginLeft: Number(e.target.value) }))} /></div></div>
-                    <div className="space-y-2"><Label>{t.gaps} (X/Y)</Label><div className="flex gap-2"><Input type="number" placeholder="X" value={printerConfig.gapX} onChange={(e) => setPrinterConfig(c => ({ ...c, gapX: Number(e.target.value) }))} /><Input type="number" placeholder="Y" value={printerConfig.gapY} onChange={(e) => setPrinterConfig(c => ({ ...c, gapY: Number(e.target.value) }))} /></div></div>
-                  </div>
-                </CardContent>
-              </Card>
+              <Card><CardHeader><CardTitle className="text-base">{t.presets}</CardTitle></CardHeader><CardContent><div className="grid grid-cols-3 gap-2">{Object.keys(printerPresets).map(key => (<Button key={key} variant="outline" size="sm" onClick={() => applyPreset(key as keyof typeof printerPresets)}>{key.replace('_', ' ')}</Button>))}</div></CardContent></Card>
+              <Card><CardHeader><CardTitle className="text-base">{t.printerType}</CardTitle></CardHeader><CardContent className="space-y-4">
+                <Select value={printerConfig.type} onValueChange={(v) => setPrinterConfig(c => ({ ...c, type: v as PrinterConfig['type'] }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="thermal">{t.thermal}</SelectItem><SelectItem value="inkjet">{t.inkjet}</SelectItem><SelectItem value="laser">{t.laser}</SelectItem></SelectContent></Select>
+                <div className="grid grid-cols-2 gap-4"><div><Label>{t.paperSize} ({t.width})</Label><Input type="number" value={printerConfig.paperWidth} onChange={(e) => setPrinterConfig(c => ({ ...c, paperWidth: Number(e.target.value) }))} /></div><div><Label>{t.paperSize} ({t.height})</Label><Input type="number" value={printerConfig.paperHeight} onChange={(e) => setPrinterConfig(c => ({ ...c, paperHeight: Number(e.target.value) }))} /></div></div>
+                <div className="grid grid-cols-2 gap-4"><div><Label>{t.labelsPerRow}</Label><Input type="number" min={1} max={4} value={printerConfig.labelsPerRow} onChange={(e) => setPrinterConfig(c => ({ ...c, labelsPerRow: Number(e.target.value) }))} /></div><div><Label>DPI</Label><Select value={String(printerConfig.dpi)} onValueChange={(v) => setPrinterConfig(c => ({ ...c, dpi: Number(v) }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="203">203</SelectItem><SelectItem value="300">300</SelectItem></SelectContent></Select></div></div>
+                <div className="grid grid-cols-2 gap-4"><div><Label>{t.margins}</Label><div className="flex gap-2"><Input placeholder="Top" value={printerConfig.marginTop} onChange={(e) => setPrinterConfig(c => ({ ...c, marginTop: Number(e.target.value) }))} /><Input placeholder="Left" value={printerConfig.marginLeft} onChange={(e) => setPrinterConfig(c => ({ ...c, marginLeft: Number(e.target.value) }))} /></div></div><div><Label>{t.gaps}</Label><div className="flex gap-2"><Input placeholder="X" value={printerConfig.gapX} onChange={(e) => setPrinterConfig(c => ({ ...c, gapX: Number(e.target.value) }))} /><Input placeholder="Y" value={printerConfig.gapY} onChange={(e) => setPrinterConfig(c => ({ ...c, gapY: Number(e.target.value) }))} /></div></div></div>
+              </CardContent></Card>
             </TabsContent>
 
-            {/* ✅ Tab لإعدادات عرض المتغيرات مع إعدادات الطباعة */}
+            {/* Variant Display Tab - فيها تكبير أرقام الباركود */}
             <TabsContent value="variantDisplay" className="mt-4 space-y-4">
               <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <ZoomIn className="h-4 w-4" />
-                      {t.variantDisplay}
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => updateVariantSettings(defaultVariantDisplaySettings)}>
-                        <RotateCcw className="h-4 w-4 me-1" />{t.reset}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {isRTL ? '⚠️ التحكم في حجم وشكل المقاسات والألوان وتأثيرها على الطباعة' : '⚠️ Control size and appearance of units/colors and their effect on printing'}
-                  </p>
-                </CardHeader>
+                <CardHeader><CardTitle className="text-base">{t.variantDisplay}</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   {/* Unit Card Size */}
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2"><Ruler className="h-4 w-4" />{t.unitCardSize}</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      <Button variant={variantDisplaySettings.unitCardSize === 'sm' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ unitCardSize: 'sm' })} className="flex flex-col items-center h-auto py-2"><Minimize2 className="h-4 w-4 mb-1" /><span className="text-xs">{t.small}</span></Button>
-                      <Button variant={variantDisplaySettings.unitCardSize === 'md' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ unitCardSize: 'md' })} className="flex flex-col items-center h-auto py-2"><span className="text-sm mb-1">□</span><span className="text-xs">{t.medium}</span></Button>
-                      <Button variant={variantDisplaySettings.unitCardSize === 'lg' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ unitCardSize: 'lg' })} className="flex flex-col items-center h-auto py-2"><span className="text-base mb-1">■</span><span className="text-xs">{t.large}</span></Button>
-                      <Button variant={variantDisplaySettings.unitCardSize === 'xl' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ unitCardSize: 'xl' })} className="flex flex-col items-center h-auto py-2"><ZoomIn className="h-4 w-4 mb-1" /><span className="text-xs">{t.extraLarge}</span></Button>
-                    </div>
-                  </div>
+                  <div><Label>{t.unitCardSize}</Label><div className="grid grid-cols-4 gap-2 mt-2">{['sm','md','lg','xl'].map(size => (<Button key={size} variant={variantDisplaySettings.unitCardSize === size ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ unitCardSize: size as any })}>{t[size as keyof typeof t] || size}</Button>))}</div></div>
                   <Separator />
                   {/* Color Button Size */}
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2"><Palette className="h-4 w-4" />{t.colorButtonSize}</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button variant={variantDisplaySettings.colorButtonSize === 'sm' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ colorButtonSize: 'sm' })}>{t.small}</Button>
-                      <Button variant={variantDisplaySettings.colorButtonSize === 'md' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ colorButtonSize: 'md' })}>{t.medium}</Button>
-                      <Button variant={variantDisplaySettings.colorButtonSize === 'lg' ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ colorButtonSize: 'lg' })}>{t.large}</Button>
-                    </div>
-                  </div>
+                  <div><Label>{t.colorButtonSize}</Label><div className="grid grid-cols-3 gap-2 mt-2">{['sm','md','lg'].map(size => (<Button key={size} variant={variantDisplaySettings.colorButtonSize === size ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ colorButtonSize: size as any })}>{t[size as keyof typeof t] || size}</Button>))}</div></div>
                   <Separator />
                   {/* Grid Columns */}
-                  <div className="space-y-3">
-                    <Label className="flex items-center gap-2"><Maximize2 className="h-4 w-4" />{t.gridColumns}</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[1, 2, 3, 4].map(cols => (<Button key={cols} variant={variantDisplaySettings.gridColumns === cols ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ gridColumns: cols as 1 | 2 | 3 | 4 })}>{cols}</Button>))}
+                  <div><Label>{t.gridColumns}</Label><div className="grid grid-cols-4 gap-2 mt-2">{['1','2','3','4'].map(cols => (<Button key={cols} variant={variantDisplaySettings.gridColumns === Number(cols) ? 'default' : 'outline'} size="sm" onClick={() => updateVariantSettings({ gridColumns: Number(cols) as 1|2|3|4 })}>{cols}</Button>))}</div></div>
+                  <Separator />
+                  {/* ✅ حجم أرقام الباركود (المتغير 0001) */}
+                  <div className="space-y-3 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <Label className="flex items-center gap-2 font-semibold">
+                        <Hash className="h-5 w-5 text-primary" />
+                        {t.barcodeTextSize}
+                      </Label>
+                      <Badge variant="default" className="font-mono text-lg px-3 py-1">
+                        {variantDisplaySettings.barcodeTextSize} px
+                      </Badge>
                     </div>
+                    <Slider 
+                      value={[variantDisplaySettings.barcodeTextSize]} 
+                      onValueChange={([v]) => updateVariantSettings({ barcodeTextSize: v })} 
+                      min={8} 
+                      max={30} 
+                      step={1} 
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>🔢 8px {isRTL ? 'صغير' : 'Small'}</span>
+                      <span>🔢 14px {isRTL ? 'عادي' : 'Normal'}</span>
+                      <span>🔢 30px {isRTL ? 'كبير جداً' : 'Extra Large'}</span>
+                    </div>
+                    <p className="text-xs text-center text-primary/70">
+                      {isRTL ? '✨ يتحكم في حجم الأرقام الظاهرة أسفل شريط الباركود (مثل: 0001)' : '✨ Controls the size of numbers below the barcode (e.g., 0001)'}
+                    </p>
                   </div>
                   <Separator />
                   {/* Switches */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between"><Label className="flex items-center gap-2"><Package className="h-4 w-4" />{t.showStock}</Label><Switch checked={variantDisplaySettings.showStock} onCheckedChange={(v) => updateVariantSettings({ showStock: v })} /></div>
-                    <div className="flex items-center justify-between"><Label className="flex items-center gap-2"><DollarSign className="h-4 w-4" />{t.showPriceInUnits}</Label><Switch checked={variantDisplaySettings.showPriceInUnits} onCheckedChange={(v) => updateVariantSettings({ showPriceInUnits: v })} /></div>
-                    <div className="flex items-center justify-between"><Label className="flex items-center gap-2"><Minimize2 className="h-4 w-4" />{t.compactMode}</Label><Switch checked={variantDisplaySettings.compactMode} onCheckedChange={(v) => updateVariantSettings({ compactMode: v })} /></div>
-                    <div className="flex items-center justify-between"><Label className="flex items-center gap-2"><Monitor className="h-4 w-4" />{t.showLivePreview}</Label><Switch checked={variantDisplaySettings.showLivePreview} onCheckedChange={(v) => updateVariantSettings({ showLivePreview: v })} /></div>
+                    <div className="flex justify-between"><Label>{t.showStock}</Label><Switch checked={variantDisplaySettings.showStock} onCheckedChange={(v) => updateVariantSettings({ showStock: v })} /></div>
+                    <div className="flex justify-between"><Label>{t.showPriceInUnits}</Label><Switch checked={variantDisplaySettings.showPriceInUnits} onCheckedChange={(v) => updateVariantSettings({ showPriceInUnits: v })} /></div>
+                    <div className="flex justify-between"><Label>{t.compactMode}</Label><Switch checked={variantDisplaySettings.compactMode} onCheckedChange={(v) => updateVariantSettings({ compactMode: v })} /></div>
+                    <div className="flex justify-between"><Label>{t.showLivePreview}</Label><Switch checked={variantDisplaySettings.showLivePreview} onCheckedChange={(v) => updateVariantSettings({ showLivePreview: v })} /></div>
                   </div>
                   <Separator />
-                  {/* Font Size */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between"><Label className="flex items-center gap-2"><ZoomIn className="h-4 w-4" />{t.fontSize}</Label><span className="text-sm text-muted-foreground">{variantDisplaySettings.fontSize}{t.px}</span></div>
-                    <Slider value={[variantDisplaySettings.fontSize]} onValueChange={([v]) => updateVariantSettings({ fontSize: v })} min={10} max={24} step={1} />
-                  </div>
-                  
-                  <Separator />
-                  
-                  {/* ✅ إعدادات الطباعة */}
+                  {/* Print Settings */}
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label className="flex items-center gap-2 text-base font-semibold">
-                        <Printer className="h-4 w-4" />
-                        {t.applyToPrint}
-                      </Label>
-                      <Switch 
-                        checked={variantDisplaySettings.applyToPrint} 
-                        onCheckedChange={(v) => updateVariantSettings({ applyToPrint: v })} 
-                      />
-                    </div>
-                    
-                    {variantDisplaySettings.applyToPrint && (
-                      <div className="space-y-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                        <div className="flex justify-between items-center">
-                          <Label className="flex items-center gap-2">
-                            <ZoomIn className="h-4 w-4" />
-                            {t.printScale}
-                          </Label>
-                          <span className="text-lg font-bold text-primary">{variantDisplaySettings.printScale}%</span>
-                        </div>
-                        <Slider 
-                          value={[variantDisplaySettings.printScale]} 
-                          onValueChange={([v]) => updateVariantSettings({ printScale: v })} 
-                          min={50} 
-                          max={200} 
-                          step={5} 
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>50% {isRTL ? 'أصغر' : 'Smaller'}</span>
-                          <span>100% {isRTL ? 'عادي' : 'Normal'}</span>
-                          <span>200% {isRTL ? 'أكبر' : 'Larger'}</span>
-                        </div>
-                        <p className="text-xs text-center text-primary/70">
-                          {isRTL ? '✨ نسبة التكبير تؤثر على حجم الخط والمسافات في الطباعة' : '✨ Scale affects font size and spacing when printing'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Preview info */}
-                  <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <p className="text-xs text-green-700 dark:text-green-400 text-center">
-                      ✨ {isRTL ? 'ملاحظة: أي تغيير في الإعدادات يظهر فوراً في الطباعة عند تفعيل "تطبيق على الطباعة"' : 'Note: Any change appears instantly in print when "Apply to Print" is enabled'}
-                    </p>
+                    <div className="flex justify-between"><Label>{t.applyToPrint}</Label><Switch checked={variantDisplaySettings.applyToPrint} onCheckedChange={(v) => updateVariantSettings({ applyToPrint: v })} /></div>
+                    {variantDisplaySettings.applyToPrint && (<div className="space-y-3"><div className="flex justify-between"><Label>{t.printScale}</Label><span className="font-bold text-primary">{variantDisplaySettings.printScale}%</span></div><Slider value={[variantDisplaySettings.printScale]} onValueChange={([v]) => updateVariantSettings({ printScale: v })} min={50} max={200} step={5} /></div>)}
                   </div>
                 </CardContent>
               </Card>
@@ -1517,30 +1211,24 @@ const BarcodePrintingCenter: React.FC = () => {
           </Tabs>
         </div>
 
-        {/* Right Panel - Preview */}
+        {/* Right Panel Preview */}
         <div className="lg:col-span-1">
           <Card className="sticky top-4">
-            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" />{t.preview}</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t.preview}</CardTitle></CardHeader>
             <CardContent>
-              <div ref={previewRef} className="bg-white border-2 border-dashed border-border rounded-lg p-4 flex items-center justify-center min-h-[200px]">
-                {selectedProducts.length > 0 && design.width > 0 && design.height > 0 ? (
-                  <div className="text-center" style={{ width: `${design.width * 3}px`, minHeight: `${design.height * 3}px`, padding: `${design.padding * 3}px`, border: design.borderEnabled ? '1px solid #333' : 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    {design.showCompanyName && design.companyName && <p style={{ fontSize: `${design.fontSize - 2}px`, fontWeight: 600, marginBottom: '4px' }}>{design.companyName}</p>}
-                    {design.showProductName && <p style={{ fontSize: `${design.fontSize}px`, fontWeight: 600, marginBottom: '4px' }}>{isRTL ? selectedProducts[0].nameAr : selectedProducts[0].name}{selectedProducts[0].isVariant && selectedProducts[0].variantInfo && <span className="text-xs text-muted-foreground block">{isRTL ? selectedProducts[0].variantInfoAr : selectedProducts[0].variantInfo}</span>}</p>}
-                    {design.showBarcode && (selectedProducts[0].barcode && selectedProducts[0].barcode !== 'NO_BARCODE' && design.barcodeWidth > 0 ? <canvas ref={canvasRef} className="mx-auto" /> : <div className="text-xs text-red-500">No barcode</div>)}
-                    {design.showSku && !design.showBarcode && <p style={{ fontSize: `${design.fontSize - 1}px`, fontFamily: 'monospace' }}>{selectedProducts[0].sku}</p>}
-                    {design.showPrice && <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 'bold', marginTop: '4px' }}>{formatCurrency(selectedProducts[0].price)}</p>}
+              <div className="bg-white border-2 border-dashed rounded-lg p-4 flex items-center justify-center min-h-[200px]">
+                {selectedProducts.length > 0 && design.width > 0 ? (
+                  <div className="text-center" style={{ width: `${design.width * 3}px`, padding: `${design.padding * 3}px`, border: design.borderEnabled ? '1px solid #333' : 'none' }}>
+                    {design.showProductName && <p style={{ fontSize: `${design.fontSize}px`, fontWeight: 600 }}>{isRTL ? selectedProducts[0].nameAr : selectedProducts[0].name}</p>}
+                    {design.showBarcode && (selectedProducts[0].barcode !== 'NO_BARCODE' ? <canvas ref={canvasRef} className="mx-auto" /> : <div className="text-red-500 text-xs">No barcode</div>)}
+                    {design.showPrice && <p style={{ fontSize: `${design.fontSize + 2}px`, fontWeight: 700, marginTop: '4px', color: '#22c55e' }}>{formatCurrency(selectedProducts[0].price)}</p>}
                   </div>
-                ) : (<div className="text-center text-muted-foreground"><Barcode className="h-16 w-16 mx-auto mb-3 opacity-20" /><p>{isRTL ? 'اختر منتج للمعاينة' : 'Select a product to preview'}</p></div>)}
+                ) : (<div className="text-center text-muted-foreground"><Barcode className="h-16 w-16 mx-auto mb-3 opacity-20" /><p>{isRTL ? 'اختر منتج للمعاينة' : 'Select a product'}</p></div>)}
               </div>
-              <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm space-y-1">
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.labelSize}:</span><span className="font-medium">{design.width} × {design.height} {t.mm}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.barcodeType}:</span><span className="font-medium font-mono">{barcodeFormat}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.printerType}:</span><span className="font-medium capitalize">{printerConfig.type}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">{t.labelsPerRow}:</span><span className="font-medium">{printerConfig.labelsPerRow}</span></div>
-                {variantDisplaySettings.applyToPrint && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">{t.printScale}:</span><span className="font-medium text-primary">{variantDisplaySettings.printScale}%</span></div>
-                )}
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm">
+                <div className="flex justify-between"><span>{t.barcodeTextSize}:</span><span className="font-mono">{variantDisplaySettings.barcodeTextSize}px</span></div>
+                <div className="flex justify-between"><span>{t.barcodeType}:</span><span className="font-mono">{barcodeFormat}</span></div>
+                <div className="flex justify-between"><span>{t.labelSize}:</span><span>{design.width}×{design.height}{t.mm}</span></div>
               </div>
             </CardContent>
           </Card>
@@ -1554,6 +1242,7 @@ const BarcodePrintingCenter: React.FC = () => {
         product={selectedProductForVariant!}
         onSelect={handleAddProduct}
         displaySettings={variantDisplaySettings}
+        barcodeFormat={barcodeFormat}
       />
     </div>
   );
