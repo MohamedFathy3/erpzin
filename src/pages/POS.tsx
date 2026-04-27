@@ -1,4 +1,4 @@
-// POS.tsx - النسخة الكاملة المعدلة
+// POS.tsx - النسخة الكاملة المعدلة مع الخصومات
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -69,6 +69,7 @@ interface CartItem {
   unitId?: number;
   colorId?: number;
   stock?: number;
+  discount_percentage?: number;  // ✅ خصم المنتج %
 }
 
 interface SalesRepresentative {
@@ -149,6 +150,10 @@ const POS: React.FC = () => {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
   const [showOfflineStats, setShowOfflineStats] = useState(false);
+  
+  // ✅ خصومات المنتجات والفاتورة
+  const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
+  const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
   
   // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
   const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
@@ -351,47 +356,44 @@ const POS: React.FC = () => {
   const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
   const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(selectedCategory);
   
-const { data: barcodeProduct } = useProductByBarcode(searchQuery);
+  const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
-
-
-
-const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const value = e.target.value;
-  setSearchQuery(value);
-  
-  if (value.length >= 3) {
-    setIsBarcodeScanning(true);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
     
-    if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-    scanTimeoutRef.current = setTimeout(() => {
+    if (value.length >= 3) {
+      setIsBarcodeScanning(true);
+      
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+        setIsBarcodeScanning(false);
+      }, 1000);
+    } else {
       setIsBarcodeScanning(false);
-    }, 1000);
-  } else {
-    setIsBarcodeScanning(false);
-  }
-};
+    }
+  };
 
-useEffect(() => {
-  console.log('🔍 Barcode scan result:', { 
-    barcodeProduct, 
-    searchQuery,
-  });
-  
-  if (barcodeProduct && barcodeProduct.id) {
-    console.log('✅ Adding product to cart:', barcodeProduct.name);
-    
-    addToCart(barcodeProduct as Product);
-    setSearchQuery('');
-    
-    toast({
-      title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
-      description: language === 'ar' 
-        ? (barcodeProduct.name_ar || barcodeProduct.name)
-        : barcodeProduct.name,
+  useEffect(() => {
+    console.log('🔍 Barcode scan result:', { 
+      barcodeProduct, 
+      searchQuery,
     });
-  }
-}, [barcodeProduct]);
+    
+    if (barcodeProduct && barcodeProduct.id) {
+      console.log('✅ Adding product to cart:', barcodeProduct.name);
+      
+      addToCart(barcodeProduct as Product);
+      setSearchQuery('');
+      
+      toast({
+        title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
+        description: language === 'ar' 
+          ? (barcodeProduct.name_ar || barcodeProduct.name)
+          : barcodeProduct.name,
+      });
+    }
+  }, [barcodeProduct]);
 
   // ==================== Data Transformation ====================
   const transformedCategories = useMemo(() => [
@@ -467,6 +469,7 @@ useEffect(() => {
         quantity: 1,
         sku: product.sku,
         stock: product.stock,
+        discount_percentage: 0, // ✅ initialize discount
       }];
     });
   };
@@ -514,7 +517,8 @@ useEffect(() => {
         colorName: variant.color,
         unitId: variant.unitId,
         colorId: variant.colorId,
-        stock: variant.stock
+        stock: variant.stock,
+        discount_percentage: 0, // ✅ initialize discount
       }];
     });
 
@@ -565,7 +569,7 @@ useEffect(() => {
   const holdOrder = () => {
     if (cartItems.length === 0) return;
     
-    const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const subtotal = calculateSubtotalAfterItemDiscounts();
     const tax = (subtotal * taxRate) / 100;
     const total = subtotal + tax;
 
@@ -594,28 +598,80 @@ useEffect(() => {
     setHeldOrders(prev => prev.filter(o => o.id !== orderId));
   };
 
+  // ✅ دالة خصم المنتج
+  const handleItemDiscountChange = (itemId: string, percentage: number, variantId?: string) => {
+    setCartItems(prev => prev.map(item => {
+      const match = variantId 
+        ? item.variantId === variantId 
+        : item.id === itemId && !item.variantId;
+      if (match) {
+        return { ...item, discount_percentage: percentage };
+      }
+      return item;
+    }));
+  };
+
+  // ✅ دالة خصم الفاتورة
+  const handleInvoiceDiscountChange = (percentage: number, amount: number) => {
+    setInvoiceDiscountPercentage(percentage);
+    setInvoiceDiscountAmount(amount);
+  };
+
   // ==================== Calculations ====================
+  const calculateSubtotalAfterItemDiscounts = () => {
+    return cartItems.reduce((sum, item) => {
+      const itemTotal = item.price * item.quantity;
+      const discountRate = (item.discount_percentage || 0) / 100;
+      return sum + (itemTotal * (1 - discountRate));
+    }, 0);
+  };
+  
   const calculateSubtotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const calculateTax = () => (calculateSubtotal() * taxRate) / 100;
-  const calculateTotal = () => calculateSubtotal() + calculateTax();
+  const calculateItemDiscountsTotal = () => {
+    return cartItems.reduce((sum, item) => {
+      const itemTotal = item.price * item.quantity;
+      const discountRate = (item.discount_percentage || 0) / 100;
+      return sum + (itemTotal * discountRate);
+    }, 0);
+  };
+  
+  const calculateSubtotalAfterAllDiscounts = () => {
+    const afterItemDiscounts = calculateSubtotalAfterItemDiscounts();
+    const invoiceDiscount = (afterItemDiscounts * invoiceDiscountPercentage) / 100;
+    return afterItemDiscounts - invoiceDiscount;
+  };
+  
+  const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
+  const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
 
   // ==================== Payment Handlers ====================
   const handlePaymentComplete = async (payments: { method: string; amount: number }[]) => {
-    console.log('📦 Payment Data:', {
-      cartItems,
+    const orderData = {
+      items: cartItems.map(item => ({
+        ...item,
+        discount_percentage: item.discount_percentage || 0,
+        item_total: (item.price * item.quantity) * (1 - (item.discount_percentage || 0) / 100)
+      })),
       subtotal: calculateSubtotal(),
+      item_discounts_total: calculateItemDiscountsTotal(),
+      invoice_discount_percentage: invoiceDiscountPercentage,
+      invoice_discount_amount: invoiceDiscountAmount,
+      subtotal_after_discounts: calculateSubtotalAfterAllDiscounts(),
       tax: calculateTax(),
       total: calculateTotal(),
-      customer: selectedCustomer,
-      delivery: selectedDelivery,
-      salesRep: selectedSalesRep,
+      customer_id: selectedCustomer?.id,
+      delivery_id: selectedDelivery?.id,
+      sales_rep_id: selectedSalesRep?.id,
+      shift_id: currentShift?.id,
       payments
-    });
+    };
+
+    console.log('📦 Order Data:', orderData);
 
     if (!navigator.onLine || isOffline) {
       try {
         const orderId = await saveOrderOffline({
-          items: cartItems,
+          ...orderData,
           subtotal: calculateSubtotal(),
           tax: calculateTax(),
           total: calculateTotal(),
@@ -643,6 +699,7 @@ useEffect(() => {
         });
       }
     } else {
+      // TODO: إرسال الطلب للـ API
       toast({
         title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
         description: language === 'ar'
@@ -655,6 +712,8 @@ useEffect(() => {
     setCartItems([]);
     setSelectedCustomer(null);
     setSelectedDelivery(null);
+    setInvoiceDiscountPercentage(0);
+    setInvoiceDiscountAmount(0);
   };
 
   // ==================== Delivery Selection Handler ====================
@@ -1000,43 +1059,39 @@ useEffect(() => {
           {/* Products Section */}
           <div className="flex-1 flex flex-col p-4 overflow-hidden">
             <div className="space-y-3 mb-4 flex-shrink-0">
-
-<div className="relative flex gap-2">
-  <div className="relative flex-1">
-    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-    <Input
-      ref={searchInputRef}
-      type="text"
-      placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
-      value={searchQuery}
-      onChange={handleSearchChange}
-      onKeyDown={(e) => {
-        // إذا ضغط Enter وكان النص باركود محتمل
-        if (e.key === 'Enter' && searchQuery.length >= 3) {
-          setIsBarcodeScanning(true);
-        }
-      }}
-      className="ps-10 pe-10 h-12 text-base"
-    />
-    <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-  </div>
-  
-  {/* زر إضافة الباركود مباشرة */}
-  {searchQuery.length >= 3 && (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      onClick={() => setIsBarcodeScanning(true)}
-      className="h-12 px-4"
-    >
-      <Barcode size={18} className="me-1" />
-      {language === 'ar' ? 'إضافة' : 'Add'}
-    </Button>
-  )}
-</div>
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                  <Input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.length >= 3) {
+                        setIsBarcodeScanning(true);
+                      }
+                    }}
+                    className="ps-10 pe-10 h-12 text-base"
+                  />
+                  <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                </div>
+                
+                {searchQuery.length >= 3 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsBarcodeScanning(true)}
+                    className="h-12 px-4"
+                  >
+                    <Barcode size={18} className="me-1" />
+                    {language === 'ar' ? 'إضافة' : 'Add'}
+                  </Button>
+                )}
+              </div>
               
-              {/* مؤشر مسح الباركود */}
               {isBarcodeScanning && (
                 <div className="flex items-center gap-1 text-xs text-green-500">
                   <Loader2 size={12} className="animate-spin" />
@@ -1044,7 +1099,6 @@ useEffect(() => {
                 </div>
               )}
               
-              {/* Offline indicator for categories */}
               {categoriesOffline && (
                 <div className="flex items-center gap-1 text-xs text-amber-500">
                   <WifiOff size={12} />
@@ -1052,7 +1106,6 @@ useEffect(() => {
                 </div>
               )}
 
-              {/* POSCategories */}
               <POSCategories
                 categories={transformedCategories}
                 selectedCategory={selectedCategory}
@@ -1145,6 +1198,10 @@ useEffect(() => {
               onHoldOrder={holdOrder}
               onPay={() => setShowPayment(true)}
               heldOrdersCount={heldOrders.length}
+              invoiceDiscountPercentage={invoiceDiscountPercentage}
+              invoiceDiscountAmount={invoiceDiscountAmount}
+              onInvoiceDiscountChange={handleInvoiceDiscountChange}
+              onItemDiscountChange={handleItemDiscountChange}
             />
           </div>
         </div>
@@ -1171,7 +1228,7 @@ useEffect(() => {
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
           total={calculateTotal()}
-          subtotal={calculateSubtotal()}
+          subtotal={calculateSubtotalAfterAllDiscounts()}
           tax={calculateTax()}
           cartItems={cartItems}
           onComplete={handlePaymentComplete}
@@ -1209,6 +1266,9 @@ useEffect(() => {
             website: user?.website,
             currency: user?.currency || 'YER'
           }}
+          invoiceDiscountPercentage={invoiceDiscountPercentage}
+          invoiceDiscountAmount={invoiceDiscountAmount}
+          itemDiscountsTotal={calculateItemDiscountsTotal()}
         />
 
         <POSHeldOrders
