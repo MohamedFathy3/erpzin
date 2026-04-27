@@ -825,29 +825,29 @@ const BarcodePrintingCenter: React.FC = () => {
           : (isRTL ? product.nameAr : product.name);
         const formattedPrice = formatCurrency(product.price);
 
-        labels.push(`
-          <div class="label" style="
-            width: ${scaledWidth}mm;
-            height: ${scaledHeight}mm;
-            padding: ${scaledPadding}mm;
-            border: ${design.borderEnabled ? '2px solid #333' : 'none'};
-            display: inline-flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            page-break-inside: avoid;
-            box-sizing: border-box;
-            margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
-            background: white;
-            border-radius: ${design.borderEnabled ? '4px' : '0'};
-          ">
-            ${design.showCompanyName && design.companyName ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-weight: 600; margin-bottom: 3px;">${design.companyName}</div>` : ''}
-            ${design.showProductName ? `<div style="font-size: ${scaledFontSize}px; font-weight: 700; margin-bottom: 4px;">${productLabel}</div>` : ''}
-            ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${scaledWidth - 10}mm;"></canvas>` : ''}
-            ${design.showPrice ? `<div style="font-size: ${scaledFontSize + 3}px; font-weight: bold; margin-top: 4px; color: #0000;">${formattedPrice}</div>` : ''}
-          </div>
-        `);
+      labels.push(`
+  <div class="label" style="
+    width: ${scaledWidth}mm;
+    height: ${scaledHeight}mm;
+    padding: ${scaledPadding}mm;
+    border: ${design.borderEnabled ? '2px solid #333' : 'none'};
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    page-break-inside: avoid;
+    box-sizing: border-box;
+    margin: ${printerConfig.gapY / 2}mm ${printerConfig.gapX / 2}mm;
+    background: white;
+    border-radius: ${design.borderEnabled ? '4px' : '0'};
+  ">
+    ${design.showCompanyName && design.companyName ? `<div style="font-size: ${Math.max(8, scaledFontSize - 2)}px; font-weight: 600; margin-bottom: 3px; color: #000;">${design.companyName}</div>` : ''}
+    ${design.showProductName ? `<div style="font-size: ${scaledFontSize}px; font-weight: 700; margin-bottom: 4px; color: #000;">${productLabel}</div>` : ''}
+    ${design.showBarcode ? `<canvas id="bc-${idx}-${i}" style="width: 100%; max-width: ${scaledWidth - 10}mm;"></canvas>` : ''}
+    ${design.showPrice ? `<div style="font-size: ${scaledFontSize + 3}px; font-weight: bold; margin-top: 4px; color: #000000;">${formattedPrice}</div>` : ''}
+  </div>
+`);
       }
     });
 
@@ -1107,11 +1107,56 @@ const BarcodePrintingCenter: React.FC = () => {
                     <div className="flex justify-between"><Label>{t.border}</Label><Switch checked={design.borderEnabled} onCheckedChange={(v) => setDesign(d => ({ ...d, borderEnabled: v }))} /></div>
                   </div>
                   <Separator />
-                  <div className="space-y-4">
-                    <div><Label>{t.fontSize}</Label><Slider value={[design.fontSize]} onValueChange={([v]) => setDesign(d => ({ ...d, fontSize: v }))} min={8} max={24} step={1} /></div>
-                    <div><Label>{t.barcodeHeight}</Label><Slider value={[design.barcodeHeight]} onValueChange={([v]) => setDesign(d => ({ ...d, barcodeHeight: v }))} min={30} max={80} step={5} /></div>
-                    <div><Label>{t.padding}</Label><Slider value={[design.padding]} onValueChange={([v]) => setDesign(d => ({ ...d, padding: v }))} min={2} max={10} step={1} /></div>
-                  </div>
+              {/* حجم الخط - Font Size */}
+<div>
+  <div className="flex justify-between items-center mb-2">
+    <Label>{t.fontSize}</Label>
+    <span className="text-sm font-mono bg-muted px-2 py-0.5 rounded">
+      {design.fontSize}px
+    </span>
+  </div>
+  <Slider 
+    value={[design.fontSize]} 
+    onValueChange={([val]) => setDesign(d => ({ ...d, fontSize: val }))} 
+    min={8} 
+    max={24} 
+    step={1} 
+  />
+</div>
+
+{/* ارتفاع الباركود - Barcode Height */}
+<div>
+  <div className="flex justify-between items-center mb-2">
+    <Label>{t.barcodeHeight}</Label>
+    <span className="text-sm font-mono bg-muted px-2 py-0.5 rounded">
+      {design.barcodeHeight}px
+    </span>
+  </div>
+  <Slider 
+    value={[design.barcodeHeight]} 
+    onValueChange={([val]) => setDesign(d => ({ ...d, barcodeHeight: val }))} 
+    min={30} 
+    max={80} 
+    step={5} 
+  />
+</div>
+
+{/* الهوامش - Padding */}
+<div>
+  <div className="flex justify-between items-center mb-2">
+    <Label>{t.padding}</Label>
+    <span className="text-sm font-mono bg-muted px-2 py-0.5 rounded">
+      {design.padding}mm
+    </span>
+  </div>
+  <Slider 
+    value={[design.padding]} 
+    onValueChange={([val]) => setDesign(d => ({ ...d, padding: val }))} 
+    min={2} 
+    max={10} 
+    step={1} 
+  />
+</div>
                   <Separator />
                   {/* ✅ اختيار نوع الباركود */}
                   <div className="space-y-3">
