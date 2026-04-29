@@ -10,7 +10,9 @@ export class ProductService {
     warehouseId?: string;
     hasBalance?: boolean;
     beginning_balance?: boolean;
-  }): Promise<Product[]> {
+    page?: number;
+    perPage?: number;
+  }): Promise<{ data: Product[]; meta: any }> {
     const apiFilters: any = {};
     
     if (filters.beginning_balance === true) {
@@ -20,51 +22,76 @@ export class ProductService {
       apiFilters.beginning_balance = 1;
     }
     
-    // ✅ كل حقل لوحده - مش كله تحت search واحد
+    // البحث
     if (filters.searchQuery && filters.searchQuery !== '___empty___') {
-      // هنا بنحدد نوع البحث بناءً على شكل النص
       const searchTerm = filters.searchQuery;
       
-      // لو النص عبارة عن أرقام فقط -> باركود
       if (/^\d+$/.test(searchTerm)) {
         apiFilters.barcode = searchTerm;
       } 
-      // لو النص يحتوي على أرقام وحروف وممكن يكون SKU
       else if (searchTerm.length <= 20 && /^[A-Za-z0-9-]+$/.test(searchTerm)) {
         apiFilters.sku = searchTerm;
       } 
-      // غير كده -> اسم
       else {
         apiFilters.name = searchTerm;
       }
     }
     
+    // الفلتر بالفرع
     if (filters.branchId && filters.branchId !== 'all') {
       apiFilters.branch_id = parseInt(filters.branchId);
     }
+    
+    // الفلتر بالمخزن
     if (filters.warehouseId && filters.warehouseId !== 'all') {
       apiFilters.warehouse_id = parseInt(filters.warehouseId);
     }
     
-    const response = await api.post('/product/index', {
+    const page = filters.page || 1;
+    const perPage = filters.perPage || 16;
+    
+    // ✅ نفس الصيغة اللي انت عاوزها
+    const payload = {
       filters: apiFilters,
       orderBy: 'id',
-      orderByDirection: 'desc',
-      perPage: 100,
-      paginate: false
-    });
+      orderByDirection: 'asc',
+      perPage: perPage,
+      paginate: true,
+      delete: false
+    };
     
-    let allProducts = response.data?.data || [];
+    console.log('📦 Products API Payload:', payload);
     
-    // If hasBalance is true, filter products with stock > 0
-    if (filters.hasBalance === true) {
-      return allProducts.filter((p: Product) => p.stock && p.stock > 0);
+    const response = await api.post('/product/index', payload);
+    
+    if (response.data.result === 'Success') {
+      return {
+        data: response.data.data || [],
+        meta: response.data.meta || {
+          current_page: page,
+          per_page: perPage,
+          total: response.data.data?.length || 0,
+          last_page: 1,
+          from: 1,
+          to: response.data.data?.length || 0
+        }
+      };
     }
     
-    return allProducts;
+    return {
+      data: [],
+      meta: {
+        current_page: 1,
+        per_page: perPage,
+        total: 0,
+        last_page: 1,
+        from: 0,
+        to: 0
+      }
+    };
   }
 
-  // ✅ دالة للبحث بالاسم فقط
+  // دالة للبحث بالاسم فقط
   async searchProductsByName(searchTerm: string): Promise<Product[]> {
     const response = await api.post('/product/index', {
       filters: { name: searchTerm },
@@ -76,7 +103,7 @@ export class ProductService {
     return response.data?.data || [];
   }
 
-  // ✅ دالة للبحث بالـ SKU فقط
+  // دالة للبحث بالـ SKU فقط
   async searchProductsBySku(searchTerm: string): Promise<Product[]> {
     const response = await api.post('/product/index', {
       filters: { sku: searchTerm },
@@ -88,7 +115,7 @@ export class ProductService {
     return response.data?.data || [];
   }
 
-  // ✅ دالة للبحث بالباركود فقط
+  // دالة للبحث بالباركود فقط
   async searchProductsByBarcode(searchTerm: string): Promise<Product[]> {
     const response = await api.post('/product/index', {
       filters: { barcode: searchTerm },
@@ -118,6 +145,4 @@ export class ProductService {
     const response = await api.post('/warehouse/index', { filters, paginate: false });
     return response.data?.data || [];
   }
-
-  // بقية الدوال كما هي...
 }

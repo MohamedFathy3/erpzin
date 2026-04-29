@@ -34,23 +34,25 @@ export const useSearchProductsByBarcode = (searchQuery: string, enabled: boolean
   });
 };
 
-// ✅ الهوك الأصلي (للبحث العام)
+// ✅ الهوك الرئيسي المعدل (مع Pagination)
 export const useProducts = (filters: {
   searchQuery: string;
   selectedBranch: string;
   selectedWarehouse: string;
   hasBalance?: boolean;
+  page?: number;
+  perPage?: number;
 }) => {
-  return useQuery<Product[]>({
-    queryKey: ['products', filters],
+  return useQuery({
+    queryKey: ['products', filters.searchQuery, filters.selectedBranch, filters.selectedWarehouse, filters.page, filters.perPage],
     queryFn: () => productService.getProducts({
       searchQuery: filters.searchQuery,
       branchId: filters.selectedBranch,
       warehouseId: filters.selectedWarehouse,
       hasBalance: filters.hasBalance ?? false,
+      page: filters.page || 1,
+      perPage: filters.perPage || 16
     }),
     enabled: true
   });
 };
-
-// باقي الهوكات كما هي...

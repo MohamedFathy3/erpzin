@@ -1,3 +1,24 @@
+/**
+ * AppContext - Application-wide state management
+ * 
+ * SECURITY NOTE: Client-Side Permissions (UX Only)
+ * ================================================
+ * The permissions in this context (canAccessPOS, canAccessFinance, etc.) are
+ * for UI/UX purposes ONLY. They control which menu items and pages are shown
+ * to users, but they do NOT provide actual security enforcement.
+ * 
+ * All actual security is enforced server-side through:
+ * 1. Supabase Row-Level Security (RLS) policies on all database tables
+ * 2. Edge function role verification for sensitive operations
+ * 3. Database functions like has_role() and has_permission()
+ * 
+ * A malicious user could manipulate these client-side permissions in DevTools,
+ * but any database operations would still be blocked by RLS policies.
+ * 
+ * Never rely on these client-side permissions for actual authorization decisions.
+ * They are purely for improving user experience by hiding irrelevant UI elements.
+ */
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
