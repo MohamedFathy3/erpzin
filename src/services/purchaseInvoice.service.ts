@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // services/purchaseInvoice.service.ts
 import api from '@/lib/api';
 import { PurchaseInvoicePayload, ApiPurchaseInvoice } from '@/types/purchaseform';

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef } from 'react'; // ✅ أضف useRef
 import { useReactToPrint } from 'react-to-print'; // ✅ أضف الاستيراد
 import InvoiceTemplate from './InvoiceTemplate'; // ✅ استيراد القالب
@@ -28,7 +29,6 @@ const defaultPaymentMethods: PaymentMethod[] = [
   { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'ctrl+1' },
   { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'ctrl+2' },
   { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'ctrl+3' },
-  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-primary', shortcut: 'ctrl+7' },
 ];
 
 interface CartItem {
@@ -487,42 +487,6 @@ const paymentShortcuts = getPaymentShortcuts({
                 className="text-lg font-bold h-12 text-center"
               />
             </div>
-          </div>
-
-          {/* Quick fill buttons */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSplitAmounts({ cash: total.toString(), card: '', wallet: '' })}
-            >
-              {language === 'ar' ? 'كل نقدي' : 'All Cash'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSplitAmounts({ cash: '', card: total.toString(), wallet: '' })}
-            >
-              {language === 'ar' ? 'كل شبكة' : 'All Card'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSplitAmounts({ cash: '', card: '', wallet: total.toString() })}
-            >
-              {language === 'ar' ? 'كل محفظة' : 'All Wallet'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSplitAmounts({
-                cash: Math.floor(total / 2).toString(),
-                card: (total - Math.floor(total / 2)).toString(),
-                wallet: ''
-              })}
-            >
-              {language === 'ar' ? 'نصفين' : '50/50'}
-            </Button>
           </div>
         </div>
       );

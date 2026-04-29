@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -13,6 +14,7 @@ import InvoiceReturnForm from "./InvoiceReturnForm";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useApp } from '@/contexts/AppContext';
 
 // ========== أنواع البيانات ==========
 
@@ -136,7 +138,8 @@ const SalesInvoiceList = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState<any>(null);
-  
+    const { currentBranch } = useApp(); // ← أضف هذا السطر
+
   // ✅ State للـ collapse - الفلاتر تكون مطوية افتراضياً
   const [filtersCollapsed, setFiltersCollapsed] = useState(true);
   
@@ -145,7 +148,8 @@ const SalesInvoiceList = () => {
     search: '',
     payment_status: 'all',
     invoice_type: 'all',
-    branch_id: 'all',
+    branch_id: currentBranch?.id ? String(currentBranch.id) : 'all', // ← هنا التعديل
+    
     salesman_id: 'all',
     customer_id: 'all',
     warehouse_id: 'all',
@@ -430,7 +434,7 @@ const SalesInvoiceList = () => {
       search: '',
       payment_status: 'all',
       invoice_type: 'all',
-      branch_id: 'all',
+    branch_id: currentBranch?.id ? String(currentBranch.id) : 'all',
       salesman_id: 'all',
       customer_id: 'all',
       warehouse_id: 'all',

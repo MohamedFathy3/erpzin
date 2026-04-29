@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ interface POSShift {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  wallet_sales: string; // مبيعات المحفظة
 }
 
 interface OpenShiftPayload {
@@ -184,7 +186,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     if (!currentShift) return 0;
     return parseFloat(currentShift.opening_balance) + 
            parseFloat(currentShift.cash_sales) - 
-           parseFloat(currentShift.returns_amount);
+           parseFloat(currentShift.returns_amount) +
+           parseFloat(currentShift.wallet_sales);
   }, [currentShift]);
 
   // ========== حساب الفرق ==========
@@ -235,6 +238,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       optional: 'Optional',
       summary: 'Shift Summary',
       refresh: 'Refresh',
+      walletsales: 'Wallet Sales',
+      cash_sales: 'Cash Sales',
       error: 'Error loading shift data',
       retry: 'Retry',
       confirmClose: 'Are you sure you want to close this shift?',
@@ -269,6 +274,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       printZ: 'طباعة تقرير Z',
       cancel: 'إلغاء',
       save: 'حفظ',
+      walletsales: 'مبيعات المحفظة',
       openShiftSuccess: 'تم فتح الوردية بنجاح',
       closeShiftSuccess: 'تم إغلاق الوردية بنجاح',
       enterOpeningAmount: 'أدخل رصيد الافتتاح',
@@ -513,6 +519,11 @@ const handleCloseShift = () => {
               <div class="stat-label">💳 ${t.card}</div>
               <div class="stat-value" style="color: #2563eb;">${formatCurrency(parseFloat(currentShift.card_sales))}</div>
             </div>
+            
+            <div class="stat-card">
+              <div class="stat-label">👛 ${t.walletsales}</div>
+              <div class="stat-value" style="color: #7c3aed;">${formatCurrency(parseFloat(currentShift.wallet_sales))}</div>
+            </div>
           </div>
           <div class="row" style="margin-top: 10px;">
             <span>↩️ ${t.returns}:</span>
@@ -672,7 +683,7 @@ const handleCloseShift = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center transition-all hover:scale-105 cursor-default">
                 <Banknote className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.cash}</div>
@@ -687,6 +698,13 @@ const handleCloseShift = () => {
                   {formatAmount(currentShift.card_sales)}
                 </div>
               </div>
+                 <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center transition-all hover:scale-105 cursor-default">
+                <Banknote className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
+                <div className="text-xs text-muted-foreground mb-1">{t.walletsales}</div>
+                <div className="font-bold text-emerald-700 dark:text-emerald-400">
+                  {formatAmount(currentShift.wallet_sales)}
+                </div>
+              </div>
               <div className="p-3 rounded-lg bg-red-100/50 dark:bg-red-900/20 text-center transition-all hover:scale-105 cursor-default">
                 <Receipt className="h-4 w-4 mx-auto mb-1 text-red-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.returns}</div>
@@ -694,6 +712,7 @@ const handleCloseShift = () => {
                   {formatAmount(currentShift.returns_amount)}
                 </div>
               </div>
+            
             </div>
 
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20">
@@ -897,6 +916,10 @@ const handleCloseShift = () => {
                 <div className="flex justify-between items-center text-emerald-600">
                   <span>+ {t.cashSales}:</span>
                   <span className="font-medium">+ {formatAmount(currentShift.cash_sales)}</span>
+                </div>
+                 <div className="flex justify-between items-center text-blue-600">
+                  <span>- {t.walletsales}:</span>
+                  <span className="font-medium">{formatAmount(currentShift.wallet_sales)}</span>
                 </div>
                 <div className="flex justify-between items-center text-red-600">
                   <span>- {t.returns}:</span>

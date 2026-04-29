@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,8 @@ import {
   ChevronUp,
   Search,
   SlidersHorizontal,
-  Timer
+  Timer,
+  Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -50,6 +52,7 @@ interface Shift {
   closed_at: string | null;
   status: 'open' | 'closed';
   notes: string;
+  wallet_sales: string; // مبيعات المحفظة
   created_at: string;
   updated_at: string;
 }
@@ -71,27 +74,50 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
   const [minAmount, setMinAmount] = useState<string>('');
   const [maxAmount, setMaxAmount] = useState<string>('');
   const [employeeFilter, setEmployeeFilter] = useState<string>('');
-  
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+const [branches, setBranches] = useState<Array<{ id: number; name: string; active: boolean }>>([]);
   // فلتر الساعات الجديد
   const [startHour, setStartHour] = useState<string>('');
   const [endHour, setEndHour] = useState<string>('');
-
-  // جلب الورديات
-  const { data: shifts = [], isLoading, refetch } = useQuery({
-    queryKey: ['shifts'],
-    queryFn: async () => {
-      try {
-        const response = await api.get('/shifts');
-        if (response.data.status) {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching shifts:', error);
-        return [];
+// جلب الفروع
+const { data: branchesData, isLoading: isLoadingBranches } = useQuery({
+  queryKey: ['branches'],
+  queryFn: async () => {
+    try {
+      const response = await api.post('/branch/index',{
+        paginate:"false"
+      });
+      if (response.data.status === 200 && response.data.result === 'Success') {
+        return response.data.data || [];
       }
+      return [];
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+      return [];
     }
-  });
+  }
+});
+const { data: shifts = [], isLoading, refetch } = useQuery({
+  queryKey: ['shifts', selectedBranchId], // أضف selectedBranchId للـ key
+  queryFn: async () => {
+    try {
+      const params: any = {};
+      
+      if (selectedBranchId && selectedBranchId !== 'all') {
+        params.branch_id = selectedBranchId;
+      }
+      
+      const response = await api.get('/shifts', { params });
+      if (response.data.status) {
+        return response.data.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching shifts:', error);
+      return [];
+    }
+  }
+});
 
   // ============ دوال التنسيق المساعدة ============
 
@@ -280,17 +306,30 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
   }, [filteredShifts, sortField, sortDirection]);
 
   // حساب الإحصائيات
-  const stats = useMemo(() => ({
+const stats = useMemo(() => ({
     totalShifts: shifts.length,
     openShifts: shifts.filter((s: Shift) => s.status === 'open').length,
     closedShifts: shifts.filter((s: Shift) => s.status === 'closed').length,
     totalCashSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.cash_sales || '0'), 0),
     totalCardSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
+    // التصحيح هنا - wallet_sales
+    totalWalletSales: shifts.reduce((sum: number, s: Shift) => {
+      const val = s.wallet_sales ? parseFloat(s.wallet_sales) : 0;
+      return sum + val;
+    }, 0),
     totalReturns: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.returns_amount || '0'), 0),
     filteredTotalCashSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.cash_sales || '0'), 0),
     filteredTotalCardSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
-  }), [shifts, filteredShifts]);
+    filteredTotalWalletSales: filteredShifts.reduce((sum: number, s: Shift) => {
+      const val = s.wallet_sales ? parseFloat(s.wallet_sales) : 0;
+      return sum + val;
+    }, 0),
+}), [shifts, filteredShifts]);
 
+
+useEffect(() => {
+  refetch();
+}, [selectedBranchId, refetch]);
   // Badge الحالة
   const getStatusBadge = useCallback((status: string) => {
     if (status === 'open') {
@@ -353,6 +392,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     closingBalance: language === 'ar' ? 'رصيد النهاية' : 'Closing',
     cashSales: language === 'ar' ? 'مبيعات نقدي' : 'Cash Sales',
     cardSales: language === 'ar' ? 'مبيعات بطاقة' : 'Card Sales',
+    walletSales: language === 'ar' ? 'مبيعات المحفظة' : 'Wallet Sales',
     expected: language === 'ar' ? 'المتوقع' : 'Expected',
     actual: language === 'ar' ? 'الفعلي' : 'Actual',
     difference: language === 'ar' ? 'الفرق' : 'Difference',
@@ -387,7 +427,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     startHour: language === 'ar' ? 'من الساعة' : 'From Hour',
     endHour: language === 'ar' ? 'إلى الساعة' : 'To Hour',
     hourFilter: language === 'ar' ? 'فلتر الساعات' : 'Hour Filter',
-    hourPlaceholder: language === 'ar' ? 'مثال: 9' : 'e.g: 9'
+    hourPlaceholder: language === 'ar' ? 'مثال: 9' : 'e.g: 9',  
   };
 
   const hasActiveFilters = globalSearch || statusFilter !== 'all' || dateFilter !== 'all' || startHour || endHour || minAmount || maxAmount || employeeFilter;
@@ -436,7 +476,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -492,7 +532,19 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             </div>
           </CardContent>
         </Card>
-
+<Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/20">
+                <DollarSign className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{t.walletSales}</p>
+                <p className="text-xl font-bold">{formatNumber(stats.totalWalletSales)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 border-purple-500/20">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -567,6 +619,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             setMinAmount('');
             setMaxAmount('');
             setEmployeeFilter('');
+             setSelectedBranchId('all');
           }} className="gap-2 text-destructive hover:text-destructive">
             <X size={14} />
             {t.clearFilters}
@@ -717,6 +770,27 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                   </Button>
                 </div>
               </div>
+              {/* فلتر الفرع - ضيفه بعد فلتر الحالة أو في أي مكان مناسب */}
+<div className="space-y-2">
+  <label className="text-sm font-medium flex items-center gap-1">
+    <Building2 size={14} className="text-primary" />
+    {language === 'ar' ? 'الفرع' : 'Branch'}
+  </label>
+  <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+    <SelectTrigger>
+      <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select Branch'} />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">{language === 'ar' ? 'جميع الفروع' : 'All Branches'}</SelectItem>
+      {branchesData?.map((branch: any) => (
+        <SelectItem key={branch.id} value={branch.id.toString()}>
+          {branch.name}
+          {!branch.active && ` (${language === 'ar' ? 'غير نشط' : 'Inactive'})`}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
             </div>
           </CardContent>
         </Card>
@@ -746,212 +820,235 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
       <Card>
         <CardContent className="p-0">
           <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead 
-                    className="min-w-[150px] cursor-pointer hover:bg-muted/80"
-                    onClick={() => {
-                      if (sortField === 'employee') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('employee');
-                        setSortDirection('asc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-1">
-                      {t.employee}
-                      {sortField === 'employee' && (
-                        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="min-w-[120px] cursor-pointer hover:bg-muted/80"
-                    onClick={() => {
-                      if (sortField === 'opened_at') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('opened_at');
-                        setSortDirection('desc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-1">
-                      {t.openedAt}
-                      {sortField === 'opened_at' && (
-                        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px]">{t.closedAt}</TableHead>
-                  <TableHead className="min-w-[100px]">{t.duration}</TableHead>
-                  <TableHead className="min-w-[100px] text-right">{t.openingBalance}</TableHead>
-                  <TableHead 
-                    className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
-                    onClick={() => {
-                      if (sortField === 'cash_sales') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('cash_sales');
-                        setSortDirection('desc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      {t.cashSales}
-                      {sortField === 'cash_sales' && (
-                        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
-                    onClick={() => {
-                      if (sortField === 'card_sales') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('card_sales');
-                        setSortDirection('desc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      {t.cardSales}
-                      {sortField === 'card_sales' && (
-                        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] text-right">{t.expected}</TableHead>
-                  <TableHead className="min-w-[100px] text-right">{t.actual}</TableHead>
-                  <TableHead 
-                    className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
-                    onClick={() => {
-                      if (sortField === 'difference') {
-                        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('difference');
-                        setSortDirection('desc');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      {t.difference}
-                      {sortField === 'difference' && (
-                        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[100px]">{t.status}</TableHead>
-                  <TableHead className="min-w-[80px] text-center">{t.actions}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={13} className="text-center py-12">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <span className="text-muted-foreground">{t.loading}</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : sortedAndFilteredShifts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={13} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-2">
-                        <Search className="h-12 w-12 text-muted-foreground/20" />
-                        <p className="text-muted-foreground">{t.noData}</p>
-                        {hasActiveFilters && (
-                          <Button variant="link" onClick={() => {
-                            setGlobalSearch('');
-                            setStatusFilter('all');
-                            setDateFilter('all');
-                            setStartHour('');
-                            setEndHour('');
-                            setMinAmount('');
-                            setMaxAmount('');
-                            setEmployeeFilter('');
-                          }}>
-                            {t.clearFilters}
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  sortedAndFilteredShifts.map((shift: Shift) => (
-                    <TableRow 
-                      key={shift.id} 
-                      className="hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => {
-                        setSelectedShift(shift);
-                        setShowDetails(true);
-                      }}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User size={14} className="text-muted-foreground shrink-0" />
-                          <span className="font-medium truncate">{shift.employee}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span>{formatDateTime(shift.opened_at)}</span>
-                          <span className="text-xs text-muted-foreground">
-                            <Timer size={10} className="inline mr-1" />
-                            {formatTime(shift.opened_at)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {formatDateTime(shift.closed_at)}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {getShiftDuration(shift)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">
-                        {formatNumber(shift.opening_balance)}
-                      </TableCell>
-                      <TableCell className="text-right text-emerald-600 font-medium whitespace-nowrap">
-                        {formatNumber(shift.cash_sales)}
-                      </TableCell>
-                      <TableCell className="text-right text-blue-600 font-medium whitespace-nowrap">
-                        {formatNumber(shift.card_sales)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">
-                        {formatNumber(shift.expected_amount)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium whitespace-nowrap">
-                        {formatNumber(shift.actual_amount)}
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        {getDifferenceBadge(shift.difference)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {getStatusBadge(shift.status)}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 hover:bg-primary/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedShift(shift);
-                            setShowDetails(true);
-                          }}
-                        >
-                          <Eye size={16} />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <Table>
+  <TableHeader className="bg-muted/50">
+    <TableRow>
+      <TableHead 
+        className="min-w-[150px] cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'employee') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('employee');
+            setSortDirection('asc');
+          }
+        }}
+      >
+        <div className="flex items-center gap-1">
+          {t.employee}
+          {sortField === 'employee' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      <TableHead 
+        className="min-w-[120px] cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'opened_at') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('opened_at');
+            setSortDirection('desc');
+          }
+        }}
+      >
+        <div className="flex items-center gap-1">
+          {t.openedAt}
+          {sortField === 'opened_at' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      <TableHead className="min-w-[120px]">{t.closedAt}</TableHead>
+      <TableHead className="min-w-[100px]">{t.duration}</TableHead>
+      <TableHead className="min-w-[100px] text-right">{t.openingBalance}</TableHead>
+      <TableHead 
+        className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'cash_sales') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('cash_sales');
+            setSortDirection('desc');
+          }
+        }}
+      >
+        <div className="flex items-center justify-end gap-1">
+          {t.cashSales}
+          {sortField === 'cash_sales' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      <TableHead 
+        className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'card_sales') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('card_sales');
+            setSortDirection('desc');
+          }
+        }}
+      >
+        <div className="flex items-center justify-end gap-1">
+          {t.cardSales}
+          {sortField === 'card_sales' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      {/* عمود المحفظة الإلكترونية الجديد */}
+      <TableHead 
+        className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'wallet_sales') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('wallet_sales');
+            setSortDirection('desc');
+          }
+        }}
+      >
+        <div className="flex items-center justify-end gap-1">
+          {t.walletSales || 'محفظة'}
+          {sortField === 'wallet_sales' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      <TableHead className="min-w-[100px] text-right">{t.expected}</TableHead>
+      <TableHead className="min-w-[100px] text-right">{t.actual}</TableHead>
+      <TableHead 
+        className="min-w-[100px] text-right cursor-pointer hover:bg-muted/80"
+        onClick={() => {
+          if (sortField === 'difference') {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortField('difference');
+            setSortDirection('desc');
+          }
+        }}
+      >
+        <div className="flex items-center justify-end gap-1">
+          {t.difference}
+          {sortField === 'difference' && (
+            sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+          )}
+        </div>
+      </TableHead>
+      <TableHead className="min-w-[100px]">{t.status}</TableHead>
+      <TableHead className="min-w-[80px] text-center">{t.actions}</TableHead>
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    {isLoading ? (
+      <TableRow>
+        <TableCell colSpan={14} className="text-center py-12"> {/* زيادة colSpan إلى 14 */}
+          <div className="flex items-center justify-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="text-muted-foreground">{t.loading}</span>
+          </div>
+        </TableCell>
+      </TableRow>
+    ) : sortedAndFilteredShifts.length === 0 ? (
+      <TableRow>
+        <TableCell colSpan={14} className="text-center py-12"> {/* زيادة colSpan إلى 14 */}
+          <div className="flex flex-col items-center gap-2">
+            <Search className="h-12 w-12 text-muted-foreground/20" />
+            <p className="text-muted-foreground">{t.noData}</p>
+            {hasActiveFilters && (
+              <Button variant="link" onClick={() => {
+                setGlobalSearch('');
+                setStatusFilter('all');
+                setDateFilter('all');
+                setStartHour('');
+                setEndHour('');
+                setMinAmount('');
+                setMaxAmount('');
+                setEmployeeFilter('');
+              }}>
+                {t.clearFilters}
+              </Button>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+    ) : (
+      sortedAndFilteredShifts.map((shift: Shift) => (
+        <TableRow 
+          key={shift.id} 
+          className="hover:bg-muted/50 cursor-pointer transition-colors"
+          onClick={() => {
+            setSelectedShift(shift);
+            setShowDetails(true);
+          }}
+        >
+          <TableCell>
+            <div className="flex items-center gap-2">
+              <User size={14} className="text-muted-foreground shrink-0" />
+              <span className="font-medium truncate">{shift.employee}</span>
+            </div>
+          </TableCell>
+          <TableCell className="text-sm whitespace-nowrap">
+            <div className="flex flex-col">
+              <span>{formatDateTime(shift.opened_at)}</span>
+              <span className="text-xs text-muted-foreground">
+                <Timer size={10} className="inline mr-1" />
+                {formatTime(shift.opened_at)}
+              </span>
+            </div>
+          </TableCell>
+          <TableCell className="text-sm whitespace-nowrap">
+            {formatDateTime(shift.closed_at)}
+          </TableCell>
+          <TableCell className="text-sm whitespace-nowrap">
+            {getShiftDuration(shift)}
+          </TableCell>
+          <TableCell className="text-right font-medium whitespace-nowrap">
+            {formatNumber(shift.opening_balance)}
+          </TableCell>
+          <TableCell className="text-right text-emerald-600 font-medium whitespace-nowrap">
+            {formatNumber(shift.cash_sales)}
+          </TableCell>
+          <TableCell className="text-right text-blue-600 font-medium whitespace-nowrap">
+            {formatNumber(shift.card_sales)}
+          </TableCell>
+          {/* عمود المحفظة الإلكترونية الجديد */}
+          <TableCell className="text-right text-purple-600 font-medium whitespace-nowrap">
+            {formatNumber(shift.wallet_sales || 0)}
+          </TableCell>
+          <TableCell className="text-right font-medium whitespace-nowrap">
+            {formatNumber(shift.expected_amount)}
+          </TableCell>
+          <TableCell className="text-right font-medium whitespace-nowrap">
+            {formatNumber(shift.actual_amount)}
+          </TableCell>
+          <TableCell className="text-right whitespace-nowrap">
+            {getDifferenceBadge(shift.difference)}
+          </TableCell>
+          <TableCell className="whitespace-nowrap">
+            {getStatusBadge(shift.status)}
+          </TableCell>
+          <TableCell className="text-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-primary/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedShift(shift);
+                setShowDetails(true);
+              }}
+            >
+              <Eye size={16} />
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))
+    )}
+  </TableBody>
+</Table>
           </div>
 
           {/* Summary Row */}

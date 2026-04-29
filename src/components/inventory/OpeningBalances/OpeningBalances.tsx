@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Package, Plus, Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useProducts, useBranches, useWarehouses } from './hooks/useProducts';
+import { useProducts } from './hooks/useProducts';
 import { useSaveOpeningBalances, useDeleteOpeningBalance } from './hooks/useOpeningBalances';
 import { ProductFilters } from './components/ProductFilters';
 import { ProductList } from './components/ProductList';

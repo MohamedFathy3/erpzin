@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { purchaseReturnService } from '@/services/purchaseReturnService';
 import type { Supplier, SupplierDto } from '@/types/supplier';
 import { supplierService } from '@/services/supplierservice';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
@@ -22,6 +23,7 @@ import api from '@/lib/api';
 import { toast } from '@/components/ui/use-toast';
 import { useReactToPrint } from 'react-to-print';
 import PurchaseInvoiceTemplate from '@/components/purchasing/PurchaseInvoiceTemplate';
+import { useApp } from '@/contexts/AppContext';
 
 import {
   Plus, FileText, Building2, Phone,
@@ -98,6 +100,7 @@ const Purchasing = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
+  const { currentBranch } = useApp(); // ← أضف هذا السطر
 
   // دالة الطباعة
   const handlePrint = useReactToPrint({
@@ -114,13 +117,25 @@ const Purchasing = () => {
     isLoading: invoicesLoading,
     refetch: refetchInvoices
   } = useQuery({
-    queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices],
-    queryFn: () =>
-      purchaseInvoiceService.getInvoices({
+    queryKey: ['purchase-invoices', currentPage, invoiceFilters, showAllInvoices, currentBranch?.id],
+    queryFn: async () => {
+      console.log('🔍 Current branch in Purchasing:', currentBranch);
+      console.log('🔍 Branch ID (string):', currentBranch?.id);
+      
+      const apiFilters: any = { ...invoiceFilters };
+      
+      if (currentBranch?.id) {
+        apiFilters.branch_id = currentBranch.id;
+      }
+      
+      console.log('📦 Final filters to API:', apiFilters);
+      
+      return purchaseInvoiceService.getInvoices({
         page: currentPage,
         showAll: showAllInvoices,
-        filters: invoiceFilters,
-      }),
+        filters: apiFilters,
+      });
+    },
   });
 
   // ✅ تحويل البيانات إلى الشكل المطلوب للجدول (بما يتوافق مع API المسطح)
@@ -319,8 +334,15 @@ const Purchasing = () => {
     refetchSuppliers();
     queryClient.invalidateQueries({ queryKey: ['purchase_orders_stats'] });
     queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
+        queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
+
   };
 
+  useEffect(() => {
+  if (activeTab === 'invoices') {
+    refetchInvoices();
+  }
+}, [currentBranch?.id, activeTab]);
   // ========== Invoice filter fields ==========
   const invoiceFilterFields: FilterField[] = [
     {
