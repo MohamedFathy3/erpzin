@@ -7,7 +7,7 @@ import { Package, Plus, Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useApp } from '@/contexts/AppContext';
-import { useProducts } from './hooks/useProducts';
+import { useProductsWithBalance } from './hooks/useProducts';  // ✅ تغيير الاستيراد
 import { useSaveOpeningBalances, useDeleteOpeningBalance } from './hooks/useOpeningBalances';
 import { ProductFilters } from './components/ProductFilters';
 import { ProductList } from './components/ProductList';
@@ -40,6 +40,17 @@ const OpeningBalances: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(16);
   
+
+
+
+  const handleBalanceSaved = () => {
+  // تحديث البيانات في الجدول
+  refetch();
+  // لو عاوز ترجع للصفحة الأولى
+  setCurrentPage(1);
+};
+
+
   // ✅ جلب الفروع من الـ API
   const { data: branches = [] } = useQuery({
     queryKey: ['branches-opening'],
@@ -96,12 +107,12 @@ const OpeningBalances: React.FC = () => {
     enabled: !!selectedBranch && selectedBranch !== 'all',
   });
   
-  // Data fetching with pagination
+  // ✅ Data fetching with pagination - استخدم الهوك الجديد
   const { 
     data: productsResponse, 
     isLoading, 
     refetch 
-  } = useProducts({
+  } = useProductsWithBalance({  // ✅ تغيير اسم الهوك
     searchQuery,
     selectedBranch,
     selectedWarehouse,
@@ -258,9 +269,19 @@ const OpeningBalances: React.FC = () => {
               <Loader2 className="animate-spin text-primary" size={32} />
             </div>
           ) : activeView === 'list' ? (
-            <ProductList products={products} onDelete={deleteBalance.mutate} />
+            <ProductList 
+              products={products} 
+              onDelete={deleteBalance.mutate}
+              isDeleting={deleteBalance.isPending}
+              deletingId={deleteBalance.variables as number | null}
+            />
           ) : (
-            <ProductGrid products={products} onDelete={deleteBalance.mutate} />
+            <ProductGrid 
+              products={products} 
+              onDelete={deleteBalance.mutate}
+              isDeleting={deleteBalance.isPending}
+              deletingId={deleteBalance.variables as number | null}
+            />
           )}
           
           {/* Pagination */}
@@ -338,6 +359,7 @@ const OpeningBalances: React.FC = () => {
         selectedBranch={selectedBranch}
         selectedWarehouse={selectedWarehouse}
         onSave={saveBalances.mutate}
+        onSuccess={handleBalanceSaved}
         isSaving={saveBalances.isPending}
       />
       

@@ -1,58 +1,50 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // hooks/useProducts.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery } from '@tanstack/react-query';
 import { ProductService } from '../services/productService';
 import { Product } from '../types';
-import api from '@/lib/api';
 
 const productService = new ProductService();
 
-// ✅ هوك للبحث بالاسم
-export const useSearchProductsByName = (searchQuery: string, enabled: boolean = true) => {
-  return useQuery<Product[]>({
-    queryKey: ['products', 'name', searchQuery],
-    queryFn: () => productService.searchProductsByName(searchQuery),
-    enabled: enabled && searchQuery.length > 0 && searchQuery !== '___empty___',
-  });
-};
-
-// ✅ هوك للبحث بالـ SKU
-export const useSearchProductsBySku = (searchQuery: string, enabled: boolean = true) => {
-  return useQuery<Product[]>({
-    queryKey: ['products', 'sku', searchQuery],
-    queryFn: () => productService.searchProductsBySku(searchQuery),
-    enabled: enabled && searchQuery.length > 0 && searchQuery !== '___empty___',
-  });
-};
-
-// ✅ هوك للبحث بالباركود
-export const useSearchProductsByBarcode = (searchQuery: string, enabled: boolean = true) => {
-  return useQuery<Product[]>({
-    queryKey: ['products', 'barcode', searchQuery],
-    queryFn: () => productService.searchProductsByBarcode(searchQuery),
-    enabled: enabled && searchQuery.length > 0 && searchQuery !== '___empty___',
-  });
-};
-
-// ✅ الهوك الرئيسي المعدل (مع Pagination)
-export const useProducts = (filters: {
+// ✅ هوك جلب المنتجات اللي عندها رصيد (لـ OpeningBalances)
+export const useProductsWithBalance = (filters: {
   searchQuery: string;
   selectedBranch: string;
   selectedWarehouse: string;
-  hasBalance?: boolean;
   page?: number;
   perPage?: number;
 }) => {
   return useQuery({
-    queryKey: ['products', filters.searchQuery, filters.selectedBranch, filters.selectedWarehouse, filters.page, filters.perPage],
-    queryFn: () => productService.getProducts({
+    queryKey: ['products-with-balance', filters.searchQuery, filters.selectedBranch, filters.selectedWarehouse, filters.page, filters.perPage],
+    queryFn: () => productService.getProductsWithBalance({
       searchQuery: filters.searchQuery,
       branchId: filters.selectedBranch,
       warehouseId: filters.selectedWarehouse,
-      hasBalance: filters.hasBalance ?? false,
       page: filters.page || 1,
       perPage: filters.perPage || 16
     }),
-    enabled: true
+    enabled: true,
+    staleTime: 0,
+    gcTime: 0
+  });
+};
+
+// ✅ هوك البحث العام للمودال
+export const useSearchProducts = (filters: {
+  searchQuery: string;
+  selectedBranch: string;
+  selectedWarehouse: string;
+  searchType: 'name' | 'sku' | 'barcode';
+  enabled: boolean;
+}) => {
+  return useQuery<Product[]>({
+    queryKey: ['search-products', filters.searchQuery, filters.selectedBranch, filters.selectedWarehouse, filters.searchType],
+    queryFn: () => productService.searchProducts({
+      searchQuery: filters.searchQuery,
+      searchType: filters.searchType
+    }),
+    enabled: filters.enabled && filters.searchQuery.length > 0 && filters.searchQuery !== '___empty___',
+    staleTime: 0,
+    gcTime: 0
   });
 };

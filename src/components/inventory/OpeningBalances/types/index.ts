@@ -22,6 +22,8 @@ export interface Product {
   name: string;
   name_ar?: string;
   sku: string;
+  category_id?: number;
+unit_id?: number;
   cost: number;
   stock?: number;
   barcode?: string;
@@ -43,13 +45,17 @@ export interface ImportPreviewItem {
 
 export interface SelectedProduct {
   product: Product;
-  unitId?: number;
+  unit_id?: number;
   unitName?: string;
+  unitId?: number;
   colorId?: number;
   colorName?: string;
   quantity: number;
   cost: number;
   price: number;
+  warehouse_id?: number;
+  branch_id?: number;
+  barcode?: string;
 }
 
 export interface Branch {

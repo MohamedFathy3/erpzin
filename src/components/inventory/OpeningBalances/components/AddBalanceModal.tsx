@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+// components/AddBalanceModal.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Building2, Package, Search, X, Save, Loader2, Barcode, Hash } from 'lucide-react';
+import { Calendar, Building2, Package, Search, X, Save, Loader2, Barcode, Hash, Warehouse } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useProducts, useSearchProductsByName, useSearchProductsBySku, useSearchProductsByBarcode } from '../hooks/useProducts';
+import { useSearchProducts } from '../hooks/useProducts';
 import { SelectedProductsTable } from './SelectedProductsTable';
 import { VariantSelectionModal } from './VariantSelectionModal';
-import { Product, Branch, Warehouse, SelectedProduct } from '../types';
+import { Product, Branch, Warehouse as WarehouseType, SelectedProduct } from '../types';
+import api from '@/lib/api';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';  // ✅ إضافة الـ toast
 
 interface AddBalanceModalProps {
   open: boolean;
@@ -18,11 +23,11 @@ interface AddBalanceModalProps {
   selectedProducts: SelectedProduct[];
   onProductsChange: (products: SelectedProduct[]) => void;
   branches: Branch[];
-  warehouses: Warehouse[];
   selectedBranch: string;
   selectedWarehouse: string;
   onSave: (products: SelectedProduct[]) => void;
   isSaving: boolean;
+  onSuccess?: () => void;  // ✅ إضافة callback للنجاح
 }
 
 type SearchType = 'name' | 'sku' | 'barcode';
@@ -32,88 +37,91 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   onOpenChange,
   selectedProducts,
   onProductsChange,
-  selectedBranch,
   branches = [], 
-  warehouses = [], 
+  selectedBranch,
   selectedWarehouse,
   onSave,
-  isSaving
+  isSaving: externalIsSaving,
+  onSuccess  // ✅ استقبال الـ callback
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<SearchType>('name');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
+  const [localSelectedBranch, setLocalSelectedBranch] = useState(selectedBranch);
+  const [localSelectedWarehouse, setLocalSelectedWarehouse] = useState(selectedWarehouse);
+  const [isInternalSaving, setIsInternalSaving] = useState(false);
   
-  // ✅ هوك البحث العام (لما ميكونش في بحث محدد)
-  const { data: generalProducts = [] } = useProducts({
-    searchQuery: searchQuery || '___empty___',
-    selectedBranch,
-    selectedWarehouse
+  const isSaving = externalIsSaving || isInternalSaving;
+
+  // ✅ جلب المخازن بناءً على الفرع المختار
+  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useQuery({
+    queryKey: ['modal-warehouses', localSelectedBranch],
+    queryFn: async () => {
+      if (!localSelectedBranch || localSelectedBranch === 'all') {
+        return [];
+      }
+      
+      try {
+        const response = await api.post('/warehouse/index', {
+          filters: { 
+            active: true,
+            branch_id: parseInt(localSelectedBranch, 10)
+          },
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 1000,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching warehouses:', error);
+        return [];
+      }
+    },
+    enabled: open && !!localSelectedBranch && localSelectedBranch !== 'all',
+  });
+  
+  // ✅ هوك البحث المستقل
+  const { data: searchResults = [], isLoading: isSearching } = useSearchProducts({
+    searchQuery: searchQuery,
+    selectedBranch: localSelectedBranch,
+    selectedWarehouse: localSelectedWarehouse,
+    searchType: searchType,
+    enabled: open
   });
 
-  // ✅ هوكات البحث المنفصلة
-  const { data: nameResults = [], isLoading: nameLoading } = useSearchProductsByName(
-    searchType === 'name' ? searchQuery : '',
-    searchType === 'name' && searchQuery.length > 0
-  );
+  const filteredProducts = searchResults.slice(0, 10);
 
-  const { data: skuResults = [], isLoading: skuLoading } = useSearchProductsBySku(
-    searchType === 'sku' ? searchQuery : '',
-    searchType === 'sku' && searchQuery.length > 0
-  );
-
-  const { data: barcodeResults = [], isLoading: barcodeLoading } = useSearchProductsByBarcode(
-    searchType === 'barcode' ? searchQuery : '',
-    searchType === 'barcode' && searchQuery.length > 0
-  );
-
-  // ✅ اختيار النتائج حسب نوع البحث
-  const getFilteredProducts = (): Product[] => {
-    if (!searchQuery) return [];
-    
-    switch (searchType) {
-      case 'name':
-        return nameResults;
-      case 'sku':
-        return skuResults;
-      case 'barcode':
-        return barcodeResults;
-      default:
-        return generalProducts.filter(p => {
-          const searchLower = searchQuery.toLowerCase();
-          return (
-            (p.name && p.name.toLowerCase().includes(searchLower)) ||
-            (p.name_ar && p.name_ar.toLowerCase().includes(searchLower)) ||
-            (p.sku && p.sku.toLowerCase().includes(searchLower)) ||
-            (p.barcode && p.barcode.toLowerCase().includes(searchLower))
-          );
-        });
+  // ✅ لما يتغير الفرع، نضبط المخزن على أول مخزن متاح أو 'all'
+  useEffect(() => {
+    if (warehouses.length > 0 && localSelectedWarehouse === 'all') {
+      setLocalSelectedWarehouse(warehouses[0].id.toString());
+    } else if (warehouses.length === 0 && localSelectedBranch !== 'all') {
+      setLocalSelectedWarehouse('all');
     }
-  };
-
-  const isLoading = () => {
-    if (!searchQuery) return false;
-    switch (searchType) {
-      case 'name': return nameLoading;
-      case 'sku': return skuLoading;
-      case 'barcode': return barcodeLoading;
-      default: return false;
-    }
-  };
-
-  const filteredProducts = getFilteredProducts().slice(0, 10);
+  }, [warehouses, localSelectedBranch]);
 
   const handleAddProduct = (product: Product) => {
     if (product.units && product.units.length > 0) {
       setSelectedProductForVariant(product);
     } else {
+      const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : null;
       const newProduct: SelectedProduct = {
         product,
         quantity: 1,
         cost: product.cost,
-        price: product.price || (product.cost || 0) * 1.3
+        price: product.price || (product.cost || 0) * 1.3,
+        unit_id: product.unit_id || null,
+        warehouse_id: warehouseId || undefined,
+        branch_id: localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined
       };
       onProductsChange([...selectedProducts, newProduct]);
     }
@@ -138,6 +146,107 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     const updated = [...selectedProducts];
     updated[index].cost = cost;
     onProductsChange(updated);
+  };
+
+  // ✅ دالة تحضير البيانات للإرسال
+  const prepareItemsForSave = () => {
+    const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : null;
+    const branchId = localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : null;
+    
+    return selectedProducts.map(item => {
+      if (!item.product?.id) {
+        console.error('Product missing id:', item);
+        return null;
+      }
+      
+      return {
+        product_id: item.product.id,
+        warehouse_id: item.warehouse_id || warehouseId,
+        branch_id: item.branch_id || branchId,
+        unit_id: item.unitId || item.unit_id || null,
+        color_id: item.colorId || null,
+        stock: item.quantity,
+        cost: item.cost
+      };
+    }).filter(item => item !== null && item.warehouse_id !== null);
+  };
+
+  // ✅ دالة الحفظ باستخدام API products/add-stock (المعدلة)
+  const handleSave = async () => {
+    const items = prepareItemsForSave();
+    
+    if (items.length === 0) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'لا توجد منتجات صالحة للحفظ' : 'No valid products to save',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const missingWarehouse = items.some(item => !item.warehouse_id);
+    if (missingWarehouse) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يجب تحديد مستودع لجميع المنتجات' : 'Please select a warehouse for all products',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsInternalSaving(true);
+    
+    try {
+      const payload = { items };
+      console.log('📦 Sending to products/add-stock:', payload);
+      
+      const response = await api.post('/products/add-stock', payload);
+      
+      // ✅ التحقق من نجاح العملية
+      if (response.data.status === 200 || response.data.success || response.data.result === 'Success' || response.data.message === 'Stock added successfully') {
+        
+        // ✅ عرض رسالة نجاح
+        toast({
+          title: language === 'ar' ? 'تم بنجاح' : 'Success',
+          description: response.data.message || (language === 'ar' ? 'تم إضافة الرصيد بنجاح' : 'Stock added successfully'),
+          variant: 'default',
+        });
+        
+        // ✅ تحديث كاش المنتجات
+        await queryClient.invalidateQueries({ queryKey: ['products-with-balance'] });
+        
+        // ✅ استدعاء onSave و onSuccess
+        onSave(selectedProducts);
+        if (onSuccess) {
+          onSuccess();
+        }
+        
+        // ✅ إعادة تعيين القائمة
+        onProductsChange([]);
+        
+        // ✅ إغلاق المودال
+        onOpenChange(false);
+        
+      } else {
+        // ✅ عرض رسالة خطأ من الـ API
+        toast({
+          title: language === 'ar' ? 'خطأ' : 'Error',
+          description: response.data.message || response.data.error || (language === 'ar' ? 'حدث خطأ أثناء الحفظ' : 'An error occurred while saving'),
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      console.error('API Error:', error);
+      
+      // ✅ عرض رسالة خطأ
+      toast({
+        title: language === 'ar' ? 'خطأ في الاتصال' : 'Connection Error',
+        description: error?.response?.data?.message || error?.message || (language === 'ar' ? 'حدث خطأ في الاتصال بالسيرفر' : 'Connection error occurred'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsInternalSaving(false);
+    }
   };
 
   const totalQuantity = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
@@ -207,6 +316,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="bg-background"
+                  disabled={isSaving}
                 />
               </div>
               
@@ -215,7 +325,14 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   <Building2 size={14} className="text-muted-foreground" />
                   {t.branch}
                 </Label>
-                <Select value={selectedBranch} onValueChange={() => {}}>
+                <Select 
+                  value={localSelectedBranch} 
+                  onValueChange={(value) => {
+                    setLocalSelectedBranch(value);
+                    setLocalSelectedWarehouse('all');
+                  }} 
+                  disabled={isSaving}
+                >
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder={t.selectBranch} />
                   </SelectTrigger>
@@ -232,11 +349,22 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
               
               <div>
                 <Label className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                  <Warehouse size={14} className="text-muted-foreground" />
                   {t.warehouse}
                 </Label>
-                <Select value={selectedWarehouse} onValueChange={() => {}}>
+                <Select 
+                  value={localSelectedWarehouse} 
+                  onValueChange={setLocalSelectedWarehouse} 
+                  disabled={isSaving || isLoadingWarehouses || localSelectedBranch === 'all'}
+                >
                   <SelectTrigger className="bg-background">
-                    <SelectValue placeholder={t.selectWarehouse} />
+                    <SelectValue placeholder={
+                      isLoadingWarehouses 
+                        ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...')
+                        : (localSelectedBranch === 'all' 
+                          ? (language === 'ar' ? 'اختر فرعاً أولاً' : 'Select branch first')
+                          : t.selectWarehouse)
+                    } />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t.allWarehouses}</SelectItem>
@@ -247,6 +375,11 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
+                {localSelectedBranch !== 'all' && warehouses.length === 0 && !isLoadingWarehouses && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    {language === 'ar' ? 'لا توجد مخازن لهذا الفرع' : 'No warehouses found for this branch'}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -258,7 +391,6 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   {t.products}
                 </h3>
                 
-                {/* ✅ أزرار تبديل نوع البحث */}
                 <div className="flex gap-1">
                   <Button
                     type="button"
@@ -266,6 +398,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                     variant={searchType === 'name' ? 'default' : 'outline'}
                     onClick={() => handleSearchTypeChange('name')}
                     className="h-8 px-3"
+                    disabled={isSaving}
                   >
                     <Package size={12} className="me-1" />
                     {t.name}
@@ -277,6 +410,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                     variant={searchType === 'sku' ? 'default' : 'outline'}
                     onClick={() => handleSearchTypeChange('sku')}
                     className="h-8 px-3"
+                    disabled={isSaving}
                   >
                     <Hash size={12} className="me-1" />
                     SKU
@@ -288,6 +422,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                     variant={searchType === 'barcode' ? 'default' : 'outline'}
                     onClick={() => handleSearchTypeChange('barcode')}
                     className="h-8 px-3"
+                    disabled={isSaving}
                   >
                     <Barcode size={12} className="me-1" />
                     {language === 'ar' ? 'باركود' : 'Barcode'}
@@ -302,17 +437,18 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 bg-background"
+                  disabled={isSaving}
                   autoFocus
                 />
               </div>
 
-              {isLoading() && (
+              {isSearching && (
                 <div className="text-center py-4">
                   <Loader2 className="animate-spin mx-auto text-primary" size={24} />
                 </div>
               )}
 
-              {searchQuery && !isLoading() && filteredProducts.length > 0 && (
+              {searchQuery && !isSearching && filteredProducts.length > 0 && (
                 <div className="border rounded-lg overflow-hidden max-h-[250px] overflow-y-auto mb-4">
                   {filteredProducts.map((product) => (
                     <div
@@ -356,7 +492,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                 </div>
               )}
 
-              {searchQuery && !isLoading() && filteredProducts.length === 0 && (
+              {searchQuery && !isSearching && filteredProducts.length === 0 && (
                 <div className="text-center py-4 text-muted-foreground border rounded-lg">
                   {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products found'}
                 </div>
@@ -382,13 +518,13 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
             </div>
             
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)} size="sm">
+              <Button variant="outline" onClick={() => onOpenChange(false)} size="sm" disabled={isSaving}>
                 <X size={14} className="me-1.5" />
                 {t.cancel}
               </Button>
               
               <Button 
-                onClick={() => onSave(selectedProducts)}
+                onClick={handleSave}
                 disabled={selectedProducts.length === 0 || isSaving}
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700"
                 size="sm"
@@ -405,6 +541,9 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
         product={selectedProductForVariant}
         onClose={() => setSelectedProductForVariant(null)}
         onAdd={(product, unit, color, quantity) => {
+          const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : undefined;
+          const branchId = localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined;
+          
           const newProduct: SelectedProduct = {
             product,
             unitId: unit?.unit_id,
@@ -413,7 +552,9 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
             colorName: color?.color,
             quantity,
             cost: unit ? parseFloat(unit.cost_price) : (product.cost || 0),
-            price: unit ? parseFloat(unit.sell_price) : (product.price || (product.cost || 0) * 1.3)
+            price: unit ? parseFloat(unit.sell_price) : (product.price || (product.cost || 0) * 1.3),
+            warehouse_id: warehouseId,
+            branch_id: branchId
           };
           
           const existingIndex = selectedProducts.findIndex(p => 
