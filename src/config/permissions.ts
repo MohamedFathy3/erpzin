@@ -17,7 +17,7 @@ export const PAGES: PagePermission[] = [
     label: 'Dashboard',
     labelAr: 'لوحة التحكم',
     icon: 'LayoutDashboard',
-    allowedRoles: ['admin',  'Manager','Cashier', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
+    allowedRoles: ['admin',  'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
   },
   {
     id: 'pos',
