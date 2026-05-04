@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Crown, Star, Package, Search, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Printer, Crown, Star, Package, Search, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 
 // ========== Types ==========
@@ -118,6 +118,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const [searchQuery, setSearchQuery] = useState("");
   const [showProductList, setShowProductList] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // ========== State ==========
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -311,117 +312,93 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen && !!formData.warehouse_id
   });
 
-
-// أضف الـ useRef للـ input
-const inputRef = useRef<HTMLInputElement>(null);
-
-// أضف دالة handleKeyDown للـ Enter
-const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === 'Enter' && products.length === 1 && searchQuery) {
-    // لو في منتج واحد بالضبط وضغط Enter، أضفه مباشرة
-    addProduct(products[0]);
-    e.preventDefault();
-  } else if (e.key === 'Enter' && products.length > 1 && searchQuery) {
-    // لو في أكتر من منتج وضغط Enter، أضف أول منتج
-    addProduct(products[0]);
-    e.preventDefault();
-  }
-};
-
-  // 7. جلب المنتجات مع البحث - كل حاجة ب key بتاعها
-// 7. جلب المنتجات مع البحث - تصحيح استلام البيانات
-const { data: products = [], isLoading: loadingProducts } = useQuery({
-  queryKey: ['products-form', formData.warehouse_id, searchQuery],
-  queryFn: async () => {
-    try {
-      // بناء فلتر البحث
-      let filters: any = { active: true };
-      
-      if (searchQuery && searchQuery.trim()) {
-        const query = searchQuery.trim();
+  // 7. جلب المنتجات مع البحث
+  const { data: products = [], isLoading: loadingProducts } = useQuery({
+    queryKey: ['products-form', formData.warehouse_id, searchQuery],
+    queryFn: async () => {
+      try {
+        let filters: any = { active: true };
         
-        if (/^\d+$/.test(query)) {
-          filters.barcode = query;
-        } 
-        else if (query.includes('-') || /^[A-Z0-9\-]+$/i.test(query)) {
-          filters.sku = query;
-        }
-        else {
-          filters.name = query;
-        }
-      }
-      
-      const response = await api.post('/product/index', {
-        filters: filters,
-        orderBy: 'id',
-        orderByDirection: 'asc',
-        perPage: 50,
-        paginate: true
-      });
-      
-      console.log('API Response:', response.data); // للتأكد من البيانات
-      
-      if (response.data.result === 'Success') {
-        let productsData = response.data.data || [];
-        
-        console.log('Products before filter:', productsData); // للتأكد
-        
-        if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !searchQuery.trim().includes('-')) {
-          const query = searchQuery.trim().toLowerCase();
-          productsData = productsData.filter((p: any) => 
-            p.name?.toLowerCase().includes(query) || 
-            p.name_ar?.toLowerCase().includes(query)
-          );
-        }
-        
-        // جلب المخزون لكل منتج
-        if (formData.warehouse_id && productsData.length > 0) {
-          const productIds = productsData.map((p: any) => p.id);
-          try {
-            const stockResponse = await api.post('/warehouse-stock/index', {
-              filters: { 
-                warehouse_id: Number(formData.warehouse_id),
-                product_id_in: productIds 
-              },
-              perPage: 1000,
-              paginate: false
-            });
-            
-            const stockMap = new Map();
-            if (stockResponse.data.result === 'Success') {
-              stockResponse.data.data?.forEach((stock: any) => {
-                stockMap.set(stock.product_id, stock.quantity);
-              });
-            }
-            
-            productsData = productsData.map((p: any) => ({
-              ...p,
-              stock: stockMap.get(p.id) || p.stock || 0
-            }));
-          } catch (stockError) {
-            console.error('Error fetching stock:', stockError);
-            // لو فشل جلب المخزون، استخدم stock الموجود في المنتج
-            productsData = productsData.map((p: any) => ({
-              ...p,
-              stock: p.stock || 0
-            }));
+        if (searchQuery && searchQuery.trim()) {
+          const query = searchQuery.trim();
+          
+          // كشف نوع البحث
+          if (/^\d+$/.test(query)) {
+            filters.barcode = query;
+          } 
+          else if (query.includes('-') || /^[A-Z0-9\-]+$/i.test(query)) {
+            filters.sku = query;
+          }
+          else {
+            filters.name = query;
           }
         }
         
-        console.log('Products after processing:', productsData); // للتأكد
-        return productsData;
+        const response = await api.post('/product/index', {
+          filters: filters,
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 50,
+          paginate: true
+        });
+        
+        if (response.data.result === 'Success') {
+          let productsData = response.data.data || [];
+          
+          // لو بحث بالاسم، فلترة الاسم العربي
+          if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !searchQuery.trim().includes('-')) {
+            const query = searchQuery.trim().toLowerCase();
+            productsData = productsData.filter((p: any) => 
+              p.name?.toLowerCase().includes(query) || 
+              p.name_ar?.toLowerCase().includes(query)
+            );
+          }
+          
+          // جلب المخزون
+          if (formData.warehouse_id && productsData.length > 0) {
+            const productIds = productsData.map((p: any) => p.id);
+            try {
+              const stockResponse = await api.post('/warehouse-stock/index', {
+                filters: { 
+                  warehouse_id: Number(formData.warehouse_id),
+                  product_id_in: productIds 
+                },
+                perPage: 1000,
+                paginate: false
+              });
+              
+              const stockMap = new Map();
+              if (stockResponse.data.result === 'Success') {
+                stockResponse.data.data?.forEach((stock: any) => {
+                  stockMap.set(stock.product_id, stock.quantity);
+                });
+              }
+              
+              productsData = productsData.map((p: any) => ({
+                ...p,
+                stock: stockMap.get(p.id) || p.stock || 0
+              }));
+            } catch (stockError) {
+              productsData = productsData.map((p: any) => ({
+                ...p,
+                stock: p.stock || 0
+              }));
+            }
+          }
+          
+          return productsData;
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        return [];
       }
-      return [];
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      toast.error(language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products');
-      return [];
-    }
-  },
-  enabled: isOpen && !!formData.warehouse_id,
-  staleTime: 30000
-});
+    },
+    enabled: isOpen && !!formData.warehouse_id,
+    staleTime: 0 // عشان يحدث فوراً مع كل بحث
+  });
 
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery && formData.warehouse_id) {
@@ -429,11 +406,20 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
           queryKey: ['products-form', formData.warehouse_id, searchQuery] 
         });
       }
-    }, 500);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery, formData.warehouse_id, queryClient]);
 
+  // دالة معالج الضغط على Enter
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && products.length > 0 && searchQuery) {
+      addProduct(products[0]);
+      e.preventDefault();
+    }
+  };
+
+  // ========== Set Default Currency & Tax ==========
   useEffect(() => {
     if (isOpen) {
       if (currencies.length > 0 && !formData.currency_id) {
@@ -536,6 +522,7 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
     }
     setSearchQuery("");
     setShowProductList(false);
+    inputRef.current?.focus();
   };
 
   // تحديث المنتج
@@ -583,60 +570,70 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
     setShowProductList(false);
   };
 
-  // إنشاء فاتورة
-  const createInvoiceMutation = useMutation({
-    mutationFn: async () => {
-      if (!formData.customer_id) {
-        throw new Error(language === 'ar' ? 'يجب اختيار العميل' : 'Customer is required');
-      }
-      if (items.length === 0) {
-        throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
-      }
-      if (!formData.currency_id) {
-        throw new Error(language === 'ar' ? 'يجب اختيار العملة' : 'Currency is required');
-      }
-      if (!formData.tax_id) {
-        throw new Error(language === 'ar' ? 'يجب اختيار الضريبة' : 'Tax is required');
-      }
-      if (!formData.warehouse_id) {
-        throw new Error(language === 'ar' ? 'يجب اختيار المخزن' : 'Warehouse is required');
-      }
+  // حفظ وطباعة
+  const handleSaveAndPrint = () => {
+    // نفس logic الحفظ مع طباعة
+    handleSave('print');
+  };
 
-      const payload = {
-        customer_id: Number(formData.customer_id),
-        sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
-        branch_id: formData.branch_id ? Number(formData.branch_id) : null,
-        warehouse_id: Number(formData.warehouse_id),
-        currency_id: Number(formData.currency_id),
-        tax_id: Number(formData.tax_id),
-        payment_method: formData.payment_method,
-        due_date: formData.due_date || null,
-        note: formData.notes || null,
-        items: items.map(item => ({
-          product_id: Number(item.product_id),
-          quantity: Number(item.quantity),
-          price: Number(item.unit_price)
-        }))
-      };
+  // دالة الحفظ الموحدة
+  const handleSave = async (action: 'save' | 'print' = 'save') => {
+    if (!formData.customer_id) {
+      toast.error(language === 'ar' ? 'يجب اختيار العميل' : 'Customer is required');
+      return;
+    }
+    if (items.length === 0) {
+      toast.error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
+      return;
+    }
+    if (!formData.currency_id) {
+      toast.error(language === 'ar' ? 'يجب اختيار العملة' : 'Currency is required');
+      return;
+    }
+    if (!formData.tax_id) {
+      toast.error(language === 'ar' ? 'يجب اختيار الضريبة' : 'Tax is required');
+      return;
+    }
+    if (!formData.warehouse_id) {
+      toast.error(language === 'ar' ? 'يجب اختيار المخزن' : 'Warehouse is required');
+      return;
+    }
 
-      console.log('📦 Sending payload to /sales-invoice/store:', JSON.stringify(payload, null, 2));
+    const payload = {
+      customer_id: Number(formData.customer_id),
+      sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
+      branch_id: formData.branch_id ? Number(formData.branch_id) : null,
+      warehouse_id: Number(formData.warehouse_id),
+      currency_id: Number(formData.currency_id),
+      tax_id: Number(formData.tax_id),
+      payment_method: formData.payment_method,
+      due_date: formData.due_date || null,
+      note: formData.notes || null,
+      items: items.map(item => ({
+        product_id: Number(item.product_id),
+        quantity: Number(item.quantity),
+        price: Number(item.unit_price)
+      }))
+    };
 
+    try {
       const response = await api.post('/sales-invoice/store', payload);
-      return response.data;
-    },
-    onSuccess: (data) => {
+      
       toast.success(language === 'ar' ? '✅ تم إنشاء الفاتورة بنجاح' : '✅ Invoice created successfully');
       
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['products-form'] });
       
+      if (action === 'print') {
+        // logic للطباعة
+        toast.info(language === 'ar' ? 'جاري تجهيز الطباعة...' : 'Preparing print...');
+      }
+      
       resetForm();
       onClose();
-    },
-    onError: (error: any) => {
+    } catch (error: any) {
       console.error('❌ Error creating invoice:', error.response?.data || error);
-      
       const errorMessage = error.response?.data?.message || error.message;
       toast.error(
         language === 'ar' 
@@ -644,7 +641,7 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
           : `❌ Error: ${errorMessage}`
       );
     }
-  });
+  };
 
   // ========== Render ==========
   return (
@@ -677,7 +674,7 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* ========== Main Form ========== */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Customer & Basic Info */}
+              {/* Customer & Basic Info - نفس الكود السابق */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -724,13 +721,10 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                       </SelectContent>
                     </Select>
                     
-                    {/* عرض نقاط الولاء */}
                     {formData.customer_id && (() => {
                       const customer = customers.find((c: Customer) => c.id === Number(formData.customer_id));
                       if (!customer) return null;
-                      
                       const earnedPoints = Math.floor(totals.totalAmount / 1000);
-                      
                       return (
                         <div className="mt-2 flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
                           <Crown size={16} className="text-amber-600" />
@@ -897,114 +891,112 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* حقل البحث المدمج */}
-               {/* حقل البحث المدمج */}
-<div className="relative" ref={searchRef}>
-  <div className="relative">
-    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-    <Input
-      ref={inputRef}
-      type="text"
-      placeholder={
-        !formData.warehouse_id 
-          ? (language === 'ar' ? '⚠️ اختر المخزن أولاً للبحث' : '⚠️ Select warehouse first to search')
-          : (language === 'ar' ? '🔍 بحث بالاسم أو الباركود أو SKU... (اضغط Enter للإضافة المباشرة)' : '🔍 Search by name, barcode or SKU... (Press Enter to add directly)')
-      }
-      value={searchQuery}
-      onChange={(e) => {
-        setSearchQuery(e.target.value);
-        setShowProductList(true);
-      }}
-      onFocus={() => setShowProductList(true)}
-      onKeyDown={handleKeyDown} // ✅ إضافة معالج الضغط على Enter
-      className="pl-10 pr-10 h-12 text-base"
-      disabled={!formData.warehouse_id}
-      autoFocus
-    />
-    {searchQuery && (
-      <button
-        onClick={() => {
-          setSearchQuery("");
-          setShowProductList(false);
-          inputRef.current?.focus();
-        }}
-        className="absolute right-3 top-1/2 -translate-y-1/2"
-      >
-        <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-      </button>
-    )}
-  </div>
-  
-  {/* رسالة توضيحية للمنتج الوحيد */}
-  {showProductList && searchQuery && !loadingProducts && products.length === 1 && (
-    <div className="absolute z-50 w-full mt-1 bg-primary/5 border border-primary/20 rounded-lg p-2 text-center text-sm text-primary">
-      💡 {language === 'ar' ? 'اضغط Enter للإضافة المباشرة' : 'Press Enter to add directly'}
-    </div>
-  )}
-  
-  {/* Loading indicator */}
-  {loadingProducts && searchQuery && (
-    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center">
-      <Loader2 className="h-5 w-5 animate-spin mx-auto" />
-      <p className="text-sm text-muted-foreground mt-2">
-        {language === 'ar' ? 'جاري البحث...' : 'Searching...'}
-      </p>
-    </div>
-  )}
-  
-  {/* قائمة المنتجات المقترحة */}
-  {showProductList && searchQuery && !loadingProducts && products.length > 0 && (
-    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
-      {products.map((product: any) => (
-        <button
-          key={product.id}
-          onClick={() => addProduct(product)}
-          className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b last:border-b-0 flex items-center justify-between group"
-        >
-          <div className="flex-1">
-            <div className="font-medium">
-              {language === 'ar' ? (product.name_ar || product.name) : product.name}
-            </div>
-            <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1">
-              <span>SKU: {product.sku}</span>
-              {product.barcode && <span>| باركود: {product.barcode}</span>}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="font-bold text-primary">
-              {product.sell_price || product.price} {currencies.find(c => c.id === Number(formData.currency_id))?.symbol}
-            </div>
-            <div className={`
-              text-xs px-2 py-0.5 rounded-full mt-1
-              ${(product.stock || 0) === 0 ? 'bg-red-100 text-red-700' : 
-                (product.stock || 0) <= 10 ? 'bg-amber-100 text-amber-700' : 
-                'bg-green-100 text-green-700'}
-            `}>
-              {language === 'ar' ? 'المخزون:' : 'Stock:'} {product.stock || 0}
-            </div>
-          </div>
-          {/* إضافة أيقونة Enter في الـ hover */}
-          <div className="ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
-            <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">
-              Enter
-            </kbd>
-          </div>
-        </button>
-      ))}
-    </div>
-  )}
-  
-  {showProductList && searchQuery && !loadingProducts && products.length === 0 && (
-    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center text-muted-foreground">
-      {language === 'ar' ? '❌ لا توجد منتجات مطابقة' : '❌ No products found'}
-    </div>
-  )}
-  
-  {!formData.warehouse_id && (
-    <p className="text-xs text-amber-600 mt-2">
-      {language === 'ar' ? '⚠️ يجب اختيار المخزن أولاً للبحث عن المنتجات' : '⚠️ Select warehouse first to search products'}
-    </p>
-  )}
-</div>
+                  <div className="relative" ref={searchRef}>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          !formData.warehouse_id 
+                            ? (language === 'ar' ? '⚠️ اختر المخزن أولاً للبحث' : '⚠️ Select warehouse first to search')
+                            : (language === 'ar' ? '🔍 بحث بالاسم أو الباركود أو SKU... (اضغط Enter للإضافة المباشرة)' : '🔍 Search by name, barcode or SKU... (Press Enter to add directly)')
+                        }
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setShowProductList(true);
+                        }}
+                        onFocus={() => setShowProductList(true)}
+                        onKeyDown={handleKeyDown}
+                        className="pl-10 pr-10 h-12 text-base"
+                        disabled={!formData.warehouse_id}
+                        autoFocus
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery("");
+                            setShowProductList(false);
+                            inputRef.current?.focus();
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2"
+                        >
+                          <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* رسالة توضيحية */}
+                    {showProductList && searchQuery && !loadingProducts && products.length === 1 && (
+                      <div className="absolute z-50 w-full mt-1 bg-primary/5 border border-primary/20 rounded-lg p-2 text-center text-sm text-primary">
+                        💡 {language === 'ar' ? 'اضغط Enter للإضافة المباشرة' : 'Press Enter to add directly'}
+                      </div>
+                    )}
+                    
+                    {/* Loading indicator */}
+                    {loadingProducts && searchQuery && (
+                      <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {language === 'ar' ? 'جاري البحث...' : 'Searching...'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* قائمة المنتجات */}
+                    {showProductList && searchQuery && !loadingProducts && products.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                        {products.map((product: any) => (
+                          <button
+                            key={product.id}
+                            onClick={() => addProduct(product)}
+                            className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b last:border-b-0 flex items-center justify-between group"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium">
+                                {language === 'ar' ? (product.name_ar || product.name) : product.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1">
+                                <span>SKU: {product.sku}</span>
+                                {product.barcode && <span>| باركود: {product.barcode}</span>}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-primary">
+                                {product.sell_price || product.price} {currencies.find(c => c.id === Number(formData.currency_id))?.symbol}
+                              </div>
+                              <div className={`
+                                text-xs px-2 py-0.5 rounded-full mt-1
+                                ${(product.stock || 0) === 0 ? 'bg-red-100 text-red-700' : 
+                                  (product.stock || 0) <= 10 ? 'bg-amber-100 text-amber-700' : 
+                                  'bg-green-100 text-green-700'}
+                              `}>
+                                {language === 'ar' ? 'المخزون:' : 'Stock:'} {product.stock || 0}
+                              </div>
+                            </div>
+                            <div className="ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">
+                                Enter
+                              </kbd>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {showProductList && searchQuery && !loadingProducts && products.length === 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center text-muted-foreground">
+                        {language === 'ar' ? '❌ لا توجد منتجات مطابقة' : '❌ No products found'}
+                      </div>
+                    )}
+                    
+                    {!formData.warehouse_id && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        {language === 'ar' ? '⚠️ يجب اختيار المخزن أولاً للبحث عن المنتجات' : '⚠️ Select warehouse first to search products'}
+                      </p>
+                    )}
+                  </div>
 
                   {/* Items Table */}
                   <div className="border rounded-lg overflow-hidden">
@@ -1115,7 +1107,6 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                     </Table>
                   </div>
 
-                  {/* إحصائيات سريعة وزر إضافة */}
                   {items.length > 0 && (
                     <div className="flex justify-between items-center text-sm bg-muted/30 p-3 rounded-lg">
                       <div className="flex gap-4">
@@ -1128,8 +1119,7 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                         onClick={() => {
                           setSearchQuery("");
                           setShowProductList(true);
-                          const input = document.querySelector('input[type="text"]') as HTMLInputElement;
-                          if (input) input.focus();
+                          inputRef.current?.focus();
                         }}
                         className="gap-2"
                       >
@@ -1285,12 +1275,11 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions - حفظ وطباعة */}
                   <div className="flex flex-col gap-3 pt-4">
                     <Button
-                      onClick={() => createInvoiceMutation.mutate()}
+                      onClick={() => handleSave('save')}
                       disabled={
-                        createInvoiceMutation.isPending || 
                         items.length === 0 || 
                         !formData.customer_id || 
                         !formData.currency_id || 
@@ -1300,17 +1289,18 @@ const { data: products = [], isLoading: loadingProducts } = useQuery({
                       className="w-full gap-2 h-11 text-base"
                       size="lg"
                     >
-                      {createInvoiceMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4" />
-                          {language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}
-                        </>
-                      )}
+                      <Save className="h-4 w-4" />
+                      {language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="w-full gap-2 h-11"
+                      onClick={handleSaveAndPrint}
+                      disabled={items.length === 0 || !formData.customer_id}
+                    >
+                      <Printer className="h-4 w-4" />
+                      {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
                     </Button>
                   </div>
                 </CardContent>
