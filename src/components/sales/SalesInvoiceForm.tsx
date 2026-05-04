@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useCurrencyTax } from "@/hooks/useCurrencyTax";
@@ -12,12 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, Printer, Crown, Star, Barcode, Search, Loader2 } from "lucide-react";
-import { format } from "date-fns";
-import QuickProductSearch from "@/components/shared/QuickProductSearch";
+import { Plus, Trash2, Save, Crown, Star, Package, Search, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
-import ProductSearch from "./ProductSearch"; 
-// ========== أنواع البيانات ==========
+
+// ========== Types ==========
 
 interface Customer {
   id: number;
@@ -58,7 +56,7 @@ interface Warehouse {
   phone?: string;
   address?: string;
   is_active?: boolean;
-  branch_id?: number | null; // 🔴 مهم جداً
+  branch_id?: number | null;
 }
 
 interface Currency {
@@ -104,6 +102,7 @@ interface InvoiceItem {
   discount_amount: number;
   tax_amount: number;
   total_price: number;
+  stock?: number;
 }
 
 interface SalesInvoiceFormProps {
@@ -115,8 +114,10 @@ interface SalesInvoiceFormProps {
 const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProps) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const { formatAmount } = useCurrencyTax(); // استخدمنا فقط formatAmount
-  const [showProductSearch, setShowProductSearch] = useState(false);
+  const { formatAmount } = useCurrencyTax();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showProductList, setShowProductList] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   // ========== State ==========
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -126,7 +127,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     branch_id: "",
     warehouse_id: "",
     due_date: "",
-    payment_method: "cash" as 'cash' | 'card' | 'wallet' | 'credit',
+    payment_method: "cash" as 'cash' | 'card' | 'wallet' | 'credit' | 'bank_transfer' | 'check',
     discount_percent: 0,
     tax_id: "",
     currency_id: "",
@@ -136,7 +137,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
   // ========== Queries ==========
 
-  // ✅ 1. جلب العملات - POST /currency/index
+  // 1. جلب العملات
   const { data: currencies = [], isLoading: loadingCurrencies } = useQuery({
     queryKey: ['currencies-form'],
     queryFn: async () => {
@@ -162,7 +163,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen
   });
 
-  // ✅ 2. جلب الضرائب - POST /tax/index
+  // 2. جلب الضرائب
   const { data: taxes = [], isLoading: loadingTaxes } = useQuery({
     queryKey: ['taxes-form'],
     queryFn: async () => {
@@ -188,7 +189,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen
   });
 
-  // ✅ 3. جلب العملاء
+  // 3. جلب العملاء
   const { data: customers = [], isLoading: loadingCustomers } = useQuery({
     queryKey: ['customers-form'],
     queryFn: async () => {
@@ -214,7 +215,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen
   });
 
-  // ✅ 4. جلب المندوبين
+  // 4. جلب المندوبين
   const { data: salesmen = [], isLoading: loadingSalesmen } = useQuery({
     queryKey: ['salesmen-form'],
     queryFn: async () => {
@@ -239,7 +240,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen
   });
 
-  // ✅ 5. جلب المخازن - الأولى (لازم يختار المخزن الأول)
+  // 5. جلب المخازن
   const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
     queryKey: ['warehouses-form'],
     queryFn: async () => {
@@ -264,20 +265,15 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     enabled: isOpen
   });
 
-  // ✅ 6. جلب الفروع - على أساس المخزن المختار
+  // 6. جلب الفروع على أساس المخزن
   const { data: branches = [], isLoading: loadingBranches } = useQuery({
     queryKey: ['branches-form', formData.warehouse_id],
     queryFn: async () => {
       try {
-        // لو مخترش مخزن، متجبش حاجة
-        if (!formData.warehouse_id) {
-          return [];
-        }
+        if (!formData.warehouse_id) return [];
 
-        // دور على المخزن المختار
         const selectedWarehouse = warehouses.find(w => w.id === Number(formData.warehouse_id));
         
-        // لو المخزن عنده branch_id معين، جيب الفرع ده بالذات
         if (selectedWarehouse?.branch_id) {
           const response = await api.post('/branch/index', {
             filters: { 
@@ -295,7 +291,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
           }
         }
         
-        // لو مفيش branch_id في المخزن، جيب كل الفروع النشطة
         const response = await api.post('/branch/index', {
           filters: { active: true },
           orderBy: 'id',
@@ -313,43 +308,139 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         return [];
       }
     },
-    enabled: isOpen && !!formData.warehouse_id // 🔴 شغال بس لما يختار مخزن
+    enabled: isOpen && !!formData.warehouse_id
   });
 
-  const { data: products = [] } = useQuery({
-    queryKey: ['products-form'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/product/index', {
-          filters: {  },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 1000,
-          paginate: false
-        });
+
+// أضف الـ useRef للـ input
+const inputRef = useRef<HTMLInputElement>(null);
+
+// أضف دالة handleKeyDown للـ Enter
+const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === 'Enter' && products.length === 1 && searchQuery) {
+    // لو في منتج واحد بالضبط وضغط Enter، أضفه مباشرة
+    addProduct(products[0]);
+    e.preventDefault();
+  } else if (e.key === 'Enter' && products.length > 1 && searchQuery) {
+    // لو في أكتر من منتج وضغط Enter، أضف أول منتج
+    addProduct(products[0]);
+    e.preventDefault();
+  }
+};
+
+  // 7. جلب المنتجات مع البحث - كل حاجة ب key بتاعها
+// 7. جلب المنتجات مع البحث - تصحيح استلام البيانات
+const { data: products = [], isLoading: loadingProducts } = useQuery({
+  queryKey: ['products-form', formData.warehouse_id, searchQuery],
+  queryFn: async () => {
+    try {
+      // بناء فلتر البحث
+      let filters: any = { active: true };
+      
+      if (searchQuery && searchQuery.trim()) {
+        const query = searchQuery.trim();
         
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
+        if (/^\d+$/.test(query)) {
+          filters.barcode = query;
+        } 
+        else if (query.includes('-') || /^[A-Z0-9\-]+$/i.test(query)) {
+          filters.sku = query;
         }
-        return [];
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        return [];
+        else {
+          filters.name = query;
+        }
       }
-    },
-    enabled: isOpen
-  });
+      
+      const response = await api.post('/product/index', {
+        filters: filters,
+        orderBy: 'id',
+        orderByDirection: 'asc',
+        perPage: 50,
+        paginate: true
+      });
+      
+      console.log('API Response:', response.data); // للتأكد من البيانات
+      
+      if (response.data.result === 'Success') {
+        let productsData = response.data.data || [];
+        
+        console.log('Products before filter:', productsData); // للتأكد
+        
+        if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !searchQuery.trim().includes('-')) {
+          const query = searchQuery.trim().toLowerCase();
+          productsData = productsData.filter((p: any) => 
+            p.name?.toLowerCase().includes(query) || 
+            p.name_ar?.toLowerCase().includes(query)
+          );
+        }
+        
+        // جلب المخزون لكل منتج
+        if (formData.warehouse_id && productsData.length > 0) {
+          const productIds = productsData.map((p: any) => p.id);
+          try {
+            const stockResponse = await api.post('/warehouse-stock/index', {
+              filters: { 
+                warehouse_id: Number(formData.warehouse_id),
+                product_id_in: productIds 
+              },
+              perPage: 1000,
+              paginate: false
+            });
+            
+            const stockMap = new Map();
+            if (stockResponse.data.result === 'Success') {
+              stockResponse.data.data?.forEach((stock: any) => {
+                stockMap.set(stock.product_id, stock.quantity);
+              });
+            }
+            
+            productsData = productsData.map((p: any) => ({
+              ...p,
+              stock: stockMap.get(p.id) || p.stock || 0
+            }));
+          } catch (stockError) {
+            console.error('Error fetching stock:', stockError);
+            // لو فشل جلب المخزون، استخدم stock الموجود في المنتج
+            productsData = productsData.map((p: any) => ({
+              ...p,
+              stock: p.stock || 0
+            }));
+          }
+        }
+        
+        console.log('Products after processing:', productsData); // للتأكد
+        return productsData;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast.error(language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products');
+      return [];
+    }
+  },
+  enabled: isOpen && !!formData.warehouse_id,
+  staleTime: 30000
+});
 
-  // ========== Set Default Currency & Tax ==========
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery && formData.warehouse_id) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['products-form', formData.warehouse_id, searchQuery] 
+        });
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, formData.warehouse_id, queryClient]);
+
   useEffect(() => {
     if (isOpen) {
-      // تعيين أول عملة كافتراضية
       if (currencies.length > 0 && !formData.currency_id) {
         const defaultCurr = currencies.find(c => c.is_default) || currencies[0];
         setFormData(prev => ({ ...prev, currency_id: defaultCurr.id.toString() }));
       }
       
-      // تعيين أول ضريبة كافتراضية
       if (taxes.length > 0 && !formData.tax_id) {
         const defaultTax = taxes.find(t => t.is_default) || taxes[0];
         setFormData(prev => ({ ...prev, tax_id: defaultTax.id.toString() }));
@@ -357,13 +448,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     }
   }, [isOpen, currencies, taxes]);
 
-  // ========== Reset branch when warehouse changes ==========
   useEffect(() => {
-    // لما المخزن يتغير، امسح الفرع المختار
     setFormData(prev => ({ ...prev, branch_id: "" }));
   }, [formData.warehouse_id]);
 
-  // ========== Generate Invoice Number ==========
   useEffect(() => {
     if (isOpen) {
       const date = new Date();
@@ -374,6 +462,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       setInvoiceNumber(`INV-${year}${month}${day}-${random}`);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowProductList(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ========== Calculations ==========
   const calculateTotals = () => {
@@ -408,7 +507,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
   // ========== Handlers ==========
 
-  // ✅ إضافة منتج
+  // إضافة منتج
   const addProduct = (product: any) => {
     const existingIndex = items.findIndex(item => item.product_id === product.id);
     
@@ -429,14 +528,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         discount_percent: 0,
         discount_amount: 0,
         tax_amount: 0,
-        total_price: Number(product.sell_price || product.price || 0)
+        total_price: Number(product.sell_price || product.price || 0),
+        stock: product.stock || 0
       };
       setItems([...items, newItem]);
       toast.success(language === 'ar' ? 'تم إضافة المنتج' : 'Product added');
     }
+    setSearchQuery("");
+    setShowProductList(false);
   };
 
-  // ✅ تحديث كمية المنتج
+  // تحديث المنتج
   const updateItem = (id: string, field: string, value: number) => {
     const updated = items.map(item => {
       if (item.id === id) {
@@ -456,13 +558,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     setItems(updated);
   };
 
-  // ✅ حذف منتج
+  // حذف منتج
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
     toast.success(language === 'ar' ? 'تم حذف المنتج' : 'Product removed');
   };
 
-  // ✅ إعادة تعيين النموذج
+  // إعادة تعيين النموذج
   const resetForm = () => {
     setItems([]);
     setFormData({
@@ -477,12 +579,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       currency_id: currencies.find(c => c.is_default)?.id?.toString() || currencies[0]?.id?.toString() || "",
       notes: ""
     });
+    setSearchQuery("");
+    setShowProductList(false);
   };
 
-  // ✅ إنشاء فاتورة جديدة
+  // إنشاء فاتورة
   const createInvoiceMutation = useMutation({
     mutationFn: async () => {
-      // التحقق من البيانات المطلوبة
       if (!formData.customer_id) {
         throw new Error(language === 'ar' ? 'يجب اختيار العميل' : 'Customer is required');
       }
@@ -499,7 +602,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         throw new Error(language === 'ar' ? 'يجب اختيار المخزن' : 'Warehouse is required');
       }
 
-      // ✅ تجهيز payload
       const payload = {
         customer_id: Number(formData.customer_id),
         sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
@@ -525,12 +627,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     onSuccess: (data) => {
       toast.success(language === 'ar' ? '✅ تم إنشاء الفاتورة بنجاح' : '✅ Invoice created successfully');
       
-      // تحديث البيانات
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['products-form'] });
       
-      // إغلاق النموذج وإعادة تعيينه
       resetForm();
       onClose();
     },
@@ -545,11 +645,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       );
     }
   });
-
-  // ✅ حفظ وطباعة
-  const handleSaveAndPrint = () => {
-    toast.info(language === 'ar' ? 'جاري تجهيز الطباعة...' : 'Preparing print...');
-  };
 
   // ========== Render ==========
   return (
@@ -681,7 +776,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     </Select>
                   </div>
 
-                  {/* 🔴 المخزن - لازم يختار الأول */}
+                  {/* المخزن */}
                   <div className="col-span-2 md:col-span-1">
                     <Label className="flex items-center gap-1 mb-2">
                       {language === 'ar' ? 'المخزن' : 'Warehouse'} 
@@ -692,7 +787,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       onValueChange={(value) => setFormData({ ...formData, warehouse_id: value })}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder={language === 'ar' ? 'اختر المخزن أولاً' : 'Select warehouse first'} />
+                        <SelectValue placeholder={language === 'ar' ? 'اختر المخزن' : 'Select warehouse'} />
                       </SelectTrigger>
                       <SelectContent>
                         {loadingWarehouses ? (
@@ -717,14 +812,9 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                         )}
                       </SelectContent>
                     </Select>
-                    {!formData.warehouse_id && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        {language === 'ar' ? '⚠️ يجب اختيار المخزن أولاً' : '⚠️ Select warehouse first'}
-                      </p>
-                    )}
                   </div>
 
-                  {/* 🔴 الفرع - بيظهر بعد اختيار المخزن */}
+                  {/* الفرع */}
                   <div className="col-span-2 md:col-span-1">
                     <Label className="mb-2 block">
                       {language === 'ar' ? 'الفرع' : 'Branch'}
@@ -772,18 +862,12 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">
-                          {language === 'ar' ? 'نقداً' : 'Cash'}
-                        </SelectItem>
-                        <SelectItem value="card">
-                          {language === 'ar' ? 'بطاقة' : 'Card'}
-                        </SelectItem>
-                        <SelectItem value="wallet">
-                          {language === 'ar' ? 'محفظة' : 'Wallet'}
-                        </SelectItem>
-                        <SelectItem value="credit">
-                          {language === 'ar' ? 'آجل' : 'Credit'}
-                        </SelectItem>
+                        <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                        <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                        <SelectItem value="wallet">{language === 'ar' ? 'محفظة' : 'Wallet'}</SelectItem>
+                        <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                        <SelectItem value="bank_transfer">{language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer'}</SelectItem>
+                        <SelectItem value="check">{language === 'ar' ? 'شيك' : 'Check'}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -804,169 +888,258 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
               </Card>
 
               {/* Product Search & Items */}
-           {/* Product Search & Items */}
-{/* Product Search & Items */}
-<Card>
-  <CardHeader className="pb-3">
-    <CardTitle className="text-lg flex items-center gap-2">
-      <div className="w-1 h-5 bg-primary rounded-full" />
-      {language === 'ar' ? 'الأصناف' : 'Items'}
-    </CardTitle>
-  </CardHeader>
-  <CardContent className="space-y-4">
-    
-    {/* ✅ Product Search - نسختين: مدمجة للموبيل و Modal للديسكتوب */}
-    
-    {/* للشاشات الصغيرة (موبايل) - بحث مدمج */}
-    <div className="block lg:hidden">
-      <ProductSearch
-        isOpen={true}
-        onClose={() => {}}
-        onSelectProduct={addProduct}
-        embedded={true}
-      />
-    </div>
-
-    {/* للشاشات الكبيرة (ديسكتوب) - زر يفتح Modal */}
-    <div className="hidden lg:block">
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full h-12 gap-2"
-        onClick={() => setShowProductSearch(true)}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="w-1 h-5 bg-primary rounded-full" />
+                    {language === 'ar' ? 'المنتجات' : 'Products'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* حقل البحث المدمج */}
+               {/* حقل البحث المدمج */}
+<div className="relative" ref={searchRef}>
+  <div className="relative">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <Input
+      ref={inputRef}
+      type="text"
+      placeholder={
+        !formData.warehouse_id 
+          ? (language === 'ar' ? '⚠️ اختر المخزن أولاً للبحث' : '⚠️ Select warehouse first to search')
+          : (language === 'ar' ? '🔍 بحث بالاسم أو الباركود أو SKU... (اضغط Enter للإضافة المباشرة)' : '🔍 Search by name, barcode or SKU... (Press Enter to add directly)')
+      }
+      value={searchQuery}
+      onChange={(e) => {
+        setSearchQuery(e.target.value);
+        setShowProductList(true);
+      }}
+      onFocus={() => setShowProductList(true)}
+      onKeyDown={handleKeyDown} // ✅ إضافة معالج الضغط على Enter
+      className="pl-10 pr-10 h-12 text-base"
+      disabled={!formData.warehouse_id}
+      autoFocus
+    />
+    {searchQuery && (
+      <button
+        onClick={() => {
+          setSearchQuery("");
+          setShowProductList(false);
+          inputRef.current?.focus();
+        }}
+        className="absolute right-3 top-1/2 -translate-y-1/2"
       >
-        <Search className="h-4 w-4" />
-        {language === 'ar' ? '🔍 بحث عن منتج' : '🔍 Search Product'}
-      </Button>
-    </div>
-
-    {/* Product Search Dialog (للديسكتوب فقط) */}
-    <div className="hidden lg:block">
-      <ProductSearch
-        isOpen={showProductSearch}
-        onClose={() => setShowProductSearch(false)}
-        onSelectProduct={addProduct}
-        embedded={false}
-      />
-    </div>
-
-    {/* Items Table */}
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader className="bg-muted/50">
-          <TableRow>
-            <TableHead className="min-w-[200px]">
-              {language === 'ar' ? 'المنتج' : 'Product'}
-            </TableHead>
-            <TableHead className="w-20 text-center">
-              {language === 'ar' ? 'الكمية' : 'Qty'}
-            </TableHead>
-            <TableHead className="w-28 text-right">
-              {language === 'ar' ? 'السعر' : 'Price'}
-            </TableHead>
-            <TableHead className="w-20 text-center">
-              {language === 'ar' ? 'خصم %' : 'Disc %'}
-            </TableHead>
-            <TableHead className="w-32 text-right">
-              {language === 'ar' ? 'الإجمالي' : 'Total'}
-            </TableHead>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                <div className="flex flex-col items-center gap-3">
-                  <Barcode size={32} className="opacity-30" />
-                  <span className="text-sm">
-                    {language === 'ar' ? 'لا توجد أصناف' : 'No items added'}
-                  </span>
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : (
-            items.map((item) => (
-              <TableRow key={item.id} className="hover:bg-muted/30">
-                <TableCell>
-                  <div className="font-medium text-sm">{item.product_name}</div>
-                  <div className="text-xs text-muted-foreground font-mono">
-                    {item.sku}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                    className="w-20 text-center mx-auto h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unit_price}
-                    onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                    className="w-24 text-right h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={item.discount_percent}
-                    onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
-                    className="w-20 text-center mx-auto h-8"
-                  />
-                </TableCell>
-                <TableCell className="font-medium text-right text-sm">
-                  {item.total_price.toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => removeItem(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
-
-    {/* زر إضافة منتج آخر */}
-    {items.length > 0 && (
-      <div className="flex justify-end">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            if (window.innerWidth < 1024) {
-              // في الموبيل، التركيز على حقل البحث المدمج
-              const searchInput = document.querySelector('.lg\\:hidden input');
-              if (searchInput) (searchInput as HTMLInputElement).focus();
-            } else {
-              setShowProductSearch(true);
-            }
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          {language === 'ar' ? 'إضافة منتج آخر' : 'Add Another Product'}
-        </Button>
-      </div>
+        <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+      </button>
     )}
-  </CardContent>
-</Card>
+  </div>
+  
+  {/* رسالة توضيحية للمنتج الوحيد */}
+  {showProductList && searchQuery && !loadingProducts && products.length === 1 && (
+    <div className="absolute z-50 w-full mt-1 bg-primary/5 border border-primary/20 rounded-lg p-2 text-center text-sm text-primary">
+      💡 {language === 'ar' ? 'اضغط Enter للإضافة المباشرة' : 'Press Enter to add directly'}
+    </div>
+  )}
+  
+  {/* Loading indicator */}
+  {loadingProducts && searchQuery && (
+    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center">
+      <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+      <p className="text-sm text-muted-foreground mt-2">
+        {language === 'ar' ? 'جاري البحث...' : 'Searching...'}
+      </p>
+    </div>
+  )}
+  
+  {/* قائمة المنتجات المقترحة */}
+  {showProductList && searchQuery && !loadingProducts && products.length > 0 && (
+    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+      {products.map((product: any) => (
+        <button
+          key={product.id}
+          onClick={() => addProduct(product)}
+          className="w-full text-left px-4 py-3 hover:bg-muted transition-colors border-b last:border-b-0 flex items-center justify-between group"
+        >
+          <div className="flex-1">
+            <div className="font-medium">
+              {language === 'ar' ? (product.name_ar || product.name) : product.name}
+            </div>
+            <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1">
+              <span>SKU: {product.sku}</span>
+              {product.barcode && <span>| باركود: {product.barcode}</span>}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-primary">
+              {product.sell_price || product.price} {currencies.find(c => c.id === Number(formData.currency_id))?.symbol}
+            </div>
+            <div className={`
+              text-xs px-2 py-0.5 rounded-full mt-1
+              ${(product.stock || 0) === 0 ? 'bg-red-100 text-red-700' : 
+                (product.stock || 0) <= 10 ? 'bg-amber-100 text-amber-700' : 
+                'bg-green-100 text-green-700'}
+            `}>
+              {language === 'ar' ? 'المخزون:' : 'Stock:'} {product.stock || 0}
+            </div>
+          </div>
+          {/* إضافة أيقونة Enter في الـ hover */}
+          <div className="ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+            <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">
+              Enter
+            </kbd>
+          </div>
+        </button>
+      ))}
+    </div>
+  )}
+  
+  {showProductList && searchQuery && !loadingProducts && products.length === 0 && (
+    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg p-4 text-center text-muted-foreground">
+      {language === 'ar' ? '❌ لا توجد منتجات مطابقة' : '❌ No products found'}
+    </div>
+  )}
+  
+  {!formData.warehouse_id && (
+    <p className="text-xs text-amber-600 mt-2">
+      {language === 'ar' ? '⚠️ يجب اختيار المخزن أولاً للبحث عن المنتجات' : '⚠️ Select warehouse first to search products'}
+    </p>
+  )}
+</div>
+
+                  {/* Items Table */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="min-w-[200px]">
+                            {language === 'ar' ? 'المنتج' : 'Product'}
+                          </TableHead>
+                          <TableHead className="w-16 text-center">
+                            {language === 'ar' ? 'المخزون' : 'Stock'}
+                          </TableHead>
+                          <TableHead className="w-20 text-center">
+                            {language === 'ar' ? 'الكمية' : 'Qty'}
+                          </TableHead>
+                          <TableHead className="w-28 text-right">
+                            {language === 'ar' ? 'السعر' : 'Price'}
+                          </TableHead>
+                          <TableHead className="w-20 text-center">
+                            {language === 'ar' ? 'خصم %' : 'Disc %'}
+                          </TableHead>
+                          <TableHead className="w-32 text-right">
+                            {language === 'ar' ? 'الإجمالي' : 'Total'}
+                          </TableHead>
+                          <TableHead className="w-12"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                              <div className="flex flex-col items-center gap-3">
+                                <Package size={32} className="opacity-30" />
+                                <span className="text-sm">
+                                  {language === 'ar' ? 'لا توجد منتجات' : 'No products added'}
+                                </span>
+                                <span className="text-xs">
+                                  {language === 'ar' ? 'ابحث عن منتج وأضفه من الأعلى' : 'Search for a product and add it from above'}
+                                </span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          items.map((item) => (
+                            <TableRow key={item.id} className="hover:bg-muted/30">
+                              <TableCell>
+                                <div className="font-medium text-sm">{item.product_name}</div>
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {item.sku}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className={`
+                                  text-xs font-mono px-2 py-0.5 rounded-full
+                                  ${(item.stock || 0) === 0 ? 'bg-red-100 text-red-700' : 
+                                    (item.stock || 0) <= 10 ? 'bg-amber-100 text-amber-700' : 
+                                    'bg-green-100 text-green-700'}
+                                `}>
+                                  {item.stock || 0}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                                  className="w-20 text-center mx-auto h-8"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.unit_price}
+                                  onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                                  className="w-24 text-right h-8"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={item.discount_percent}
+                                  onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
+                                  className="w-20 text-center mx-auto h-8"
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium text-right text-sm">
+                                {item.total_price.toLocaleString()}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => removeItem(item.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* إحصائيات سريعة وزر إضافة */}
+                  {items.length > 0 && (
+                    <div className="flex justify-between items-center text-sm bg-muted/30 p-3 rounded-lg">
+                      <div className="flex gap-4">
+                        <span>{language === 'ar' ? 'عدد المنتجات:' : 'Items:'} <strong>{items.length}</strong></span>
+                        <span>{language === 'ar' ? 'الكمية الإجمالية:' : 'Total Qty:'} <strong>{items.reduce((sum, i) => sum + i.quantity, 0)}</strong></span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setShowProductList(true);
+                          const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+                          if (input) input.focus();
+                        }}
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        {language === 'ar' ? 'إضافة منتج آخر' : 'Add Another Product'}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Notes */}
               <Card>
@@ -1139,16 +1312,6 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                         </>
                       )}
                     </Button>
-                    
-                    {/* <Button 
-                      variant="outline" 
-                      className="w-full gap-2 h-11"
-                      onClick={handleSaveAndPrint}
-                      disabled={createInvoiceMutation.isPending || items.length === 0}
-                    >
-                      <Printer className="h-4 w-4" />
-                      {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
-                    </Button> */}
                   </div>
                 </CardContent>
               </Card>
