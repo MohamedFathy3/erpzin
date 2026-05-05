@@ -21,8 +21,8 @@ interface CartItem {
   sizeName?: string;
   colorName?: string;
   stock?: number;
-  discount_percentage?: number;  // ✅ خصم المنتج %
-  discount_amount?: number;       // ✅ قيمة خصم المنتج
+  discount_percentage?: number;
+  discount_amount?: number;
 }
 
 interface POSCartProps {

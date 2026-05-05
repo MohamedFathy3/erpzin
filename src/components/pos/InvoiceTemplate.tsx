@@ -41,6 +41,9 @@ interface InvoiceTemplateProps {
     total: number;
     payments: { method: string; amount: number }[];
     change?: number;
+    totalDiscountPercentage?: number;    // ✅ نسبة الخصم الكلية
+    totalDiscountAmount?: number;        // ✅ قيمة الخصم الكلية
+    invoiceDiscountPercentage?: number;  // ✅ نسبة خصم الفاتورة (للعلم)
   };
   companyInfo: CompanyInfo;
 }
@@ -51,7 +54,6 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     const isRTL = language === 'ar';
     const { formatCurrency } = useRegionalSettings();
 
-    // ✅ قيم افتراضية آمنة
     const safeInvoiceData = {
       id: invoiceData.id || '',
       date: invoiceData.date || new Date().toISOString(),
@@ -67,9 +69,11 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       payments: invoiceData.payments || [],
       change: invoiceData.change || 0,
       taxRate: invoiceData.taxRate || 14,
+      totalDiscountPercentage: invoiceData.totalDiscountPercentage || 0,
+      totalDiscountAmount: invoiceData.totalDiscountAmount || 0,
+      invoiceDiscountPercentage: invoiceData.invoiceDiscountPercentage || 0,
     };
 
-    // نصوص ثابتة حسب اللغة
     const texts = {
       invoice: isRTL ? 'فاتورة ضريبية' : 'Tax Invoice',
       invoiceNo: isRTL ? 'رقم الفاتورة' : 'Invoice No.',
@@ -95,9 +99,9 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       change: isRTL ? 'الباقي' : 'Change',
       thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
       poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP',
+      totalDiscount: isRTL ? 'خصم إجمالي' : 'Total Discount',
     };
 
-    // تجهيز نص طريقة الدفع
     const getPaymentMethodText = (method: string) => {
       switch (method.toLowerCase()) {
         case 'cash': return texts.cash;
@@ -122,9 +126,8 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           lineHeight: '1.3'
         }}
       >
-        {/* Header - مع اللوجو وبيانات الشركة */}
+        {/* Header */}
         <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-          {/* اللوجو إذا كان موجود */}
           {companyInfo.logo && (
             <div className="flex justify-center mb-1">
               <img 
@@ -135,12 +138,10 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
           
-          {/* اسم الشركة - مع الاسم العربي */}
           <h1 className="text-sm font-bold text-black">
             {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
           </h1>
           
-          {/* بيانات الفرع إذا كانت موجودة */}
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
             <div className="text-[9px] text-gray-700 mt-1">
               {safeInvoiceData.branchName && <p>{texts.branch}: {safeInvoiceData.branchName}</p>}
@@ -149,7 +150,6 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
           
-          {/* بيانات الشركة الإضافية إذا لم يكن هناك بيانات فرع */}
           {!safeInvoiceData.branchName && companyInfo.address && (
             <p className="text-[9px] text-gray-700">
               {isRTL ? companyInfo.addressAr || companyInfo.address : companyInfo.address}
@@ -160,28 +160,25 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             <p className="text-[9px] text-gray-700">{texts.phone}: {companyInfo.phone}</p>
           )}
           
-          {/* رقم الضريبة إذا كان موجود */}
           {companyInfo.tax_id && (
             <p className="text-[9px] text-gray-700">VAT: {companyInfo.tax_id}</p>
           )}
         </div>
 
-        {/* Invoice Header - مع تنسيق جديد: رقم الفاتورة وطريقة الدفع يمين، التاريخ والكاشير يسار */}
+        {/* Invoice Header */}
         <div className="flex justify-between items-start text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
-          {/* الجانب الأيمن - رقم الفاتورة وطريقة الدفع */}
           <div className="text-left">
             <div><span className="font-bold">{texts.invoiceNo}:</span> <span className="font-mono">{String(safeInvoiceData.id).slice(-8)}</span></div>
             <div><span className="font-bold">{texts.paymentMethod}:</span> <span>{paymentMethodsText}</span></div>
           </div>
           
-          {/* الجانب الأيسر - التاريخ والكاشير */}
           <div className="text-right">
             <div><span className="font-bold">{texts.date}:</span> <span>{new Date(safeInvoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span></div>
             <div><span className="font-bold">{texts.cashier}:</span> <span>{safeInvoiceData.cashierName}</span></div>
           </div>
         </div>
 
-        {/* معلومات العميل إذا وجد */}
+        {/* Customer Info */}
         {safeInvoiceData.customer ? (
           <div className="text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
             <div className="flex justify-between">
@@ -215,7 +212,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <th className="py-1 text-center w-8">{texts.quantity}</th>
               <th className="py-1 text-right w-14">{texts.price}</th>
               <th className="py-1 text-right w-14">{texts.total}</th>
-            </tr>
+             </tr>
           </thead>
           <tbody>
             {safeInvoiceData.items.map((item, index) => (
@@ -247,13 +244,20 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </tbody>
         </table>
 
-        {/* Totals Section */}
+        {/* Totals Section with Discount */}
         <div className="flex flex-col items-end mb-2 border-t border-gray-300 pt-2">
           <div className="w-3/4 text-[9px]">
             <div className="flex justify-between py-0.5">
               <span>{texts.subtotal}:</span>
               <span>{formatCurrency(safeInvoiceData.subtotal)}</span>
             </div>
+            {/* ✅ عرض الخصم الكلي إذا كان موجود */}
+            {safeInvoiceData.totalDiscountAmount > 0 && (
+              <div className="flex justify-between py-0.5 text-green-600 font-semibold">
+                <span>{texts.totalDiscount} ({safeInvoiceData.totalDiscountPercentage}%):</span>
+                <span>-{formatCurrency(safeInvoiceData.totalDiscountAmount)}</span>
+              </div>
+            )}
             <div className="flex justify-between py-0.5">
               <span>{texts.tax}:</span>
               <span>{formatCurrency(safeInvoiceData.tax)}</span>

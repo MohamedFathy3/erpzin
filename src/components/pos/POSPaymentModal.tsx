@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useRef } from 'react'; // ✅ أضف useRef
-import { useReactToPrint } from 'react-to-print'; // ✅ أضف الاستيراد
-import InvoiceTemplate from './InvoiceTemplate'; // ✅ استيراد القالب
+import React, { useState, useEffect, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
+import InvoiceTemplate from './InvoiceTemplate';
 import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { saveOrderOffline } from '@/lib/offlineDB';
@@ -10,7 +10,7 @@ import { getPaymentShortcuts, usePOSKeyboardShortcuts } from '@/hooks/usePOSKeyb
 import { Input } from '../ui/input';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
-import { useAuth } from '@/contexts/AuthContext'; // ✅ استيراد useAuth
+import { useAuth } from '@/contexts/AuthContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 
@@ -29,6 +29,8 @@ const defaultPaymentMethods: PaymentMethod[] = [
   { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'ctrl+1' },
   { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'ctrl+2' },
   { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'ctrl+3' },
+    { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-indigo-500', shortcut: 'ctrl+4' },
+
 ];
 
 interface CartItem {
@@ -41,6 +43,7 @@ interface CartItem {
   sku: string;
   sizeName?: string;
   colorName?: string;
+  discount_percentage?: number;
 }
 
 interface PaymentModalProps {
@@ -51,17 +54,18 @@ interface PaymentModalProps {
   tax: number;
   cartItems: CartItem[];
   onComplete: (payments: { method: string; amount: number }[]) => void;
-  customer?: { id: string; name: string; loyalty_points?: number | null } | null;
-  deliveryPerson?: { id: string; name: string } | null;
+  customer?: { id: string; name: string; name_ar?: string; phone?: string; loyalty_points?: number | null } | null;
+  deliveryPerson?: { id: string; name: string; phone?: string } | null;
   shiftId?: string | null;
   branchId?: string | null;
   salesRepresentative?: { id: string | number; name: string; commission_rate?: string } | null;
-  // ✅ أضف هذه الأسطر
   branchName?: string | null;
   branchNameAr?: string | null;
   branchPhone?: string | null;
   branchAddress?: string | null;
   branchAddressAr?: string | null;
+  invoiceDiscountPercentage?: number;
+  invoiceDiscountAmount?: number;
   companyInfo: {
     name: string;
     nameAr?: string;
@@ -76,7 +80,6 @@ interface PaymentModalProps {
     currency?: string | null;
   };
 }
-
 
 const POSPaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -96,11 +99,13 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   branchPhone,
   branchAddress,
   branchAddressAr,
+  invoiceDiscountPercentage = 0,
+  invoiceDiscountAmount = 0,
   companyInfo,
 }) => {
   const { language } = useLanguage();
-  const { user } = useAuth(); 
-    const isRTL = language === 'ar';
+  const { user } = useAuth();
+  const isRTL = language === 'ar';
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
   const [cashAmount, setCashAmount] = useState<string>(total.toString());
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({
@@ -110,17 +115,14 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [showPrintOptions, setShowPrintOptions] = useState(false); // ✅ للتحكم في عرض خيارات الطباعة
-  const [completedInvoice, setCompletedInvoice] = useState<any>(null); // ✅ لحفظ بيانات الفاتورة بعد الإتمام
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [completedInvoice, setCompletedInvoice] = useState<any>(null);
   const { formatCurrency } = useRegionalSettings();
 
-  const invoiceRef = useRef<HTMLDivElement>(null); // ✅ ref للطباعة
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
-  // ✅ دالة الطباعة
   const { activeTaxRates } = useCurrencyTax();
-
-// وفي handleSaveAndPrint، بعد let payments = []:
-const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
+  const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
 
   const handlePrint = useReactToPrint({
     contentRef: invoiceRef,
@@ -132,10 +134,6 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
     },
   });
 
-
-
-  
-  // متابعة حالة النت
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -149,9 +147,7 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
     };
   }, []);
 
-  // Payment methods (ثابتة بدون API)
   const paymentMethods: PaymentMethod[] = defaultPaymentMethods;
-
   const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
   useEffect(() => {
@@ -187,13 +183,35 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
       const totalPaid = Object.values(splitAmounts).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
       return totalPaid >= total;
     }
-    return true; // For electronic payments
+    return true;
   };
 
-  // ✅ دالة حفظ وطباعة الفاتورة
+  const calculateTotalDiscountPercentage = (): number => {
+    if (!cartItems.length) return 0;
+    
+    const originalTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    const afterItemDiscount = cartItems.reduce((sum, item) => {
+      const itemOriginal = item.price * item.quantity;
+      const itemDiscountPercent = (item.discount_percentage || 0) / 100;
+      return sum + (itemOriginal * (1 - itemDiscountPercent));
+    }, 0);
+    
+    const finalTotal = afterItemDiscount * (1 - (invoiceDiscountPercentage / 100));
+    
+    const totalDiscountAmount = originalTotal - finalTotal;
+    const totalDiscountPercentage = originalTotal > 0 ? (totalDiscountAmount / originalTotal) * 100 : 0;
+    
+    return Math.round(totalDiscountPercentage * 100) / 100;
+  };
+
+  const getOriginalTotal = (): number => {
+    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
   const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
     let payments: { method: string; amount: number }[] = [];
-    
+
     if (paymentMethod === 'split') {
       Object.entries(splitAmounts).forEach(([method, amount]) => {
         const numAmount = parseFloat(amount) || 0;
@@ -207,12 +225,14 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
       payments = [{ method: paymentMethod, amount: total }];
     }
 
-    // Filter out payments with zero amounts
     payments = payments.filter(payment => payment.amount > 0);
+
+    const totalDiscountPercentage = calculateTotalDiscountPercentage();
+    const originalTotal = getOriginalTotal();
+    const totalDiscountAmount = originalTotal - total;
 
     setIsProcessing(true);
     try {
-      // Prepare invoice data
       const invoiceData = {
         customer_id: parseInt(String(customer?.id)) || 1,
         sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
@@ -221,21 +241,22 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
           quantity: item.quantity,
           price: item.price,
           color: item.colorName || null,
-          size: item.sizeName || null
+          size: item.sizeName || null,
+          discount_amount: totalDiscountAmount  // قيمة الخصم الإجمالية (اختياري)
         })),
+        discount_percentage: totalDiscountPercentage,  // ✅ نسبة الخصم الكلية (خارج items)
         payments: payments,
-        subtotal,
-        tax,
-        total,
+        subtotal: subtotal,
+        tax: tax,
+        total: total,
         shift_id: shiftId,
         branch_id: branchId,
-        delivery_id: parseInt(String(deliveryPerson?.id)) || null
+        delivery_id: parseInt(String(deliveryPerson?.id)) || null,
       };
 
       let invoiceId = '';
       let success = false;
 
-      // إذا كان في وضع Offline
       if (isOffline) {
         const offlineId = await saveOrderOffline({
           items: cartItems,
@@ -253,15 +274,14 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
           success = true;
           toast({
             title: language === 'ar' ? 'نجاح' : 'Success',
-            description: language === 'ar' 
-              ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً' 
+            description: language === 'ar'
+              ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً'
               : 'Invoice saved locally. Will sync later',
           });
         } else {
           throw new Error('Failed to save offline');
         }
       } else {
-        // وضع Online - إرسال للـ API
         const response = await fetch('/api/invoice/store', {
           method: 'POST',
           headers: {
@@ -286,60 +306,59 @@ const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRat
       }
 
       if (success) {
-        // تحضير بيانات الفاتورة للطباعة
-        // تحضير بيانات الفاتورة للطباعة
-const printData = {
-  id: String(invoiceId),
-  date: new Date().toISOString(),
-  cashierName: user?.name,
-  branchName: branchName || companyInfo?.name,
-  branchPhone: branchPhone || companyInfo?.phone,
-  branchAddress: isRTL 
-    ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address 
-    : branchAddress || companyInfo?.address,
-  customer: customer ? { 
-    name: customer.name,
-    nameAr: customer.name_ar || customer.name,
-    phone: customer.phone 
-  } : null,
-  salesRep: salesRepresentative ? { 
-    name: salesRepresentative.name,
-    nameAr: salesRepresentative.name,
-    commission_rate: salesRepresentative.commission_rate
-  } : null,
-  deliveryPerson: deliveryPerson ? { // ✅ مندوب التوصيل
-    name: deliveryPerson.name,
-    nameAr: deliveryPerson.name,
-    phone: deliveryPerson.phone
-  } : null,
-  items: cartItems.map(item => ({
-    name: item.name,
-    nameAr: item.nameAr || item.name,
-    quantity: item.quantity,
-    price: item.price,
-    sizeName: item.sizeName,
-    sizeNameAr: item.sizeName,
-    colorName: item.colorName,
-    colorNameAr: item.colorName
-  })),
-  subtotal,
-  tax,
-  taxRate: defaultTax?.rate || 0,
-  total,
-  payments,
-  change: calculateChange()
-};
+        const printData = {
+          id: String(invoiceId),
+          date: new Date().toISOString(),
+          cashierName: user?.name,
+          branchName: branchName || companyInfo?.name,
+          branchPhone: branchPhone || companyInfo?.phone,
+          branchAddress: isRTL
+            ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
+            : branchAddress || companyInfo?.address,
+          customer: customer ? {
+            name: customer.name,
+            nameAr: customer.name_ar || customer.name,
+            phone: customer.phone
+          } : null,
+          salesRep: salesRepresentative ? {
+            name: salesRepresentative.name,
+            nameAr: salesRepresentative.name,
+            commission_rate: salesRepresentative.commission_rate
+          } : null,
+          deliveryPerson: deliveryPerson ? {
+            name: deliveryPerson.name,
+            nameAr: deliveryPerson.name,
+            phone: deliveryPerson.phone
+          } : null,
+          items: cartItems.map(item => ({
+            name: item.name,
+            nameAr: item.nameAr || item.name,
+            quantity: item.quantity,
+            price: item.price,
+            sizeName: item.sizeName,
+            sizeNameAr: item.sizeName,
+            colorName: item.colorName,
+            colorNameAr: item.colorName,
+            // لا نضع discount_percentage هنا لأنه شامل
+          })),
+          subtotal: subtotal,
+          tax: tax,
+          taxRate: defaultTax?.rate || 0,
+          total: total,
+          payments: payments,
+          change: calculateChange(),
+          totalDiscountPercentage: totalDiscountPercentage,   // ✅ نسبة الخصم الكلية
+          totalDiscountAmount: totalDiscountAmount,          // ✅ قيمة الخصم الكلية
+          invoiceDiscountPercentage: invoiceDiscountPercentage,
+        };
 
         setCompletedInvoice({ payments, printData });
 
         if (type === 'save') {
-          // حفظ فقط
           onComplete(payments);
         } else if (type === 'print') {
-          // طباعة فقط (للفاتورة المحفوظة مسبقاً)
           handlePrint();
         } else if (type === 'both') {
-          // حفظ وطباعة
           setShowPrintOptions(true);
           setTimeout(() => {
             handlePrint();
@@ -358,16 +377,15 @@ const printData = {
     }
   };
 
-  const handleComplete = () => handleSaveAndPrint('save'); // حفظ فقط
-  const handleSaveAndPrintNow = () => handleSaveAndPrint('both'); // حفظ وطباعة
+  const handleComplete = () => handleSaveAndPrint('save');
+  const handleSaveAndPrintNow = () => handleSaveAndPrint('both');
 
-  // Payment modal keyboard shortcuts
-const paymentShortcuts = getPaymentShortcuts({
-  onConfirm: () => canComplete() && !isProcessing && handleComplete(),
-  onCancel: onClose,
-  onSaveOnly: () => canComplete() && !isProcessing && handleComplete(), 
-  onSaveAndPrint: () => canComplete() && !isProcessing && handleSaveAndPrintNow(), // ✅ إضافة هذا السطر
-  onSelectCash: () => setPaymentMethod('cash'),
+  const paymentShortcuts = getPaymentShortcuts({
+    onConfirm: () => canComplete() && !isProcessing && handleComplete(),
+    onCancel: onClose,
+    onSaveOnly: () => canComplete() && !isProcessing && handleComplete(),
+    onSaveAndPrint: () => canComplete() && !isProcessing && handleSaveAndPrintNow(),
+    onSelectCash: () => setPaymentMethod('cash'),
     onSelectCard: () => setPaymentMethod('card'),
     onSelectKuraimi: () => setPaymentMethod('wallet'),
     onSelectFloosak: () => { },
@@ -435,7 +453,6 @@ const paymentShortcuts = getPaymentShortcuts({
     if (paymentMethod === 'split') {
       return (
         <div className="space-y-4">
-          {/* Split remaining indicator */}
           <div className={cn(
             "p-3 rounded-lg text-center",
             getSplitRemaining() > 0 ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
@@ -446,7 +463,6 @@ const paymentShortcuts = getPaymentShortcuts({
             <p className="text-xl font-bold">{formatCurrency(getSplitRemaining())}</p>
           </div>
 
-          {/* Split inputs for all 3 methods */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
@@ -492,7 +508,6 @@ const paymentShortcuts = getPaymentShortcuts({
       );
     }
 
-    // Electronic payment methods (card or wallet)
     const method = paymentMethods.find(m => m.id === paymentMethod);
     return (
       <div className="text-center py-8">
@@ -509,7 +524,7 @@ const paymentShortcuts = getPaymentShortcuts({
           }
         </p>
         <p className="text-3xl font-bold text-primary mt-4">
-         {formatCurrency(total)} 
+          {formatCurrency(total)}
         </p>
       </div>
     );
@@ -517,21 +532,17 @@ const paymentShortcuts = getPaymentShortcuts({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div className="relative w-full max-w-2xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-foreground">
               {language === 'ar' ? 'الدفع' : 'Payment'}
             </h2>
-            {/* Offline indicator */}
             {isOffline && (
               <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-xs">
                 <WifiOff size={12} />
@@ -548,7 +559,6 @@ const paymentShortcuts = getPaymentShortcuts({
         </div>
 
         <div className="p-6">
-          {/* Customer & Delivery Info */}
           {(customer || deliveryPerson) && (
             <div className="flex gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
               {customer && (
@@ -563,7 +573,6 @@ const paymentShortcuts = getPaymentShortcuts({
                       <span className="text-warning/70 text-xs">{language === 'ar' ? 'نقطة' : 'pts'}</span>
                     </div>
                   )}
-                  {/* Points to be earned */}
                   <div className="text-xs text-success mt-1">
                     +{Math.floor(total / 1000)} {language === 'ar' ? 'نقطة جديدة' : 'new pts'}
                   </div>
@@ -578,7 +587,6 @@ const paymentShortcuts = getPaymentShortcuts({
             </div>
           )}
 
-          {/* Offline warning */}
           {isOffline && (
             <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
               <WifiOff className="h-4 w-4 text-amber-600" />
@@ -590,7 +598,6 @@ const paymentShortcuts = getPaymentShortcuts({
             </div>
           )}
 
-          {/* Total Display */}
           <div className="text-center mb-6">
             <p className="text-muted-foreground text-sm mb-1">
               {language === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}
@@ -600,7 +607,6 @@ const paymentShortcuts = getPaymentShortcuts({
             </p>
           </div>
 
-          {/* Payment Method Tabs */}
           <div className="flex gap-2 mb-6 justify-center">
             {paymentMethods.map((method) => (
               <button
@@ -623,10 +629,8 @@ const paymentShortcuts = getPaymentShortcuts({
             ))}
           </div>
 
-          {/* Payment Content */}
           {renderPaymentContent()}
 
-          {/* Change Display */}
           {(paymentMethod === 'cash' || paymentMethod === 'split') && calculateChange() > 0 && (
             <div className="mt-6 p-4 bg-success/10 rounded-xl text-center">
               <p className="text-sm text-success mb-1">
@@ -639,9 +643,7 @@ const paymentShortcuts = getPaymentShortcuts({
           )}
         </div>
 
-        {/* Footer - مع زرين */}
         <div className="p-4 border-t border-border bg-muted/30 space-y-2">
-          {/* ✅ زر الحفظ والطباعة معاً */}
           <Button
             onClick={handleSaveAndPrintNow}
             disabled={!canComplete() || isProcessing}
@@ -665,64 +667,58 @@ const paymentShortcuts = getPaymentShortcuts({
             )}
           </Button>
 
-         {/* ✅ زر الحفظ فقط - مع عرض الاختصار */}
-<div className="flex gap-2">
-  <Button
-    onClick={handleComplete}
-    disabled={!canComplete() || isProcessing}
-    variant="outline"
-    className={cn(
-      'flex-1 h-12 relative',
-      isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
-    )}
-  >
-    {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
-    {isOffline 
-      ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
-      : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
-    }
-    <kbd className="absolute -top-1 -end-1 text-[9px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
-      Ctrl+S
-    </kbd>
-  </Button>
-  
-  {/* ✅ زر إلغاء */}
-  <Button
-    onClick={onClose}
-    variant="ghost"
-    className="h-12 px-6"
-  >
-    {language === 'ar' ? 'إلغاء' : 'Cancel'}
-  </Button>
-</div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleComplete}
+              disabled={!canComplete() || isProcessing}
+              variant="outline"
+              className={cn(
+                'flex-1 h-12 relative',
+                isOffline ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''
+              )}
+            >
+              {isOffline ? <WifiOff size={18} className="me-2" /> : <Check size={18} className="me-2" />}
+              {isOffline
+                ? (language === 'ar' ? 'حفظ محلياً' : 'Save Locally')
+                : (language === 'ar' ? 'حفظ فقط' : 'Save Only')
+              }
+              <kbd className="absolute -top-1 -end-1 text-[9px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
+                Ctrl+S
+              </kbd>
+            </Button>
+
+            <Button
+              onClick={onClose}
+              variant="ghost"
+              className="h-12 px-6"
+            >
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* ✅ نافذة الطباعة المخفية */}
-     {/* ✅ نافذة الطباعة المخفية - مع companyInfo */}
-{showPrintOptions && completedInvoice && (
-  <div style={{ display: 'none' }}>
-    <InvoiceTemplate 
-      ref={invoiceRef} 
-      invoiceData={completedInvoice.printData}
-
-      companyInfo={{  // ✅ أضف companyInfo هنا
-        name: user?.name || 'متجرك',
-        nameAr: user?.name,
-        logo: user?.logoUrl , 
-        address: user?.address,
-        addressAr: user?.address,
-        phone: user?.phone,
-        email: user?.email,
-        tax_id: user?.tax_id,
-        commercial_register: user?.commercial_register,
-        website: user?.website,
-        currency: user?.currency || 'YER'
-      }}
-      
-    />
-  </div>
-)}
+      {showPrintOptions && completedInvoice && (
+        <div style={{ display: 'none' }}>
+          <InvoiceTemplate
+            ref={invoiceRef}
+            invoiceData={completedInvoice.printData}
+            companyInfo={{
+              name: companyInfo?.name || 'متجرك',
+              nameAr: companyInfo?.nameAr,
+              logo: companyInfo?.logo,
+              address: companyInfo?.address,
+              addressAr: companyInfo?.addressAr,
+              phone: companyInfo?.phone,
+              email: companyInfo?.email,
+              tax_id: companyInfo?.tax_id,
+              commercial_register: companyInfo?.commercial_register,
+              website: companyInfo?.website,
+              currency: companyInfo?.currency || 'YER'
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

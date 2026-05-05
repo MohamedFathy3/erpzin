@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -145,12 +146,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
-  const [timeFrom, setTimeFrom] = useState<string>('');
-  const [timeTo, setTimeTo] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
   const [showFilters, setShowFilters] = useState<boolean>(true);
@@ -162,32 +160,32 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [printData, setPrintData] = useState<any>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-// ========== Print Handler ==========
-const handlePrint = useReactToPrint({
-  contentRef: printRef, // ✅ استخدم contentRef بدل content
-  documentTitle: (printType === 'sale' 
-    ? `Invoice-${printData?.invoice_number}` 
-    : `Return-${printData?.return_number}`) || 'invoice',
-  onAfterPrint: () => {
-    setShowPrintDialog(false);
-    setPrintData(null);
-  },
-});
+  // ========== Print Handler ==========
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: (printType === 'sale' 
+      ? `Invoice-${printData?.invoice_number}` 
+      : `Return-${printData?.return_number}`) || 'invoice',
+    onAfterPrint: () => {
+      setShowPrintDialog(false);
+      setPrintData(null);
+    },
+  });
 
-const onPrintClick = (type: 'sale' | 'return', data: any) => {
-  setPrintType(type);
-  setPrintData(data);
-  setShowPrintDialog(true);
+  const onPrintClick = (type: 'sale' | 'return', data: any) => {
+    setPrintType(type);
+    setPrintData(data);
+    setShowPrintDialog(true);
+    
+    setTimeout(() => {
+      if (printRef.current) {
+        handlePrint();
+      } else {
+        console.error('Print ref is not available');
+      }
+    }, 200);
+  };
   
-  // استخدم setTimeout أصغر واتأكد إن الـ Dialog ظهر
-  setTimeout(() => {
-    if (printRef.current) {
-      handlePrint();
-    } else {
-      console.error('Print ref is not available');
-    }
-  }, 200);
-};
   // ========== Translations ==========
   const t = {
     title: language === 'ar' ? 'فواتير نقطة البيع' : 'POS Invoices',
@@ -196,8 +194,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     search: language === 'ar' ? 'بحث برقم الفاتورة أو العميل...' : 'Search by invoice or customer...',
     dateFrom: language === 'ar' ? 'من تاريخ' : 'From Date',
     dateTo: language === 'ar' ? 'إلى تاريخ' : 'To Date',
-    timeFrom: language === 'ar' ? 'من وقت' : 'From Time',
-    timeTo: language === 'ar' ? 'إلى وقت' : 'To Time',
     branch: language === 'ar' ? 'الفرع' : 'Branch',
     allBranches: language === 'ar' ? 'جميع الفروع' : 'All Branches',
     paymentMethod: language === 'ar' ? 'طريقة الدفع' : 'Payment Method',
@@ -253,58 +249,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
 
   // ========== Queries ==========
 
-  // ✅ جلب الفروع - POST /branch/index
-  const { data: branches = [], isLoading: branchesLoading } = useQuery({
-    queryKey: ['branches-pos-list'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/branch/index', {
-          filters: { active: true },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-        return [];
-      }
-    }
-  });
-
-  // ✅ جلب الكاشيرز - POST /employee/index (مع فلتر role=cashier)
-  const { data: cashiers = [], isLoading: cashiersLoading } = useQuery({
-    queryKey: ['cashiers-pos-list'],
-    queryFn: async () => {
-      try {
-        const response = await api.post('/employee/index', {
-          filters: { 
-            position: 'cashier',
-            is_active: true 
-          },
-          orderBy: 'id',
-          orderByDirection: 'asc',
-          perPage: 100,
-          paginate: false
-        });
-
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
-        return [];
-      } catch (error) {
-        console.error('Error fetching cashiers:', error);
-        return [];
-      }
-    }
-  });
-
-  // ✅ جلب فواتير المبيعات - POST /invoices/index
+  // ✅ جلب الفواتير
   const { data: sales = [], isLoading: salesLoading, refetch: refetchSales } = useQuery({
     queryKey: ['pos-sales', activeTab],
     queryFn: async () => {
@@ -329,7 +274,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     }
   });
 
-  // ✅ جلب فواتير المرتجعات - POST /return-invoices/index
+  // ✅ جلب المرتجعات
   const { data: returns = [], isLoading: returnsLoading, refetch: refetchReturns } = useQuery({
     queryKey: ['pos-returns', activeTab],
     queryFn: async () => {
@@ -357,55 +302,37 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
 
   // ========== Filter Functions ==========
 
-  // ✅ دالة فلترة المبيعات
   const filterSales = (sale: Sale) => {
-    // 1. فلترة البحث
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       const matchesInvoice = sale.invoice_number?.toLowerCase().includes(searchLower);
       const matchesCustomer = sale.customer?.name?.toLowerCase().includes(searchLower) ||
-                            sale.customer?.name_ar?.toLowerCase().includes(searchLower) ||
-                            sale.customer?.phone?.toLowerCase().includes(searchLower);
+                            sale.customer?.name_ar?.toLowerCase().includes(searchLower);
       if (!matchesInvoice && !matchesCustomer) return false;
     }
 
-    // 2. فلترة التاريخ والوقت
-    if (dateFrom || timeFrom || dateTo || timeTo) {
+    if (dateFrom || dateTo) {
       const saleDate = sale.created_at;
       if (!saleDate) return false;
-
       const dateTime = new Date(saleDate);
       
       if (dateFrom) {
         const fromDateTime = new Date(dateFrom);
-        if (timeFrom) {
-          const [hours, minutes] = timeFrom.split(':').map(Number);
-          fromDateTime.setHours(hours, minutes, 0);
-        } else {
-          fromDateTime.setHours(0, 0, 0);
-        }
+        fromDateTime.setHours(0, 0, 0);
         if (dateTime < fromDateTime) return false;
       }
-
       if (dateTo) {
         const toDateTime = new Date(dateTo);
-        if (timeTo) {
-          const [hours, minutes] = timeTo.split(':').map(Number);
-          toDateTime.setHours(hours, minutes, 59);
-        } else {
-          toDateTime.setHours(23, 59, 59);
-        }
+        toDateTime.setHours(23, 59, 59);
         if (dateTime > toDateTime) return false;
       }
     }
 
-    // 3. فلترة طريقة الدفع (لو اختار طريقة معينة، نتأكد إنها موجودة في المدفوعات)
     if (selectedPaymentMethod !== 'all') {
       const hasPaymentMethod = sale.payments?.some(p => p.method === selectedPaymentMethod);
       if (!hasPaymentMethod) return false;
     }
 
-    // 4. فلترة الحالة (تحويل status من API)
     if (selectedStatus !== 'all') {
       const saleStatus = getSaleStatus(sale);
       if (saleStatus !== selectedStatus) return false;
@@ -414,85 +341,55 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     return true;
   };
 
-  // ✅ دالة فلترة المرتجعات
   const filterReturns = (ret: ReturnInvoice) => {
-    // 1. فلترة البحث
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       const matchesInvoice = ret.return_number?.toLowerCase().includes(searchLower);
       const customerName = ret.invoice?.customer?.name || ret.customer?.name || '';
-      const customerNameAr = ret.invoice?.customer?.name_ar || ret.customer?.name_ar || '';
-      const customerPhone = ret.invoice?.customer?.phone || ret.customer?.phone || '';
-      
-      const matchesCustomer = customerName.toLowerCase().includes(searchLower) ||
-                            customerNameAr.toLowerCase().includes(searchLower) ||
-                            customerPhone.toLowerCase().includes(searchLower);
-      
+      const matchesCustomer = customerName.toLowerCase().includes(searchLower);
       if (!matchesInvoice && !matchesCustomer) return false;
     }
 
-    // 2. فلترة التاريخ والوقت
-    if (dateFrom || timeFrom || dateTo || timeTo) {
+    if (dateFrom || dateTo) {
       const returnDate = ret.return_date || ret.created_at;
       if (!returnDate) return false;
-
       const dateTime = new Date(returnDate);
       
       if (dateFrom) {
         const fromDateTime = new Date(dateFrom);
-        if (timeFrom) {
-          const [hours, minutes] = timeFrom.split(':').map(Number);
-          fromDateTime.setHours(hours, minutes, 0);
-        } else {
-          fromDateTime.setHours(0, 0, 0);
-        }
+        fromDateTime.setHours(0, 0, 0);
         if (dateTime < fromDateTime) return false;
       }
-
       if (dateTo) {
         const toDateTime = new Date(dateTo);
-        if (timeTo) {
-          const [hours, minutes] = timeTo.split(':').map(Number);
-          toDateTime.setHours(hours, minutes, 59);
-        } else {
-          toDateTime.setHours(23, 59, 59);
-        }
+        toDateTime.setHours(23, 59, 59);
         if (dateTime > toDateTime) return false;
       }
     }
 
-    // 3. فلترة الحالة
     if (selectedStatus !== 'all' && ret.status !== selectedStatus) return false;
 
     return true;
   };
 
-  // ✅ دالة لتحديد حالة الفاتورة بناءً على المبالغ
   const getSaleStatus = (sale: Sale): string => {
     if (sale.status === 'cancelled') return 'cancelled';
-    
     const total = parseFloat(sale.amounts?.total || '0');
     const paid = parseFloat(sale.amounts?.paid || '0');
-    const remaining = parseFloat(sale.amounts?.remaining || '0');
-    
-    if (paid >= total && remaining <= 0) return 'paid';
+    if (paid >= total) return 'paid';
     if (paid > 0 && paid < total) return 'partial';
     if (paid === 0) return 'pending';
-    
     return sale.status || 'pending';
   };
 
-  // ✅ فلترة المبيعات
   const filteredSales = useMemo(() => {
     return sales.filter(filterSales);
-  }, [sales, searchTerm, dateFrom, dateTo, timeFrom, timeTo, selectedPaymentMethod, selectedStatus]);
+  }, [sales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus]);
 
-  // ✅ فلترة المرتجعات
   const filteredReturns = useMemo(() => {
     return returns.filter(filterReturns);
-  }, [returns, searchTerm, dateFrom, dateTo, timeFrom, timeTo, selectedStatus]);
+  }, [returns, searchTerm, dateFrom, dateTo, selectedStatus]);
 
-  // ✅ حساب الإحصائيات
   const totalSalesAmount = useMemo(() => {
     return filteredSales.reduce((sum: number, s: Sale) => sum + (parseFloat(s.amounts?.total || '0')), 0);
   }, [filteredSales]);
@@ -503,14 +400,12 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
 
   // ========== Helper Functions ==========
 
-  // ✅ تنسيق الأرقام
   const formatNumber = (value: string | number, decimals: number = 2): string => {
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) return '0.00';
     return num.toFixed(decimals).toLocaleString();
   };
 
-  // ✅ أيقونات طرق الدفع
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case 'cash': return <Banknote size={14} />;
@@ -520,24 +415,23 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     }
   };
 
-  // ✅ ألوان طرق الدفع
   const getPaymentMethodColor = (method: string) => {
     switch (method) {
-      case 'cash': return 'bg-green-500/10 text-green-600 border-green-200 dark:bg-green-950/30 dark:text-green-400';
-      case 'card': return 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400';
-      case 'wallet': return 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400';
-      case 'credit': return 'bg-orange-500/10 text-orange-600 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400';
-      default: return 'bg-gray-500/10 text-gray-600 border-gray-200 dark:bg-gray-950/30 dark:text-gray-400';
+      case 'cash': return 'bg-green-500/10 text-green-600 border-green-200';
+      case 'card': return 'bg-blue-500/10 text-blue-600 border-blue-200';
+      case 'wallet': return 'bg-purple-500/10 text-purple-600 border-purple-200';
+      case 'credit': return 'bg-orange-500/10 text-orange-600 border-orange-200';
+      default: return 'bg-gray-500/10 text-gray-600 border-gray-200';
     }
   };
 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { color: string; label: string }> = {
-      paid: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400', label: t.paid_status },
-      partial: { color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400', label: t.partial },
-      pending: { color: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400', label: t.pending },
-      cancelled: { color: 'bg-red-500/10 text-red-600 border-red-200 dark:bg-red-950/30 dark:text-red-400', label: t.cancelled },
-      completed: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400', label: t.paid_status },
+      paid: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200', label: t.paid_status },
+      partial: { color: 'bg-amber-500/10 text-amber-600 border-amber-200', label: t.partial },
+      pending: { color: 'bg-blue-500/10 text-blue-600 border-blue-200', label: t.pending },
+      cancelled: { color: 'bg-red-500/10 text-red-600 border-red-200', label: t.cancelled },
+      completed: { color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200', label: t.paid_status },
     };
     const { color, label } = config[status] || config.pending;
     return <Badge variant="outline" className={cn(color, 'border-0')}>{label}</Badge>;
@@ -555,16 +449,13 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     );
   };
 
-  // ✅ عرض طرق الدفع المتعددة
   const renderPaymentMethods = (payments: Payment[] = []) => {
     if (!payments || payments.length === 0) {
       return getPaymentMethodBadge('cash');
     }
-
     if (payments.length === 1) {
       return getPaymentMethodBadge(payments[0].method);
     }
-
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-1 flex-wrap">
@@ -587,31 +478,31 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     );
   };
 
-  // ✅ عرض المبالغ بشكل منسق
   const renderAmounts = (amounts: Amounts) => {
     const total = parseFloat(amounts?.total || '0');
     const paid = parseFloat(amounts?.paid || '0');
     const remaining = parseFloat(amounts?.remaining || '0');
     
     return (
-      <div className="space-y-1">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">{t.total}:</span>
-          <span className="font-medium">{formatNumber(total)}</span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">{t.paid}:</span>
-          <span className="font-medium text-emerald-600">{formatNumber(paid)}</span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">{remaining > 0 ? t.remaining : t.overpaid}:</span>
-          <span className={cn(
-            "font-medium",
-            remaining > 0 ? "text-amber-600" : remaining < 0 ? "text-blue-600" : "text-muted-foreground"
-          )}>
-            {formatNumber(Math.abs(remaining))}
-            {remaining < 0 && ' ↑'}
-          </span>
+      <div className="whitespace-nowrap">
+        <div className="flex items-center justify-end gap-4">
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">{t.total}</p>
+            <p className="text-sm font-semibold">{formatNumber(total)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">{t.paid}</p>
+            <p className="text-sm font-semibold text-emerald-600">{formatNumber(paid)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">{remaining > 0 ? t.remaining : t.overpaid}</p>
+            <p className={cn(
+              "text-sm font-semibold",
+              remaining > 0 ? "text-amber-600" : remaining < 0 ? "text-blue-600" : "text-muted-foreground"
+            )}>
+              {formatNumber(Math.abs(remaining))}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -621,21 +512,15 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     setSearchTerm('');
     setDateFrom('');
     setDateTo('');
-    setTimeFrom('');
-    setTimeTo('');
     setSelectedBranch('all');
     setSelectedPaymentMethod('all');
     setSelectedStatus('all');
-    setSelectedUser('all');
   };
 
   const refreshData = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([
-        refetchSales(),
-        refetchReturns()
-      ]);
+      await Promise.all([refetchSales(), refetchReturns()]);
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -643,17 +528,14 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
     }
   };
 
-  const hasActiveFilters = searchTerm || dateFrom || dateTo || timeFrom || timeTo || 
-    selectedBranch !== 'all' || selectedPaymentMethod !== 'all' || 
-    selectedStatus !== 'all' || selectedUser !== 'all';
-
-  const isLoading = salesLoading || returnsLoading || branchesLoading || cashiersLoading;
+  const hasActiveFilters = searchTerm || dateFrom || dateTo || selectedPaymentMethod !== 'all' || selectedStatus !== 'all';
+  const isLoading = salesLoading || returnsLoading;
 
   // ========== Render ==========
   return (
     <div className="space-y-4">
-      {/* ========== Header ========== */}
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Receipt className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold">{t.title}</h2>
@@ -678,7 +560,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
         </div>
       </div>
 
-      {/* ========== Stats Cards ========== */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20">
           <CardContent className="p-4">
@@ -710,7 +592,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-500/20">
-                <User className="h-5 w-5 text-blue-600" />
+                <Receipt className="h-5 w-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-xl font-bold">{filteredSales.length}</p>
@@ -734,7 +616,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
         </Card>
       </div>
 
-      {/* ========== Filters Toggle ========== */}
+      {/* Filters Toggle */}
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -755,12 +637,11 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
         )}
       </div>
 
-      {/* ========== Filters Section ========== */}
-
+      {/* Filters Section */}
       {showFilters && (
         <Card>
           <CardContent className="p-4 space-y-4">
-            {/* Row 1: Search */}
+            {/* Search */}
             <div className="relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -781,8 +662,8 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
               )}
             </div>
 
-            {/* Row 2: Date & Time Filters */}
-            <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
+            {/* Date Filters */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.dateFrom}</Label>
                 <DatePicker
@@ -792,15 +673,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   language={language}
                 />
               </div>
-              {/* <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">{t.timeFrom}</Label>
-                <TimePicker
-                  value={timeFrom}
-                  onChange={setTimeFrom}
-                  placeholder={t.timeFrom}
-                  language={language}
-                />
-              </div> */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.dateTo}</Label>
                 <DatePicker
@@ -810,38 +682,10 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                   language={language}
                 />
               </div>
-              {/* <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">{t.timeTo}</Label>
-                <TimePicker
-                  value={timeTo}
-                  onChange={setTimeTo}
-                  placeholder={t.timeTo}
-                  language={language}
-                />
-              </div> */}
             </div>
 
-            {/* Row 3: Selects */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">{t.branch}</Label>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t.allBranches} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t.allBranches}</SelectItem>
-                    {branches.map((b: any) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        <div className="flex items-center gap-2">
-                          <Building2 size={14} className="text-muted-foreground" />
-                          {language === 'ar' ? b.name_ar || b.name : b.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Selects */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.paymentMethod}</Label>
                 <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
@@ -877,7 +721,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
         </Card>
       )}
 
-      {/* ========== Tabs ========== */}
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'sales' | 'returns')}>
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="sales" className="gap-2">
@@ -896,26 +740,26 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
           </TabsTrigger>
         </TabsList>
 
-        {/* ========== Sales Tab ========== */}
-        <TabsContent value="sales">
+        {/* Sales Tab */}
+        <TabsContent value="sales" className="mt-4">
           <Card>
             <CardContent className="p-0">
-              <ScrollArea className="h-[500px]">
-                <div className="min-w-[1000px]">
+              <div className="overflow-x-auto scroll-smooth">
+                <div className="min-w-[1200px]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="min-w-[150px]">{t.invoiceNumber}</TableHead>
-                        <TableHead className="min-w-[200px]">{t.customer}</TableHead>
-                        <TableHead className="min-w-[250px]">{t.paymentMethod}</TableHead>
-                        <TableHead className="min-w-[200px] text-right">{t.total}</TableHead>
-                        <TableHead className="min-w-[100px] text-center">{t.actions}</TableHead>
+                        <TableHead className="w-[180px] whitespace-nowrap">{t.invoiceNumber}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.customer}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.paymentMethod}</TableHead>
+                        <TableHead className="w-[300px] whitespace-nowrap text-right">{t.total}</TableHead>
+                        <TableHead className="w-[100px] whitespace-nowrap text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {salesLoading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
+                          <TableCell colSpan={5} className="text-center py-8">
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin text-primary" />
                               <span className="text-muted-foreground">{t.loading}</span>
@@ -924,7 +768,7 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                         </TableRow>
                       ) : filteredSales.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                             <Receipt className="mx-auto h-12 w-12 mb-4 opacity-20" />
                             <p>{t.noData}</p>
                           </TableCell>
@@ -932,14 +776,13 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                       ) : (
                         filteredSales.map((sale: Sale) => (
                           <TableRow key={sale.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedSale(sale)}>
-                            <TableCell className="font-mono text-sm font-medium">
+                            <TableCell className="font-mono text-sm font-medium whitespace-nowrap">
                               {sale.invoice_number || '-'}
                             </TableCell>
-                         
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <User size={14} className="text-muted-foreground" />
-                                <span>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <User size={14} className="text-muted-foreground shrink-0" />
+                                <span className="truncate max-w-[200px]">
                                   {sale.customer 
                                     ? (language === 'ar' ? sale.customer.name_ar || sale.customer.name : sale.customer.name)
                                     : '-'
@@ -947,7 +790,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                                 </span>
                               </div>
                             </TableCell>
-
                             <TableCell>
                               {renderPaymentMethods(sale.payments)}
                             </TableCell>
@@ -986,30 +828,27 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                     </TableBody>
                   </Table>
                 </div>
-              </ScrollArea>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ========== Returns Tab ========== */}
-
-
-
-        <TabsContent value="returns">
+        {/* Returns Tab */}
+        <TabsContent value="returns" className="mt-4">
           <Card>
             <CardContent className="p-0">
-              <ScrollArea className="h-[500px]">
-                <div className="min-w-[800px]">
+              <div className="overflow-x-auto scroll-smooth">
+                <div className="min-w-[1200px]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
-                        <TableHead className="min-w-[150px]">{t.returnNumber}</TableHead>
-                        <TableHead className="min-w-[150px]">{t.date}</TableHead>
-                        <TableHead className="min-w-[200px]">{t.customer}</TableHead>
-                        <TableHead className="min-w-[120px]">{t.refundMethod}</TableHead>
-                        <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
-                        <TableHead className="min-w-[120px]">{t.status}</TableHead>
-                        <TableHead className="min-w-[100px] text-center">{t.actions}</TableHead>
+                        <TableHead className="w-[180px] whitespace-nowrap">{t.returnNumber}</TableHead>
+                        <TableHead className="w-[180px] whitespace-nowrap">{t.date}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.customer}</TableHead>
+                        <TableHead className="w-[150px] whitespace-nowrap">{t.refundMethod}</TableHead>
+                        <TableHead className="w-[120px] whitespace-nowrap text-right">{t.total}</TableHead>
+                        <TableHead className="w-[120px] whitespace-nowrap">{t.status}</TableHead>
+                        <TableHead className="w-[100px] whitespace-nowrap text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1031,7 +870,6 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                         </TableRow>
                       ) : (
                         filteredReturns.map((ret: ReturnInvoice) => {
-                          // الحصول على اسم العميل (من invoice أو customer مباشرة)
                           const customerName = ret.invoice?.customer 
                             ? (language === 'ar' ? ret.invoice.customer.name_ar || ret.invoice.customer.name : ret.invoice.customer.name)
                             : ret.customer 
@@ -1040,26 +878,24 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                           
                           return (
                             <TableRow key={ret.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedReturn(ret)}>
-                              <TableCell className="font-mono text-sm font-medium">
+                              <TableCell className="font-mono text-sm font-medium whitespace-nowrap">
                                 {ret.return_number || '-'}
                               </TableCell>
-                              <TableCell className="text-sm">
+                              <TableCell className="whitespace-nowrap">
                                 {ret.return_date || ret.created_at ? 
-                                  format(new Date(ret.return_date || ret.created_at), 'yyyy-MM-dd HH:mm', { 
-                                    locale: language === 'ar' ? ar : undefined 
-                                  }) : '-'
+                                  format(new Date(ret.return_date || ret.created_at), 'yyyy-MM-dd HH:mm') : '-'
                                 }
                               </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <User size={14} className="text-muted-foreground" />
-                                  <span>{customerName}</span>
+                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                  <User size={14} className="text-muted-foreground shrink-0" />
+                                  <span className="truncate max-w-[200px]">{customerName}</span>
                                 </div>
                               </TableCell>
                               <TableCell>
                                 {getPaymentMethodBadge(ret.refund_method || 'cash')}
                               </TableCell>
-                              <TableCell className="font-semibold text-right text-red-600">
+                              <TableCell className="font-semibold text-right text-red-600 whitespace-nowrap">
                                 -{formatNumber(ret.total_amount || 0)}
                               </TableCell>
                               <TableCell>{getStatusBadge(ret.status || 'completed')}</TableCell>
@@ -1096,15 +932,15 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
                     </TableBody>
                   </Table>
                 </div>
-              </ScrollArea>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* ========== Sale Details Modal ========== */}
+      {/* Sale Details Modal */}
       <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Receipt size={20} className="text-primary" />
@@ -1112,154 +948,142 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
             </DialogTitle>
           </DialogHeader>
           {selectedSale && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Invoice Info */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.date}</p>
-                  <p className="text-sm font-medium">
-                    {selectedSale.created_at
-                      ? format(new Date(selectedSale.created_at), 'yyyy-MM-dd HH:mm')
-                      : '-'
-                    }
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.customer}</p>
-                  <p className="text-sm font-medium">
-                    {selectedSale.customer 
-                      ? (language === 'ar' ? selectedSale.customer.name_ar || selectedSale.customer.name : selectedSale.customer.name)
-                      : '-'
-                    }
-                  </p>
-                </div>
-                 <div>
-                  <p className="text-xs text-muted-foreground">{t.salesRepresentative}</p>
-                  <p className="text-sm font-medium">
-                    {selectedSale.salesRepresentative 
-                      ? (language === 'ar' ? selectedSale.salesRepresentative.name || selectedSale.salesRepresentative.name : selectedSale.salesRepresentative.name)
-                      : '-'
-                    }
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.paymentMethod}</p>
-                  <div className="mt-1 space-y-1">
-                    {selectedSale.payments?.map((payment, idx) => (
-                      <div key={idx} className="flex items-center gap-1">
-                        {getPaymentMethodBadge(payment.method)}
-                        <span className="text-xs font-medium">{formatNumber(payment.amount)}</span>
-                      </div>
-                    ))}
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {/* Invoice Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.date}</p>
+                    <p className="text-sm font-medium">
+                      {selectedSale.created_at ? format(new Date(selectedSale.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.customer}</p>
+                    <p className="text-sm font-medium">
+                      {selectedSale.customer 
+                        ? (language === 'ar' ? selectedSale.customer.name_ar || selectedSale.customer.name : selectedSale.customer.name)
+                        : '-'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.salesRepresentative}</p>
+                    <p className="text-sm font-medium">
+                      {selectedSale.salesRepresentative?.name || '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.status}</p>
+                    <div className="mt-1">{getStatusBadge(getSaleStatus(selectedSale))}</div>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.status}</p>
-                  <div className="mt-1">{getStatusBadge(getSaleStatus(selectedSale))}</div>
-                </div>
-              </div>
 
-              {/* Amounts Summary */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                  <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
-                  <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
+                {/* Amounts Summary */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
+                    <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
+                  </div>
+                  <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">{t.paidAmount}</p>
+                    <p className="text-lg font-bold text-emerald-600">{formatNumber(selectedSale.amounts?.paid || '0')}</p>
+                  </div>
+                  <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? t.remaining : t.overpaid}
+                    </p>
+                    <p className={cn(
+                      "text-lg font-bold",
+                      parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
+                      parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
+                    )}>
+                      {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
+                    </p>
+                  </div>
                 </div>
-                <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20">
-                  <p className="text-xs text-muted-foreground mb-1">{t.paidAmount}</p>
-                  <p className="text-lg font-bold text-emerald-600">{formatNumber(selectedSale.amounts?.paid || '0')}</p>
-                </div>
-                <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? t.remaining : t.overpaid}
-                  </p>
-                  <p className={cn(
-                    "text-lg font-bold",
-                    parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
-                    parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
-                  )}>
-                    {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
-                    {parseFloat(selectedSale.amounts?.remaining || '0') < 0 && ' ↑'}
-                  </p>
-                </div>
-              </div>
 
-              {/* Payment Breakdown */}
-              {selectedSale.payments && selectedSale.payments.length > 1 && (
+                {/* Payment Breakdown */}
+                {selectedSale.payments && selectedSale.payments.length > 1 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <PieChart size={16} className="text-primary" />
+                      {t.paymentBreakdown}
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {selectedSale.payments.map((payment, idx) => (
+                        <div key={idx} className={cn(
+                          "p-2 rounded-lg border text-center",
+                          getPaymentMethodColor(payment.method)
+                        )}>
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            {getPaymentIcon(payment.method)}
+                            <span className="text-xs font-medium">
+                              {payment.method === 'cash' ? t.cash : 
+                               payment.method === 'card' ? t.card : 
+                               payment.method === 'wallet' ? t.wallet : 
+                               payment.method === 'credit' ? t.credit : payment.method}
+                            </span>
+                          </div>
+                          <p className="text-sm font-bold">{formatNumber(payment.amount)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Items Table */}
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <PieChart size={16} className="text-primary" />
-                    {t.paymentBreakdown}
+                    <Receipt size={16} className="text-primary" />
+                    {t.items}
                   </h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedSale.payments.map((payment, idx) => (
-                      <div key={idx} className={cn(
-                        "p-2 rounded-lg border",
-                        getPaymentMethodColor(payment.method).split(' ')[0]
-                      )}>
-                        <div className="flex items-center gap-1 mb-1">
-                          {getPaymentIcon(payment.method)}
-                          <span className="text-xs font-medium">
-                            {payment.method === 'cash' ? t.cash : 
-                             payment.method === 'card' ? t.card : 
-                             payment.method === 'wallet' ? t.wallet : 
-                             payment.method === 'credit' ? t.credit : payment.method}
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold">{formatNumber(payment.amount)}</p>
-                      </div>
-                    ))}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                            <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedSale.items?.map((item: SaleItem, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <div>
+                                  <span className="font-medium">{item.product_name || '-'}</span>
+                                  {(item.color || item.size) && (
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                      {item.color && <span>🎨 {item.color}</span>}
+                                      {item.size && <span>📏 {item.size}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                              <TableCell className="text-right">{formatNumber(item.price || '0')}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatNumber(item.total || '0')}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 </div>
-              )}
-
-              {/* Items Table */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Receipt size={16} className="text-primary" />
-                  {t.items}
-                </h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[200px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
-                        <TableHead className="min-w-[100px] text-right">{t.price}</TableHead>
-                        <TableHead className="min-w-[100px] text-right">{t.total}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedSale.items?.map((item: SaleItem, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">
-                            {item.product_name || '-'}
-                            {(item.color || item.size) && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                {item.color && <span>🎨 {item.color}</span>}
-                                {item.size && <span>📏 {item.size}</span>}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                          <TableCell className="text-right">{formatNumber(item.price || '0')}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatNumber(item.total || '0')}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
               </div>
-            </div>
+            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* ========== Return Details Modal ========== */}
+      {/* Return Details Modal */}
       <Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <RotateCcw size={20} className="text-primary" />
@@ -1267,139 +1091,144 @@ const onPrintClick = (type: 'sale' | 'return', data: any) => {
             </DialogTitle>
           </DialogHeader>
           {selectedReturn && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Return Info */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.date}</p>
-                  <p className="text-sm font-medium">
-                    {selectedReturn.return_date || selectedReturn.created_at
-                      ? format(new Date(selectedReturn.return_date || selectedReturn.created_at), 'yyyy-MM-dd HH:mm')
-                      : '-'
-                    }
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.customer}</p>
-                  <p className="text-sm font-medium">
-                    {selectedReturn.invoice?.customer 
-                      ? (language === 'ar' ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name)
-                      : selectedReturn.customer 
-                        ? (language === 'ar' ? selectedReturn.customer.name_ar || selectedReturn.customer.name : selectedReturn.customer.name)
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {/* Return Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.date}</p>
+                    <p className="text-sm font-medium">
+                      {selectedReturn.return_date || selectedReturn.created_at
+                        ? format(new Date(selectedReturn.return_date || selectedReturn.created_at), 'yyyy-MM-dd HH:mm')
                         : '-'
-                    }
-                  </p>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.customer}</p>
+                    <p className="text-sm font-medium">
+                      {selectedReturn.invoice?.customer 
+                        ? (language === 'ar' ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name)
+                        : selectedReturn.customer 
+                          ? (language === 'ar' ? selectedReturn.customer.name_ar || selectedReturn.customer.name : selectedReturn.customer.name)
+                          : '-'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.reason}</p>
+                    <p className="text-sm font-medium">{selectedReturn.reason || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.status}</p>
+                    <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.reason}</p>
-                  <p className="text-sm font-medium">{selectedReturn.reason || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.status}</p>
-                  <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
-                </div>
-              </div>
 
-              {/* Refund Method */}
-              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                <p className="text-xs text-muted-foreground mb-1">{t.refundMethod}</p>
-                <div>{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
-              </div>
-
-              {/* Items Table */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Receipt size={16} className="text-primary" />
-                  {t.items}
-                </h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[200px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                        <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
-                        <TableHead className="min-w-[100px] text-right">{t.price}</TableHead>
-                        <TableHead className="min-w-[100px] text-right">{t.total}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedReturn.return_items?.map((item: ReturnItem, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">
-                            {item.product_name || '-'}
-                            {(item.color || item.size) && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                {item.color && <span>🎨 {item.color}</span>}
-                                {item.size && <span>📏 {item.size}</span>}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                          <TableCell className="text-right">{formatNumber(item.unit_price || 0)}</TableCell>
-                          <TableCell className="text-right font-medium text-red-600">
-                            -{formatNumber(item.total_price || 0)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                {/* Refund Method */}
+                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">{t.refundMethod}</p>
+                  <div className="flex justify-center">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
                 </div>
-              </div>
 
-              {/* Total */}
-              <div className="flex justify-end">
-                <div className="w-64 border rounded-lg p-4 bg-red-500/5 border-red-200">
-                  <div className="flex justify-between font-bold text-lg text-red-600">
-                    <span>{t.netTotal}:</span>
-                    <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
+                {/* Items Table */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Receipt size={16} className="text-primary" />
+                    {t.items}
+                  </h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                            <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedReturn.return_items?.map((item: ReturnItem, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <div>
+                                  <span className="font-medium">{item.product_name || '-'}</span>
+                                  {(item.color || item.size) && (
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                      {item.color && <span>🎨 {item.color}</span>}
+                                      {item.size && <span>📏 {item.size}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                              <TableCell className="text-right">{formatNumber(item.unit_price || 0)}</TableCell>
+                              <TableCell className="text-right font-medium text-red-600">
+                                -{formatNumber(item.total_price || 0)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total */}
+                <div className="flex justify-end">
+                  <div className="w-80 border rounded-lg p-4 bg-red-500/5 border-red-200">
+                    <div className="flex justify-between font-bold text-lg text-red-600">
+                      <span>{t.netTotal}:</span>
+                      <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>
 
-  {/* ========== Print Dialog ========== */}
-<Dialog open={showPrintDialog} onOpenChange={() => {
-  setShowPrintDialog(false);
-  setPrintData(null);
-}}>
-  <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-    <DialogHeader>
-      <DialogTitle className="flex items-center gap-2">
-        <Printer size={20} className="text-primary" />
-        {printType === 'sale' 
-          ? `${t.invoiceDetails} - ${printData?.invoice_number}`
-          : `${t.returnDetails} - ${printData?.return_number}`
-        }
-      </DialogTitle>
-    </DialogHeader>
-    <div className="overflow-auto max-h-[70vh]">
-      {printData && (
-        <PrintableInvoice
-          ref={printRef}
-          data={printData}
-          type={printType}
-          language={language}
-          // 👇 مش محتاج تمرر companyInfo لأنها هتجيله من AuthContext
-        />
-      )}
-    </div>
-    <div className="flex justify-end gap-2 mt-4">
-      <Button variant="outline" onClick={() => {
+      {/* Print Dialog */}
+      <Dialog open={showPrintDialog} onOpenChange={() => {
         setShowPrintDialog(false);
         setPrintData(null);
       }}>
-        {language === 'ar' ? 'إلغاء' : 'Cancel'}
-      </Button>
-      <Button onClick={() => handlePrint()} className="gap-2">
-        <Printer size={16} />
-        {language === 'ar' ? 'طباعة' : 'Print'}
-      </Button>
-    </div>
-  </DialogContent>
-</Dialog>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer size={20} className="text-primary" />
+              {printType === 'sale' 
+                ? `${t.invoiceDetails} - ${printData?.invoice_number}`
+                : `${t.returnDetails} - ${printData?.return_number}`
+              }
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto max-h-[70vh]">
+            {printData && (
+              <PrintableInvoice
+                ref={printRef}
+                data={printData}
+                type={printType}
+                language={language}
+              />
+            )}
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => {
+              setShowPrintDialog(false);
+              setPrintData(null);
+            }}>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={() => handlePrint()} className="gap-2">
+              <Printer size={16} />
+              {language === 'ar' ? 'طباعة' : 'Print'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

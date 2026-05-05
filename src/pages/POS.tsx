@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // POS.tsx - النسخة الكاملة المعدلة مع الخصومات
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
