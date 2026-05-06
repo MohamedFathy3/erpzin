@@ -103,7 +103,7 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
           <Search className="h-4 w-4 me-2" />
           {t.invoiceMode}
         </Button>
-        <Button
+        {/* <Button
           variant={searchMode === 'product' ? 'default' : 'outline'}
           size="sm"
           onClick={switchToProductMode}
@@ -111,7 +111,7 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
         >
           <Package className="h-4 w-4 me-2" />
           {t.productMode}
-        </Button>
+        </Button> */}
       </div>
 
       {/* Search Input */}

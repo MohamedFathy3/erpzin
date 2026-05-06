@@ -980,6 +980,7 @@ const SalesInvoiceList = () => {
                         </span>
                       </div>
                     </TableHead>
+                    
                     <TableHead className="min-w-[120px] font-bold">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

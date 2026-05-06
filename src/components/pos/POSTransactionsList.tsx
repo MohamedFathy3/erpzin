@@ -81,11 +81,12 @@ interface Sale {
   invoice_number: string;
   status: 'paid' | 'pending' | 'cancelled' | 'partial';
   customer: Customer | null;
-  salesRepresentative: { id: number; name: string } | null;
+  salesRepresentative: { id: number; name: string, name_ar:string } | null;
   amounts: Amounts;
   items: SaleItem[];
   payments: Payment[];
   created_at: string;
+  cashier: string;
   
 }
 
@@ -207,6 +208,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     date: language === 'ar' ? 'التاريخ' : 'Date',
     salesRepresentative: language === 'ar' ? 'المندوب' : 'Sales Representative',
     customer: language === 'ar' ? 'العميل' : 'Customer',
+    cashier: language === 'ar' ? 'الكاشير' : 'Cashier',
     total: language === 'ar' ? 'الإجمالي' : 'Total',
     paid: language === 'ar' ? 'المدفوع' : 'Paid',
     remaining: language === 'ar' ? 'المتبقي' : 'Remaining',
@@ -751,6 +753,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       <TableRow>
                         <TableHead className="w-[180px] whitespace-nowrap">{t.invoiceNumber}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.customer}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.cashier}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.salesRepresentative}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.paymentMethod}</TableHead>
                         <TableHead className="w-[300px] whitespace-nowrap text-right">{t.total}</TableHead>
                         <TableHead className="w-[100px] whitespace-nowrap text-center">{t.actions}</TableHead>
@@ -777,7 +781,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         filteredSales.map((sale: Sale) => (
                           <TableRow key={sale.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedSale(sale)}>
                             <TableCell className="font-mono text-sm font-medium whitespace-nowrap">
-                              {sale.invoice_number || '-'}
+                              {sale.invoice_number || 'N/A'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2 whitespace-nowrap">
@@ -785,7 +789,29 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 <span className="truncate max-w-[200px]">
                                   {sale.customer 
                                     ? (language === 'ar' ? sale.customer.name_ar || sale.customer.name : sale.customer.name)
-                                    : '-'
+                                    : 'N/A'
+                                  }
+                                </span>
+                              </div>
+                            </TableCell>
+                             <TableCell>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <User size={14} className="text-muted-foreground shrink-0" />
+                                <span className="truncate max-w-[200px]">
+                                  {sale.salesRepresentative 
+                                    ? (language === 'ar' ? sale.salesRepresentative.name_ar || sale.salesRepresentative.name : sale.salesRepresentative.name)
+                                    : 'N/A'
+                                  }
+                                </span>
+                              </div>
+                            </TableCell>
+                              <TableCell>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <User size={14} className="text-muted-foreground shrink-0" />
+                                <span className="truncate max-w-[200px]">
+                                  {sale.cashier 
+                                    ? (language === 'ar' ? sale.cashier : sale.cashier)
+                                    : 'N/A'
                                   }
                                 </span>
                               </div>
@@ -1083,112 +1109,128 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
       {/* Return Details Modal */}
       <Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="p-4 border-b">
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw size={20} className="text-primary" />
-              {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
-            </DialogTitle>
-          </DialogHeader>
-          {selectedReturn && (
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {/* Return Info */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t.date}</p>
-                    <p className="text-sm font-medium">
-                      {selectedReturn.return_date || selectedReturn.created_at
-                        ? format(new Date(selectedReturn.return_date || selectedReturn.created_at), 'yyyy-MM-dd HH:mm')
-                        : '-'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t.customer}</p>
-                    <p className="text-sm font-medium">
-                      {selectedReturn.invoice?.customer 
-                        ? (language === 'ar' ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name : selectedReturn.invoice.customer.name)
-                        : selectedReturn.customer 
-                          ? (language === 'ar' ? selectedReturn.customer.name_ar || selectedReturn.customer.name : selectedReturn.customer.name)
-                          : '-'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t.reason}</p>
-                    <p className="text-sm font-medium">{selectedReturn.reason || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t.status}</p>
-                    <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
-                  </div>
-                </div>
+  <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+    <DialogHeader className="p-4 border-b">
+      <DialogTitle className="flex items-center gap-2">
+        <RotateCcw size={20} className="text-primary" />
+        {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
+      </DialogTitle>
+    </DialogHeader>
+    {selectedReturn && (
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4">
+          {/* Return Info */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div>
+              <p className="text-xs text-muted-foreground">{t.date}</p>
+              <p className="text-sm font-medium">
+                {selectedReturn.return_date || selectedReturn.created_at
+                  ? format(new Date(selectedReturn.return_date || selectedReturn.created_at), 'yyyy-MM-dd HH:mm')
+                  : '-'
+                }
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t.customer}</p>
+              <p className="text-sm font-medium">
+                {selectedReturn.invoice?.customer?.name 
+                  ? (language === 'ar' 
+                      ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name 
+                      : selectedReturn.invoice.customer.name)
+                  : '-'
+                }
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t.reason}</p>
+              <p className="text-sm font-medium">{selectedReturn.reason || '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{t.status}</p>
+              <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
+            </div>
+          </div>
 
-                {/* Refund Method */}
-                <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{t.refundMethod}</p>
-                  <div className="flex justify-center">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
-                </div>
+          {/* Refund Method */}
+          <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
+            <p className="text-xs text-muted-foreground mb-1">{t.refundMethod}</p>
+            <div className="flex justify-center">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
+          </div>
 
-                {/* Items Table */}
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <Receipt size={16} className="text-primary" />
-                    {t.items}
-                  </h3>
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                            <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
-                            <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
-                            <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedReturn.return_items?.map((item: ReturnItem, index: number) => (
-                            <TableRow key={index}>
-                              <TableCell>
-                                <div>
-                                  <span className="font-medium">{item.product_name || '-'}</span>
-                                  {(item.color || item.size) && (
-                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                      {item.color && <span>🎨 {item.color}</span>}
-                                      {item.size && <span>📏 {item.size}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                              <TableCell className="text-right">{formatNumber(item.unit_price || 0)}</TableCell>
-                              <TableCell className="text-right font-medium text-red-600">
-                                -{formatNumber(item.total_price || 0)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Total */}
-                <div className="flex justify-end">
-                  <div className="w-80 border rounded-lg p-4 bg-red-500/5 border-red-200">
-                    <div className="flex justify-between font-bold text-lg text-red-600">
-                      <span>{t.netTotal}:</span>
-                      <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
-                    </div>
-                  </div>
-                </div>
+          {/* Items Table */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Receipt size={16} className="text-primary" />
+              {t.items}
+            </h3>
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                      <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
+                      <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
+                      <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* استخدم selectedReturn.items مش return_items */}
+                    {selectedReturn.items?.map((item: ReturnItem, index: number) => (
+                      <TableRow key={item.id || index}>
+                        <TableCell>
+                          <div>
+                            <span className="font-medium">{item.product?.name || '-'}</span>
+                            {(item.color || item.size) && (
+                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                {item.size && (
+                                  <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                                    📏 {language === 'ar' ? 'مقاس:' : 'Size:'} {item.size}
+                                  </span>
+                                )}
+                                {item.color && (
+                                  <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                                    🎨 {language === 'ar' ? 'لون:' : 'Color:'} {item.color}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                        <TableCell className="text-right">{formatNumber(item.price || 0)}</TableCell>
+                        <TableCell className="text-right font-medium text-red-600">
+                          -{formatNumber(item.total || 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(!selectedReturn.items || selectedReturn.items.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                          {language === 'ar' ? 'لا توجد منتجات مرتجعة' : 'No return items'}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-            </ScrollArea>
-          )}
-        </DialogContent>
-      </Dialog>
+            </div>
+          </div>
+
+          {/* Total */}
+          <div className="flex justify-end">
+            <div className="w-80 border rounded-lg p-4 bg-red-500/5 border-red-200">
+              <div className="flex justify-between font-bold text-lg text-red-600">
+                <span>{t.netTotal}:</span>
+                <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
+    )}
+  </DialogContent>
+</Dialog>
 
       {/* Print Dialog */}
       <Dialog open={showPrintDialog} onOpenChange={() => {
