@@ -14,16 +14,20 @@ interface CompanyInfo {
   commercial_register?: string | null;
   website?: string | null;
   currency?: string | null;
+      invoice_number?: string;
+
 }
 
 interface InvoiceTemplateProps {
   invoiceData: {
-    id: string;
-    date: string;
-    customer: { name: string; nameAr?: string; phone?: string } | null;
+    invoiceNumber?: string;
+    id?: number;
+    date?: string;
+    customer?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
     branchName?: string;
     branchPhone?: string;
+        invoice_number?: string;
     branchAddress?: string;
     taxRate?: number;
     items: Array<{
@@ -41,9 +45,9 @@ interface InvoiceTemplateProps {
     total: number;
     payments: { method: string; amount: number }[];
     change?: number;
-    totalDiscountPercentage?: number;    // ✅ نسبة الخصم الكلية
-    totalDiscountAmount?: number;        // ✅ قيمة الخصم الكلية
-    invoiceDiscountPercentage?: number;  // ✅ نسبة خصم الفاتورة (للعلم)
+    totalDiscountPercentage?: number;
+    totalDiscountAmount?: number;
+    invoiceDiscountPercentage?: number;
   };
   companyInfo: CompanyInfo;
 }
@@ -53,9 +57,47 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     const { language } = useLanguage();
     const isRTL = language === 'ar';
     const { formatCurrency } = useRegionalSettings();
+     console.log('🔍 invoiceData received:', invoiceData);
+    console.log('🔍 invoice_number:', invoiceData?.invoice_number);
+    console.log('🔍 invoiceNumber:', invoiceData?.invoiceNumber);
+    console.log('🔍 id:', invoiceData?.id);
+      // debugger;
+    const getInvoiceNumber = () => {
+      // ✅ backend payload key is invoice_number (snake_case)
+      const anyData = invoiceData as Record<string, unknown>;
+
+      if (anyData?.invoice_number != null && anyData?.invoice_number !== '') {
+        return String(anyData.invoice_number);
+      }
+
+      // ✅ fallback (camelCase)
+      if (anyData?.invoiceNumber != null && anyData?.invoiceNumber !== '') {
+        return String(anyData.invoiceNumber);
+      }
+
+      // ✅ extra fallback: sometimes API might send invoiceNumber inside data
+      const data = anyData?.data as Record<string, unknown> | undefined;
+      const maybeInvoiceNumber = data && 'invoice_number' in data ? (data as Record<string, unknown>)['invoice_number'] : undefined;
+      if (maybeInvoiceNumber != null) {
+        return String(maybeInvoiceNumber);
+      }
+
+      // ✅ hard fallback for your current payload example
+      if (anyData?.invoice_number != null) {
+        return String(anyData.invoice_number);
+      }
+
+
+      return '-----';
+    };
+
+    const fullInvoiceNumber = getInvoiceNumber();
+    
+    // ✅ للـ console.log عشان تتأكد من الرقم
+    console.log('🖨️ Full Invoice Number in Print:', fullInvoiceNumber);
 
     const safeInvoiceData = {
-      id: invoiceData.id || '',
+      invoice_number: fullInvoiceNumber,
       date: invoiceData.date || new Date().toISOString(),
       customer: invoiceData.customer || null,
       cashierName: invoiceData.cashierName || '---',
@@ -123,7 +165,9 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           margin: '0 auto',
           padding: '4mm 3mm',
           fontSize: '10px',
-          lineHeight: '1.3'
+          lineHeight: '1.3',
+          wordWrap: 'break-word',      // ✅ يخلي النص يلف لو طويل
+          overflowWrap: 'break-word'   // ✅ يمنع تقطيع الكلمات
         }}
       >
         {/* Header */}
@@ -165,25 +209,47 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           )}
         </div>
 
-        {/* Invoice Header */}
+        {/* ✅ Invoice Header - رقم الفاتورة يظهر كامل */}
         <div className="flex justify-between items-start text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
-          <div className="text-left">
-            <div><span className="font-bold">{texts.invoiceNo}:</span> <span className="font-mono">{String(safeInvoiceData.id).slice(-8)}</span></div>
-            <div><span className="font-bold">{texts.paymentMethod}:</span> <span>{paymentMethodsText}</span></div>
+          <div className="text-left" style={{ maxWidth: '45%' }}>
+            {/* ✅ رقم الفاتورة كامل بدون تقطيع */}
+            <div className="mb-1">
+              <span className="font-bold">{texts.invoiceNo}:</span>
+              <span 
+                className="font-mono font-semibold ml-1 break-all"
+                style={{ 
+                  wordBreak: 'break-all',
+                  display: 'inline-block',
+                  maxWidth: '100%'
+                }}
+              >
+                {safeInvoiceData.invoice_number}
+              </span>
+            </div>
+            <div>
+              <span className="font-bold">{texts.paymentMethod}:</span>
+              <span className="ml-1">{paymentMethodsText}</span>
+            </div>
           </div>
           
-          <div className="text-right">
-            <div><span className="font-bold">{texts.date}:</span> <span>{new Date(safeInvoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span></div>
-            <div><span className="font-bold">{texts.cashier}:</span> <span>{safeInvoiceData.cashierName}</span></div>
+          <div className="text-right" style={{ maxWidth: '45%' }}>
+            <div className="mb-1">
+              <span className="font-bold">{texts.date}:</span>
+              <span className="ml-1">{new Date(safeInvoiceData.date).toLocaleDateString(isRTL ? 'ar' : 'en')}</span>
+            </div>
+            <div>
+              <span className="font-bold">{texts.cashier}:</span>
+              <span className="ml-1">{safeInvoiceData.cashierName}</span>
+            </div>
           </div>
         </div>
 
         {/* Customer Info */}
-        {safeInvoiceData.customer ? (
+        {safeInvoiceData.customer && safeInvoiceData.customer.name ? (
           <div className="text-[9px] mb-2 border-b border-dashed border-gray-300 pb-2">
             <div className="flex justify-between">
               <span className="font-bold">{texts.customer}:</span>
-              <span>
+              <span className="break-words" style={{ maxWidth: '60%', textAlign: 'right' }}>
                 {isRTL && safeInvoiceData.customer.nameAr ? safeInvoiceData.customer.nameAr : safeInvoiceData.customer.name}
               </span>
             </div>
@@ -219,7 +285,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <tr key={index} className="border-b border-gray-200">
                 <td className="py-1 text-center">{index + 1}</td>
                 <td className="py-1 text-right">
-                  <div>{isRTL ? item.nameAr : item.name}</div>
+                  <div className="break-words" style={{ maxWidth: '100px' }}>{isRTL ? item.nameAr : item.name}</div>
                   {(item.sizeName || item.colorName) && (
                     <div className="text-gray-500 text-[8px]">
                       {isRTL ? (
@@ -251,17 +317,19 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <span>{texts.subtotal}:</span>
               <span>{formatCurrency(safeInvoiceData.subtotal)}</span>
             </div>
-            {/* ✅ عرض الخصم الكلي إذا كان موجود */}
+            
             {safeInvoiceData.totalDiscountAmount > 0 && (
               <div className="flex justify-between py-0.5 text-green-600 font-semibold">
                 <span>{texts.totalDiscount} ({safeInvoiceData.totalDiscountPercentage}%):</span>
                 <span>-{formatCurrency(safeInvoiceData.totalDiscountAmount)}</span>
               </div>
             )}
+            
             <div className="flex justify-between py-0.5">
               <span>{texts.tax}:</span>
               <span>{formatCurrency(safeInvoiceData.tax)}</span>
             </div>
+            
             <div className="flex justify-between py-1 font-bold border-t border-gray-400 mt-1">
               <span>{texts.grandTotal}:</span>
               <span>{formatCurrency(safeInvoiceData.total)}</span>
@@ -289,6 +357,16 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           </div>
         )}
+
+        {/* ✅ باركود لرقم الفاتورة (اختياري) - للبحث */}
+        <div className="text-center mt-2 pt-1 border-t border-dashed border-gray-300">
+          <div className="text-[7px] text-gray-400 mb-1">
+            {isRTL ? 'استخدم هذا الرقم للبحث والمراجعة' : 'Use this number for search and reference'}
+          </div>
+          <div className="font-mono text-[8px] font-bold text-gray-700 break-all">
+            {safeInvoiceData.invoice_number}
+          </div>
+        </div>
 
         {/* Footer */}
         <div className="text-center text-[8px] text-gray-500 border-t border-dashed border-gray-300 pt-2 mt-2">

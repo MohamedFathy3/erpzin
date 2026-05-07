@@ -1,15 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
+import { Printer, DollarSign, CreditCard, Wallet, Clock, User, Building2, Package, Truck, Calendar, Hash, Percent, Tag, Info, Receipt, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import CompanyHeader from "@/components/shared/CompanyHeader";
 import api from "@/lib/api";
+import { useReactToPrint } from "react-to-print";
+import { toast } from "sonner";
 
 interface InvoiceDetailsProps {
   invoice: any;
@@ -17,254 +22,564 @@ interface InvoiceDetailsProps {
   onClose: () => void;
 }
 
+// مكون الطباعة المتقدم
+const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) => {
+  const isArabic = language === 'ar';
+
+  // حساب التفاصيل المالية
+  const subtotal = invoice.items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0;
+  const discountAmount = invoice.discount_amount || 0;
+  const discountPercent = invoice.discount_percent || 0;
+  const taxAmount = invoice.tax_amount || 0;
+  const taxRate = invoice.tax_rate || 0;
+  const total = parseFloat(invoice.total_amount) || 0;
+  const paidAmount = invoice.paid_amount || 0;
+  const remainingAmount = invoice.remaining_amount || total - paidAmount;
+
+  const getPaymentMethodText = (method: string) => {
+    const methods: Record<string, { ar: string; en: string }> = {
+      cash: { ar: 'نقدي', en: 'Cash' },
+      card: { ar: 'بطاقة ائتمان', en: 'Credit Card' },
+      wallet: { ar: 'محفظة إلكترونية', en: 'Digital Wallet' },
+      credit: { ar: 'آجل', en: 'Credit' }
+    };
+    return isArabic ? methods[method]?.ar : methods[method]?.en;
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    const statuses: Record<string, { ar: string; en: string }> = {
+      paid: { ar: 'مدفوع', en: 'Paid' },
+      pending: { ar: 'معلق', en: 'Pending' },
+      partial: { ar: 'مدفوع جزئياً', en: 'Partially Paid' },
+      cancelled: { ar: 'ملغي', en: 'Cancelled' }
+    };
+    return isArabic ? statuses[status]?.ar : statuses[status]?.en;
+  };
+
+  return (
+    <div style={{ direction: isArabic ? 'rtl' : 'ltr', fontFamily: 'Arial, sans-serif', padding: '32px', backgroundColor: 'white' }}>
+      {/* Header */}
+      <div style={{ borderBottom: '4px solid #2563eb', paddingBottom: '16px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            {companyInfo?.logo && (
+              <img src={companyInfo.logo} alt="Logo" style={{ height: '64px', width: 'auto', marginBottom: '12px', objectFit: 'contain' }} />
+            )}
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
+              {isArabic ? companyInfo?.nameAr || companyInfo?.name : companyInfo?.name}
+            </h1>
+            <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+              {companyInfo?.address && <div>📍 {isArabic ? companyInfo?.addressAr || companyInfo?.address : companyInfo?.address}</div>}
+              {companyInfo?.phone && <div>📞 {companyInfo?.phone}</div>}
+              {companyInfo?.email && <div>✉️ {companyInfo?.email}</div>}
+              {companyInfo?.tax_id && <div>🆔 {isArabic ? 'الرقم الضريبي' : 'Tax ID'}: {companyInfo?.tax_id}</div>}
+            </div>
+          </div>
+          
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#2563eb', marginBottom: '8px' }}>
+              {isArabic ? 'فاتورة ضريبية' : 'TAX INVOICE'}
+            </div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: 'monospace', color: '#374151' }}>
+              #{invoice.invoice_number}
+            </div>
+            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+              {isArabic ? 'تاريخ الإصدار' : 'Issue Date'}: {formatDate(invoice.created_at)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Customer & Business Info */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #e5e7eb' }}>
+            <User size={18} color="#2563eb" />
+            <h3 style={{ fontWeight: '600', margin: 0 }}>{isArabic ? 'بيانات العميل' : 'Customer Information'}</h3>
+          </div>
+          <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+            <div><strong>{isArabic ? 'الاسم' : 'Name'}:</strong> {isArabic ? invoice.customer?.name_ar || invoice.customer?.name : invoice.customer?.name}</div>
+            <div><strong>{isArabic ? 'رقم العميل' : 'Customer ID'}:</strong> #{invoice.customer?.id}</div>
+          </div>
+        </div>
+        
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', backgroundColor: '#f9fafb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #e5e7eb' }}>
+            <Building2 size={18} color="#2563eb" />
+            <h3 style={{ fontWeight: '600', margin: 0 }}>{isArabic ? 'معلومات الفاتورة' : 'Invoice Information'}</h3>
+          </div>
+          <div style={{ fontSize: '14px', lineHeight: '1.8' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span><strong>{isArabic ? 'الفرع' : 'Branch'}:</strong></span>
+              <span>{invoice.branch || '---'}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span><strong>{isArabic ? 'المخزن' : 'Warehouse'}:</strong></span>
+              <span>{invoice.warehouse || '---'}</span>
+            </div>
+            {invoice.sales_representative && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span><strong>{isArabic ? 'المندوب' : 'Sales Rep'}:</strong></span>
+                <span>{isArabic ? invoice.sales_representative?.name_ar || invoice.sales_representative?.name : invoice.sales_representative?.name}</span>
+              </div>
+            )}
+            {invoice.treasury && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span><strong>{isArabic ? 'الخزينة' : 'Treasury'}:</strong></span>
+                <span>{invoice.treasury}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span><strong>{isArabic ? 'العملة' : 'Currency'}:</strong></span>
+              <span>{invoice.currency || '	ر.ي'}</span>
+            </div>
+            {invoice.tax && invoice.tax !== '0' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span><strong>{isArabic ? 'الضريبة' : 'Tax'}:</strong></span>
+                <span>{invoice.tax}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Items Table */}
+      <div style={{ marginBottom: '24px', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#2563eb', color: 'white' }}>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #3b82f6' }}>#</th>
+              <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #3b82f6' }}>{isArabic ? 'المنتج' : 'Product'}</th>
+              <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'الكمية' : 'Qty'}</th>
+              <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #3b82f6' }}>{isArabic ? 'السعر' : 'Price'}</th>
+              <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'الخصم' : 'Discount'}</th>
+              <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #3b82f6' }}>{isArabic ? 'الإجمالي' : 'Total'}</th>
+             </tr>
+          </thead>
+          <tbody>
+            {invoice.items?.map((item: any, idx: number) => (
+              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{idx + 1}</td>
+                <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                  <div style={{ fontWeight: '500' }}>{item.product_name}</div>
+                  {item.product_id && <div style={{ fontSize: '11px', color: '#6b7280' }}>ID: {item.product_id}</div>}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.quantity}</td>
+                <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb' }}>{formatCurrency(Number(item.price))}</td>
+                <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
+                <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>{formatCurrency(Number(item.total || item.price * item.quantity))}</td>
+               </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Summary Section */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
+        <div style={{ width: '320px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+            <span><strong>{isArabic ? 'المجموع الفرعي' : 'Subtotal'}:</strong></span>
+            <span>{formatCurrency(subtotal)}</span>
+          </div>
+          
+          {discountAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb', color: '#dc2626' }}>
+              <span><strong>{isArabic ? 'الخصم' : 'Discount'} ({discountPercent}%):</strong></span>
+              <span>- {formatCurrency(discountAmount)}</span>
+            </div>
+          )}
+          
+          {taxAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+              <span><strong>{isArabic ? 'الضريبة' : 'Tax'} ({taxRate}%):</strong></span>
+              <span>{formatCurrency(taxAmount)}</span>
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px' }}>
+            <span>{isArabic ? 'الإجمالي' : 'Total'}:</span>
+            <span style={{ color: '#2563eb' }}>{formatCurrency(total)}</span>
+          </div>
+          
+          {paidAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#10b981' }}>
+              <span><strong>{isArabic ? 'المدفوع' : 'Paid'}:</strong></span>
+              <span>{formatCurrency(paidAmount)}</span>
+            </div>
+          )}
+          
+          {remainingAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#f59e0b' }}>
+              <span><strong>{isArabic ? 'المتبقي' : 'Remaining'}:</strong></span>
+              <span>{formatCurrency(remainingAmount)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Payment & Notes Section */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <Wallet size={18} color="#16a34a" />
+            <h4 style={{ fontWeight: '600', margin: 0, color: '#166534' }}>{isArabic ? 'معلومات الدفع' : 'Payment Information'}</h4>
+          </div>
+          <div style={{ fontSize: '14px', lineHeight: '1.8' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#166534' }}>{isArabic ? 'طريقة الدفع' : 'Payment Method'}:</span>
+              <span style={{ fontWeight: '500' }}>{getPaymentMethodText(invoice.payment_method)}</span>
+            </div>
+            {invoice.due_date && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#166534' }}>{isArabic ? 'تاريخ الاستحقاق' : 'Due Date'}:</span>
+                <span>{formatDate(invoice.due_date)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <Info size={18} color="#2563eb" />
+            <h4 style={{ fontWeight: '600', margin: 0, color: '#1e40af' }}>{isArabic ? 'ملاحظات' : 'Notes'}</h4>
+          </div>
+          <p style={{ fontSize: '14px', color: '#374151', margin: 0 }}>
+            {invoice.note || (isArabic ? 'لا توجد ملاحظات' : 'No notes')}
+          </p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb', textAlign: 'center', fontSize: '11px', color: '#9ca3af' }}>
+        <p style={{ margin: 0 }}>{isArabic ? 'شكراً لتسوقكم معنا' : 'Thank you for shopping with us'}</p>
+        <p style={{ margin: '4px 0 0 0' }}>{isArabic ? 'هذه الفاتورة صادرة إلكترونياً وتعتبر صالحة بدون توقيع' : 'This invoice is electronically generated and valid without signature'}</p>
+      </div>
+    </div>
+  );
+};
+
 const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
+  const { user: authUser } = useAuth();
+  const printRef = useRef<HTMLDivElement>(null);
 
-  // ✅ Items جاهزة من الفاتورة نفسها
+  // Company Info للطباعة
+  const companyInfo = {
+    name: authUser?.company_name || 'Company Name',
+    nameAr: authUser?.company_name_ar || 'اسم الشركة',
+    logo: authUser?.company_logo,
+    address: authUser?.company_address,
+    addressAr: authUser?.company_address_ar,
+    phone: authUser?.company_phone,
+    email: authUser?.company_email,
+    tax_id: authUser?.company_tax_id,
+  };
+
   const items = invoice?.items || [];
 
-  // ✅ دالة عرض طريقة الدفع
+  // حساب الإحصائيات
+  const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+  const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+  const total = parseFloat(invoice?.total_amount) || 0;
+  const discountAmount = subtotal - total;
+
+  // دالة عرض طريقة الدفع
   const getPaymentMethodBadge = (method: string) => {
-    const methodConfig: Record<string, { label: string; className: string }> = {
+    const methodConfig: Record<string, { label: string; className: string; icon: JSX.Element }> = {
       cash: { 
         label: language === 'ar' ? 'نقدي' : 'Cash', 
-        className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
+        className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
+        icon: <DollarSign className="h-3 w-3" />
       },
       card: { 
         label: language === 'ar' ? 'بطاقة' : 'Card', 
-        className: 'bg-blue-500/10 text-blue-600 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400'
+        className: 'bg-blue-500/10 text-blue-600 border-blue-200',
+        icon: <CreditCard className="h-3 w-3" />
       },
       wallet: { 
         label: language === 'ar' ? 'محفظة' : 'Wallet', 
-        className: 'bg-purple-500/10 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400'
+        className: 'bg-purple-500/10 text-purple-600 border-purple-200',
+        icon: <Wallet className="h-3 w-3" />
       },
       credit: { 
         label: language === 'ar' ? 'آجل' : 'Credit', 
-        className: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400'
+        className: 'bg-amber-500/10 text-amber-600 border-amber-200',
+        icon: <Clock className="h-3 w-3" />
       }
     };
     const config = methodConfig[method] || methodConfig.cash;
     return (
-      <Badge variant="outline" className={config.className}>
+      <Badge variant="outline" className={`${config.className} flex items-center gap-1`}>
+        {config.icon}
         {config.label}
       </Badge>
     );
   };
 
-  const handlePrint = () => {
-    window.print();
+  // دالة عرض حالة الفرق (للمقارنة بين المجموع الفرعي والإجمالي)
+  const getDifferenceBadge = () => {
+    const diff = subtotal - total;
+    if (diff > 0) {
+      return (
+        <Badge className="bg-green-500/10 text-green-600 flex items-center gap-1">
+          <TrendingDown className="h-3 w-3" />
+          خصم: {formatCurrency(diff)}
+        </Badge>
+      );
+    } else if (diff < 0) {
+      return (
+        <Badge className="bg-red-500/10 text-red-600 flex items-center gap-1">
+          <TrendingUp className="h-3 w-3" />
+          زيادة: {formatCurrency(Math.abs(diff))}
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-gray-500/10 text-gray-600 flex items-center gap-1">
+        <Minus className="h-3 w-3" />
+        بدون خصم
+      </Badge>
+    );
   };
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `invoice-${invoice?.invoice_number || 'print'}`,
+    onAfterPrint: () => {
+      toast.success(language === 'ar' ? 'تمت الطباعة بنجاح' : 'Print completed successfully');
+    },
+  });
 
   if (!invoice) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full print:overflow-visible">
-        <DialogHeader className="flex flex-row items-center justify-between print:hidden">
-          <DialogTitle>
-            {language === 'ar' ? 'تفاصيل الفاتورة' : 'Invoice Details'}
-          </DialogTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handlePrint}>
-              <Printer className="h-4 w-4 ml-2" />
-              {language === 'ar' ? 'طباعة' : 'Print'}
-            </Button>
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-6 print:p-8 print:bg-white">
-          {/* Company Header */}
-          <CompanyHeader 
-            variant="print" 
-            showBranch={true}
-          />
-          
-          {/* Invoice Number */}
-          <div className="flex justify-between items-center border-b pb-4">
-            <div>
-              <h3 className="text-xl font-bold">{invoice.invoice_number}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-muted-foreground">
-                  {formatDate(invoice.created_at, true)}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {getPaymentMethodBadge(invoice.payment_method)}
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full print:overflow-visible p-0">
+          {/* رأس الديالوج - يختفي عند الطباعة */}
+          <div className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between print:hidden">
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              {language === 'ar' ? 'تفاصيل الفاتورة' : 'Invoice Details'}
+            </DialogTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrint} className="gap-2">
+                <Printer className="h-4 w-4" />
+                {language === 'ar' ? 'طباعة' : 'Print'}
+              </Button>
             </div>
           </div>
 
-          {/* Customer & Invoice Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Customer Info */}
-            <Card>
-              <CardContent className="pt-6">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-primary rounded-full" />
-                  {language === 'ar' ? 'معلومات العميل' : 'Customer Info'}
-                </h4>
-                <div className="space-y-2">
-                  <p className="font-medium text-lg">
-                    {language === 'ar' 
-                      ? invoice.customer?.name_ar || invoice.customer?.name 
-                      : invoice.customer?.name}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Invoice Info */}
-            <Card>
-              <CardContent className="pt-6">
-                <h4 className="font-semibold mb-4 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-primary rounded-full" />
-                  {language === 'ar' ? 'معلومات الفاتورة' : 'Invoice Info'}
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'طريقة الدفع:' : 'Payment:'}
-                  </span>
-                  <span className="font-medium">{getPaymentMethodBadge(invoice.payment_method)}</span>
-                  
-                  {invoice.due_date && (
-                    <>
-                      <span className="text-muted-foreground">
-                        {language === 'ar' ? 'تاريخ الاستحقاق:' : 'Due Date:'}
-                      </span>
-                      <span className="font-medium">{formatDate(invoice.due_date)}</span>
-                    </>
-                  )}
-                  
-                  {invoice.sales_representative && (
-                    <>
-                      <span className="text-muted-foreground">
-                        {language === 'ar' ? 'المندوب:' : 'Salesman:'}
-                      </span>
-                      <span className="font-medium">
-                        {language === 'ar' 
-                          ? invoice.sales_representative?.name_ar || invoice.sales_representative?.name 
-                          : invoice.sales_representative?.name}
-                      </span>
-                    </>
-                  )}
-
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'الفرع:' : 'Branch:'}
-                  </span>
-                  <span className="font-medium">
-                    {invoice.branch || '---'}
-                  </span>
-
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'المخزن:' : 'Warehouse:'}
-                  </span>
-                  <span className="font-medium">
-                    {invoice.warehouse || '---'}
-                  </span>
-
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'العملة:' : 'Currency:'}
-                  </span>
-                  <span className="font-medium">
-                    {invoice.currency || 'USD'}
-                  </span>
-
-                  <span className="text-muted-foreground">
-                    {language === 'ar' ? 'الضريبة:' : 'Tax:'}
-                  </span>
-                  <span className="font-medium">
-                    {invoice.tax || '---'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+          {/* محتوى الفاتورة - للطباعة */}
+          <div ref={printRef}>
+            <PrintTemplate 
+              invoice={invoice}
+              companyInfo={companyInfo}
+              language={language}
+              formatCurrency={formatCurrency}
+            />
           </div>
 
-          {/* Items Table */}
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="w-12 font-bold">#</TableHead>
-                  <TableHead className="font-bold">
-                    {language === 'ar' ? 'المنتج' : 'Product'}
-                  </TableHead>
-                  <TableHead className="text-center font-bold">
-                    {language === 'ar' ? 'الكمية' : 'Qty'}
-                  </TableHead>
-                  <TableHead className="text-right font-bold">
-                    {language === 'ar' ? 'السعر' : 'Price'}
-                  </TableHead>
-                  <TableHead className="text-right font-bold">
-                    {language === 'ar' ? 'الإجمالي' : 'Total'}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length === 0 ? (
+          {/* محتوى العرض في الديالوج - نسخة محسنة للشاشة */}
+          <div className="p-6 space-y-6 print:hidden">
+            {/* بطاقة الملخص السريع */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-blue-600">{language === 'ar' ? 'إجمالي الفاتورة' : 'Total'}</p>
+                      <p className="text-xl font-bold text-blue-700">{formatCurrency(total)}</p>
+                    </div>
+                    <div className="p-2 bg-blue-200/50 rounded-lg"><DollarSign className="h-5 w-5 text-blue-600" /></div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-emerald-600">{language === 'ar' ? 'عدد الأصناف' : 'Items'}</p>
+                      <p className="text-xl font-bold text-emerald-700">{items.length}</p>
+                    </div>
+                    <div className="p-2 bg-emerald-200/50 rounded-lg"><Package className="h-5 w-5 text-emerald-600" /></div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-purple-600">{language === 'ar' ? 'الكمية الإجمالية' : 'Total Qty'}</p>
+                      <p className="text-xl font-bold text-purple-700">{totalItems}</p>
+                    </div>
+                    <div className="p-2 bg-purple-200/50 rounded-lg"><Hash className="h-5 w-5 text-purple-600" /></div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-amber-600">{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</p>
+                      <div className="mt-1">{getPaymentMethodBadge(invoice.payment_method)}</div>
+                    </div>
+                    <div className="p-2 bg-amber-200/50 rounded-lg"><CreditCard className="h-5 w-5 text-amber-600" /></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* معلومات العميل والفاتورة */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <span className="w-1 h-5 bg-primary rounded-full" />
+                    <User className="h-4 w-4 text-primary" />
+                    {language === 'ar' ? 'معلومات العميل' : 'Customer Info'}
+                  </h4>
+                  <div className="space-y-2">
+                    <p className="font-medium text-lg">
+                      {language === 'ar' ? invoice.customer?.name_ar || invoice.customer?.name : invoice.customer?.name}
+                    </p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Hash className="h-3 w-3" />
+                      ID: {invoice.customer?.id}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <span className="w-1 h-5 bg-primary rounded-full" />
+                    <Building2 className="h-4 w-4 text-primary" />
+                    {language === 'ar' ? 'معلومات الفاتورة' : 'Invoice Info'}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <span className="text-muted-foreground">{language === 'ar' ? 'رقم الفاتورة:' : 'Invoice #:'}</span>
+                    <span className="font-mono font-medium">{invoice.invoice_number}</span>
+                    
+                    <span className="text-muted-foreground">{language === 'ar' ? 'التاريخ:' : 'Date:'}</span>
+                    <span>{formatDate(invoice.created_at, true)}</span>
+                    
+                    <span className="text-muted-foreground">{language === 'ar' ? 'الفرع:' : 'Branch:'}</span>
+                    <span>{invoice.branch || '---'}</span>
+                    
+                    <span className="text-muted-foreground">{language === 'ar' ? 'المخزن:' : 'Warehouse:'}</span>
+                    <span>{invoice.warehouse || '---'}</span>
+                    
+                    {invoice.sales_representative && (
+                      <>
+                        <span className="text-muted-foreground">{language === 'ar' ? 'المندوب:' : 'Sales Rep:'}</span>
+                        <span>{invoice.sales_representative?.name}</span>
+                      </>
+                    )}
+                    
+                    {invoice.treasury && (
+                      <>
+                        <span className="text-muted-foreground">{language === 'ar' ? 'الخزينة:' : 'Treasury:'}</span>
+                        <span>{invoice.treasury}</span>
+                      </>
+                    )}
+                    
+                    <span className="text-muted-foreground">{language === 'ar' ? 'العملة:' : 'Currency:'}</span>
+                    <span>{invoice.currency || 'YER'}</span>
+                    
+                    {invoice.tax && invoice.tax !== '0' && (
+                      <>
+                        <span className="text-muted-foreground">{language === 'ar' ? 'الضريبة:' : 'Tax:'}</span>
+                        <span>{invoice.tax}%</span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* جدول المنتجات */}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {language === 'ar' ? 'لا توجد أصناف' : 'No items found'}
-                    </TableCell>
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                    <TableHead className="text-center w-24">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                    <TableHead className="text-right w-32">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                    <TableHead className="text-right w-32">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                   </TableRow>
-                ) : (
-                  items.map((item: any, index: number) => (
-                    <TableRow key={item.product_id || index} className="hover:bg-muted/30">
-                      <TableCell className="font-mono text-sm">{index + 1}</TableCell>
-                      <TableCell>
-                        <div className="font-medium">{item.product_name}</div>
-                      </TableCell>
-                      <TableCell className="text-center font-medium">{item.quantity}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(Number(item.price) || 0)}
-                      </TableCell>
-                      <TableCell className="text-right font-bold font-mono">
-                        {formatCurrency(Number(item.total) || 0)}
+                </TableHeader>
+                <TableBody>
+                  {items.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        {language === 'ar' ? 'لا توجد أصناف' : 'No items found'}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    items.map((item: any, index: number) => (
+                      <TableRow key={item.product_id || index}>
+                        <TableCell className="font-mono text-sm">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="font-medium">{item.product_name}</div>
+                          <div className="text-xs text-muted-foreground">ID: {item.product_id}</div>
+                        </TableCell>
+                        <TableCell className="text-center font-medium">{item.quantity}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(Number(item.price))}</TableCell>
+                        <TableCell className="text-right font-bold font-mono text-primary">{formatCurrency(Number(item.total))}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-          {/* Summary */}
-          <div className="flex justify-end">
-            <div className="w-72 space-y-3">
-              <div className="flex justify-between text-lg font-bold border-t pt-3">
-                <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
-                <span className="text-primary font-mono">
-                  {formatCurrency(Number(invoice.total_amount) || 0)} {invoice.currency || 'USD'}
-                </span>
+            {/* ملخص الفاتورة */}
+            <div className="flex justify-end">
+              <div className="w-80 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي:' : 'Subtotal:'}</span>
+                  <span className="font-mono">{formatCurrency(subtotal)}</span>
+                </div>
+                
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-red-600">
+                    <span>{language === 'ar' ? 'الخصم:' : 'Discount:'}</span>
+                    <span className="font-mono">- {formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
+                  <span>{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
+                  <span className="text-primary font-mono">{formatCurrency(total)}</span>
+                </div>
+                
+                <div className="flex justify-end mt-2">
+                  {getDifferenceBadge()}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Notes */}
-          {invoice.note && (
-            <div className="border-t pt-4">
-              <h4 className="font-semibold mb-2 flex items-center gap-2">
-                <span className="w-1 h-4 bg-primary rounded-full" />
-                {language === 'ar' ? 'ملاحظات' : 'Notes'}
-              </h4>
-              <p className="text-muted-foreground bg-muted/30 p-3 rounded-lg">
-                {invoice.note}
-              </p>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="border-t pt-4 text-center text-xs text-muted-foreground">
-            <p>
-              {language === 'ar' 
-                ? 'شكراً لتعاملكم معنا' 
-                : 'Thank you for your business'}
-            </p>
+            {/* الملاحظات */}
+            {invoice.note && (
+              <div className="border-t pt-4">
+                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                  <span className="w-1 h-4 bg-primary rounded-full" />
+                  <Info className="h-4 w-4 text-primary" />
+                  {language === 'ar' ? 'ملاحظات' : 'Notes'}
+                </h4>
+                <p className="text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                  {invoice.note}
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

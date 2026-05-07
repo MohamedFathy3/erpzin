@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // InventoryCount.tsx
 import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -25,7 +26,9 @@ import type {
   Product, 
   WarehouseProduct, 
   InventoryRecord,
-  CountedProduct 
+  CountedProduct,
+  ProductUnit,
+  UnitColor
 } from '@/types/inventory';
 
 import {
@@ -51,6 +54,70 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+
+// ========== Helper Functions ==========
+
+// دالة لتحويل بيانات المنتج إلى صفوف مسطحة (كل لون + مقاس كصف منفصل)
+const flattenProductColors = (product: WarehouseProduct): CountedProduct[] => {
+  const flattened: CountedProduct[] = [];
+  
+  if (!product.units || product.units.length === 0) {
+    // إذا لم يكن هناك وحدات، أضف المنتج كما هو
+    return [{
+      product_id: product.id,
+      unit_id: null,
+      color_id: null,
+      counted_stock: 0,
+      system_stock: product.stock || 0,
+      product_name: product.name,
+      unit_name: null,
+      color: null,
+      color_hex: null,
+      sku: product.sku
+    }];
+  }
+  
+  // مرور على كل الوحدات والألوان
+  product.units.forEach((unit: ProductUnit) => {
+    if (unit.colors && unit.colors.length > 0) {
+      unit.colors.forEach((color: UnitColor) => {
+        flattened.push({
+          product_id: product.id,
+          unit_id: unit.unit_id,
+          color_id: color.color_id,
+          counted_stock: 0,
+          system_stock: color.stock,
+          product_name: product.name,
+          unit_name: unit.unit_name,
+          color: color.color,
+          color_hex: color.hex_code,
+          sku: product.sku
+        });
+      });
+    } else {
+      // إذا لم يكن هناك ألوان في الوحدة
+      flattened.push({
+        product_id: product.id,
+        unit_id: unit.unit_id,
+        color_id: null,
+        counted_stock: 0,
+        system_stock: 0,
+        product_name: product.name,
+        unit_name: unit.unit_name,
+        color: null,
+        color_hex: null,
+        sku: product.sku
+      });
+    }
+  });
+  
+  return flattened;
+};
+
+// دالة لإنشاء مفتاح فريد للمنتج
+const getProductUniqueKey = (product: CountedProduct): string => {
+  return `${product.product_id}_${product.unit_id || ''}_${product.color_id || ''}`;
+};
 
 // ========== Component ==========
 const InventoryCount = () => {
@@ -140,6 +207,7 @@ const InventoryCount = () => {
   const createMutation = useCreate();
   const updateMutation = useUpdate();
   const updateNoteMutation = useUpdateNote();
+  const queryClient = useQueryClient();
 
   // ========== Company Info ==========
   const companyInfo = {
@@ -226,7 +294,10 @@ const InventoryCount = () => {
       totalSystemStock: 'Total System Stock',
       totalCountedStock: 'Total Counted Stock',
       totalDifference: 'Total Difference',
-      varianceSummary: 'Variance Summary'
+      varianceSummary: 'Variance Summary',
+      unit: 'Size',
+      color: 'Color',
+      details: 'Details'
     },
     ar: {
       title: 'جرد المخزون',
@@ -299,7 +370,10 @@ const InventoryCount = () => {
       totalSystemStock: 'إجمالي مخزون النظام',
       totalCountedStock: 'إجمالي المخزون المعدود',
       totalDifference: 'إجمالي الفرق',
-      varianceSummary: 'ملخص الفروقات'
+      varianceSummary: 'ملخص الفروقات',
+      unit: 'المقاس',
+      color: 'اللون',
+      details: 'التفاصيل'
     }
   }[language];
 
@@ -331,22 +405,42 @@ const InventoryCount = () => {
     );
   };
 
-  const handleAddProductToCount = (productId: number, stock: number) => {
-    if (stock < 0) {
+  // دالة لإضافة منتج للجرد
+  const handleAddProductToCount = (item: CountedProduct, countedStock: number) => {
+    if (countedStock < 0) {
       toast({ title: t.error, description: 'الكمية يجب أن تكون 0 أو أكثر', variant: 'destructive' });
       return;
     }
+    
+    const uniqueKey = getProductUniqueKey(item);
+    
     setCountedProducts(prev => {
-      const existing = prev.find(p => p.product_id === productId);
-      if (existing) {
-        return prev.map(p => p.product_id === productId ? { ...p, counted_stock: stock } : p);
+      const existingIndex = prev.findIndex(p => getProductUniqueKey(p) === uniqueKey);
+      
+      if (existingIndex !== -1) {
+        // تحديث الموجود
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          counted_stock: countedStock
+        };
+        return updated;
       }
-      return [...prev, { product_id: productId, counted_stock: stock }];
+      
+      // إضافة جديد
+      return [...prev, {
+        ...item,
+        uniqueKey,
+        counted_stock: countedStock
+      }];
     });
   };
 
-  const handleRemoveProductFromCount = (productId: number) => {
-    setCountedProducts(prev => prev.filter(p => p.product_id !== productId));
+  // دالة لحذف منتج من الجرد
+  const handleRemoveProductFromCount = (productId: number, unitId?: number | null, colorId?: number | null) => {
+    setCountedProducts(prev => prev.filter(p => 
+      !(p.product_id === productId && p.unit_id === unitId && p.color_id === colorId)
+    ));
   };
 
   const handleClearAllProducts = () => {
@@ -378,9 +472,13 @@ const InventoryCount = () => {
         note: editNote,
         update_stock: updateStock
       }
+    }, {
+      onSuccess: () => {
+        setEditRecordOpen(false);
+        setSelectedRecord(null);
+        refetchRecords();
+      }
     });
-    setEditRecordOpen(false);
-    setSelectedRecord(null);
   };
 
   const calculateDifference = () => {
@@ -390,6 +488,59 @@ const InventoryCount = () => {
 
   const difference = calculateDifference();
   const isDifferent = difference !== 0;
+
+  // ========== Flatten Products for Display ==========
+  
+  // تحويل المنتجات إلى صفوف مسطحة (كل لون + مقاس كصف)
+  const flattenedProducts = useMemo(() => {
+    if (!warehouseProducts.length) return [];
+    
+    const flattened: CountedProduct[] = [];
+    warehouseProducts.forEach((product: WarehouseProduct) => {
+      const productRows = flattenProductColors(product);
+      flattened.push(...productRows);
+    });
+    
+    // تطبيق البحث
+    if (!searchQuery) return flattened;
+    const query = searchQuery.toLowerCase();
+    return flattened.filter((row: CountedProduct) =>
+      row.product_name?.toLowerCase().includes(query) ||
+      row.sku?.toLowerCase().includes(query) ||
+      row.unit_name?.toLowerCase().includes(query) ||
+      row.color?.toLowerCase().includes(query)
+    );
+  }, [warehouseProducts, searchQuery]);
+
+  // المنتجات المختارة للعرض في الملخص
+  const selectedProductsSummary = useMemo(() => {
+    return countedProducts.map(cp => {
+      const fullProduct = flattenedProducts.find(fp => 
+        fp.product_id === cp.product_id && 
+        fp.unit_id === cp.unit_id && 
+        fp.color_id === cp.color_id
+      );
+      return {
+        ...cp,
+        product_name: fullProduct?.product_name || cp.product_name,
+        unit_name: fullProduct?.unit_name || cp.unit_name,
+        color: fullProduct?.color || cp.color,
+        sku: fullProduct?.sku || cp.sku
+      };
+    });
+  }, [countedProducts, flattenedProducts]);
+
+  // فلتر سجلات الجرد
+  const filteredInventoryRecords = useMemo(() => {
+    let filtered = inventoryRecords || [];
+    if (warehouseFilter !== 'all') {
+      filtered = filtered.filter((r: InventoryRecord) => r.warehouse?.id === parseInt(warehouseFilter));
+    }
+    if (productFilter !== 'all') {
+      filtered = filtered.filter((r: InventoryRecord) => r.product?.id === parseInt(productFilter));
+    }
+    return filtered;
+  }, [inventoryRecords, warehouseFilter, productFilter]);
 
   // ========== Print & Export Functions ==========
 
@@ -561,27 +712,6 @@ const InventoryCount = () => {
     });
   };
 
-  const filteredWarehouseProducts = useMemo(() => {
-    if (!searchQuery) return warehouseProducts;
-    const query = searchQuery.toLowerCase();
-    return warehouseProducts.filter((p: WarehouseProduct) =>
-      p.name?.toLowerCase().includes(query) ||
-      p.name_ar?.toLowerCase().includes(query) ||
-      p.sku?.toLowerCase().includes(query)
-    );
-  }, [warehouseProducts, searchQuery]);
-
-  const filteredInventoryRecords = useMemo(() => {
-    let filtered = inventoryRecords || [];
-    if (warehouseFilter !== 'all') {
-      filtered = filtered.filter((r: InventoryRecord) => r.warehouse.id === parseInt(warehouseFilter));
-    }
-    if (productFilter !== 'all') {
-      filtered = filtered.filter((r: InventoryRecord) => r.product.id === parseInt(productFilter));
-    }
-    return filtered;
-  }, [inventoryRecords, warehouseFilter, productFilter]);
-
   const isLoading = recordsLoading;
 
   // ========== Render ==========
@@ -705,13 +835,13 @@ const InventoryCount = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8">
+                      <TableCell colSpan={11} className="text-center py-8">
                         <div className="flex justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
                       </TableCell>
                     </TableRow>
                   ) : filteredInventoryRecords.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                         <ClipboardList className="mx-auto h-12 w-12 mb-4 opacity-20" />
                         <p>{t.noData}</p>
                       </TableCell>
@@ -720,27 +850,26 @@ const InventoryCount = () => {
                     filteredInventoryRecords.map((record: InventoryRecord) => (
                       <TableRow key={record.id}>
                         <TableCell className="font-medium">
-                          INV-{formatDate(record.created_at).replace(/\//g, '')}-{record.warehouse.id}
+                          INV-{formatDate(record.created_at).replace(/\//g, '')}-{record.warehouse?.id || record.warehouse_id}
                         </TableCell>
                         <TableCell>
-                          {language === 'ar' ? record.warehouse.name_ar || record.warehouse.name : record.warehouse.name}
+                          {language === 'ar' ? record.warehouse?.name_ar || record.warehouse?.name : record.warehouse?.name}
                         </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">
-                              {language === 'ar' ? record.product.name_ar || record.product.name : record.product.name}
+                              {language === 'ar' ? record.product?.name_ar || record.product?.name : record.product?.name}
                             </p>
-                            <p className="text-xs text-muted-foreground">{record.product.sku}</p>
+                            <p className="text-xs text-muted-foreground">{record.product?.sku}</p>
                           </div>
                         </TableCell>
+                       
                         <TableCell className="text-center font-medium">{record.system_stock}</TableCell>
                         <TableCell className="text-center font-medium">{record.counted_stock}</TableCell>
                         <TableCell className="text-center">{getStatusBadge(record)}</TableCell>
                         <TableCell>{formatDate(record.created_at)}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm truncate max-w-[150px]">{record.note || '-'}</span>
-                          </div>
+                          <span className="text-sm truncate max-w-[150px] block">{record.note || '-'}</span>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -778,13 +907,43 @@ const InventoryCount = () => {
           ) : selectedRecord && inventoryDetails ? (
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg">
-                <div><p className="text-xs text-muted-foreground">{t.product}</p><p className="font-medium">{language === 'ar' ? selectedRecord.product.name_ar || selectedRecord.product.name : selectedRecord.product.name}</p></div>
-                <div><p className="text-xs text-muted-foreground">{t.warehouse}</p><p className="font-medium">{language === 'ar' ? selectedRecord.warehouse.name_ar || selectedRecord.warehouse.name : selectedRecord.warehouse.name}</p></div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t.product}</p>
+                  <p className="font-medium">
+                    {language === 'ar' ? selectedRecord.product?.name_ar || selectedRecord.product?.name : selectedRecord.product?.name}
+                  </p>
+                  {selectedRecord.unit_name && (
+                    <p className="text-xs text-muted-foreground mt-1">{t.unit}: {selectedRecord.unit_name}</p>
+                  )}
+                  {selectedRecord.color && (
+                    <p className="text-xs text-muted-foreground">{t.color}: {selectedRecord.color}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{t.warehouse}</p>
+                  <p className="font-medium">
+                    {language === 'ar' ? selectedRecord.warehouse?.name_ar || selectedRecord.warehouse?.name : selectedRecord.warehouse?.name}
+                  </p>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>{t.systemStock}</Label><div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-center"><span className="text-2xl font-bold">{selectedRecord.system_stock}</span></div></div>
-                <div className="space-y-2"><Label>{t.countedStock}</Label><Input type="number" min="0" value={editCountedStock} onChange={(e) => setEditCountedStock(Number(e.target.value))} className="text-center text-lg font-medium" /></div>
+                <div className="space-y-2">
+                  <Label>{t.systemStock}</Label>
+                  <div className="p-3 bg-gray-100 dark:bg-gray-800 rounded-lg text-center">
+                    <span className="text-2xl font-bold">{selectedRecord.system_stock}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.countedStock}</Label>
+                  <Input 
+                    type="number" 
+                    min="0" 
+                    value={editCountedStock} 
+                    onChange={(e) => setEditCountedStock(Number(e.target.value))} 
+                    className="text-center text-lg font-medium" 
+                  />
+                </div>
               </div>
               
               <div className={cn("p-3 rounded-lg text-center", difference > 0 ? "bg-green-100" : difference < 0 ? "bg-red-100" : "bg-gray-100")}>
@@ -797,14 +956,23 @@ const InventoryCount = () => {
               {isDifferent && (
                 <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                   <AlertTriangle size={16} className="text-yellow-600" />
-                  <div className="flex-1"><Label className="text-sm font-medium">{t.updateActualStock}</Label><p className="text-xs text-muted-foreground">{t.willUpdateStock}</p></div>
-                  <button onClick={() => setUpdateStock(!updateStock)} className={cn("w-10 h-5 rounded-full transition-colors relative", updateStock ? "bg-green-500" : "bg-gray-300")}>
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium">{t.updateActualStock}</Label>
+                    <p className="text-xs text-muted-foreground">{t.willUpdateStock}</p>
+                  </div>
+                  <button 
+                    onClick={() => setUpdateStock(!updateStock)} 
+                    className={cn("w-10 h-5 rounded-full transition-colors relative", updateStock ? "bg-green-500" : "bg-gray-300")}
+                  >
                     <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform", updateStock ? "translate-x-5" : "translate-x-0.5")} />
                   </button>
                 </div>
               )}
               
-              <div className="space-y-2"><Label>{t.notes}</Label><Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={3} placeholder={t.addNote} /></div>
+              <div className="space-y-2">
+                <Label>{t.notes}</Label>
+                <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={3} placeholder={t.addNote} />
+              </div>
             </div>
           ) : null}
           
@@ -820,49 +988,200 @@ const InventoryCount = () => {
 
       {/* New Count Dialog */}
       <Dialog open={newCountOpen} onOpenChange={setNewCountOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-4 border-b">
-            <DialogTitle className="flex items-center gap-2"><Plus size={18} />{t.newCount}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus size={18} />
+              {t.newCount}
+            </DialogTitle>
           </DialogHeader>
+          
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* اختيار المخزن */}
             <div className="space-y-2">
               <Label>{t.warehouse} *</Label>
-              <Select value={selectedWarehouse} onValueChange={(v) => { setSelectedWarehouse(v); setCountedProducts([]); setSearchQuery(''); }}>
-                <SelectTrigger><SelectValue placeholder={t.selectWarehouse} /></SelectTrigger>
+              <Select 
+                value={selectedWarehouse} 
+                onValueChange={(v) => { 
+                  setSelectedWarehouse(v); 
+                  setCountedProducts([]); 
+                  setSearchQuery('');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t.selectWarehouse} />
+                </SelectTrigger>
                 <SelectContent>
                   {warehouses.map((w: Warehouse) => (
                     <SelectItem key={w.id} value={w.id.toString()}>
-                      <div className="flex items-center gap-2"><WarehouseIcon size={14} />{language === 'ar' ? w.name_ar || w.name : w.name}</div>
+                      <div className="flex items-center gap-2">
+                        <WarehouseIcon size={14} />
+                        {language === 'ar' ? w.name_ar || w.name : w.name}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2"><Label>{t.notes}</Label><Textarea value={countNotes} onChange={(e) => setCountNotes(e.target.value)} rows={2} placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'} /></div>
+            
+            {/* الملاحظات */}
+            <div className="space-y-2">
+              <Label>{t.notes}</Label>
+              <Textarea 
+                value={countNotes} 
+                onChange={(e) => setCountNotes(e.target.value)} 
+                rows={2} 
+                placeholder={language === 'ar' ? 'ملاحظات إضافية...' : 'Additional notes...'} 
+              />
+            </div>
+            
             {selectedWarehouse && (
               <>
-                {countedProducts.length > 0 && (
+                {/* المنتجات المختارة */}
+                {selectedProductsSummary.length > 0 && (
                   <div className="bg-primary/5 p-3 rounded-lg border">
-                    <div className="flex items-center justify-between mb-2"><span className="text-sm font-medium">{t.selectedProducts}</span><Badge variant="secondary">{countedProducts.length}</Badge>
-                      <Button variant="ghost" size="sm" onClick={handleClearAllProducts} className="h-7 text-xs text-destructive"><X size={12} className="me-1" />{language === 'ar' ? 'مسح الكل' : 'Clear All'}</Button>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">{t.selectedProducts}</span>
+                      <Badge variant="secondary">{selectedProductsSummary.length} {t.productsCount}</Badge>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleClearAllProducts} 
+                        className="h-7 text-xs text-destructive"
+                      >
+                        <X size={12} className="me-1" />
+                        {language === 'ar' ? 'مسح الكل' : 'Clear All'}
+                      </Button>
                     </div>
-                    <ScrollArea className="max-h-[120px]">
+                    <ScrollArea className="max-h-[150px]">
                       <div className="space-y-1">
-                        {countedProducts.map(p => {
-                          const product = warehouseProducts.find((pr: WarehouseProduct) => pr.id === p.product_id);
-                          return (<div key={p.product_id} className="flex items-center justify-between text-xs p-1 hover:bg-primary/10 rounded"><span className="truncate max-w-[200px]">{language === 'ar' ? product?.name_ar || product?.name : product?.name}</span><div className="flex items-center gap-2"><span className="font-medium">{p.counted_stock}</span><Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveProductFromCount(p.product_id)}><X size={10} /></Button></div></div>);
-                        })}
+                        {selectedProductsSummary.map((p, idx) => (
+                          <div key={`selected-${p.product_id}-${p.unit_id}-${p.color_id}-${idx}`} className="flex items-center justify-between text-xs p-1 hover:bg-primary/10 rounded">
+                            <div className="flex-1 min-w-0">
+                              <span className="truncate block">
+                                {language === 'ar' ? p.product_name : p.product_name}
+                                {p.unit_name && ` (${p.unit_name})`}
+                                {p.color && ` - ${p.color}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="font-medium text-green-600">{p.counted_stock}</span>
+                              <span className="text-muted-foreground">/ {p.system_stock}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-5 w-5" 
+                                onClick={() => handleRemoveProductFromCount(p.product_id, p.unit_id, p.color_id)}
+                              >
+                                <X size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </ScrollArea>
                   </div>
                 )}
-                <div className="space-y-2"><Label>{t.product}</Label><div className="relative"><Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} /><Input placeholder={t.searchProducts} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ps-9" /></div></div>
-                <ScrollArea className="h-[300px] border rounded-lg">
-                  {filteredWarehouseProducts.length === 0 ? (<div className="flex flex-col items-center justify-center h-full text-muted-foreground"><Package className="h-12 w-12 mb-2 opacity-20" /><p className="text-sm">{t.noProducts}</p></div>) : (
+                
+                {/* البحث عن المنتجات */}
+                <div className="space-y-2">
+                  <Label>{t.product}</Label>
+                  <div className="relative">
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <Input 
+                      placeholder={t.searchProducts} 
+                      value={searchQuery} 
+                      onChange={(e) => setSearchQuery(e.target.value)} 
+                      className="ps-9" 
+                    />
+                  </div>
+                </div>
+                
+                {/* قائمة المنتجات */}
+                <ScrollArea className="h-[350px] border rounded-lg">
+                  {flattenedProducts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <Package className="h-12 w-12 mb-2 opacity-20" />
+                      <p className="text-sm">{t.noProducts}</p>
+                    </div>
+                  ) : (
                     <div className="p-2 space-y-2">
-                      {filteredWarehouseProducts.map((product: WarehouseProduct) => {
-                        const countedItem = countedProducts.find(p => p.product_id === product.id);
-                        return (<div key={product.id} className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-muted/50"><div className="flex-1"><p className="font-medium truncate">{language === 'ar' ? product.name_ar || product.name : product.name}</p><div className="flex items-center gap-2 text-xs text-muted-foreground"><span>{product.sku}</span><span>•</span><span>{t.systemStock}: {product.stock || 0}</span></div></div><div className="flex items-center gap-2"><Input type="number" min="0" value={countedItem?.counted_stock || ''} onChange={(e) => handleAddProductToCount(product.id, Number(e.target.value))} className="w-24 text-center" placeholder="0" />{countedItem ? (<Button variant="ghost" size="icon" className="h-9 w-9 text-destructive" onClick={() => handleRemoveProductFromCount(product.id)}><X size={16} /></Button>) : (<Button variant="outline" size="icon" className="h-9 w-9" onClick={() => handleAddProductToCount(product.id, product.stock || 0)}><Plus size={16} /></Button>)}</div></div>);
+                      {flattenedProducts.map((item: CountedProduct, idx: number) => {
+                        const countedItem = countedProducts.find(p => 
+                          p.product_id === item.product_id && 
+                          p.unit_id === item.unit_id && 
+                          p.color_id === item.color_id
+                        );
+                        
+                        return (
+                          <div 
+                            key={`product-${item.product_id}-${item.unit_id}-${item.color_id}-${idx}`} 
+                            className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-muted/50"
+                          >
+                            {/* معلومات المنتج */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">
+                                {language === 'ar' ? item.product_name : item.product_name}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                <span className="font-mono">{item.sku}</span>
+                                {item.unit_name && (
+                                  <>
+                                    <span>•</span>
+                                    <Badge variant="secondary" className="text-xs">
+                                      {t.unit}: {item.unit_name}
+                                    </Badge>
+                                  </>
+                                )}
+                                {item.color && (
+                                  <>
+                                    <span>•</span>
+                                    <Badge variant="outline" className="text-xs gap-1">
+                                      <div 
+                                        className="w-3 h-3 rounded-full" 
+                                        style={{ backgroundColor: item.color_hex || '#ccc' }}
+                                      />
+                                      {item.color}
+                                    </Badge>
+                                  </>
+                                )}
+                                <span>•</span>
+                                <span>{t.systemStock}: {item.system_stock}</span>
+                              </div>
+                            </div>
+                            
+                            {/* حقل الإدخال والأزرار */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={countedItem?.counted_stock ?? ''}
+                                onChange={(e) => handleAddProductToCount(item, Number(e.target.value))}
+                                className="w-24 text-center"
+                                placeholder="0"
+                              />
+                              {countedItem ? (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-9 w-9 text-destructive"
+                                  onClick={() => handleRemoveProductFromCount(item.product_id, item.unit_id, item.color_id)}
+                                >
+                                  <X size={16} />
+                                </Button>
+                              ) : (
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  className="h-9 w-9"
+                                  onClick={() => handleAddProductToCount(item, item.system_stock || 0)}
+                                >
+                                  <Plus size={16} />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
                       })}
                     </div>
                   )}
@@ -870,10 +1189,43 @@ const InventoryCount = () => {
               </>
             )}
           </div>
+          
           <DialogFooter className="p-4 border-t gap-2">
-            <Button variant="outline" onClick={() => setNewCountOpen(false)}>{t.cancel}</Button>
-            <Button onClick={() => createMutation.mutate({ warehouse_id: Number(selectedWarehouse), note: countNotes, products: countedProducts })} disabled={!selectedWarehouse || countedProducts.length === 0 || createMutation.isPending}>
-              {createMutation.isPending ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin me-2" /> : null}
+            <Button variant="outline" onClick={() => setNewCountOpen(false)}>
+              {t.cancel}
+            </Button>
+            <Button 
+              onClick={() => {
+                const productsToSend = countedProducts.map(p => ({
+                  product_id: p.product_id,
+                  unit_id: p.unit_id,
+                  color_id: p.color_id,
+                  counted_stock: p.counted_stock
+                }));
+                
+                createMutation.mutate({
+                  warehouse_id: Number(selectedWarehouse),
+                  note: countNotes,
+                  products: productsToSend
+                }, {
+                  onSuccess: () => {
+                    setNewCountOpen(false);
+                    setSelectedWarehouse('');
+                    setCountNotes('');
+                    setCountedProducts([]);
+                    setSearchQuery('');
+                    refetchRecords();
+                  }
+                });
+              }} 
+              disabled={!selectedWarehouse || countedProducts.length === 0 || createMutation.isPending}
+              className="gap-2"
+            >
+              {createMutation.isPending ? (
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save size={16} />
+              )}
               {createMutation.isPending ? (language === 'ar' ? 'جاري الإنشاء...' : 'Creating...') : t.createCount}
             </Button>
           </DialogFooter>

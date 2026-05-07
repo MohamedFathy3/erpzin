@@ -151,7 +151,8 @@ const POS: React.FC = () => {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
   const [showOfflineStats, setShowOfflineStats] = useState(false);
-  
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
   // ✅ خصومات المنتجات والفاتورة
   const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
   const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
@@ -646,28 +647,35 @@ const POS: React.FC = () => {
   const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
 
   // ==================== Payment Handlers ====================
-  const handlePaymentComplete = async (payments: { method: string; amount: number }[]) => {
-    const orderData = {
-      items: cartItems.map(item => ({
-        ...item,
-        discount_percentage: item.discount_percentage || 0,
-        item_total: (item.price * item.quantity) * (1 - (item.discount_percentage || 0) / 100)
-      })),
-      subtotal: calculateSubtotal(),
-      item_discounts_total: calculateItemDiscountsTotal(),
-      invoice_discount_percentage: invoiceDiscountPercentage,
-      invoice_discount_amount: invoiceDiscountAmount,
-      subtotal_after_discounts: calculateSubtotalAfterAllDiscounts(),
-      tax: calculateTax(),
-      total: calculateTotal(),
-      customer_id: selectedCustomer?.id,
-      delivery_id: selectedDelivery?.id,
-      sales_rep_id: selectedSalesRep?.id,
-      shift_id: currentShift?.id,
-      payments
-    };
+const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string) => {
+ const finalInvoiceNumber = invoiceNum || invoiceNumber || `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
+  
+  if (invoiceNum) {
+    setInvoiceNumber(invoiceNum);
+  }
+  
+  const orderData = {
+    items: cartItems.map(item => ({
+      ...item,
+      discount_percentage: item.discount_percentage || 0,
+      item_total: (item.price * item.quantity) * (1 - (item.discount_percentage || 0) / 100)
+    })),
+    invoice_number: finalInvoiceNumber,
+    subtotal: calculateSubtotal(),
+    item_discounts_total: calculateItemDiscountsTotal(),
+    invoice_discount_percentage: invoiceDiscountPercentage,
+    invoice_discount_amount: invoiceDiscountAmount,
+    subtotal_after_discounts: calculateSubtotalAfterAllDiscounts(),
+    tax: calculateTax(),
+    total: calculateTotal(),
+    customer_id: selectedCustomer?.id,
+    delivery_id: selectedDelivery?.id,
+    sales_rep_id: selectedSalesRep?.id,
+    shift_id: currentShift?.id,
+    payments
+  };
 
-    console.log('📦 Order Data:', orderData);
+  console.log('📦 Order Data:', orderData);
 
     if (!navigator.onLine || isOffline) {
       try {
@@ -1232,7 +1240,10 @@ const POS: React.FC = () => {
           subtotal={calculateSubtotalAfterAllDiscounts()}
           tax={calculateTax()}
           cartItems={cartItems}
-          onComplete={handlePaymentComplete}
+        onComplete={(payments, invoiceNum) => {
+    console.log('📄 Invoice Number from modal:', invoiceNum);
+    handlePaymentComplete(payments, invoiceNum);
+  }}
           customer={selectedCustomer ? { 
             id: selectedCustomer.id, 
             name: selectedCustomer.name, 

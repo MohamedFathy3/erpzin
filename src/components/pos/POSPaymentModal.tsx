@@ -53,7 +53,7 @@ interface PaymentModalProps {
   subtotal: number;
   tax: number;
   cartItems: CartItem[];
-  onComplete: (payments: { method: string; amount: number }[]) => void;
+  onComplete: (payments: { method: string; amount: number }[], invoiceNumber: string) => void;
   customer?: { id: string; name: string; name_ar?: string; phone?: string; loyalty_points?: number | null } | null;
   deliveryPerson?: { id: string; name: string; phone?: string } | null;
   shiftId?: string | null;
@@ -130,7 +130,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     onAfterPrint: () => {
       setShowPrintOptions(false);
       setCompletedInvoice(null);
-      onComplete(completedInvoice?.payments || []);
+      onComplete(completedInvoice?.payments || [], completedInvoice?.invoice_number || '');
     },
   });
 
@@ -209,173 +209,187 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
-    let payments: { method: string; amount: number }[] = [];
+ const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
+  let payments: { method: string; amount: number }[] = [];
 
-    if (paymentMethod === 'split') {
-      Object.entries(splitAmounts).forEach(([method, amount]) => {
-        const numAmount = parseFloat(amount) || 0;
-        if (numAmount > 0) {
-          payments.push({ method, amount: numAmount });
-        }
+  if (paymentMethod === 'split') {
+    Object.entries(splitAmounts).forEach(([method, amount]) => {
+      const numAmount = parseFloat(amount) || 0;
+      if (numAmount > 0) {
+        payments.push({ method, amount: numAmount });
+      }
+    });
+  } else if (paymentMethod === 'cash') {
+    payments = [{ method: 'cash', amount: parseFloat(cashAmount) || total }];
+  } else {
+    payments = [{ method: paymentMethod, amount: total }];
+  }
+
+  payments = payments.filter(payment => payment.amount > 0);
+
+  const totalDiscountPercentage = calculateTotalDiscountPercentage();
+  const originalTotal = getOriginalTotal();
+  const totalDiscountAmount = originalTotal - total;
+
+  setIsProcessing(true);
+  try {
+    const invoiceData = {
+      customer_id: parseInt(String(customer?.id)) || 1,
+      sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
+      items: cartItems.map(item => ({
+        product_id: parseInt(item.id),
+        quantity: item.quantity,
+        price: item.price,
+        color: item.colorName || null,
+        size: item.sizeName || null,
+        discount_amount: totalDiscountAmount
+      })),
+      discount_percentage: totalDiscountPercentage,
+      payments: payments,
+      subtotal: subtotal,
+      tax: tax,
+      total: total,
+      shift_id: shiftId,
+      branch_id: branchId,
+      delivery_id: parseInt(String(deliveryPerson?.id)) || null,
+    };
+
+    let invoiceId = '';
+    let invoiceNumberFromServer = '';  // ✅ متغير لتخزين رقم الفاتورة من السيرفر
+    let success = false;
+
+    if (isOffline) {
+      // ✅ في حالة عدم الاتصال، نولد رقم مؤقت
+      const offlineInvoiceNumber = `INV-OFFLINE-${Date.now()}`;
+      const offlineId = await saveOrderOffline({
+        items: cartItems,
+        subtotal,
+        tax,
+        total,
+        customer_id: customer?.id,
+        delivery_id: deliveryPerson?.id,
+        payment_method: paymentMethod,
+        payments,
+        invoice_number: offlineInvoiceNumber
       });
-    } else if (paymentMethod === 'cash') {
-      payments = [{ method: 'cash', amount: parseFloat(cashAmount) || total }];
-    } else {
-      payments = [{ method: paymentMethod, amount: total }];
-    }
 
-    payments = payments.filter(payment => payment.amount > 0);
-
-    const totalDiscountPercentage = calculateTotalDiscountPercentage();
-    const originalTotal = getOriginalTotal();
-    const totalDiscountAmount = originalTotal - total;
-
-    setIsProcessing(true);
-    try {
-      const invoiceData = {
-        customer_id: parseInt(String(customer?.id)) || 1,
-        sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
-        items: cartItems.map(item => ({
-          product_id: parseInt(item.id),
-          quantity: item.quantity,
-          price: item.price,
-          color: item.colorName || null,
-          size: item.sizeName || null,
-          discount_amount: totalDiscountAmount  // قيمة الخصم الإجمالية (اختياري)
-        })),
-        discount_percentage: totalDiscountPercentage,  // ✅ نسبة الخصم الكلية (خارج items)
-        payments: payments,
-        subtotal: subtotal,
-        tax: tax,
-        total: total,
-        shift_id: shiftId,
-        branch_id: branchId,
-        delivery_id: parseInt(String(deliveryPerson?.id)) || null,
-      };
-
-      let invoiceId = '';
-      let success = false;
-
-      if (isOffline) {
-        const offlineId = await saveOrderOffline({
-          items: cartItems,
-          subtotal,
-          tax,
-          total,
-          customer_id: customer?.id,
-          delivery_id: deliveryPerson?.id,
-          payment_method: paymentMethod,
-          payments
-        });
-
-        if (offlineId) {
-          invoiceId = offlineId;
-          success = true;
-          toast({
-            title: language === 'ar' ? 'نجاح' : 'Success',
-            description: language === 'ar'
-              ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً'
-              : 'Invoice saved locally. Will sync later',
-          });
-        } else {
-          throw new Error('Failed to save offline');
-        }
-      } else {
-        const response = await fetch('/api/invoice/store', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(invoiceData)
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create invoice');
-        }
-
-        const result = await response.json();
-        invoiceId = result.data?.id || `INV-${Date.now()}`;
+      if (offlineId) {
+        invoiceId = offlineId;
+        invoiceNumberFromServer = offlineInvoiceNumber;
         success = true;
         toast({
           title: language === 'ar' ? 'نجاح' : 'Success',
-          description: language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully',
+          description: language === 'ar'
+            ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً'
+            : 'Invoice saved locally. Will sync later',
         });
+      } else {
+        throw new Error('Failed to save offline');
       }
-
-      if (success) {
-        const printData = {
-          id: String(invoiceId),
-          date: new Date().toISOString(),
-          cashierName: user?.name,
-          branchName: branchName || companyInfo?.name,
-          branchPhone: branchPhone || companyInfo?.phone,
-          branchAddress: isRTL
-            ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
-            : branchAddress || companyInfo?.address,
-          customer: customer ? {
-            name: customer.name,
-            nameAr: customer.name_ar || customer.name,
-            phone: customer.phone
-          } : null,
-          salesRep: salesRepresentative ? {
-            name: salesRepresentative.name,
-            nameAr: salesRepresentative.name,
-            commission_rate: salesRepresentative.commission_rate
-          } : null,
-          deliveryPerson: deliveryPerson ? {
-            name: deliveryPerson.name,
-            nameAr: deliveryPerson.name,
-            phone: deliveryPerson.phone
-          } : null,
-          items: cartItems.map(item => ({
-            name: item.name,
-            nameAr: item.nameAr || item.name,
-            quantity: item.quantity,
-            price: item.price,
-            sizeName: item.sizeName,
-            sizeNameAr: item.sizeName,
-            colorName: item.colorName,
-            colorNameAr: item.colorName,
-            // لا نضع discount_percentage هنا لأنه شامل
-          })),
-          subtotal: subtotal,
-          tax: tax,
-          taxRate: defaultTax?.rate || 0,
-          total: total,
-          payments: payments,
-          change: calculateChange(),
-          totalDiscountPercentage: totalDiscountPercentage,   // ✅ نسبة الخصم الكلية
-          totalDiscountAmount: totalDiscountAmount,          // ✅ قيمة الخصم الكلية
-          invoiceDiscountPercentage: invoiceDiscountPercentage,
-        };
-
-        setCompletedInvoice({ payments, printData });
-
-        if (type === 'save') {
-          onComplete(payments);
-        } else if (type === 'print') {
-          handlePrint();
-        } else if (type === 'both') {
-          setShowPrintOptions(true);
-          setTimeout(() => {
-            handlePrint();
-          }, 100);
-        }
-      }
-    } catch (error) {
-      console.error('Error saving invoice:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice',
-        variant: 'destructive',
+    } else {
+      const response = await fetch('/api/invoice/store', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(invoiceData)
       });
-    } finally {
-      setIsProcessing(false);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create invoice');
+      }
+
+      const result = await response.json();
+      console.log('📦 Server response:', result);
+      
+      // ✅ استخراج رقم الفاتورة من الـ response
+      invoiceId = result.data?.id || `INV-${Date.now()}`;
+      invoiceNumberFromServer = result.data?.invoice_number || result.data?.invoiceNumber || `INV-${Date.now()}`;
+      
+      console.log('📄 Invoice number from server:', invoiceNumberFromServer);
+      
+      success = true;
+      toast({
+        title: language === 'ar' ? 'نجاح' : 'Success',
+        description: language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully',
+      });
     }
-  };
+
+    if (success) {
+      const printData = {
+        id: String(invoiceId),
+        invoice_number: invoiceNumberFromServer,  // ✅ استخدام رقم الفاتورة من السيرفر
+        date: new Date().toISOString(),
+        cashierName: user?.name,
+        branchName: branchName || companyInfo?.name,
+        branchPhone: branchPhone || companyInfo?.phone,
+        branchAddress: isRTL
+          ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
+          : branchAddress || companyInfo?.address,
+        customer: customer ? {
+          name: customer.name,
+          nameAr: customer.name_ar || customer.name,
+          phone: customer.phone
+        } : null,
+        salesRep: salesRepresentative ? {
+          name: salesRepresentative.name,
+          nameAr: salesRepresentative.name,
+          commission_rate: salesRepresentative.commission_rate
+        } : null,
+        deliveryPerson: deliveryPerson ? {
+          name: deliveryPerson.name,
+          nameAr: deliveryPerson.name,
+          phone: deliveryPerson.phone
+        } : null,
+        items: cartItems.map(item => ({
+          name: item.name,
+          nameAr: item.nameAr || item.name,
+          quantity: item.quantity,
+          price: item.price,
+          sizeName: item.sizeName,
+          sizeNameAr: item.sizeName,
+          colorName: item.colorName,
+          colorNameAr: item.colorName,
+        })),
+        subtotal: subtotal,
+        tax: tax,
+        taxRate: defaultTax?.rate || 0,
+        total: total,
+        payments: payments,
+        change: calculateChange(),
+        totalDiscountPercentage: totalDiscountPercentage,
+        totalDiscountAmount: totalDiscountAmount,
+        invoiceDiscountPercentage: invoiceDiscountPercentage,
+      };
+
+      console.log('📄 Print data with invoice number:', printData.invoice_number);
+
+      setCompletedInvoice({ payments, printData });
+
+      if (type === 'save') {
+        onComplete(payments, invoiceNumberFromServer);  // ✅ إرسال رقم الفاتورة من السيرفر
+      } else if (type === 'print') {
+        handlePrint();
+      } else if (type === 'both') {
+        setShowPrintOptions(true);
+        setTimeout(() => {
+          handlePrint();
+        }, 100);
+      }
+    }
+  } catch (error) {
+    console.error('Error saving invoice:', error);
+    toast({
+      title: language === 'ar' ? 'خطأ' : 'Error',
+      description: language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice',
+      variant: 'destructive',
+    });
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   const handleComplete = () => handleSaveAndPrint('save');
   const handleSaveAndPrintNow = () => handleSaveAndPrint('both');

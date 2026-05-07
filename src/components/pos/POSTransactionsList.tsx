@@ -753,8 +753,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       <TableRow>
                         <TableHead className="w-[180px] whitespace-nowrap">{t.invoiceNumber}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.customer}</TableHead>
-                        <TableHead className="w-[250px] whitespace-nowrap">{t.cashier}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.salesRepresentative}</TableHead>
+                        <TableHead className="w-[250px] whitespace-nowrap">{t.cashier}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.paymentMethod}</TableHead>
                         <TableHead className="w-[300px] whitespace-nowrap text-right">{t.total}</TableHead>
                         <TableHead className="w-[100px] whitespace-nowrap text-center">{t.actions}</TableHead>
