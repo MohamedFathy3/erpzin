@@ -2,7 +2,8 @@ import React from 'react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext'; // 👈 استيراد useAuth
+import { useAuth } from '@/contexts/AuthContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 interface PrintableInvoiceProps {
   data: any;
@@ -23,16 +24,14 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
   ({ data, type, language, companyInfo: propCompanyInfo }, ref) => {
     const isRtl = language === 'ar';
     const dir = isRtl ? 'rtl' : 'ltr';
-    
-    // 👇 جلب بيانات المستخدم من AuthContext
     const { user } = useAuth();
-    
-    // الترجمات
+    const { formatCurrency } = useRegionalSettings();
+
     const t = {
       en: {
         companyName: 'Yemen Company',
-        invoice: 'Sales Invoice',
-        return: 'Return Invoice',
+        invoice: 'SALES INVOICE',
+        return: 'RETURN INVOICE',
         invoiceNumber: 'Invoice No.',
         returnNumber: 'Return No.',
         date: 'Date',
@@ -44,6 +43,7 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
         price: 'Price',
         total: 'Total',
         subtotal: 'Subtotal',
+        discount: 'Discount',
         paid: 'Paid',
         remaining: 'Remaining',
         overpaid: 'Overpaid',
@@ -57,7 +57,9 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
         thankYou: 'Thank you for your business',
         returnProcessed: 'Return processed successfully',
         taxNumber: 'Tax No.',
-        pageOf: 'Page {current} of {total}',
+        cashier: 'Cashier',
+        color: 'Color',
+        size: 'Size',
       },
       ar: {
         companyName: 'شركة اليمن',
@@ -73,7 +75,8 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
         quantity: 'الكمية',
         price: 'السعر',
         total: 'الإجمالي',
-        subtotal: 'المجموع الفرعي',
+        subtotal: 'المجموع',
+        discount: 'الخصم',
         paid: 'المدفوع',
         remaining: 'المتبقي',
         overpaid: 'مدفوع زيادة',
@@ -87,20 +90,20 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
         thankYou: 'شكراً لتسوقكم معنا',
         returnProcessed: 'تمت عملية الإرجاع بنجاح',
         taxNumber: 'الرقم الضريبي',
-        pageOf: 'صفحة {current} من {total}',
+        cashier: 'الكاشير',
+        color: 'اللون',
+        size: 'المقاس',
       },
     };
 
     const texts = t[language];
 
-    // تنسيق الأرقام
     const formatNumber = (value: string | number, decimals: number = 2): string => {
       const num = typeof value === 'string' ? parseFloat(value) : value;
       if (isNaN(num)) return '0.00';
       return num.toFixed(decimals).toLocaleString(language === 'ar' ? 'ar-YE' : 'en-US');
     };
 
-    // تنسيق التاريخ
     const formatDate = (dateStr: string) => {
       if (!dateStr) return '-';
       try {
@@ -112,385 +115,360 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
       }
     };
 
-    // 👇 معلومات الشركة من الـ API (مع fallback للقيم الافتراضية)
     const company = {
       name: user?.name || propCompanyInfo?.name || 'Yemen Company',
-      name_ar: user?.name || propCompanyInfo?.name_ar || 'شركة اليمن', // لو مفيش اسم عربي، استخدم الاسم الإنجليزي
+      name_ar: user?.name || propCompanyInfo?.name_ar || 'شركة اليمن',
       phone: user?.phone || propCompanyInfo?.phone || '01-234567',
-      fax: propCompanyInfo?.fax, // الفاكس لسه مش موجود في الـ API
       address: user?.address || propCompanyInfo?.address || 'اليمن - صنعاء',
       taxNumber: user?.tax_id || propCompanyInfo?.taxNumber || '',
-      logo: user?.logo_icon || user?.logoUrl || propCompanyInfo?.logo || '/injaz-logo.png',
-      website: user?.website,
-      email: user?.email,
-      commercial_register: user?.commercial_register,
-      currency: user?.currency || 'YER',
+      logo: user?.logo_icon || user?.logoUrl || propCompanyInfo?.logo,
     };
 
     const displayName = isRtl ? company.name_ar : company.name;
 
-    if (type === 'sale') {
-      // ========== فاتورة مبيعات ==========
-      return (
-        <div
-          ref={ref}
-          dir={dir}
-          className="p-6 max-w-4xl mx-auto bg-white font-sans"
-          style={{
-            fontFamily: isRtl ? 'Cairo, sans-serif' : 'Inter, sans-serif',
-          }}
-        >
-          {/* Header with Logo */}
-          {/* <div className="flex items-center justify-between mb-6 border-b pb-4">
-            <div className="flex items-center gap-3">
-              {company.logo && (
-                <img
-                  src={company.logo}
-                  alt={displayName}
-                  className="h-16 w-auto object-contain"
-                  onError={(e) => {
-                    // لو الصورة مش موجودة، نخفيها
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <div>
-                <h1 className="text-2xl font-bold text-primary">{displayName}</h1>
-                <p className="text-sm text-gray-600">{company.address}</p>
-                {company.website && (
-                  <p className="text-xs text-gray-500">{company.website}</p>
-                )}
-              </div>
-            </div>
-            <div className="text-left">
-              <p className="text-sm">📞 {company.phone}</p>
-              {company.email && <p className="text-sm">✉️ {company.email}</p>}
-              {company.taxNumber && (
-                <p className="text-sm">🏷️ {texts.taxNumber}: {company.taxNumber}</p>
-              )}
-              {company.commercial_register && (
-                <p className="text-sm">📋 سجل تجاري: {company.commercial_register}</p>
-              )}
-            </div>
-          </div> */}
+    // حساب الخصم إذا كان موجود
+    const hasDiscount = data.discount_percentage > 0 || data.discount_amount > 0;
+    const discountPercent = data.discount_percentage || 0;
+    const discountAmount = data.discount_amount || 0;
 
-          {/* Invoice Title */}
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold border-b-2 border-primary inline-block pb-2 px-8">
+    // ستايل الطباعة
+    const printStyles = {
+      container: {
+        width: '80mm', // عرض ورقة الكاشير
+        margin: '0 auto',
+        padding: '8px',
+        fontFamily: isRtl ? 'Cairo, "Segoe UI", monospace' : 'monospace',
+        fontSize: '12px',
+        lineHeight: '1.4',
+        backgroundColor: 'white',
+        color: 'black',
+      },
+      header: {
+        textAlign: 'center' as const,
+        borderBottom: '1px dashed #000',
+        paddingBottom: '8px',
+        marginBottom: '8px',
+      },
+      companyName: {
+        fontSize: '16px',
+        fontWeight: 'bold' as const,
+        marginBottom: '4px',
+      },
+      row: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '4px',
+      },
+      divider: {
+        borderTop: '1px dashed #000',
+        margin: '8px 0',
+      },
+      table: {
+        width: '100%',
+        borderCollapse: 'collapse' as const,
+        marginBottom: '8px',
+      },
+      th: {
+        borderBottom: '1px dotted #000',
+        padding: '4px 0',
+        textAlign: 'right' as const,
+        fontSize: '10px',
+      },
+      td: {
+        padding: '2px 0',
+        textAlign: 'right' as const,
+      },
+      totalRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontWeight: 'bold' as const,
+        borderTop: '1px solid #000',
+        paddingTop: '4px',
+        marginTop: '4px',
+      },
+      footer: {
+        textAlign: 'center' as const,
+        borderTop: '1px dashed #000',
+        paddingTop: '8px',
+        marginTop: '8px',
+        fontSize: '10px',
+      },
+    };
+
+    if (type === 'sale') {
+      return (
+        <div ref={ref} dir={dir} style={printStyles.container}>
+          {/* Header */}
+          <div style={printStyles.header}>
+            <div style={printStyles.companyName}>{displayName}</div>
+            <div style={{ fontSize: '10px' }}>{company.address}</div>
+            <div style={{ fontSize: '10px' }}>📞 {company.phone}</div>
+            {company.taxNumber && (
+              <div style={{ fontSize: '9px' }}>ضريبي: {company.taxNumber}</div>
+            )}
+            <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px' }}>
               {texts.invoice}
-            </h2>
+            </div>
           </div>
 
           {/* Invoice Info */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-600">{texts.invoiceNumber}</p>
-              <p className="text-xl font-bold font-mono">{data.invoice_number}</p>
+          <div style={{ marginBottom: '8px' }}>
+            <div style={printStyles.row}>
+              <span>{texts.invoiceNumber}:</span>
+              <span style={{ fontFamily: 'monospace' }}>{data.invoice_number}</span>
             </div>
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-600">{texts.date}</p>
-              <p className="text-xl font-bold">{formatDate(data.created_at)}</p>
+            <div style={printStyles.row}>
+              <span>{texts.date}:</span>
+              <span>{formatDate(data.created_at)}</span>
             </div>
+            {data.cashier && (
+              <div style={printStyles.row}>
+                <span>{texts.cashier}:</span>
+                <span>{data.cashier?.name || '-'}</span>
+              </div>
+            )}
           </div>
 
-          {/* Customer Info */}
-          {data.customer && (
-            <div className="border p-4 rounded-lg mb-6 bg-gray-50">
-              <h3 className="font-semibold mb-3 text-primary">{texts.customer}</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">{texts.customer}</p>
-                  <p className="font-medium">
-                    {isRtl ? data.customer.name_ar || data.customer.name : data.customer.name}
-                  </p>
-                </div>
-                {data.customer.phone && (
-                  <div>
-                    <p className="text-sm text-gray-600">{texts.phone}</p>
-                    <p className="font-medium" dir="ltr">{data.customer.phone}</p>
-                  </div>
-                )}
+          {/* Customer */}
+          {data.customer && data.customer.name && (
+            <div style={{ marginBottom: '8px', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <div style={printStyles.row}>
+                <span>{texts.customer}:</span>
+                <span>{isRtl ? data.customer.name_ar || data.customer.name : data.customer.name}</span>
               </div>
+              {data.customer.phone && (
+                <div style={printStyles.row}>
+                  <span>{texts.phone}:</span>
+                  <span>{data.customer.phone}</span>
+                </div>
+              )}
             </div>
           )}
 
+          <div style={printStyles.divider} />
+
           {/* Items Table */}
-          <div className="mb-6">
-            <h3 className="font-semibold mb-3 text-primary">{texts.items}</h3>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-primary/10">
-                  <th className="border p-2 text-right">#</th>
-                  <th className="border p-2 text-right">{texts.product}</th>
-                  <th className="border p-2 text-center">{texts.quantity}</th>
-                  <th className="border p-2 text-right">{texts.price}</th>
-                  <th className="border p-2 text-right">{texts.total}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items?.map((item: any, index: number) => (
-                  <tr key={index} className="even:bg-gray-50">
-                    <td className="border p-2 text-right">{index + 1}</td>
-                    <td className="border p-2">
+          <table style={printStyles.table}>
+            <thead>
+              <tr>
+                <th style={{ ...printStyles.th, width: '30%' }}>{texts.product}</th>
+                <th style={{ ...printStyles.th, width: '15%', textAlign: 'center' }}>{texts.quantity}</th>
+                <th style={{ ...printStyles.th, width: '25%', textAlign: 'right' }}>{texts.price}</th>
+                <th style={{ ...printStyles.th, width: '30%', textAlign: 'right' }}>{texts.total}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items?.map((item: any, index: number) => {
+                const effectivePrice = hasDiscount 
+                  ? (parseFloat(item.total || '0') / item.quantity) 
+                  : parseFloat(item.price || '0');
+                
+                return (
+                  <tr key={index}>
+                    <td style={printStyles.td}>
                       {item.product_name || '-'}
                       {(item.color || item.size) && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {item.color && <span>🎨 {item.color}</span>}
-                          {item.size && (
-                            <span className="mr-2">📏 {item.size}</span>
-                          )}
+                        <div style={{ fontSize: '9px', color: '#666' }}>
+                          {item.color && `${texts.color}: ${item.color}`}
+                          {item.size && ` ${texts.size}: ${item.size}`}
                         </div>
                       )}
                     </td>
-                    <td className="border p-2 text-center">{item.quantity || 0}</td>
-                    <td className="border p-2 text-right">{formatNumber(item.price || '0')}</td>
-                    <td className="border p-2 text-right font-medium">
-                      {formatNumber(item.total || '0')} {company.currency}
+                    <td style={{ ...printStyles.td, textAlign: 'center' }}>{item.quantity}</td>
+                    <td style={{ ...printStyles.td, textAlign: 'right' }}>
+                      {hasDiscount ? (
+                        <>
+                          <span style={{ textDecoration: 'line-through', fontSize: '9px', color: '#999' }}>
+                            {formatNumber(item.price)}
+                          </span>
+                          <br />
+                          <span>{formatNumber(effectivePrice)}</span>
+                        </>
+                      ) : (
+                        formatNumber(item.price)
+                      )}
+                    </td>
+                    <td style={{ ...printStyles.td, textAlign: 'right', fontWeight: 'bold' }}>
+                      {formatNumber(item.total || item.quantity * effectivePrice)}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div style={printStyles.divider} />
+
+          {/* Totals */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={printStyles.row}>
+              <span>{texts.subtotal}:</span>
+              <span>{formatNumber(data.amounts?.total || data.total_amount || 0)}</span>
+            </div>
+            
+            {/* Discount Section */}
+            {hasDiscount && (
+              <>
+                <div style={printStyles.row}>
+                  <span>{texts.discount}:</span>
+                  <span style={{ color: '#e53e3e' }}>
+                    {discountPercent > 0 && `-${discountPercent}% `}
+                    {discountAmount > 0 && `-${formatNumber(discountAmount)}`}
+                  </span>
+                </div>
+                <div style={printStyles.row}>
+                  <span>{texts.total}:</span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {formatNumber(data.amounts?.total || data.total_amount || 0)}
+                  </span>
+                </div>
+              </>
+            )}
+            
+            <div style={printStyles.row}>
+              <span>{texts.paid}:</span>
+              <span>{formatNumber(data.amounts?.paid || data.total_amount || 0)}</span>
+            </div>
           </div>
 
-          {/* Payment Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Payment Methods */}
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <h3 className="font-semibold mb-3 text-primary">{texts.paymentMethod}</h3>
-              {data.payments?.map((payment: any, idx: number) => (
-                <div key={idx} className="flex justify-between mb-2">
-                  <span className="text-gray-600">
-                    {payment.method === 'cash'
-                      ? texts.cash
-                      : payment.method === 'card'
-                      ? texts.card
-                      : payment.method === 'wallet'
-                      ? texts.wallet
-                      : payment.method === 'credit'
-                      ? texts.credit
-                      : payment.method}
+          {/* Payment Methods */}
+          {data.payments && data.payments.length > 0 && (
+            <div style={{ marginBottom: '8px', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{texts.paymentMethod}</div>
+              {data.payments.map((payment: any, idx: number) => (
+                <div key={idx} style={printStyles.row}>
+                  <span>
+                    {payment.method === 'cash' ? texts.cash :
+                     payment.method === 'card' ? texts.card :
+                     payment.method === 'wallet' ? texts.wallet :
+                     payment.method === 'credit' ? texts.credit : payment.method}
                   </span>
-                  <span className="font-medium">{formatNumber(payment.amount)} {company.currency}</span>
+                  <span>{formatNumber(payment.amount)}</span>
                 </div>
               ))}
             </div>
-
-            {/* Totals */}
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <h3 className="font-semibold mb-3 text-primary">{texts.total}</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">{texts.subtotal}:</span>
-                  <span>{formatNumber(data.amounts?.total || '0')} {company.currency}</span>
-                </div>
-                <div className="flex justify-between text-emerald-600">
-                  <span>{texts.paid}:</span>
-                  <span>{formatNumber(data.amounts?.paid || '0')} {company.currency}</span>
-                </div>
-                {parseFloat(data.amounts?.remaining || '0') !== 0 && (
-                  <div
-                    className={cn(
-                      'flex justify-between font-bold border-t pt-2',
-                      parseFloat(data.amounts?.remaining || '0') > 0
-                        ? 'text-amber-600'
-                        : 'text-blue-600'
-                    )}
-                  >
-                    <span>
-                      {parseFloat(data.amounts?.remaining || '0') > 0
-                        ? texts.remaining
-                        : texts.overpaid}
-                      :
-                    </span>
-                    <span>
-                      {formatNumber(
-                        Math.abs(parseFloat(data.amounts?.remaining || '0'))
-                      )}{' '}
-                      {company.currency}
-                      {parseFloat(data.amounts?.remaining || '0') < 0 && ' ↑'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Footer */}
-          <div className="text-center mt-8 pt-4 border-t text-gray-500 text-sm">
-            <p>{texts.thankYou}</p>
-            <p className="mt-1">{new Date().toLocaleDateString()}</p>
+          <div style={printStyles.footer}>
+            <div>{texts.thankYou}</div>
+            <div style={{ fontSize: '9px', marginTop: '4px' }}>
+              {formatDate(new Date().toISOString())}
+            </div>
           </div>
         </div>
       );
     } else {
-      // ========== فاتورة مرتجع ==========
+      // Return Invoice
       return (
-        <div
-          ref={ref}
-          dir={dir}
-          className="p-6 max-w-4xl mx-auto bg-white font-sans"
-          style={{
-            fontFamily: isRtl ? 'Cairo, sans-serif' : 'Inter, sans-serif',
-          }}
-        >
-          {/* Header with Logo */}
-          {/* <div className="flex items-center justify-between mb-6 border-b pb-4">
-            <div className="flex items-center gap-3">
-              {company.logo && (
-                <img
-                  src={company.logo}
-                  alt={displayName}
-                  className="h-16 w-auto object-contain"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <div>
-                <h1 className="text-2xl font-bold text-primary">{displayName}</h1>
-                <p className="text-sm text-gray-600">{company.address}</p>
-                {company.website && (
-                  <p className="text-xs text-gray-500">{company.website}</p>
-                )}
-              </div>
-            </div>
-            <div className="text-left">
-              <p className="text-sm">📞 {company.phone}</p>
-              {company.email && <p className="text-sm">✉️ {company.email}</p>}
-              {company.taxNumber && (
-                <p className="text-sm">🏷️ {texts.taxNumber}: {company.taxNumber}</p>
-              )}
-              {company.commercial_register && (
-                <p className="text-sm">📋 سجل تجاري: {company.commercial_register}</p>
-              )}
-            </div>
-          </div> */}
-
-          {/* Return Title */}
-          <div className="text-center mb-6">
-            <h2 className="text-3xl font-bold border-b-2 border-red-500 inline-block pb-2 px-8 text-red-600">
+        <div ref={ref} dir={dir} style={printStyles.container}>
+          {/* Header */}
+          <div style={printStyles.header}>
+            <div style={printStyles.companyName}>{displayName}</div>
+            <div style={{ fontSize: '10px' }}>{company.address}</div>
+            <div style={{ fontSize: '10px' }}>📞 {company.phone}</div>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px', color: '#e53e3e' }}>
               {texts.return}
-            </h2>
+            </div>
           </div>
 
           {/* Return Info */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-600">{texts.returnNumber}</p>
-              <p className="text-xl font-bold font-mono">{data.return_number}</p>
+          <div style={{ marginBottom: '8px' }}>
+            <div style={printStyles.row}>
+              <span>{texts.returnNumber}:</span>
+              <span style={{ fontFamily: 'monospace' }}>{data.return_number}</span>
             </div>
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <p className="text-sm text-gray-600">{texts.date}</p>
-              <p className="text-xl font-bold">
-                {formatDate(data.return_date || data.created_at)}
-              </p>
+            <div style={printStyles.row}>
+              <span>{texts.date}:</span>
+              <span>{formatDate(data.return_date || data.created_at)}</span>
             </div>
           </div>
 
-          {/* Customer Info */}
+          {/* Customer */}
           {(data.customer || data.invoice?.customer) && (
-            <div className="border p-4 rounded-lg mb-6 bg-gray-50">
-              <h3 className="font-semibold mb-3 text-primary">{texts.customer}</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">{texts.customer}</p>
-                  <p className="font-medium">
-                    {isRtl 
-                      ? (data.customer?.name_ar || data.invoice?.customer?.name_ar || data.customer?.name || data.invoice?.customer?.name)
-                      : (data.customer?.name || data.invoice?.customer?.name)
-                    }
-                  </p>
-                </div>
-                {(data.customer?.phone || data.invoice?.customer?.phone) && (
-                  <div>
-                    <p className="text-sm text-gray-600">{texts.phone}</p>
-                    <p className="font-medium" dir="ltr">
-                      {data.customer?.phone || data.invoice?.customer?.phone}
-                    </p>
-                  </div>
-                )}
+            <div style={{ marginBottom: '8px', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <div style={printStyles.row}>
+                <span>{texts.customer}:</span>
+                <span>
+                  {isRtl 
+                    ? (data.customer?.name_ar || data.invoice?.customer?.name_ar || data.customer?.name || data.invoice?.customer?.name)
+                    : (data.customer?.name || data.invoice?.customer?.name)}
+                </span>
               </div>
             </div>
           )}
 
           {/* Reason */}
           {data.reason && (
-            <div className="border p-4 rounded-lg mb-6 bg-red-50 border-red-200">
-              <p className="text-sm text-gray-600 mb-1">{texts.reason}</p>
-              <p className="font-medium text-red-600">{data.reason}</p>
+            <div style={{ marginBottom: '8px', padding: '4px', backgroundColor: '#fff5f5', borderRadius: '4px', color: '#e53e3e' }}>
+              <div style={printStyles.row}>
+                <span>{texts.reason}:</span>
+                <span>{data.reason}</span>
+              </div>
             </div>
           )}
 
-          {/* Items Table */}
-          <div className="mb-6">
-            <h3 className="font-semibold mb-3 text-primary">{texts.items}</h3>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-red-500/10">
-                  <th className="border p-2 text-right">#</th>
-                  <th className="border p-2 text-right">{texts.product}</th>
-                  <th className="border p-2 text-center">{texts.quantity}</th>
-                  <th className="border p-2 text-right">{texts.price}</th>
-                  <th className="border p-2 text-right">{texts.total}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.return_items?.map((item: any, index: number) => (
-                  <tr key={index} className="even:bg-gray-50">
-                    <td className="border p-2 text-right">{index + 1}</td>
-                    <td className="border p-2">
-                      {item.product_name || '-'}
-                      {(item.color || item.size) && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {item.color && <span>🎨 {item.color}</span>}
-                          {item.size && (
-                            <span className="mr-2">📏 {item.size}</span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="border p-2 text-center">{item.quantity || 0}</td>
-                    <td className="border p-2 text-right">
-                      {formatNumber(item.unit_price || 0)}
-                    </td>
-                    <td className="border p-2 text-right font-medium text-red-600">
-                      -{formatNumber(item.total_price || 0)} {company.currency}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div style={printStyles.divider} />
 
-          {/* Refund Method and Total */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="border p-4 rounded-lg bg-gray-50">
-              <h3 className="font-semibold mb-2 text-primary">{texts.refundMethod}</h3>
-              <p className="text-lg">
-                {data.refund_method === 'cash'
-                  ? texts.cash
-                  : data.refund_method === 'card'
-                  ? texts.card
-                  : data.refund_method === 'wallet'
-                  ? texts.wallet
-                  : data.refund_method === 'credit'
-                  ? texts.credit
-                  : data.refund_method}
-              </p>
+          {/* Items Table */}
+          <table style={printStyles.table}>
+            <thead>
+              <tr>
+                <th style={{ ...printStyles.th, width: '35%' }}>{texts.product}</th>
+                <th style={{ ...printStyles.th, width: '15%', textAlign: 'center' }}>{texts.quantity}</th>
+                <th style={{ ...printStyles.th, width: '25%', textAlign: 'right' }}>{texts.price}</th>
+                <th style={{ ...printStyles.th, width: '25%', textAlign: 'right' }}>{texts.total}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.return_items || data.items)?.map((item: any, index: number) => (
+                <tr key={index}>
+                  <td style={printStyles.td}>
+                    {item.product_name || '-'}
+                    {(item.color || item.size) && (
+                      <div style={{ fontSize: '9px', color: '#666' }}>
+                        {item.color && `${texts.color}: ${item.color}`}
+                        {item.size && ` ${texts.size}: ${item.size}`}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ ...printStyles.td, textAlign: 'center' }}>{item.quantity}</td>
+                  <td style={{ ...printStyles.td, textAlign: 'right' }}>
+                    {formatNumber(item.unit_price || item.price || 0)}
+                  </td>
+                  <td style={{ ...printStyles.td, textAlign: 'right', color: '#e53e3e' }}>
+                    -{formatNumber(item.total_price || item.total || 0)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={printStyles.divider} />
+
+          {/* Refund Method */}
+          <div style={{ marginBottom: '8px' }}>
+            <div style={printStyles.row}>
+              <span>{texts.refundMethod}:</span>
+              <span>
+                {data.refund_method === 'cash' ? texts.cash :
+                 data.refund_method === 'card' ? texts.card :
+                 data.refund_method === 'wallet' ? texts.wallet :
+                 data.refund_method === 'credit' ? texts.credit : data.refund_method}
+              </span>
             </div>
-            <div className="border p-4 rounded-lg bg-red-50 border-red-200">
-              <h3 className="font-semibold mb-2 text-red-600">{texts.total}</h3>
-              <p className="text-2xl font-bold text-red-600">
-                -{formatNumber(data.total_amount || 0)} {company.currency}
-              </p>
+            <div style={{ ...printStyles.totalRow, color: '#e53e3e' }}>
+              <span>{texts.total}:</span>
+              <span>-{formatNumber(data.total_amount || 0)}</span>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="text-center mt-8 pt-4 border-t text-gray-500 text-sm">
-            <p>{texts.returnProcessed}</p>
-            <p className="mt-1">{new Date().toLocaleDateString()}</p>
+          <div style={printStyles.footer}>
+            <div>{texts.returnProcessed}</div>
+            <div style={{ fontSize: '9px', marginTop: '4px' }}>
+              {formatDate(new Date().toISOString())}
+            </div>
           </div>
         </div>
       );

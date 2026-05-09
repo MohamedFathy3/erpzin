@@ -60,6 +60,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   const [currencyId, setCurrencyId] = useState('');
   const [searchMode, setSearchMode] = useState<'product' | 'invoice'>('invoice');
   const [showResults, setShowResults] = useState(false);
+  const [invoiceTotalAmount, setInvoiceTotalAmount] = useState<number | null>(null);
 
   // Set defaults
   useEffect(() => {
@@ -68,7 +69,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
 
   // ========== Search Invoice by Number ==========
-  const { data: invoiceData, isLoading: isSearchingInvoice, refetch: refetchInvoice } = useQuery({
+  const { data: invoiceData, isLoading: isSearchingInvoice } = useQuery({
     queryKey: ['invoice-search', invoiceNumber],
     queryFn: async () => {
       if (!invoiceNumber.trim()) return null;
@@ -78,6 +79,10 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
           params: { invoice_number: invoiceNumber }
         });
         setShowResults(true);
+        // حفظ total_amount
+        if (response.data?.data?.total_amount) {
+          setInvoiceTotalAmount(parseFloat(response.data.data.total_amount));
+        }
         return response.data;
       } catch (error: any) {
         setShowResults(true);
@@ -91,6 +96,13 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     },
     enabled: !!invoiceNumber && invoiceNumber.length > 0 && searchMode === 'invoice',
   });
+
+  // Reset when invoice number changes
+  useEffect(() => {
+    if (!invoiceNumber) {
+      setInvoiceTotalAmount(null);
+    }
+  }, [invoiceNumber]);
 
   // ========== Search Regular Products ==========
   const { data: regularProducts, isLoading: isSearchingProducts } = useQuery({
@@ -113,27 +125,38 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     enabled: searchMode === 'product' && !!searchQuery,
   });
 
-  // Extract products from invoice
-  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any) => ({
-    id: item.product_id,
-    name: item.product_name,
-    name_ar: item.product_name,
-    sku: item.sku || '',
-    price: item.price,
-    quantity_sold: item.quantity,
-    invoice_price: item.price,
-    color: item.color || null,
-    size: item.size || null,
-    image_url: null,
-    stock: item.stock,
-  }));
+  // تعديل: بنحضر المنتجات من الفاتورة وبنغير السعر لـ total_amount
+  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any, index: number, array: any[]) => {
+    const totalAmount = invoiceTotalAmount || 0;
+    const totalQuantity = array.reduce((sum: number, i: any) => sum + i.quantity, 0);
+    
+    // حساب سعر المنتج = total_amount / عدد المنتجات
+    let unitPrice = item.price;
+    if (totalAmount > 0 && totalQuantity > 0) {
+      unitPrice = (totalAmount / totalQuantity).toFixed(2);
+    }
+    
+    return {
+      id: item.product_id,
+      name: item.product_name,
+      name_ar: item.product_name,
+      sku: item.sku || '',
+      price: unitPrice, // السعر المعدل 8100
+      quantity_sold: item.quantity,
+      invoice_price: unitPrice, // السعر المعدل
+      color: item.color || null,
+      size: item.size || null,
+      image_url: null,
+      stock: item.stock,
+    };
+  });
 
-  // Determine which products to show
   const filteredProducts = searchMode === 'invoice' ? invoiceProducts : (regularProducts || []);
   const isSearching = searchMode === 'invoice' ? isSearchingInvoice : isSearchingProducts;
 
   // ========== Item Management ==========
   const addItem = (product: InvoiceProduct) => {
+    // السعر اللي هياخده هو 8100
     const unitPrice = searchMode === 'invoice'
       ? parseFloat(product.invoice_price || product.price || '0')
       : parseFloat(product.price || '0');
@@ -164,7 +187,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
         product_name: product.name_ar || product.name,
         sku: product.sku || 'N/A',
         quantity: 1,
-        unit_price: unitPrice,
+        unit_price: unitPrice, // ده هيكون 8100
         reason: '',
         color: product.color || null,
         size: product.size || null,
@@ -174,7 +197,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
           name: product.name,
           name_ar: product.name_ar,
           sku: product.sku,
-          price: product.price?.toString() || '0',
+          price: unitPrice.toString(),
           image_url: product.image_url,
           imageUrl: product.image_url
         }
@@ -186,7 +209,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     
     const productName = product.name_ar || product.name;
     const variant = product.color || product.size ? ` (${product.color || ''} ${product.size || ''})`.trim() : '';
-    toast.success(`تم إضافة ${productName}${variant}`);
+    toast.success(`تم إضافة ${productName}${variant} بسعر ${unitPrice}`);
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -248,7 +271,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
           color: item.color || null,
           size: item.size || null,
           quantity: item.quantity,
-          price: item.unit_price
+          price: item.unit_price  // السعر اللي هيتسجل 8100
         })),
         payments: [{
           method: refundMethod,
@@ -271,13 +294,13 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       toast.success('تم إنشاء فاتورة المرتجع بنجاح');
       onComplete?.(total);
       
-      // Reset form
       setItems([]);
       setInvoiceNumber('');
       setReturnReason('');
       setRefundMethod('cash');
       setSearchQuery('');
       setShowResults(false);
+      setInvoiceTotalAmount(null);
     },
     onError: (error: any) => {
       console.error('❌ Return Error:', error.response?.data || error.message);
@@ -285,7 +308,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     }
   });
 
-  // Close dropdown
   const closeResults = () => {
     setShowResults(false);
   };
@@ -294,6 +316,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     setSearchQuery('');
     setInvoiceNumber('');
     setShowResults(false);
+    setInvoiceTotalAmount(null);
   };
 
   const switchToInvoiceMode = () => {
@@ -302,6 +325,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     setInvoiceNumber('');
     setItems([]);
     setShowResults(false);
+    setInvoiceTotalAmount(null);
   };
 
   const switchToProductMode = () => {
@@ -310,10 +334,10 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     setInvoiceNumber('');
     setItems([]);
     setShowResults(false);
+    setInvoiceTotalAmount(null);
   };
 
   return {
-    // State
     searchMode,
     searchQuery,
     invoiceNumber,
@@ -326,15 +350,12 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     invoiceData,
     filteredProducts,
     isSearching,
-    
-    // Calculated
+    invoiceTotalAmount,
     subtotal,
     taxPercent,
     taxAmount,
     total,
     selectedCurrency,
-    
-    // Actions
     setSearchQuery,
     setInvoiceNumber,
     setReturnReason,
@@ -343,7 +364,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     setCurrencyId,
     setSearchMode,
     setShowResults,
-    
     addItem,
     updateQuantity,
     removeItem,
@@ -355,8 +375,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     resetSearch,
     switchToInvoiceMode,
     switchToProductMode,
-    
-    // Mutation
     processReturn: processReturnMutation.mutate,
     isProcessing: processReturnMutation.isPending,
   };

@@ -37,7 +37,8 @@ import {
   CreditCard,
   Wallet,
   Banknote,
-  PieChart
+  PieChart,
+  Tag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -1108,54 +1109,127 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       </Dialog>
 
       {/* Return Details Modal */}
-      <Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
+  <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
   <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
     <DialogHeader className="p-4 border-b">
       <DialogTitle className="flex items-center gap-2">
-        <RotateCcw size={20} className="text-primary" />
-        {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
+        <Receipt size={20} className="text-primary" />
+        {t.invoiceDetails} - <span className="font-mono">{selectedSale?.invoice_number}</span>
       </DialogTitle>
     </DialogHeader>
-    {selectedReturn && (
+    {selectedSale && (
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {/* Return Info */}
+          {/* Invoice Info */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
             <div>
               <p className="text-xs text-muted-foreground">{t.date}</p>
               <p className="text-sm font-medium">
-                {selectedReturn.return_date || selectedReturn.created_at
-                  ? format(new Date(selectedReturn.return_date || selectedReturn.created_at), 'yyyy-MM-dd HH:mm')
-                  : '-'
-                }
+                {selectedSale.created_at ? format(new Date(selectedSale.created_at), 'yyyy-MM-dd HH:mm') : '-'}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t.customer}</p>
               <p className="text-sm font-medium">
-                {selectedReturn.invoice?.customer?.name 
-                  ? (language === 'ar' 
-                      ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name 
-                      : selectedReturn.invoice.customer.name)
+                {selectedSale.customer 
+                  ? (language === 'ar' ? selectedSale.customer.name_ar || selectedSale.customer.name : selectedSale.customer.name)
                   : '-'
                 }
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{t.reason}</p>
-              <p className="text-sm font-medium">{selectedReturn.reason || '-'}</p>
+              <p className="text-xs text-muted-foreground">{t.salesRepresentative}</p>
+              <p className="text-sm font-medium">
+                {selectedSale.salesRepresentative?.name || '-'}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t.status}</p>
-              <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
+              <div className="mt-1">{getStatusBadge(getSaleStatus(selectedSale))}</div>
             </div>
           </div>
 
-          {/* Refund Method */}
-          <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
-            <p className="text-xs text-muted-foreground mb-1">{t.refundMethod}</p>
-            <div className="flex justify-center">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
+          {/* Amounts Summary */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
+              <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
+              <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
+            </div>
+            <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 text-center">
+              <p className="text-xs text-muted-foreground mb-1">{t.paidAmount}</p>
+              <p className="text-lg font-bold text-emerald-600">{formatNumber(selectedSale.amounts?.paid || '0')}</p>
+            </div>
+            <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-center">
+              <p className="text-xs text-muted-foreground mb-1">
+                {parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? t.remaining : t.overpaid}
+              </p>
+              <p className={cn(
+                "text-lg font-bold",
+                parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
+                parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
+              )}>
+                {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
+              </p>
+            </div>
           </div>
+
+          {/* Discount Section - جديد */}
+          {(selectedSale.discount_percentage > 0 || selectedSale.discount_amount > 0) && (
+            <div className="p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} className="text-orange-500" />
+                  <span className="text-sm font-medium text-orange-700">
+                    {language === 'ar' ? 'الخصم' : 'Discount'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  {selectedSale.discount_percentage > 0 && (
+                    <span className="text-sm text-orange-600 font-medium">
+                      {selectedSale.discount_percentage}% خصم
+                    </span>
+                  )}
+                  {selectedSale.discount_percentage > 0 && selectedSale.discount_amount > 0 && (
+                    <span className="text-xs text-muted-foreground mx-1">•</span>
+                  )}
+                  {selectedSale.discount_amount > 0 && (
+                    <span className="text-sm font-semibold text-orange-600">
+                      {formatNumber(selectedSale.discount_amount)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Breakdown */}
+          {selectedSale.payments && selectedSale.payments.length > 1 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <PieChart size={16} className="text-primary" />
+                {t.paymentBreakdown}
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {selectedSale.payments.map((payment, idx) => (
+                  <div key={idx} className={cn(
+                    "p-2 rounded-lg border text-center",
+                    getPaymentMethodColor(payment.method)
+                  )}>
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      {getPaymentIcon(payment.method)}
+                      <span className="text-xs font-medium">
+                        {payment.method === 'cash' ? t.cash : 
+                         payment.method === 'card' ? t.card : 
+                         payment.method === 'wallet' ? t.wallet : 
+                         payment.method === 'credit' ? t.credit : payment.method}
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold">{formatNumber(payment.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Items Table */}
           <div className="space-y-2">
@@ -1175,54 +1249,49 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* استخدم selectedReturn.items مش return_items */}
-                    {selectedReturn.items?.map((item: ReturnItem, index: number) => (
-                      <TableRow key={item.id || index}>
-                        <TableCell>
-                          <div>
-                            <span className="font-medium">{item.product?.name || '-'}</span>
-                            {(item.color || item.size) && (
-                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                {item.size && (
-                                  <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
-                                    📏 {language === 'ar' ? 'مقاس:' : 'Size:'} {item.size}
-                                  </span>
-                                )}
-                                {item.color && (
-                                  <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
-                                    🎨 {language === 'ar' ? 'لون:' : 'Color:'} {item.color}
-                                  </span>
-                                )}
+                    {selectedSale.items?.map((item: SaleItem, index: number) => {
+                      // حساب السعر بعد الخصم لكل وحدة
+                      const hasDiscount = selectedSale.discount_percentage > 0 || selectedSale.discount_amount > 0;
+                      const effectivePrice = hasDiscount 
+                        ? (parseFloat(item.total) / item.quantity) 
+                        : parseFloat(item.price);
+                      
+                      return (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <div>
+                              <span className="font-medium">{item.product_name || '-'}</span>
+                              {(item.color || item.size) && (
+                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                  {item.color && <span>🎨 {item.color}</span>}
+                                  {item.size && <span>📏 {item.size}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                          <TableCell className="text-right">
+                            {hasDiscount ? (
+                              <div>
+                                <span className="line-through text-muted-foreground text-xs">
+                                  {formatNumber(item.price)}
+                                </span>
+                                <span className="font-medium text-primary block">
+                                  {formatNumber(effectivePrice)}
+                                </span>
                               </div>
+                            ) : (
+                              formatNumber(item.price)
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                        <TableCell className="text-right">{formatNumber(item.price || 0)}</TableCell>
-                        <TableCell className="text-right font-medium text-red-600">
-                          -{formatNumber(item.total || 0)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {(!selectedReturn.items || selectedReturn.items.length === 0) && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                          {language === 'ar' ? 'لا توجد منتجات مرتجعة' : 'No return items'}
-                        </TableCell>
-                      </TableRow>
-                    )}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatNumber(item.total)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
-              </div>
-            </div>
-          </div>
-
-          {/* Total */}
-          <div className="flex justify-end">
-            <div className="w-80 border rounded-lg p-4 bg-red-500/5 border-red-200">
-              <div className="flex justify-between font-bold text-lg text-red-600">
-                <span>{t.netTotal}:</span>
-                <span>-{formatNumber(selectedReturn.total_amount || 0)}</span>
               </div>
             </div>
           </div>

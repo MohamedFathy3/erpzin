@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // components/pos/DirectReturnForm.tsx
 import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -229,11 +230,16 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
                           </div>
                         )}
                       </div>
-                      <div className="text-left flex-shrink-0">
-                        <div className="font-bold text-lg text-primary">
-                          {formatCurrency(parseFloat(product.price))}
-                        </div>
-                      </div>
+<div className="text-left flex-shrink-0">
+  <div className="font-bold text-lg text-primary">
+    {formatCurrency(parseFloat(product.price))}
+  </div>
+  {searchMode === 'invoice' && (product as any).original_price && (
+    <div className="text-xs text-muted-foreground line-through">
+      {formatCurrency(parseFloat((product as any).original_price))}
+    </div>
+  )}
+</div>
                     </div>
                   </div>
                 ))

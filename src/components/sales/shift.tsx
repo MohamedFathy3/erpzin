@@ -33,7 +33,8 @@ import {
   SlidersHorizontal,
   Timer,
   Building2,
-  Printer
+  Printer,
+  Receipt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -261,9 +262,11 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     totalCashSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.cash_sales || '0'), 0),
     totalCardSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
     totalWalletSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.wallet_sales || '0'), 0),
+    totalReturns: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.returns_amount || '0'), 0),
     filteredTotalCashSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.cash_sales || '0'), 0),
     filteredTotalCardSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
     filteredTotalWalletSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.wallet_sales || '0'), 0),
+    filteredTotalReturns: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.returns_amount || '0'), 0),
   }), [shifts, filteredShifts]);
 
   useEffect(() => {
@@ -347,6 +350,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             <div class="print-row"><span>💰 ${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.cash_sales)}</span></div>
             <div class="print-row"><span>📱 ${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.wallet_sales)}</span></div>
             <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
+            <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
             <hr/>
             <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0'))}</span></div>
           </div>
@@ -403,6 +407,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     totalCash: language === 'ar' ? 'إجمالي النقدي' : 'Total Cash',
     totalCard: language === 'ar' ? 'إجمالي البطاقة' : 'Total Card',
     totalWallet: language === 'ar' ? 'إجمالي المحفظة' : 'Total Wallet',
+    totalReturns: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns',
     employee: language === 'ar' ? 'الموظف' : 'Employee',
     openedAt: language === 'ar' ? 'وقت الفتح' : 'Opened At',
     closedAt: language === 'ar' ? 'وقت الإغلاق' : 'Closed At',
@@ -411,6 +416,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     cashSales: language === 'ar' ? 'مبيعات نقدي' : 'Cash Sales',
     cardSales: language === 'ar' ? 'مبيعات بطاقة' : 'Card Sales',
     walletSales: language === 'ar' ? 'مبيعات المحفظة' : 'Wallet Sales',
+    returns: language === 'ar' ? 'مرتجعات' : 'Returns',
     expected: language === 'ar' ? 'المتوقع' : 'Expected',
     actual: language === 'ar' ? 'الفعلي' : 'Actual',
     difference: language === 'ar' ? 'الفرق' : 'Difference',
@@ -441,6 +447,9 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     hourFilter: language === 'ar' ? 'فلتر الساعات' : 'Hour Filter',
     print: language === 'ar' ? 'طباعة' : 'Print',
     printInvoice: language === 'ar' ? 'طباعة فاتورة' : 'Print Invoice',
+    showing: language === 'ar' ? 'عرض' : 'Showing',
+    of: language === 'ar' ? 'من' : 'of',
+    items: language === 'ar' ? 'وردية' : 'shifts',
   };
 
   const hasActiveFilters = globalSearch || statusFilter !== 'all' || dateFilter !== 'all' || startHour || endHour || minAmount || maxAmount || employeeFilter;
@@ -451,6 +460,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     { value: 'cash_sales', label: language === 'ar' ? 'المبيعات النقدية' : 'Cash Sales' },
     { value: 'wallet_sales', label: language === 'ar' ? 'مبيعات المحفظة' : 'Wallet Sales' },
     { value: 'card_sales', label: language === 'ar' ? 'مبيعات البطاقة' : 'Card Sales' },
+    { value: 'returns_amount', label: language === 'ar' ? 'المرتجعات' : 'Returns' },
     { value: 'difference', label: language === 'ar' ? 'الفرق' : 'Difference' },
   ];
 
@@ -480,8 +490,8 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      {/* Stats Cards - 7 Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5">
           <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-blue-500/20"><Clock className="h-5 w-5 text-blue-600" /></div><div><p className="text-xs text-muted-foreground">{t.title}</p><p className="text-xl font-bold">{stats.totalShifts}</p></div></div></CardContent>
         </Card>
@@ -499,6 +509,9 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
         </Card>
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5">
           <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-blue-500/20"><CreditCard className="h-5 w-5 text-blue-600" /></div><div><p className="text-xs text-muted-foreground">{t.totalCard}</p><p className="text-xl font-bold">{formatNumber(stats.totalCardSales)}</p></div></div></CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-red-500/10 to-red-500/5">
+          <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-red-500/20"><Receipt className="h-5 w-5 text-red-600" /></div><div><p className="text-xs text-muted-foreground">{t.totalReturns}</p><p className="text-xl font-bold text-red-600">{formatNumber(stats.totalReturns)}</p></div></div></CardContent>
         </Card>
       </div>
 
@@ -558,6 +571,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             <span className="flex items-center gap-1"><DollarSign size={14} className="text-emerald-600" />{formatNumber(stats.filteredTotalCashSales)}</span>
             <span className="flex items-center gap-1"><Wallet size={14} className="text-purple-600" />{formatNumber(stats.filteredTotalWalletSales)}</span>
             <span className="flex items-center gap-1"><CreditCard size={14} className="text-blue-600" />{formatNumber(stats.filteredTotalCardSales)}</span>
+            <span className="flex items-center gap-1"><Receipt size={14} className="text-red-600" />{formatNumber(stats.filteredTotalReturns)}</span>
           </div>
         )}
       </div>
@@ -569,26 +583,43 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => { if (sortField === 'employee') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('employee'); setSortDirection('asc'); } }}><div className="flex items-center gap-1">{t.employee}{sortField === 'employee' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => { if (sortField === 'opened_at') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('opened_at'); setSortDirection('desc'); } }}><div className="flex items-center gap-1">{t.openedAt}{sortField === 'opened_at' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => { if (sortField === 'employee') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('employee'); setSortDirection('asc'); } }}>
+                    <div className="flex items-center gap-1">{t.employee}{sortField === 'employee' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => { if (sortField === 'opened_at') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('opened_at'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center gap-1">{t.openedAt}{sortField === 'opened_at' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
                   <TableHead>{t.closedAt}</TableHead>
                   <TableHead>{t.duration}</TableHead>
                   <TableHead className="text-right">{t.openingBalance}</TableHead>
-                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'cash_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('cash_sales'); setSortDirection('desc'); } }}><div className="flex items-center justify-end gap-1">{t.cashSales}{sortField === 'cash_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
-                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'wallet_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('wallet_sales'); setSortDirection('desc'); } }}><div className="flex items-center justify-end gap-1">{t.walletSales}{sortField === 'wallet_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
-                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'card_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('card_sales'); setSortDirection('desc'); } }}><div className="flex items-center justify-end gap-1">{t.cardSales}{sortField === 'card_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'cash_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('cash_sales'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center justify-end gap-1">{t.cashSales}{sortField === 'cash_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'wallet_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('wallet_sales'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center justify-end gap-1">{t.walletSales}{sortField === 'wallet_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'card_sales') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('card_sales'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center justify-end gap-1">{t.cardSales}{sortField === 'card_sales' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'returns_amount') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('returns_amount'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center justify-end gap-1 text-red-600">
+                      <Receipt size={14} />{t.returns}{sortField === 'returns_amount' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                    </div>
+                  </TableHead>
                   <TableHead className="text-right">{t.expected}</TableHead>
                   <TableHead className="text-right">{t.actual}</TableHead>
-                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'difference') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('difference'); setSortDirection('desc'); } }}><div className="flex items-center justify-end gap-1">{t.difference}{sortField === 'difference' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div></TableHead>
+                  <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'difference') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('difference'); setSortDirection('desc'); } }}>
+                    <div className="flex items-center justify-end gap-1">{t.difference}{sortField === 'difference' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
+                  </TableHead>
                   <TableHead>{t.status}</TableHead>
                   <TableHead className="text-center">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow><TableCell colSpan={13} className="text-center py-12"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={14} className="text-center py-12"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
                 ) : sortedAndFilteredShifts.length === 0 ? (
-                  <TableRow><TableCell colSpan={13} className="text-center py-12">{t.noData}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={14} className="text-center py-12">{t.noData}</TableCell></TableRow>
                 ) : (
                   sortedAndFilteredShifts.map((shift) => (
                     <TableRow key={shift.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => { setSelectedShift(shift); setShowDetails(true); }}>
@@ -600,6 +631,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                       <TableCell className="text-right text-emerald-600">{formatNumber(shift.cash_sales)}</TableCell>
                       <TableCell className="text-right text-purple-600">{formatNumber(shift.wallet_sales)}</TableCell>
                       <TableCell className="text-right text-blue-600">{formatNumber(shift.card_sales)}</TableCell>
+                      <TableCell className="text-right text-red-600">-{formatNumber(shift.returns_amount)}</TableCell>
                       <TableCell className="text-right">{formatNumber(shift.expected_amount)}</TableCell>
                       <TableCell className="text-right">{formatNumber(shift.actual_amount)}</TableCell>
                       <TableCell className="text-right">{getDifferenceBadge(shift.difference)}</TableCell>
@@ -627,6 +659,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                   <div className="flex items-center gap-2"><DollarSign size={14} className="text-emerald-600" /><span className="text-muted-foreground">{t.cashSales}:</span><span className="font-medium text-emerald-600">{formatNumber(stats.filteredTotalCashSales)}</span></div>
                   <div className="flex items-center gap-2"><Wallet size={14} className="text-purple-600" /><span className="text-muted-foreground">{t.walletSales}:</span><span className="font-medium text-purple-600">{formatNumber(stats.filteredTotalWalletSales)}</span></div>
                   <div className="flex items-center gap-2"><CreditCard size={14} className="text-blue-600" /><span className="text-muted-foreground">{t.cardSales}:</span><span className="font-medium text-blue-600">{formatNumber(stats.filteredTotalCardSales)}</span></div>
+                  <div className="flex items-center gap-2"><Receipt size={14} className="text-red-600" /><span className="text-muted-foreground">{t.returns}:</span><span className="font-medium text-red-600">{formatNumber(stats.filteredTotalReturns)}</span></div>
                   <div className="flex items-center gap-2"><TrendingUp size={14} className="text-amber-600" /><span className="text-muted-foreground">{t.difference}:</span><span className="font-medium">{formatNumber(sortedAndFilteredShifts.reduce((sum, s) => sum + parseFloat(s.difference || '0'), 0))}</span></div>
                 </div>
               </div>
@@ -653,11 +686,12 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                 <div className="p-3 border rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.openedAt}</p><p className="font-medium">{formatDateTime(selectedShift.opened_at)}</p></div>
                 <div className="p-3 border rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.closedAt}</p><p className="font-medium">{formatDateTime(selectedShift.closed_at)}</p></div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="p-3 bg-primary/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.openingBalance}</p><p className="text-xl font-bold">{formatNumber(selectedShift.opening_balance)}</p></div>
                 <div className="p-3 bg-emerald-500/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.cashSales}</p><p className="text-xl font-bold text-emerald-600">{formatNumber(selectedShift.cash_sales)}</p></div>
                 <div className="p-3 bg-purple-500/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.walletSales}</p><p className="text-xl font-bold text-purple-600">{formatNumber(selectedShift.wallet_sales)}</p></div>
                 <div className="p-3 bg-blue-500/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.cardSales}</p><p className="text-xl font-bold text-blue-600">{formatNumber(selectedShift.card_sales)}</p></div>
+                <div className="p-3 bg-red-500/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Receipt size={12} className="text-red-600" />{t.returns}</p><p className="text-xl font-bold text-red-600">-{formatNumber(selectedShift.returns_amount)}</p></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 bg-amber-500/5 rounded-lg"><p className="text-xs text-muted-foreground mb-1">{t.expected}</p><p className="text-xl font-bold text-amber-600">{formatNumber(selectedShift.expected_amount)}</p></div>
