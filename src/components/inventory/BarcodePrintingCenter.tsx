@@ -239,8 +239,39 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
   const [selectedColor, setSelectedColor] = useState<ProductColor | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   
+  // ========== معاينة الباركود ==========
+  useEffect(() => {
+    if (previewCanvasRef.current && selectedUnit?.barcode && selectedUnit.barcode !== 'NO_BARCODE') {
+      try {
+        let format = "CODE128";
+        switch (barcodeFormat) {
+          case 'CODE128': format = "CODE128"; break;
+          case 'CODE39': format = "CODE39"; break;
+          case 'EAN13': format = "EAN13"; break;
+          case 'UPC': format = "UPC"; break;
+          case 'ITF14': format = "ITF14"; break;
+          case 'CODABAR': format = "codabar"; break;
+          default: format = "CODE128";
+        }
+        
+        JsBarcode(previewCanvasRef.current, selectedUnit.barcode, {
+          format: format,
+          width: 2,
+          height: 40,
+          displayValue: true,
+          fontSize: displaySettings.barcodeTextSize,
+          textMargin: 2,
+        });
+      } catch (e) {
+        console.error('Preview barcode error:', e);
+      }
+    }
+  }, [selectedUnit, displaySettings.barcodeTextSize, barcodeFormat]);
+
+  // ========== شرط الخروج - بعد كل الـ Hooks ==========
   if (!product) return null;
   
+  // ========== دوال مساعدة ==========
   const getUnitCardClass = () => {
     switch (displaySettings.unitCardSize) {
       case 'sm': return 'px-2 py-1.5 text-xs';
@@ -297,35 +328,6 @@ const VariantSelectorModal: React.FC<VariantSelectorModalProps> = ({
   const productName = language === 'ar' 
     ? (product.name_ar || product.name || '') 
     : (product.name || '');
-
-  // معاينة الباركود مع حجم النص المخصص ونوع الباركود
-  useEffect(() => {
-    if (previewCanvasRef.current && selectedUnit?.barcode && selectedUnit.barcode !== 'NO_BARCODE') {
-      try {
-        let format = "CODE128";
-        switch (barcodeFormat) {
-          case 'CODE128': format = "CODE128"; break;
-          case 'CODE39': format = "CODE39"; break;
-          case 'EAN13': format = "EAN13"; break;
-          case 'UPC': format = "UPC"; break;
-          case 'ITF14': format = "ITF14"; break;
-          case 'CODABAR': format = "codabar"; break;
-          default: format = "CODE128";
-        }
-        
-        JsBarcode(previewCanvasRef.current, selectedUnit.barcode, {
-          format: format,
-          width: 2,
-          height: 40,
-          displayValue: true,
-          fontSize: displaySettings.barcodeTextSize,
-          textMargin: 2,
-        });
-      } catch (e) {
-        console.error('Preview barcode error:', e);
-      }
-    }
-  }, [selectedUnit, displaySettings.barcodeTextSize, barcodeFormat]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1280,15 +1282,17 @@ const BarcodePrintingCenter: React.FC = () => {
         </div>
       </div>
 
-      {/* Variant Selector Modal */}
-      <VariantSelectorModal
-        isOpen={variantModalOpen}
-        onClose={() => { setVariantModalOpen(false); setSelectedProductForVariant(null); }}
-        product={selectedProductForVariant!}
-        onSelect={handleAddProduct}
-        displaySettings={variantDisplaySettings}
-        barcodeFormat={barcodeFormat}
-      />
+     {/* Variant Selector Modal */}
+{variantModalOpen && selectedProductForVariant && (
+  <VariantSelectorModal
+    isOpen={variantModalOpen}
+    onClose={() => { setVariantModalOpen(false); setSelectedProductForVariant(null); }}
+    product={selectedProductForVariant}
+    onSelect={handleAddProduct}
+    displaySettings={variantDisplaySettings}
+    barcodeFormat={barcodeFormat}
+  />
+)}
     </div>
   );
 };

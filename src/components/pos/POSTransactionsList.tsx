@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
@@ -88,13 +88,19 @@ interface Sale {
   payments: Payment[];
   created_at: string;
   cashier: string;
+    discount_percentage?: number;
+  discount_amount?: number;
   
 }
 
 interface ReturnItem {
   id: number;
   product_id: number;
-  product_name: string;
+  product?: {           // ✅ أضف كائن product
+    id: number;
+    name: string;
+  };
+  product_name?: string;  // ✅ خليها اختيارية
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -107,6 +113,7 @@ interface ReturnInvoice {
   return_number: string;
   return_date: string;
   total_amount: number;
+  refunded_amount: number;
   reason: string | null;
   status: 'completed' | 'pending' | 'cancelled';
   customer_id: number | null;
@@ -115,8 +122,9 @@ interface ReturnInvoice {
     id: number;
     invoice_number: string;
     customer: Customer;
+    items?: any[];  // ✅ أضف items للفاتورة الأصلية
   };
-  return_items: ReturnItem[];
+  items?: ReturnItem[];  // ✅ اسمها "items" مش "return_items"
   refund_method: 'cash' | 'card' | 'wallet' | 'credit';
   created_at: string;
   updated_at: string;
@@ -923,7 +931,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 {getPaymentMethodBadge(ret.refund_method || 'cash')}
                               </TableCell>
                               <TableCell className="font-semibold text-right text-red-600 whitespace-nowrap">
-                                -{formatNumber(ret.total_amount || 0)}
+                                -{formatNumber(ret.refunded_amount || 0)}
                               </TableCell>
                               <TableCell>{getStatusBadge(ret.status || 'completed')}</TableCell>
                               <TableCell>
@@ -1109,192 +1117,162 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       </Dialog>
 
       {/* Return Details Modal */}
-  <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
+{/* ========== Return Details Modal ========== */}
+<Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
   <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
     <DialogHeader className="p-4 border-b">
       <DialogTitle className="flex items-center gap-2">
-        <Receipt size={20} className="text-primary" />
-        {t.invoiceDetails} - <span className="font-mono">{selectedSale?.invoice_number}</span>
+        <RotateCcw size={20} className="text-primary" />
+        {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
       </DialogTitle>
+      <DialogDescription className="sr-only">
+        {language === 'ar' 
+          ? `تفاصيل مرتجع رقم ${selectedReturn?.return_number}` 
+          : `Return details for ${selectedReturn?.return_number}`}
+      </DialogDescription>
     </DialogHeader>
-    {selectedSale && (
+    {selectedReturn && (
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {/* Invoice Info */}
+          {/* Return Info */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
             <div>
               <p className="text-xs text-muted-foreground">{t.date}</p>
               <p className="text-sm font-medium">
-                {selectedSale.created_at ? format(new Date(selectedSale.created_at), 'yyyy-MM-dd HH:mm') : '-'}
+                {selectedReturn.return_date ? format(new Date(selectedReturn.return_date), 'yyyy-MM-dd HH:mm') : '-'}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t.customer}</p>
               <p className="text-sm font-medium">
-                {selectedSale.customer 
-                  ? (language === 'ar' ? selectedSale.customer.name_ar || selectedSale.customer.name : selectedSale.customer.name)
-                  : '-'
+                {selectedReturn.invoice?.customer 
+                  ? (language === 'ar' 
+                      ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name 
+                      : selectedReturn.invoice.customer.name)
+                  : selectedReturn.customer
+                    ? (language === 'ar' 
+                        ? selectedReturn.customer.name_ar || selectedReturn.customer.name 
+                        : selectedReturn.customer.name)
+                    : '-'
                 }
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">{t.salesRepresentative}</p>
-              <p className="text-sm font-medium">
-                {selectedSale.salesRepresentative?.name || '-'}
-              </p>
+              <p className="text-xs text-muted-foreground">{t.refundMethod}</p>
+              <div className="mt-1">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t.status}</p>
-              <div className="mt-1">{getStatusBadge(getSaleStatus(selectedSale))}</div>
+              <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
             </div>
           </div>
 
-          {/* Amounts Summary */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
-              <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
-            </div>
-            <div className="p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{t.paidAmount}</p>
-              <p className="text-lg font-bold text-emerald-600">{formatNumber(selectedSale.amounts?.paid || '0')}</p>
-            </div>
-            <div className="p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-center">
-              <p className="text-xs text-muted-foreground mb-1">
-                {parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? t.remaining : t.overpaid}
-              </p>
-              <p className={cn(
-                "text-lg font-bold",
-                parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
-                parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
-              )}>
-                {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
+          {/* Return Amount */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 bg-red-500/5 rounded-lg border border-red-500/20 text-center">
+              <p className="text-xs text-muted-foreground mb-1">{t.total}</p>
+              <p className="text-2xl font-bold text-red-600">
+                -{formatNumber(selectedReturn.refunded_amount || selectedReturn.total_amount || 0)}
               </p>
             </div>
+            {selectedReturn.reason && (
+              <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                <p className="text-xs text-muted-foreground mb-1">{t.reason}</p>
+                <p className="text-sm font-medium">{selectedReturn.reason}</p>
+              </div>
+            )}
           </div>
 
-          {/* Discount Section - جديد */}
-          {(selectedSale.discount_percentage > 0 || selectedSale.discount_amount > 0) && (
-            <div className="p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+<div className="space-y-2">
+  <h3 className="text-sm font-semibold flex items-center gap-2">
+    <Receipt size={16} className="text-primary" />
+    {t.items}
+  </h3>
+  
+  <div className="border rounded-lg overflow-hidden">
+    <div className="overflow-x-auto">
+      <Table>
+      <TableHeader>
+  <TableRow>
+    <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+    <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
+    <TableHead className="min-w-[150px] text-right">{language === 'ar' ? 'السعر × الكمية' : 'Price × Qty'}</TableHead>
+    <TableHead className="min-w-[120px] text-right">{language === 'ar' ? 'الإجمالي قبل الخصم' : 'Total before Discount'}</TableHead>
+  </TableRow>
+</TableHeader>
+<TableBody>
+  {selectedReturn.items?.map((item: any, index: number) => {
+    const price = item.price || item.unit_price || 0;
+    const quantity = item.quantity || 0;
+    const subtotal = price * quantity;  // قبل الخصم
+    const total = item.total || item.total_price || 0;  // بعد الخصم
+    const discountAmount = subtotal - total;
+    const discountPercent = item.discount_percentage || (discountAmount > 0 ? (discountAmount / subtotal * 100).toFixed(1) : 0);
+    
+    return (
+      <TableRow key={index}>
+        <TableCell>
+          <div>
+            <span className="font-medium">{item.product?.name || item.name || item.product_name || '-'}</span>
+            {(item.color || item.size) && (
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                {item.color && <span>🎨 {item.color}</span>}
+                {item.size && <span>📏 {item.size}</span>}
+              </div>
+            )}
+          </div>
+        </TableCell>
+        
+        {/* الكمية */}
+        <TableCell className="text-center font-medium">{quantity}</TableCell>
+        
+        {/* السعر × الكمية (قبل الخصم) */}
+        <TableCell className="text-right">
+          <div className="space-y-0.5">
+            <div className="text-sm">
+              {formatNumber(price)} × {quantity}
+            </div>
+            <div className="text-xs text-muted-foreground line-through">
+              = {formatNumber(subtotal)}
+            </div>
+          </div>
+        </TableCell>
+        
+        {/* الإجمالي قبل الخصم */}
+        <TableCell className="text-right">
+          <div className="space-y-0.5">
+            <div className="text-sm font-bold text-red-600">
+              -{formatNumber(total)}
+            </div>
+            {discountAmount > 0 && (
+              <div className="text-[10px] text-emerald-600">
+                {language === 'ar' ? 'وفرت' : 'saved'}: {formatNumber(discountAmount)} ({discountPercent}%)
+              </div>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  })}
+</TableBody>
+      </Table>
+    </div>
+  </div>
+</div>
+
+          {/* Invoice Reference */}
+          {selectedReturn.invoice && (
+            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Tag size={16} className="text-orange-500" />
-                  <span className="text-sm font-medium text-orange-700">
-                    {language === 'ar' ? 'الخصم' : 'Discount'}
-                  </span>
-                </div>
-                <div className="text-right">
-                  {selectedSale.discount_percentage > 0 && (
-                    <span className="text-sm text-orange-600 font-medium">
-                      {selectedSale.discount_percentage}% خصم
-                    </span>
-                  )}
-                  {selectedSale.discount_percentage > 0 && selectedSale.discount_amount > 0 && (
-                    <span className="text-xs text-muted-foreground mx-1">•</span>
-                  )}
-                  {selectedSale.discount_amount > 0 && (
-                    <span className="text-sm font-semibold text-orange-600">
-                      {formatNumber(selectedSale.discount_amount)}
-                    </span>
-                  )}
-                </div>
+                <span className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'مرتجع عن فاتورة' : 'Return for Invoice'}:
+                </span>
+                <span className="font-mono font-semibold">
+                  {selectedReturn.invoice.invoice_number}
+                </span>
               </div>
             </div>
           )}
-
-          {/* Payment Breakdown */}
-          {selectedSale.payments && selectedSale.payments.length > 1 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <PieChart size={16} className="text-primary" />
-                {t.paymentBreakdown}
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {selectedSale.payments.map((payment, idx) => (
-                  <div key={idx} className={cn(
-                    "p-2 rounded-lg border text-center",
-                    getPaymentMethodColor(payment.method)
-                  )}>
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      {getPaymentIcon(payment.method)}
-                      <span className="text-xs font-medium">
-                        {payment.method === 'cash' ? t.cash : 
-                         payment.method === 'card' ? t.card : 
-                         payment.method === 'wallet' ? t.wallet : 
-                         payment.method === 'credit' ? t.credit : payment.method}
-                      </span>
-                    </div>
-                    <p className="text-sm font-bold">{formatNumber(payment.amount)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Items Table */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Receipt size={16} className="text-primary" />
-              {t.items}
-            </h3>
-            <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                      <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
-                      <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
-                      <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedSale.items?.map((item: SaleItem, index: number) => {
-                      // حساب السعر بعد الخصم لكل وحدة
-                      const hasDiscount = selectedSale.discount_percentage > 0 || selectedSale.discount_amount > 0;
-                      const effectivePrice = hasDiscount 
-                        ? (parseFloat(item.total) / item.quantity) 
-                        : parseFloat(item.price);
-                      
-                      return (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <div>
-                              <span className="font-medium">{item.product_name || '-'}</span>
-                              {(item.color || item.size) && (
-                                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                  {item.color && <span>🎨 {item.color}</span>}
-                                  {item.size && <span>📏 {item.size}</span>}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                          <TableCell className="text-right">
-                            {hasDiscount ? (
-                              <div>
-                                <span className="line-through text-muted-foreground text-xs">
-                                  {formatNumber(item.price)}
-                                </span>
-                                <span className="font-medium text-primary block">
-                                  {formatNumber(effectivePrice)}
-                                </span>
-                              </div>
-                            ) : (
-                              formatNumber(item.price)
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatNumber(item.total)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </div>
         </div>
       </ScrollArea>
     )}
@@ -1310,9 +1288,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Printer size={20} className="text-primary" />
-              {printType === 'sale' 
-                ? `${t.invoiceDetails} - ${printData?.invoice_number}`
-                : `${t.returnDetails} - ${printData?.return_number}`
+              {printType === 'return' 
+                ? `${t.returnDetails} - ${printData?.return_number}`
+                : `${t.invoiceDetails} - ${printData?.invoice_number}`
               }
             </DialogTitle>
           </DialogHeader>

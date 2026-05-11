@@ -641,7 +641,6 @@ useEffect(() => {
     }
   }, [isOpen, invoiceNumber]);
 
-  // 5. إغلاق قائمة المنتجات عند الضغط خارجها
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -652,7 +651,6 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ========== Item Functions ==========
 const updateItem = (id: string, field: string, value: number) => {
   const updated = items.map(item => {
     if (item.id === id) {
