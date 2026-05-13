@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,11 +23,10 @@ import {
   Filter,
   X,
   RefreshCw,
-  Building2,
   ArrowLeftRight,
   ArrowRight,
   ArrowLeft,
-  Truck
+  Barcode
 } from 'lucide-react';
 
 // ========== أنواع البيانات ==========
@@ -37,19 +37,19 @@ interface Warehouse {
   active: boolean;
 }
 
-// ✅ دي البيانات اللي جاية من /warehouses/index-product
 interface WarehouseProduct {
-  id: number;           // ده هو product_id
+  id: number;
+  product_id?: number;
   product_name: string;
   warehouse_name: string;
   stock: number;
   cost: string;
   sku?: string;
+  barcode?: string;
 }
 
-// ✅ دي البيانات اللي بنبعت فيها للـ API
 interface TransferProduct {
-  product_id: number;   // بناخدها من id بتاع WarehouseProduct
+  product_id: number;
   quantity: number;
   note?: string;
 }
@@ -63,6 +63,7 @@ const WarehouseTransfer = () => {
   const [fromWarehouse, setFromWarehouse] = useState('');
   const [toWarehouse, setToWarehouse] = useState('');
   const [searchText, setSearchText] = useState('');
+  const [modalSearchText, setModalSearchText] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
   const [transferItems, setTransferItems] = useState<TransferProduct[]>([]);
   const [productNotes, setProductNotes] = useState<Record<number, string>>({});
@@ -85,7 +86,7 @@ const WarehouseTransfer = () => {
       cancel: 'Cancel',
       selectFrom: 'Select source',
       selectTo: 'Select destination',
-      search: 'Search products...',
+      search: 'Search by name or barcode...',
       noData: 'No products found',
       loading: 'Loading...',
       allWarehouses: 'All Warehouses',
@@ -97,7 +98,11 @@ const WarehouseTransfer = () => {
       totalItems: 'Total Items',
       totalQuantity: 'Total Quantity',
       filter: 'Filter',
-      reset: 'Reset'
+      reset: 'Reset',
+      error: 'Error',
+      transferring: 'Transferring...',
+      barcode: 'Barcode',
+      totalStock: 'Total Stock'
     },
     ar: {
       title: 'مخزون المخازن',
@@ -115,7 +120,7 @@ const WarehouseTransfer = () => {
       cancel: 'إلغاء',
       selectFrom: 'اختر المصدر',
       selectTo: 'اختر الوجهة',
-      search: 'ابحث عن منتج...',
+      search: 'ابحث بالاسم أو الباركود...',
       noData: 'لا توجد منتجات',
       loading: 'جاري التحميل...',
       allWarehouses: 'جميع المخازن',
@@ -127,7 +132,11 @@ const WarehouseTransfer = () => {
       totalItems: 'إجمالي الأصناف',
       totalQuantity: 'إجمالي الكميات',
       filter: 'تصفية',
-      reset: 'إعادة تعيين'
+      reset: 'إعادة تعيين',
+      error: 'خطأ',
+      transferring: 'جاري التحويل...',
+      barcode: 'الباركود',
+      totalStock: 'إجمالي المخزون'
     }
   }[language];
 
@@ -145,9 +154,9 @@ const WarehouseTransfer = () => {
     }
   });
 
-  // ========== 2. جلب المنتجات في المخازن ==========
+  // ========== 2. جلب المنتجات في المخازن (للواجهة الرئيسية) ==========
   const { data: products = [], isLoading, refetch } = useQuery({
-    queryKey: ['warehouse-products', warehouseFilter],
+    queryKey: ['warehouse-products', warehouseFilter, searchText],
     queryFn: async () => {
       const payload: any = {
         orderBy: 'id',
@@ -155,44 +164,96 @@ const WarehouseTransfer = () => {
         paginate: false
       };
 
+      const filters: any = {};
+
       if (warehouseFilter !== 'all') {
         const warehouse = warehouses.find((w: Warehouse) => w.id === parseInt(warehouseFilter));
         if (warehouse) {
-          payload.filters = { warehouse_name: warehouse.name };
+          filters.warehouse_name = warehouse.name;
         }
+      }
+
+      if (searchText && searchText.trim() !== '') {
+        const searchValue = searchText.trim();
+        if (/^\d+$/.test(searchValue)) {
+          filters.barcode = searchValue;
+        } else {
+          filters.product_name = searchValue;
+        }
+      }
+
+      if (Object.keys(filters).length > 0) {
+        payload.filters = filters;
       }
 
       const res = await api.post('/warehouses/index-product', payload);
       return res.data.result === 'Success' ? res.data.data || [] : [];
-    }
+    },
+    refetchOnWindowFocus: false,
   });
 
-  // ========== 3. فلترة المنتجات ==========
-  const filteredProducts = useMemo(() => {
-    if (!searchText) return products;
-    const query = searchText.toLowerCase();
-    return products.filter((p: WarehouseProduct) =>
-      p.product_name.toLowerCase().includes(query)
-    );
-  }, [products, searchText]);
+  // ========== 3. جلب منتجات المخزن المصدر (للمودال) ==========
+  const { 
+    data: modalProducts = [], 
+    isLoading: modalLoading, 
+    refetch: refetchModal 
+  } = useQuery({
+    queryKey: ['modal-warehouse-products', fromWarehouse, modalSearchText],
+    queryFn: async () => {
+      if (!fromWarehouse) return [];
+      
+      const payload: any = {
+        orderBy: 'id',
+        perPage: 1000,
+        paginate: false
+      };
+
+      const filters: any = {};
+
+      // فلتر المخزن المصدر
+      const warehouse = warehouses.find((w: Warehouse) => w.id === parseInt(fromWarehouse));
+      if (warehouse) {
+        filters.warehouse_name = warehouse.name;
+      }
+
+      // فلتر البحث في المودال
+      if (modalSearchText && modalSearchText.trim() !== '') {
+        const searchValue = modalSearchText.trim();
+        if (/^\d+$/.test(searchValue)) {
+          filters.barcode = searchValue;
+        } else {
+          filters.product_name = searchValue;
+        }
+      }
+
+      if (Object.keys(filters).length > 0) {
+        payload.filters = filters;
+      }
+
+      console.log('📦 Modal fetch payload:', payload);
+
+      const res = await api.post('/warehouses/index-product', payload);
+      return res.data.result === 'Success' ? res.data.data || [] : [];
+    },
+    enabled: !!fromWarehouse, // فقط لما يكون المخزن المصدر محدد
+    refetchOnWindowFocus: false,
+  });
 
   // ========== 4. الإحصائيات ==========
   const stats = useMemo(() => {
-    const totalItems = filteredProducts.length;
-    const totalStock = filteredProducts.reduce((sum, p: WarehouseProduct) => sum + p.stock, 0);
+    const totalItems = products.length;
+    const totalStock = products.reduce((sum, p: WarehouseProduct) => sum + p.stock, 0);
     return { totalItems, totalStock };
-  }, [filteredProducts]);
+  }, [products]);
 
   // ========== 5. تحويل منتجات ==========
   const transferMutation = useMutation({
     mutationFn: async () => {
-      // ✅ التحقق من المدخلات
       if (!fromWarehouse) throw new Error('Select source warehouse');
       if (!toWarehouse) throw new Error('Select destination warehouse');
       if (fromWarehouse === toWarehouse) throw new Error(t.differentWarehouses);
       if (transferItems.length === 0) throw new Error('Add products to transfer');
 
-      // ✅ تجهيز البيلود بالضبط زي البوستمان
       const payload = {
         from_warehouse_id: parseInt(fromWarehouse),
         to_warehouse_id: parseInt(toWarehouse),
@@ -209,20 +270,20 @@ const WarehouseTransfer = () => {
       return res.data;
     },
     onSuccess: () => {
-      toast({ title: t.success, description: t.transferSuccess });
+      toast({ title: t.transferSuccess, description: t.transferSuccess });
       queryClient.invalidateQueries({ queryKey: ['warehouse-products'] });
-      // ✅ إعادة تعيين الحالة
+      queryClient.invalidateQueries({ queryKey: ['modal-warehouse-products'] });
       setShowTransferModal(false);
       setTransferItems([]);
       setProductNotes({});
       setFromWarehouse('');
       setToWarehouse('');
+      setModalSearchText('');
     },
     onError: (error: AxiosError) => {
-      console.error('Transfer error:', error.response?.data || error);
       toast({
         title: t.error,
-        description: error.message,
+        description: (error.response?.data as any)?.message || error.message,
         variant: 'destructive'
       });
     }
@@ -230,24 +291,22 @@ const WarehouseTransfer = () => {
 
   // ========== 6. إضافة منتج للتحويل ==========
   const handleAddProduct = (product: WarehouseProduct) => {
-    // ✅ نستخدم product.id كـ product_id
-    const exists = transferItems.find(item => item.product_id === product.id);
+    const productId = product.product_id || product.id;
+    const exists = transferItems.find(item => item.product_id === productId);
     
     if (exists) {
-      // زيادة الكمية
       setTransferItems(prev =>
         prev.map(item =>
-          item.product_id === product.id
+          item.product_id === productId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
       );
     } else {
-      // إضافة منتج جديد
       setTransferItems(prev => [
         ...prev,
         {
-          product_id: product.id,
+          product_id: productId,
           quantity: 1
         }
       ]);
@@ -256,7 +315,7 @@ const WarehouseTransfer = () => {
 
   // ========== 7. تغيير الكمية ==========
   const handleQuantityChange = (productId: number, quantity: number) => {
-    const product = products.find((p: WarehouseProduct) => p.id === productId);
+    const product = modalProducts.find((p: WarehouseProduct) => (p.product_id || p.id) === productId);
     if (!product) return;
     
     setTransferItems(prev =>
@@ -292,6 +351,7 @@ const WarehouseTransfer = () => {
     setToWarehouse('');
     setTransferItems([]);
     setProductNotes({});
+    setModalSearchText('');
     setShowTransferModal(true);
   };
 
@@ -301,12 +361,14 @@ const WarehouseTransfer = () => {
     setProductNotes({});
     setFromWarehouse('');
     setToWarehouse('');
+    setModalSearchText('');
   };
 
   // ========== 11. إعادة تعيين الفلاتر ==========
   const handleResetFilters = () => {
     setWarehouseFilter('all');
     setSearchText('');
+    setTimeout(() => refetch(), 100);
   };
 
   // ========== 12. اسم المخزن ==========
@@ -316,7 +378,6 @@ const WarehouseTransfer = () => {
     return language === 'ar' ? w.name_ar || w.name : w.name;
   };
 
-  // ========== العرض ==========
   return (
     <div className="space-y-4">
       {/* ===== الهيدر ===== */}
@@ -373,7 +434,10 @@ const WarehouseTransfer = () => {
         <CardContent>
           <div className="flex gap-4">
             <div className="flex-1">
-              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+              <Select value={warehouseFilter} onValueChange={(value) => {
+                setWarehouseFilter(value);
+                setTimeout(() => refetch(), 100);
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder={t.allWarehouses} />
                 </SelectTrigger>
@@ -392,7 +456,11 @@ const WarehouseTransfer = () => {
               <Input
                 placeholder={t.search}
                 value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                onChange={(e) => {
+                  setSearchText(e.target.value);
+                  const timeoutId = setTimeout(() => refetch(), 500);
+                  return () => clearTimeout(timeoutId);
+                }}
                 className="pr-9"
               />
             </div>
@@ -411,6 +479,7 @@ const WarehouseTransfer = () => {
               <TableHeader className="sticky top-0 bg-background">
                 <TableRow>
                   <TableHead>{t.product}</TableHead>
+                  <TableHead>{t.barcode}</TableHead>
                   <TableHead>{t.warehouse}</TableHead>
                   <TableHead className="text-center">{t.stock}</TableHead>
                 </TableRow>
@@ -422,7 +491,7 @@ const WarehouseTransfer = () => {
                       {t.loading}
                     </TableCell>
                   </TableRow>
-                ) : filteredProducts.length === 0 ? (
+                ) : products.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       <Package className="h-12 w-12 mx-auto mb-2 opacity-20" />
@@ -430,16 +499,20 @@ const WarehouseTransfer = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((item: WarehouseProduct) => (
+                  products.map((item: WarehouseProduct) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.product_name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="font-mono">
+                          {item.barcode || '-'}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{item.warehouse_name}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={item.stock > 10 ? 'outline' : item.stock > 0 ? 'secondary' : 'destructive'}>
                           {item.stock}
                         </Badge>
                       </TableCell>
-                    
                     </TableRow>
                   ))
                 )}
@@ -452,7 +525,7 @@ const WarehouseTransfer = () => {
 
       {/* ===== مودال التحويل ===== */}
       <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowLeftRight className="h-5 w-5 text-primary" />
@@ -465,7 +538,12 @@ const WarehouseTransfer = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t.fromWarehouse} <span className="text-destructive">*</span></Label>
-                <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
+                <Select value={fromWarehouse} onValueChange={(value) => {
+                  setFromWarehouse(value);
+                  setModalSearchText('');
+                  setTransferItems([]);
+                  setProductNotes({});
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder={t.selectFrom} />
                   </SelectTrigger>
@@ -504,26 +582,49 @@ const WarehouseTransfer = () => {
             {/* جدول منتجات المخزن المصدر */}
             {fromWarehouse && toWarehouse && (
               <>
+                {/* مدخل البحث داخل المودال */}
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder={t.search}
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
+                    value={modalSearchText}
+                    onChange={(e) => {
+                      setModalSearchText(e.target.value);
+                      // الـ refetchModal هتشتغل تلقائياً لأن modalSearchText في الـ queryKey
+                    }}
                     className="pr-9"
                   />
+                  {modalSearchText && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 h-6 w-6"
+                      onClick={() => setModalSearchText('')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
 
                 <div className="border rounded-lg">
-                  <div className="p-3 bg-muted/30 border-b flex items-center gap-2">
-                    <ArrowRight className="h-4 w-4 text-primary" />
-                    <span className="font-medium">{t.fromWarehouse}: {getWarehouseName(fromWarehouse)}</span>
+                  <div className="p-3 bg-muted/30 border-b flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ArrowRight className="h-4 w-4 text-primary" />
+                      <span className="font-medium">{t.fromWarehouse}: {getWarehouseName(fromWarehouse)}</span>
+                    </div>
+                    {modalSearchText && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Search className="h-3 w-3" />
+                        {modalSearchText}
+                      </Badge>
+                    )}
                   </div>
-                  <ScrollArea className="h-[250px]">
+                  <ScrollArea className="h-[300px]">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background">
                         <TableRow>
                           <TableHead>{t.product}</TableHead>
+                          <TableHead>{t.barcode}</TableHead>
                           <TableHead className="w-24 text-center">{t.stock}</TableHead>
                           <TableHead className="w-24 text-center">{t.quantity}</TableHead>
                           <TableHead className="w-32">{t.note}</TableHead>
@@ -531,13 +632,42 @@ const WarehouseTransfer = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {products
-                          .filter((p: WarehouseProduct) => p.warehouse_name === getWarehouseName(fromWarehouse))
-                          .map((product: WarehouseProduct) => {
-                            const transferItem = transferItems.find(item => item.product_id === product.id);
+                        {modalLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8">
+                              {t.loading}
+                            </TableCell>
+                          </TableRow>
+                        ) : modalProducts.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                              <Package className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                              {modalSearchText ? (
+                                <span>{t.noData} <span className="font-mono">"{modalSearchText}"</span></span>
+                              ) : (
+                                t.noData
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          modalProducts.map((product: WarehouseProduct) => {
+                            const productId = product.product_id || product.id;
+                            const transferItem = transferItems.find(item => item.product_id === productId);
                             return (
-                              <TableRow key={product.id}>
-                                <TableCell className="font-medium">{product.product_name}</TableCell>
+                              <TableRow key={product.id} className={transferItem ? 'bg-primary/5' : ''}>
+                                <TableCell className="font-medium">
+                                  {product.product_name}
+                                  {transferItem && (
+                                    <Badge variant="outline" className="mr-2 text-xs">
+                                      ✓
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="font-mono text-xs">
+                                    {product.barcode || '-'}
+                                  </Badge>
+                                </TableCell>
                                 <TableCell className="text-center">
                                   <Badge variant={product.stock > 0 ? 'secondary' : 'destructive'}>
                                     {product.stock}
@@ -548,16 +678,18 @@ const WarehouseTransfer = () => {
                                     type="number"
                                     min="1"
                                     max={product.stock}
-                                    value={transferItem?.quantity || 0}
+                                    value={transferItem?.quantity || ''}
                                     onChange={(e) => {
                                       const qty = parseInt(e.target.value) || 0;
                                       if (qty > 0) {
                                         if (transferItem) {
-                                          handleQuantityChange(product.id, qty);
+                                          handleQuantityChange(productId, qty);
                                         } else {
                                           handleAddProduct(product);
-                                          setTimeout(() => handleQuantityChange(product.id, qty), 0);
+                                          setTimeout(() => handleQuantityChange(productId, qty), 0);
                                         }
+                                      } else if (transferItem) {
+                                        handleRemoveProduct(productId);
                                       }
                                     }}
                                     className="w-20 text-center mx-auto"
@@ -566,8 +698,8 @@ const WarehouseTransfer = () => {
                                 </TableCell>
                                 <TableCell>
                                   <Input
-                                    value={productNotes[product.id] || ''}
-                                    onChange={(e) => handleNoteChange(product.id, e.target.value)}
+                                    value={productNotes[productId] || ''}
+                                    onChange={(e) => handleNoteChange(productId, e.target.value)}
                                     placeholder={t.note}
                                     disabled={!transferItem}
                                     className="h-8"
@@ -578,8 +710,8 @@ const WarehouseTransfer = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() => handleRemoveProduct(product.id)}
-                                      className="h-8 w-8 text-destructive"
+                                      onClick={() => handleRemoveProduct(productId)}
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
                                     >
                                       <X className="h-4 w-4" />
                                     </Button>
@@ -587,7 +719,8 @@ const WarehouseTransfer = () => {
                                 </TableCell>
                               </TableRow>
                             );
-                          })}
+                          })
+                        )}
                       </TableBody>
                     </Table>
                   </ScrollArea>
@@ -595,24 +728,27 @@ const WarehouseTransfer = () => {
 
                 {/* ملخص التحويل */}
                 {transferItems.length > 0 && (
-                  <div className="bg-muted/30 p-4 rounded-lg">
+                  <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-4 rounded-lg border border-primary/20">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-6">
                         <div>
                           <p className="text-sm text-muted-foreground">{t.totalItems}</p>
-                          <p className="text-xl font-bold">{transferItems.length}</p>
+                          <p className="text-2xl font-bold text-primary">{transferItems.length}</p>
                         </div>
+                        <div className="h-10 w-px bg-border" />
                         <div>
                           <p className="text-sm text-muted-foreground">{t.totalQuantity}</p>
-                          <p className="text-xl font-bold">
+                          <p className="text-2xl font-bold text-primary">
                             {transferItems.reduce((sum, item) => sum + item.quantity, 0)}
                           </p>
                         </div>
                       </div>
-                      <ArrowLeft className="h-5 w-5 text-success" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">{t.toWarehouse}</p>
-                        <p className="font-medium">{getWarehouseName(toWarehouse)}</p>
+                      <div className="flex items-center gap-3">
+                        <ArrowLeft className="h-5 w-5 text-success" />
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">{t.toWarehouse}</p>
+                          <p className="font-bold text-success">{getWarehouseName(toWarehouse)}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -621,7 +757,7 @@ const WarehouseTransfer = () => {
             )}
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 sticky bottom-0 bg-background pt-4 border-t">
             <Button variant="outline" onClick={handleCloseTransfer}>
               {t.cancel}
             </Button>
@@ -634,15 +770,16 @@ const WarehouseTransfer = () => {
                 transferItems.length === 0 ||
                 transferMutation.isPending
               }
+              className="gap-2"
             >
               {transferMutation.isPending ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2" />
-                  {t.transferring || 'Transferring...'}
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {t.transferring}
                 </>
               ) : (
                 <>
-                  <Save className="h-4 w-4 ml-2" />
+                  <Save className="h-4 w-4" />
                   {t.saveTransfer}
                 </>
               )}

@@ -34,6 +34,7 @@ class ProductManager {
     return newItems;
   }
   
+
 createItemFromProduct(product: Product, language: string, unitId?: number, colorId?: number, stockOverride?: number): InvoiceItem {
   const selectedUnit = unitId 
     ? product.units?.find(u => u.unit_id === unitId)  // unit_id مش id
@@ -51,14 +52,15 @@ createItemFromProduct(product: Product, language: string, unitId?: number, color
   return {
     id: `temp-${Date.now()}-${Math.random()}`,
     product_id: product.id,
-    product_variant_id: selectedColor?.id || null,  // id من الجدول (9)
+    product_variant_id: selectedColor?.id || null,
     product_name: language === 'ar' ? (product.name_ar || product.name) : product.name,
     product_sku: product.sku,
     size_name: selectedUnit?.unit_name,
     size_name_ar: selectedUnit?.unit_name_ar || selectedUnit?.unit_name,
     color_name: selectedColor?.color,
     color_name_ar: selectedColor?.color,
-    color_id: colorId || null,  // color_id الحقيقي (1)
+    color_id: colorId || null,
+    product_unit_id: unitId || null,  // ✅ تأكد من تخزين unit_id
     stock: stockOverride ?? colorStock ?? product.stock ?? 0,
     quantity: 1,
     unit_cost: selectedUnit ? Number(selectedUnit.cost_price) : Number(product.cost),
@@ -67,7 +69,6 @@ createItemFromProduct(product: Product, language: string, unitId?: number, color
     tax_percent: product.tax_rate || 0,
     tax_amount: 0,
     total_cost: 0,
-    product_unit_id: unitId || null,  // unit_id الحقيقي (1)
   };
 }
   

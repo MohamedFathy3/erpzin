@@ -352,7 +352,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
             <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
             <hr/>
-            <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0'))}</span></div>
+            <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
           </div>
 
           <div class="print-section">

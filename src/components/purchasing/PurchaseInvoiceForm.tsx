@@ -251,28 +251,29 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   };
 
-  const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
-    // Check for duplicate product + color
-    const existingIndex = productManager.checkDuplicateProduct(items, product.id, colorId);
-    
-    if (existingIndex >= 0) {
-      // Same product and same color - increase quantity
-      const newItems = productManager.incrementQuantity(items, existingIndex);
-      setItems(newItems);
-      toast({
-        title: language === 'ar' ? 'تم التحديث' : 'Updated',
-        description: language === 'ar' ? 'تم زيادة الكمية' : 'Quantity increased'
-      });
-    } else {
-      // New product or same product with new color - add new row
-      const newItem = productManager.createItemFromProduct(product, language, unitId, colorId, stockOverride);
-      setItems([...items, newItem]);
-      toast({
-        title: language === 'ar' ? 'تمت الإضافة' : 'Added',
-        description: language === 'ar' ? 'تم إضافة المنتج' : 'Product added'
-      });
-    }
-  };
+
+const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
+  // ✅ التحقق من الـ duplicate باستخدام product_id + unit_id + color_id
+  const existingIndex = productManager.checkDuplicateProduct(items, product.id, unitId, colorId);
+  
+  if (existingIndex >= 0) {
+    // نفس المنتج ونفس المقاس ونفس اللون - زيادة الكمية
+    const newItems = productManager.incrementQuantity(items, existingIndex);
+    setItems(newItems);
+    toast({
+      title: language === 'ar' ? 'تم التحديث' : 'Updated',
+      description: language === 'ar' ? 'تم زيادة الكمية' : 'Quantity increased'
+    });
+  } else {
+    // منتج جديد أو نفس المنتج بمقاس أو لون مختلف - إضافة سطر جديد
+    const newItem = productManager.createItemFromProduct(product, language, unitId, colorId, stockOverride);
+    setItems([...items, newItem]);
+    toast({
+      title: language === 'ar' ? 'تمت الإضافة' : 'Added',
+      description: language === 'ar' ? 'تم إضافة المنتج' : 'Product added'
+    });
+  }
+};
 
   const addVariant = (variant: {
     product_id: string;
@@ -526,7 +527,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                     />
                     
                     {/* Items Table */}
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border rounded-lg overflow-hidden overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/30">

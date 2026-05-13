@@ -189,7 +189,6 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     const wallet = parseFloat(currentShift.wallet_sales || '0');
     const returns = parseFloat(currentShift.returns_amount || '0');
     
-    // المتوقع = رصيد الافتتاح + (نقدي + بطاقة + محفظة) - المرتجعات
     return opening + cash + card + wallet - returns;
   }, [currentShift]);
 
@@ -200,6 +199,141 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     return actual - expectedAmount;
   }, [currentShift, closingAmount, expectedAmount]);
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return format(date, 'yyyy-MM-dd HH:mm:ss');
+};
+
+const getShiftDuration = (shift) => {
+  if (!shift.opened_at) return '-';
+  const start = new Date(shift.opened_at);
+  const end = shift.closed_at ? new Date(shift.closed_at) : new Date();
+  const diffMs = end.getTime() - start.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (language === 'ar') {
+    return `${diffHours} ساعة و ${diffMinutes} دقيقة`;
+  }
+  return `${diffHours}h ${diffMinutes}m`;
+};
+
+const formatNumber = (value) => {
+  if (value === null || value === undefined) return '0.00';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0.00';
+  return num.toFixed(2);
+};
+
+const printShift = (shift) => {
+  const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
+  if (printWindow) {
+    const diffNum = parseFloat(shift.difference || '0');
+    const now = new Date();
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="${language === 'ar' ? 'rtl' : 'ltr'}">
+      <head>
+        <title>${language === 'ar' ? 'فاتورة الوردية #' + shift.id : 'Shift Invoice #' + shift.id}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', 'Traditional Arabic', monospace;
+            font-size: 12px;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 3mm;
+            background: white;
+            color: black;
+          }
+          @media print {
+            body { margin: 0; padding: 2mm; }
+            .no-print { display: none; }
+          }
+          .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed #000; }
+          .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dotted #ccc; }
+          .print-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+          .print-label { font-weight: bold; }
+          .print-value { font-family: monospace; }
+          hr { margin: 4px 0; border: none; border-top: 1px dotted #ccc; }
+          .text-center { text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <div style="font-size: 16px; font-weight: bold;">${language === 'ar' ? 'تقرير إغلاق وردية' : 'Shift Closing Report'}</div>
+          <div style="font-size: 10px; margin-top: 3px;">${language === 'ar' ? 'نقاط البيع' : 'POS System'}</div>
+          <div style="font-size: 9px; margin-top: 2px;">${formatDateTime(now)}</div>
+        </div>
+
+        <div class="print-section">
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'رقم الوردية:' : 'Shift #:'}</span><span>${shift.id}</span></div>
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'الموظف:' : 'Employee:'}</span><span>${shift.employee}</span></div>
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'الحالة:' : 'Status:'}</span><span>${shift.status === 'open' ? (language === 'ar' ? 'مفتوحة' : 'Open') : (language === 'ar' ? 'مغلقة' : 'Closed')}</span></div>
+        </div>
+
+        <div class="print-section">
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'وقت الفتح:' : 'Opened:'}</span><span>${formatDateTime(shift.opened_at)}</span></div>
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'وقت الإغلاق:' : 'Closed:'}</span><span>${shift.closed_at ? formatDateTime(shift.closed_at) : (language === 'ar' ? 'لم يغلق بعد' : 'Not closed')}</span></div>
+          <div class="print-row"><span class="print-label">${language === 'ar' ? 'المدة:' : 'Duration:'}</span><span>${getShiftDuration(shift)}</span></div>
+        </div>
+
+        <div class="print-section">
+          <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
+          <div class="print-row"><span>${language === 'ar' ? 'رصيد البداية:' : 'Opening Balance:'}</span><span>${formatNumber(shift.opening_balance)}</span></div>
+          <hr/>
+          <div class="print-row"><span>💰 ${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.cash_sales)}</span></div>
+          <div class="print-row"><span>📱 ${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.wallet_sales)}</span></div>
+          <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
+          <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
+          <hr/>
+          <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
+        </div>
+
+        <div class="print-section">
+          <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
+          <div class="print-row"><span>${language === 'ar' ? 'المبلغ المتوقع:' : 'Expected Amount:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
+          <hr/>
+          <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'الفرق:' : 'Difference:'}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(shift.difference)}</span></div>
+        </div>
+
+        ${shift.notes ? `
+        <div style="margin-bottom: 8px; padding: 4px 0;">
+          <div style="font-weight: bold; margin-bottom: 3px;">📝 ${language === 'ar' ? 'ملاحظات:' : 'Notes:'}</div>
+          <div style="font-size: 10px; padding: 3px; background: #f9f9f9;">${shift.notes}</div>
+        </div>
+        ` : ''}
+
+        <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <div style="font-size: 9px;">${language === 'ar' ? 'توقيع الموظف:' : 'Employee Signature:'}</div>
+            <div style="font-size: 9px;">${language === 'ar' ? 'توقيع المدير:' : 'Manager Signature:'}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <div style="border-bottom: 1px dotted #000; width: 70px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+            <div style="border-bottom: 1px dotted #000; width: 70px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; font-size: 8px;">
+          ${language === 'ar' ? 'شكراً لاستخدامكم نظام نقاط البيع' : 'Thank you for using POS System'}
+          <div>${formatDateTime(now)}</div>
+        </div>
+
+        <div class="no-print" style="text-align: center; margin-top: 20px; position: fixed; bottom: 10px; left: 0; right: 0; background: white; padding: 10px;">
+          <button onclick="window.print();return false;" style="padding: 8px 16px; margin: 3px; cursor: pointer;">🖨️ ${language === 'ar' ? 'طباعة' : 'Print'}</button>
+          <button onclick="window.close();return false;" style="padding: 8px 16px; margin: 3px; cursor: pointer;">❌ ${language === 'ar' ? 'إغلاق' : 'Close'}</button>
+        </div>
+        <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+};
   // ========== Translations ==========
   const t = {
     en: {
@@ -324,101 +458,28 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     });
   };
 
-  const handleCloseShift = () => {
-    const amount = parseFloat(closingAmount);
-    if (isNaN(amount) || amount < 0) {
-      toast.error(t.validAmount);
-      return;
+const handleCloseShift = () => {
+  const amount = parseFloat(closingAmount);
+  if (isNaN(amount) || amount < 0) {
+    toast.error(t.validAmount);
+    return;
+  }
+
+  if (!window.confirm(t.confirmClose)) return;
+
+  closeShiftMutation.mutate({
+    actual_amount: amount,
+    notes: closingNotes || undefined
+  }, {
+    onSuccess: (data) => {
+      if (data.status && currentShift) {
+        setTimeout(() => {
+          printShift(currentShift);
+        }, 500);
+      }
     }
-
-    if (!window.confirm(t.confirmClose)) return;
-
-    closeShiftMutation.mutate({
-      actual_amount: amount,
-      notes: closingNotes || undefined
-    });
-  };
-
-  const printZReport = () => {
-    if (!currentShift) return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const varianceText = currentVariance === 0 ? t.exact : currentVariance > 0 ? t.surplus : t.shortage;
-    const varianceClass = currentVariance === 0 ? 'exact' : currentVariance > 0 ? 'surplus' : 'shortage';
-    const varianceIcon = currentVariance === 0 ? '✓' : currentVariance > 0 ? '↑' : '↓';
-
-    const content = `
-      <!DOCTYPE html>
-      <html dir="rtl">
-      <head>
-        <meta charset="utf-8">
-        <title>${t.closeShift} - #${currentShift.id}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Arial', sans-serif; padding: 30px; direction: rtl; background: #fff; color: #333; }
-          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #000; }
-          .shop-name { font-size: 28px; font-weight: bold; color: #2563eb; }
-          .shift-info { text-align: center; margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 12px; }
-          .section { margin: 25px 0; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; }
-          .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; color: #2563eb; }
-          .row { display: flex; justify-content: space-between; margin: 12px 0; padding: 8px 0; }
-          .total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #000; padding-top: 15px; margin-top: 15px; }
-          .variance { padding: 15px; border-radius: 8px; margin-top: 15px; }
-          .variance.exact { background: #dcfce7; color: #166534; }
-          .variance.surplus { background: #dbeafe; color: #1e40af; }
-          .variance.shortage { background: #fee2e2; color: #991b1b; }
-          .footer { margin-top: 40px; padding-top: 20px; border-top: 2px dashed #cbd5e1; text-align: center; color: #64748b; }
-          .amount { font-family: 'Courier New', monospace; font-size: 1.1em; font-weight: 600; }
-          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
-          .stat-card { background: #f8fafc; padding: 15px; border-radius: 8px; text-align: center; }
-          .stat-label { font-size: 12px; color: #64748b; margin-bottom: 5px; }
-          .stat-value { font-size: 18px; font-weight: bold; }
-          @media print { body { padding: 15px; } .no-print { display: none; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1 class="shop-name">${localStorage.getItem('shop_name') || t.currentShift}</h1>
-          <p>تقرير إغلاق الوردية</p>
-        </div>
-        <div class="shift-info">
-          <div class="grid-2">
-            <div class="stat-card"><div class="stat-label">${t.shiftNumber}</div><div class="stat-value">#${currentShift.id}</div></div>
-            <div class="stat-card"><div class="stat-label">${t.cashier}</div><div class="stat-value">${localStorage.getItem('cashier_name') || '-'}</div></div>
-          </div>
-          <div class="row"><span>${t.openTime}:</span><span>${format(new Date(currentShift.opened_at), 'yyyy/MM/dd HH:mm:ss', { locale: ar })}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">💰 ${t.openingBalance}</div>
-          <div class="row"><span>${t.openingBalance}:</span><span class="amount">${formatCurrency(parseFloat(currentShift.opening_balance))}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">📊 ${t.totalSales}</div>
-          <div class="grid-2">
-            <div class="stat-card"><div class="stat-label">💰 ${t.cash}</div><div class="stat-value">${formatCurrency(parseFloat(currentShift.cash_sales))}</div></div>
-            <div class="stat-card"><div class="stat-label">💳 ${t.card}</div><div class="stat-value">${formatCurrency(parseFloat(currentShift.card_sales))}</div></div>
-            <div class="stat-card"><div class="stat-label">👛 ${t.wallet}</div><div class="stat-value">${formatCurrency(parseFloat(currentShift.wallet_sales))}</div></div>
-            <div class="stat-card"><div class="stat-label">↩️ ${t.returns}</div><div class="stat-value" style="color:#dc2626;">${formatCurrency(parseFloat(currentShift.returns_amount))}</div></div>
-          </div>
-          <div class="row total"><span>${t.netSales}:</span><span class="amount">${formatCurrency(parseFloat(currentShift.cash_sales) + parseFloat(currentShift.card_sales) + parseFloat(currentShift.wallet_sales))}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">⚖️ ${t.variance}</div>
-          <div class="row"><span>${t.expectedAmount}:</span><span class="amount">${formatCurrency(expectedAmount)}</span></div>
-          <div class="row"><span>${t.actualAmount}:</span><span class="amount">${formatCurrency(parseFloat(closingAmount || '0'))}</span></div>
-          <div class="variance ${varianceClass}"><div class="row"><span>${varianceIcon} ${varianceText}</span><span class="amount">${formatCurrency(Math.abs(currentVariance))}</span></div></div>
-        </div>
-        <div class="footer"><p>${t.thankYou}</p></div>
-        <div class="no-print" style="text-align:center;margin-top:30px;"><button onclick="window.print()" style="padding:10px30px;background:#2563eb;color:white;border:none;border-radius:6px;">🖨️ طباعة</button></div>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(content);
-    printWindow.document.close();
-  };
+  });
+};
 
   const getVarianceBadge = () => {
     if (!currentShift || !currentShift.difference) return null;
@@ -490,7 +551,6 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
               </div>
             </div>
             
-            {/* Grid 4 Cards - including returns */}
             <div className="grid grid-cols-4 gap-2">
               <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Banknote className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
@@ -528,15 +588,11 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             )}
 
             <div className="flex gap-2">
-              <Button className="flex-1 gap-2" variant="outline" onClick={() => setShowSummary(!showSummary)}>
-                <Receipt className="h-4 w-4" />{t.summary}
-              </Button>
               <Button className="flex-1 gap-2" variant="destructive" onClick={() => setCloseShiftModal(true)}>
                 <X className="h-4 w-4" />{t.closeShift}
               </Button>
             </div>
 
-            {/* Summary Table */}
             {showSummary && (
               <div className="mt-4 p-4 bg-muted/30 rounded-lg space-y-2 animate-in slide-in-from-top-2">
                 <h4 className="font-medium text-sm mb-3">{t.shiftDetails}</h4>
@@ -546,7 +602,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                   <div><span className="text-muted-foreground">{t.walletsales}:</span><div className="font-mono">{formatAmount(currentShift.wallet_sales)}</div></div>
                   <div><span className="text-muted-foreground">{t.totalReturns}:</span><div className="font-mono text-destructive">{formatAmount(currentShift.returns_amount)}</div></div>
                   <div className="col-span-2"><Separator /></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">{t.netSales}:</span><div className="font-mono text-primary text-lg">{formatAmount(parseFloat(currentShift.cash_sales) + parseFloat(currentShift.card_sales) + parseFloat(currentShift.wallet_sales))}</div></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">{t.netSales}:</span><div className="font-mono text-primary text-lg">{formatAmount(parseFloat(currentShift.cash_sales) + parseFloat(currentShift.card_sales) + parseFloat(currentShift.wallet_sales) - parseFloat(currentShift.returns_amount))}</div></div>
                 </div>
               </div>
             )}
@@ -633,7 +689,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             </div>
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={printZReport} disabled={!closingAmount} className="gap-2"><Printer className="h-4 w-4" />{t.printZ}</Button>
+            <Button variant="outline" onClick={() => printShift(currentShift)} disabled={!closingAmount} className="gap-2">
+              <Printer className="h-4 w-4" />
+              {t.printZ}
+            </Button>
             <Button variant="outline" onClick={() => setCloseShiftModal(false)}>{t.cancel}</Button>
             <Button onClick={handleCloseShift} disabled={closeShiftMutation.isPending || !closingAmount} variant="destructive">{closeShiftMutation.isPending ? <><RefreshCw className="h-4 w-4 animate-spin" />{t.loading}</> : t.closeShift}</Button>
           </DialogFooter>
