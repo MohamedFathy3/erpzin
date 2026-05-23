@@ -122,7 +122,7 @@ interface OfflineStats {
 // ==================== Main Component ====================
 const POS: React.FC = () => {
   const { language } = useLanguage();
-  const { userBranch, currentBranch } = useApp();
+  const { userBranch, currentBranch,  } = useApp();
   const { formatCurrency } = useRegionalSettings();
   const { taxRates } = useCurrencyTax();
   const navigate = useNavigate();
@@ -163,7 +163,7 @@ const POS: React.FC = () => {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
+  const { signOut,user } = useAuth();
   
   const [branchDetails, setBranchDetails] = useState<{
     phone?: string | null;
@@ -741,9 +741,9 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
   // ==================== UI Handlers ====================
   const handleLogout = async () => {
-    localStorage.removeItem('sb-auth');
-    navigate('/auth');
+    await signOut(); // الدالة هتتعامل مع كل حاجة (كوكيز، تخزين محلي، توجيه)
   };
+
 
   const handleFocusSearch = useCallback(() => {
     searchInputRef.current?.focus();

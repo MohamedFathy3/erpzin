@@ -126,16 +126,16 @@ interface InvoiceItem {
   sku: string;
   quantity: number;
   unit_price: number;
-  discount_percent: number;
-  discount_amount: number;
+  discount_percent: number; // خصم على مستوى المنتج (%)
+  discount_amount: number;  // قيمة خصم المنتج المحسوبة
   tax_amount: number;
-  total_price: number;
+  total_price: number;      // الإجمالي بعد خصم المنتج (quantity * unit_price - discount_amount)
   stock: number;
   unit_id?: number | null;
-  unit_name?: string | null;  // أضف هذا
+  unit_name?: string | null;
   color_id?: number | null;
-  color_name?: string | null;  // أضف هذا
-  color_hex?: string | null;   // أضف هذا للون الدائري
+  color_name?: string | null;
+  color_hex?: string | null;
   variant_id?: string;
 }
 
@@ -169,7 +169,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     treasury_id: "",
     due_date: "",
     payment_method: "cash" as 'cash' | 'card' | 'wallet' | 'credit' | 'bank_transfer' | 'check',
-    discount_percent: 0,
+    discount_percent: 0, // خصم على مستوى الفاتورة (%)
     tax_id: "",
     currency_id: "",
     notes: ""
@@ -442,22 +442,59 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const getTaxName = (tax: Tax) => language === 'ar' ? (tax.name_ar || tax.name) : tax.name;
 
   // ========== Cart Calculations ==========
-const calculateTotals = () => {
-  const subtotal = items.reduce((sum, item) => {
-    const itemTotal = item.quantity * item.unit_price;
-    const itemDiscount = (itemTotal * item.discount_percent) / 100;
-    return sum + (itemTotal - itemDiscount);
-  }, 0);
+  // حساب إجمالي الفاتورة بشكل صحيح مع مراعاة:
+  // 1. خصم كل منتج على حدة (discount_percent)
+  // 2. خصم الفاتورة الكلي (formData.discount_percent)
+  // 3. الضريبة
+  const calculateTotals = () => {
+    // الخطوة 1: حساب المجموع الفرعي بعد خصم المنتجات
+    const subtotalAfterItemDiscounts = items.reduce((sum, item) => {
+      // إجمالي سعر المنتج قبل خصم المنتج
+      const itemGrossTotal = item.quantity * item.unit_price;
+      // خصم المنتج (المحسوب مسبقاً وحفظ في discount_amount)
+      return sum + (itemGrossTotal - item.discount_amount);
+    }, 0);
+    
+    // الخطوة 2: حساب خصم الفاتورة
+    const invoiceDiscountAmount = (subtotalAfterItemDiscounts * formData.discount_percent) / 100;
+    const afterInvoiceDiscount = subtotalAfterItemDiscounts - invoiceDiscountAmount;
+    
+    // الخطوة 3: حساب الضريبة
+    const selectedTax = taxes.find(t => t.id === Number(formData.tax_id));
+    const taxPercent = selectedTax?.rate || 0;
+    const taxAmount = (afterInvoiceDiscount * taxPercent) / 100;
+    const totalAmount = afterInvoiceDiscount + taxAmount;
+    
+    return {
+      subtotal: subtotalAfterItemDiscounts,
+      invoiceDiscountAmount,
+      taxAmount,
+      totalAmount,
+      taxPercent,
+      invoiceDiscountPercent: formData.discount_percent
+    };
+  };
   
-  const discountAmount = (subtotal * formData.discount_percent) / 100;
-  const afterDiscount = subtotal - discountAmount;
-  const selectedTax = taxes.find(t => t.id === Number(formData.tax_id));
-  const taxPercent = selectedTax?.rate || 0;
-  const taxAmount = (afterDiscount * taxPercent) / 100;
-  const totalAmount = afterDiscount + taxAmount;
-  return { subtotal, discountAmount, taxAmount, totalAmount, taxPercent };
-};
   const totals = calculateTotals();
+
+  // تحديث عنصر في السلة مع إعادة حساب خصم المنتج
+  const updateItem = (id: string, field: string, value: number) => {
+    const updated = items.map(item => {
+      if (item.id === id) {
+        const newItem = { ...item, [field]: value };
+        
+        // إعادة حساب إجمالي المنتج وخصمه
+        const grossTotal = newItem.quantity * newItem.unit_price;
+        const itemDiscountAmount = (grossTotal * newItem.discount_percent) / 100;
+        newItem.discount_amount = itemDiscountAmount;
+        newItem.total_price = grossTotal - itemDiscountAmount;
+        
+        return newItem;
+      }
+      return item;
+    });
+    setItems(updated);
+  };
 
   // ========== Handlers for Variant Selection ==========
   const openVariantSelector = (product: Product) => {
@@ -471,79 +508,85 @@ const calculateTotals = () => {
     setShowVariantDialog(true);
   };
 
-const addProductToCart = (product: Product, unit: UnitOption | null, color: ColorOption | null) => {
-  let unitPrice = product.sell_price || product.price || 0;
-  let unitId: number | null = null;
-  let unitName: string | null = null;
-  let colorId: number | null = null;
-  let colorName: string | null = null;
-  let colorHex: string | null = null;
-  let variantStock = product.stock || 0;
+  const addProductToCart = (product: Product, unit: UnitOption | null, color: ColorOption | null) => {
+    let unitPrice = product.sell_price || product.price || 0;
+    let unitId: number | null = null;
+    let unitName: string | null = null;
+    let colorId: number | null = null;
+    let colorName: string | null = null;
+    let colorHex: string | null = null;
+    let variantStock = product.stock || 0;
 
-  if (unit) {
-    unitPrice = parseFloat(unit.sell_price);
-    unitId = unit.unit_id;
-    unitName = unit.unit_name;
-    if (color) {
-      colorId = color.color_id;
-      colorName = color.color;
-      colorHex = color.hex_code || null;
-      variantStock = color.stock;
-    } else {
-      if (unit.colors && unit.colors.length > 0) {
-        toast.error(language === 'ar' ? 'يرجى اختيار اللون' : 'Please select a color');
-        return;
+    if (unit) {
+      unitPrice = parseFloat(unit.sell_price);
+      unitId = unit.unit_id;
+      unitName = unit.unit_name;
+      if (color) {
+        colorId = color.color_id;
+        colorName = color.color;
+        colorHex = color.hex_code || null;
+        variantStock = color.stock;
+      } else {
+        if (unit.colors && unit.colors.length > 0) {
+          toast.error(language === 'ar' ? 'يرجى اختيار اللون' : 'Please select a color');
+          return;
+        }
+        variantStock = unit.colors?.reduce((sum, c) => sum + c.stock, 0) || 0;
       }
-      variantStock = unit.colors?.reduce((sum, c) => sum + c.stock, 0) || 0;
     }
-  }
 
-  if (variantStock <= 0) {
-    toast.error(language === 'ar' ? 'هذا المتغير غير متوفر في المخزون' : 'This variant is out of stock');
-    return;
-  }
+    if (variantStock <= 0) {
+      toast.error(language === 'ar' ? 'هذا المتغير غير متوفر في المخزون' : 'This variant is out of stock');
+      return;
+    }
 
-  const existingIndex = items.findIndex(item =>
-    item.product_id === product.id &&
-    item.unit_id === unitId &&
-    item.color_id === colorId
-  );
+    const existingIndex = items.findIndex(item =>
+      item.product_id === product.id &&
+      item.unit_id === unitId &&
+      item.color_id === colorId
+    );
 
-  if (existingIndex >= 0) {
-    const updated = [...items];
-    updated[existingIndex].quantity += 1;
-    updated[existingIndex].total_price = updated[existingIndex].quantity * updated[existingIndex].unit_price;
-    setItems(updated);
-    toast.success(language === 'ar' ? 'تم زيادة الكمية' : 'Quantity updated');
-  } else {
-    const newItem: InvoiceItem = {
-      id: crypto.randomUUID(),
-      product_id: product.id,
-      product_name: language === 'ar' ? (product.name_ar || product.name) : product.name,
-      sku: product.sku,
-      quantity: 1,
-      unit_price: unitPrice,
-      discount_percent: 0,
-      discount_amount: 0,
-      tax_amount: 0,
-      total_price: unitPrice,
-      stock: variantStock,
-      unit_id: unitId,
-      unit_name: unitName,
-      color_id: colorId,
-      color_name: colorName,
-      color_hex: colorHex,
-      variant_id: unitId && colorId ? `${product.id}-${unitId}-${colorId}` : undefined
-    };
-    setItems([...items, newItem]);
-    toast.success(language === 'ar' ? 'تم إضافة المنتج' : 'Product added');
-  }
-  setSearchQuery("");
-  setShowProductList(false);
-  inputRef.current?.focus();
-  setShowVariantDialog(false);
-  setSelectedProduct(null);
-};
+    if (existingIndex >= 0) {
+      const updated = [...items];
+      updated[existingIndex].quantity += 1;
+      // إعادة حساب الإجمالي بعد زيادة الكمية
+      const grossTotal = updated[existingIndex].quantity * updated[existingIndex].unit_price;
+      const itemDiscountAmount = (grossTotal * updated[existingIndex].discount_percent) / 100;
+      updated[existingIndex].discount_amount = itemDiscountAmount;
+      updated[existingIndex].total_price = grossTotal - itemDiscountAmount;
+      setItems(updated);
+      toast.success(language === 'ar' ? 'تم زيادة الكمية' : 'Quantity updated');
+    } else {
+      const grossTotal = unitPrice;
+      const itemDiscountAmount = 0; // خصم المنتج الابتدائي صفر
+      const newItem: InvoiceItem = {
+        id: crypto.randomUUID(),
+        product_id: product.id,
+        product_name: language === 'ar' ? (product.name_ar || product.name) : product.name,
+        sku: product.sku,
+        quantity: 1,
+        unit_price: unitPrice,
+        discount_percent: 0,
+        discount_amount: itemDiscountAmount,
+        tax_amount: 0,
+        total_price: grossTotal - itemDiscountAmount,
+        stock: variantStock,
+        unit_id: unitId,
+        unit_name: unitName,
+        color_id: colorId,
+        color_name: colorName,
+        color_hex: colorHex,
+        variant_id: unitId && colorId ? `${product.id}-${unitId}-${colorId}` : undefined
+      };
+      setItems([...items, newItem]);
+      toast.success(language === 'ar' ? 'تم إضافة المنتج' : 'Product added');
+    }
+    setSearchQuery("");
+    setShowProductList(false);
+    inputRef.current?.focus();
+    setShowVariantDialog(false);
+    setSelectedProduct(null);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && products.length > 0 && searchQuery) {
@@ -554,54 +597,54 @@ const addProductToCart = (product: Product, unit: UnitOption | null, color: Colo
 
   // ========== useEffect للتهيئة - مع منع الحلقات اللانهائية ==========
   
-useEffect(() => {
-  if (!isOpen) return;
-  if (initializedRef.current) return;
-  
-  let hasChanges = false;
-  let newCurrencyId = formData.currency_id;
-  let newTaxId = formData.tax_id;
-  
-  if (!newCurrencyId && currencies.length > 0) {
-    const defaultCurr = currencies.find(c => c.default === true && c.active === true);
-    if (defaultCurr) {
-      newCurrencyId = defaultCurr.id.toString();
-      hasChanges = true;
-    } else {
-      const activeCurr = currencies.find(c => c.active === true);
-      if (activeCurr) {
-        newCurrencyId = activeCurr.id.toString();
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initializedRef.current) return;
+    
+    let hasChanges = false;
+    let newCurrencyId = formData.currency_id;
+    let newTaxId = formData.tax_id;
+    
+    if (!newCurrencyId && currencies.length > 0) {
+      const defaultCurr = currencies.find(c => c.default === true && c.active === true);
+      if (defaultCurr) {
+        newCurrencyId = defaultCurr.id.toString();
         hasChanges = true;
+      } else {
+        const activeCurr = currencies.find(c => c.active === true);
+        if (activeCurr) {
+          newCurrencyId = activeCurr.id.toString();
+          hasChanges = true;
+        }
       }
     }
-  }
-  
-  if (!newTaxId && taxes.length > 0) {
-    const defaultTax = taxes.find(t => t.default === true && t.active === true);
-    if (defaultTax) {
-      newTaxId = defaultTax.id.toString();
-      hasChanges = true;
-    } else {
-      const activeTax = taxes.find(t => t.active === true);
-      if (activeTax) {
-        newTaxId = activeTax.id.toString();
+    
+    if (!newTaxId && taxes.length > 0) {
+      const defaultTax = taxes.find(t => t.default === true && t.active === true);
+      if (defaultTax) {
+        newTaxId = defaultTax.id.toString();
         hasChanges = true;
+      } else {
+        const activeTax = taxes.find(t => t.active === true);
+        if (activeTax) {
+          newTaxId = activeTax.id.toString();
+          hasChanges = true;
+        }
       }
     }
-  }
-  
-  if (hasChanges) {
-    setFormData(prev => ({
-      ...prev,
-      currency_id: newCurrencyId || prev.currency_id,
-      tax_id: newTaxId || prev.tax_id
-    }));
-  }
-  
-  if (currencies.length > 0 && taxes.length > 0) {
-    initializedRef.current = true;
-  }
-}, [isOpen, currencies, taxes]);
+    
+    if (hasChanges) {
+      setFormData(prev => ({
+        ...prev,
+        currency_id: newCurrencyId || prev.currency_id,
+        tax_id: newTaxId || prev.tax_id
+      }));
+    }
+    
+    if (currencies.length > 0 && taxes.length > 0) {
+      initializedRef.current = true;
+    }
+  }, [isOpen, currencies, taxes]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -651,21 +694,6 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-const updateItem = (id: string, field: string, value: number) => {
-  const updated = items.map(item => {
-    if (item.id === id) {
-      const newItem = { ...item, [field]: value };
-      const baseTotal = newItem.quantity * newItem.unit_price;
-      const discount = (baseTotal * newItem.discount_percent) / 100;
-      newItem.discount_amount = discount;
-      newItem.total_price = baseTotal - discount;
-      return newItem;
-    }
-    return item;
-  });
-  setItems(updated);
-};
-
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
     toast.success(language === 'ar' ? 'تم حذف المنتج' : 'Product removed');
@@ -692,6 +720,7 @@ const updateItem = (id: string, field: string, value: number) => {
     prevBranchRef.current = null;
   };
 
+  // ========== حفظ الفاتورة مع البيانات الصحيحة ==========
   const handleSave = async (action: 'save' | 'print' = 'save') => {
     if (!formData.customer_id) {
       toast.error(language === 'ar' ? 'يجب اختيار العميل' : 'Customer is required');
@@ -722,6 +751,20 @@ const updateItem = (id: string, field: string, value: number) => {
       return;
     }
 
+    // حساب إجماليات الفاتورة النهائية للإرسال
+    const subtotalAfterItemDiscounts = items.reduce((sum, item) => {
+      const itemGrossTotal = item.quantity * item.unit_price;
+      return sum + (itemGrossTotal - item.discount_amount);
+    }, 0);
+    
+    const discountAmount = (subtotalAfterItemDiscounts * formData.discount_percent) / 100;
+    const netTotal = subtotalAfterItemDiscounts - discountAmount;
+    
+    const selectedTax = taxes.find(t => t.id === Number(formData.tax_id));
+    const taxPercent = selectedTax?.rate || 0;
+    const taxAmount = (netTotal * taxPercent) / 100;
+    const totalAmount = netTotal + taxAmount;
+
     const payload = {
       customer_id: Number(formData.customer_id),
       sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
@@ -733,10 +776,19 @@ const updateItem = (id: string, field: string, value: number) => {
       payment_method: formData.payment_method,
       due_date: formData.due_date || null,
       note: formData.notes || null,
+      discount_percentage: formData.discount_percent, // خصم الفاتورة %
+      discount_amount: discountAmount,                // قيمة خصم الفاتورة
+      subtotal: subtotalAfterItemDiscounts,          // المجموع بعد خصم المنتجات
+      net_total: netTotal,                           // المجموع بعد خصم الفاتورة
+      tax_amount: taxAmount,                         // قيمة الضريبة
+      total_amount: totalAmount,                     // الإجمالي النهائي
       items: items.map(item => ({
         product_id: Number(item.product_id),
         quantity: Number(item.quantity),
         price: Number(item.unit_price),
+        discount_percentage: item.discount_percent,   // خصم المنتج %
+        discount_amount: item.discount_amount,       // قيمة خصم المنتج
+        total_price: item.total_price,               // إجمالي المنتج بعد خصمه
         unit_id: item.unit_id ? Number(item.unit_id) : null,
         color_id: item.color_id ? Number(item.color_id) : null,
       }))
@@ -744,15 +796,38 @@ const updateItem = (id: string, field: string, value: number) => {
 
     try {
       const response = await api.post('/sales-invoice/store', payload);
-      toast.success(language === 'ar' ? '✅ تم إنشاء الفاتورة بنجاح' : '✅ Invoice created successfully');
-      queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-      queryClient.invalidateQueries({ queryKey: ['products-form'] });
-      if (action === 'print') {
-        toast.info(language === 'ar' ? 'جاري تجهيز الطباعة...' : 'Preparing print...');
+      
+      if (response.data.result === 'Success') {
+        toast.success(language === 'ar' ? '✅ تم إنشاء الفاتورة بنجاح' : '✅ Invoice created successfully');
+        queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['products-form'] });
+        
+        if (action === 'print') {
+          // محاولة طباعة الفاتورة
+          try {
+            const invoiceId = response.data.data?.id;
+            if (invoiceId) {
+              // فتح صفحة الطباعة في نافذة جديدة
+              const printWindow = window.open(`/sales-invoice/print/${invoiceId}`, '_blank');
+              if (printWindow) {
+                toast.success(language === 'ar' ? 'تم فتح صفحة الطباعة' : 'Print page opened');
+              } else {
+                toast.warning(language === 'ar' ? 'الرجاء السماح بالنوافذ المنبثقة للطباعة' : 'Please allow popups for printing');
+              }
+            } else {
+              toast.info(language === 'ar' ? 'جاري تجهيز الطباعة...' : 'Preparing print...');
+            }
+          } catch (printError) {
+            console.error('Print error:', printError);
+          }
+        }
+        
+        resetForm();
+        onClose();
+      } else {
+        toast.error(language === 'ar' ? '❌ فشل في إنشاء الفاتورة' : '❌ Failed to create invoice');
       }
-      resetForm();
-      onClose();
     } catch (error: any) {
       console.error('❌ Error creating invoice:', error.response?.data || error);
       const errorMessage = error.response?.data?.message || error.message;
@@ -967,30 +1042,30 @@ const updateItem = (id: string, field: string, value: number) => {
                               <TableCell>
                                 <div className="font-medium text-sm">{item.product_name}</div>
                                 <div className="text-xs text-muted-foreground font-mono">{item.sku}</div>
-                             {(item.unit_id || item.color_id) && (
-  <div className="text-xs text-primary mt-1 flex flex-wrap gap-2 items-center">
-    {item.unit_name && (
-      <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
-        {language === 'ar' ? 'مقاس:' : 'Size:'} {item.unit_name}
-      </span>
-    )}
-    {item.color_name && (
-      <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
-        {language === 'ar' ? 'لون:' : 'Color:'}
-        <div 
-          style={{
-            width: '14px',
-            height: '14px',
-            borderRadius: '50%',
-            backgroundColor: item.color_hex || '#CCCCCC',
-            border: '1px solid #ccc'
-          }}
-        />
-        {item.color_name}
-      </span>
-    )}
-  </div>
-)}
+                                {(item.unit_id || item.color_id) && (
+                                  <div className="text-xs text-primary mt-1 flex flex-wrap gap-2 items-center">
+                                    {item.unit_name && (
+                                      <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                                        {language === 'ar' ? 'مقاس:' : 'Size:'} {item.unit_name}
+                                      </span>
+                                    )}
+                                    {item.color_name && (
+                                      <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                                        {language === 'ar' ? 'لون:' : 'Color:'}
+                                        <div 
+                                          style={{
+                                            width: '14px',
+                                            height: '14px',
+                                            borderRadius: '50%',
+                                            backgroundColor: item.color_hex || '#CCCCCC',
+                                            border: '1px solid #ccc'
+                                          }}
+                                        />
+                                        {item.color_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-center">
                                 <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${(item.stock || 0) === 0 ? 'bg-red-100 text-red-700' : (item.stock || 0) <= 10 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
@@ -999,7 +1074,16 @@ const updateItem = (id: string, field: string, value: number) => {
                               </TableCell>
                               <TableCell><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} className="w-20 text-center mx-auto h-8" /></TableCell>
                               <TableCell><Input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)} className="w-24 text-right h-8" /></TableCell>
-                              <TableCell><Input type="number" min="0" max="100" value={item.discount_percent} onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)} className="w-20 text-center mx-auto h-8" /></TableCell>
+                              <TableCell>
+                                <Input 
+                                  type="number" 
+                                  min="0" 
+                                  max="100" 
+                                  value={item.discount_percent} 
+                                  onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)} 
+                                  className="w-20 text-center mx-auto h-8" 
+                                />
+                              </TableCell>
                               <TableCell className="font-medium text-right text-sm">{item.total_price.toLocaleString()}</TableCell>
                               <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(item.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
                             </TableRow>
@@ -1010,27 +1094,123 @@ const updateItem = (id: string, field: string, value: number) => {
                   </div>
                   {items.length > 0 && (
                     <div className="flex justify-between items-center text-sm bg-muted/30 p-3 rounded-lg">
-                      <div className="flex gap-4"><span>{language === 'ar' ? 'عدد المنتجات:' : 'Items:'} <strong>{items.length}</strong></span><span>{language === 'ar' ? 'الكمية الإجمالية:' : 'Total Qty:'} <strong>{items.reduce((sum, i) => sum + i.quantity, 0)}</strong></span></div>
-                      <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setShowProductList(true); inputRef.current?.focus(); }}><Plus className="h-4 w-4" />{language === 'ar' ? 'إضافة منتج آخر' : 'Add Another'}</Button>
+                      <div className="flex gap-4">
+                        <span>{language === 'ar' ? 'عدد المنتجات:' : 'Items:'} <strong>{items.length}</strong></span>
+                        <span>{language === 'ar' ? 'الكمية الإجمالية:' : 'Total Qty:'} <strong>{items.reduce((sum, i) => sum + i.quantity, 0)}</strong></span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setShowProductList(true); inputRef.current?.focus(); }}>
+                        <Plus className="h-4 w-4" />{language === 'ar' ? 'إضافة منتج آخر' : 'Add Another'}
+                      </Button>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card><CardContent className="pt-4"><Label className="mb-2 block">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label><Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} placeholder={language === 'ar' ? 'أضف ملاحظات للفاتورة...' : 'Add invoice notes...'} className="resize-none" /></CardContent></Card>
+              <Card>
+                <CardContent className="pt-4">
+                  <Label className="mb-2 block">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
+                  <Textarea 
+                    value={formData.notes} 
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
+                    rows={2} 
+                    placeholder={language === 'ar' ? 'أضف ملاحظات للفاتورة...' : 'Add invoice notes...'} 
+                    className="resize-none" 
+                  />
+                </CardContent>
+              </Card>
             </div>
 
             {/* Summary */}
             <div className="space-y-6">
               <Card className="sticky top-24">
-                <CardHeader className="pb-3 border-b"><CardTitle className="text-lg flex items-center gap-2"><div className="w-1 h-5 bg-primary rounded-full" />{language === 'ar' ? 'ملخص الفاتورة' : 'Invoice Summary'}</CardTitle></CardHeader>
+                <CardHeader className="pb-3 border-b">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="w-1 h-5 bg-primary rounded-full" />
+                    {language === 'ar' ? 'ملخص الفاتورة' : 'Invoice Summary'}
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                  <div className="space-y-2"><Label className="text-sm text-muted-foreground">{language === 'ar' ? 'العملة' : 'Currency'} <span className="text-destructive">*</span></Label><Select value={formData.currency_id} onValueChange={(value) => setFormData({ ...formData, currency_id: value })}><SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger><SelectContent>{loadingCurrencies ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : currencies.map((c: Currency) => <SelectItem key={c.id} value={c.id.toString()}>{getCurrencyName(c)} ({c.symbol})</SelectItem>)}</SelectContent></Select></div>
-                  <div className="flex justify-between items-center py-2 border-b"><span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span><span className="font-medium text-lg">{formatAmount(totals.subtotal, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span></div>
-                  <div className="space-y-2"><div className="flex justify-between items-center"><Label className="text-sm text-muted-foreground">{language === 'ar' ? 'الخصم' : 'Discount'}</Label><span className="text-destructive font-medium">-{formatAmount(totals.discountAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span></div><div className="flex items-center gap-3"><div className="flex-1 relative"><Input type="number" min="0" max="100" value={formData.discount_percent} onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })} className="pl-8 pr-4 text-center" /><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span></div></div></div>
-                  <div className="space-y-2"><div className="flex justify-between items-center"><Label className="text-sm text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'} <span className="text-destructive">*</span></Label><span className="text-primary font-medium">+{formatAmount(totals.taxAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span></div><Select value={formData.tax_id} onValueChange={(value) => setFormData({ ...formData, tax_id: value })}><SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger><SelectContent>{loadingTaxes ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : taxes.map((t: Tax) => <SelectItem key={t.id} value={t.id.toString()}>{getTaxName(t)} ({t.rate}%)</SelectItem>)}</SelectContent></Select></div>
-                  <div className="border-t pt-4"><div className="flex justify-between items-center"><span className="text-lg font-bold">{language === 'ar' ? 'الإجمالي' : 'Total'}</span><span className="text-2xl font-bold text-primary">{formatAmount(totals.totalAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span></div></div>
-                  <div className="flex flex-col gap-3 pt-4"><Button onClick={() => handleSave('save')} disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id} className="w-full gap-2 h-11 text-base"><Save className="h-4 w-4" />{language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}</Button><Button variant="outline" onClick={handleSaveAndPrint} disabled={items.length === 0 || !formData.customer_id} className="w-full gap-2 h-11"><Printer className="h-4 w-4" />{language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}</Button></div>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground">{language === 'ar' ? 'العملة' : 'Currency'} <span className="text-destructive">*</span></Label>
+                    <Select value={formData.currency_id} onValueChange={(value) => setFormData({ ...formData, currency_id: value })}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {loadingCurrencies ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : 
+                          currencies.map((c: Currency) => <SelectItem key={c.id} value={c.id.toString()}>{getCurrencyName(c)} ({c.symbol})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-b">
+                    <span className="text-muted-foreground">{language === 'ar' ? 'المجموع بعد خصم المنتجات' : 'Subtotal after item discounts'}</span>
+                    <span className="font-medium text-lg">{formatAmount(totals.subtotal, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm text-muted-foreground">{language === 'ar' ? 'خصم الفاتورة' : 'Invoice Discount'}</Label>
+                      <span className="text-destructive font-medium">-{formatAmount(totals.invoiceDiscountAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 relative">
+                        <Input 
+                          type="number" 
+                          min="0" 
+                          max="100" 
+                          value={formData.discount_percent} 
+                          onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })} 
+                          className="pl-8 pr-4 text-center" 
+                        />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2 border-t">
+                    <span className="text-muted-foreground">{language === 'ar' ? 'المجموع بعد خصم الفاتورة' : 'Net Total'}</span>
+                    <span className="font-medium">{formatAmount(totals.totalAmount - totals.taxAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'} <span className="text-destructive">*</span></Label>
+                      <span className="text-primary font-medium">+{formatAmount(totals.taxAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
+                    </div>
+                    <Select value={formData.tax_id} onValueChange={(value) => setFormData({ ...formData, tax_id: value })}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {loadingTaxes ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : 
+                          taxes.map((t: Tax) => <SelectItem key={t.id} value={t.id.toString()}>{getTaxName(t)} ({t.rate}%)</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-bold">{language === 'ar' ? 'الإجمالي النهائي' : 'Total'}</span>
+                      <span className="text-2xl font-bold text-primary">{formatAmount(totals.totalAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-3 pt-4">
+                    <Button 
+                      onClick={() => handleSave('save')} 
+                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id} 
+                      className="w-full gap-2 h-11 text-base"
+                    >
+                      <Save className="h-4 w-4" />
+                      {language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleSaveAndPrint} 
+                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id} 
+                      className="w-full gap-2 h-11"
+                    >
+                      <Printer className="h-4 w-4" />
+                      {language === 'ar' ? 'حفظ وطباعة' : 'Save & Print'}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1041,7 +1221,9 @@ const updateItem = (id: string, field: string, value: number) => {
       {/* Dialog لاختيار المقاس واللون */}
       <Dialog open={showVariantDialog} onOpenChange={setShowVariantDialog}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{language === 'ar' ? 'اختيار المقاس واللون' : 'Select Size & Color'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{language === 'ar' ? 'اختيار المقاس واللون' : 'Select Size & Color'}</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-4">
             {selectedProduct && selectedProduct.units && selectedProduct.units.length > 0 && (
               <>
@@ -1063,53 +1245,55 @@ const updateItem = (id: string, field: string, value: number) => {
                 {selectedUnit && selectedUnit.colors && selectedUnit.colors.length > 0 && (
                   <div>
                     <Label>{language === 'ar' ? 'اللون' : 'Color'}</Label>
-                 <Select value={selectedColor?.color_id?.toString()} onValueChange={(val) => {
-  const color = selectedUnit.colors.find(c => c.color_id === parseInt(val));
-  setSelectedColor(color || null);
-}}>
-  <SelectTrigger className="flex items-center justify-between">
-    <SelectValue placeholder={language === 'ar' ? 'اختر اللون' : 'Select color'} />
-    {selectedColor && (
-      <div 
-        style={{
-          width: '18px',
-          height: '18px',
-          borderRadius: '50%',
-          backgroundColor: selectedColor.hex_code || '#CCCCCC',
-          border: '1px solid #ddd',
-          marginLeft: '8px'
-        }}
-      />
-    )}
-  </SelectTrigger>
-  <SelectContent>
-    {selectedUnit.colors.map(color => (
-      <SelectItem key={color.color_id} value={color.color_id.toString()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div 
-            style={{
-              width: '20px',
-              height: '20px',
-              borderRadius: '50%',
-              backgroundColor: color.hex_code || '#CCCCCC',
-              border: '1px solid #ccc'
-            }}
-          />
-          <span>
-            {color.color} ({language === 'ar' ? 'المخزون' : 'stock'}: {color.stock})
-          </span>
-        </div>
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+                    <Select value={selectedColor?.color_id?.toString()} onValueChange={(val) => {
+                      const color = selectedUnit.colors.find(c => c.color_id === parseInt(val));
+                      setSelectedColor(color || null);
+                    }}>
+                      <SelectTrigger className="flex items-center justify-between">
+                        <SelectValue placeholder={language === 'ar' ? 'اختر اللون' : 'Select color'} />
+                        {selectedColor && (
+                          <div 
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              backgroundColor: selectedColor.hex_code || '#CCCCCC',
+                              border: '1px solid #ddd',
+                              marginLeft: '8px'
+                            }}
+                          />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedUnit.colors.map(color => (
+                          <SelectItem key={color.color_id} value={color.color_id.toString()}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div 
+                                style={{
+                                  width: '20px',
+                                  height: '20px',
+                                  borderRadius: '50%',
+                                  backgroundColor: color.hex_code || '#CCCCCC',
+                                  border: '1px solid #ccc'
+                                }}
+                              />
+                              <span>
+                                {color.color} ({language === 'ar' ? 'المخزون' : 'stock'}: {color.stock})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
                 <Button onClick={() => {
                   if (!selectedUnit) { toast.error(language === 'ar' ? 'يرجى اختيار المقاس' : 'Select size'); return; }
                   if (selectedUnit.colors && selectedUnit.colors.length > 0 && !selectedColor) { toast.error(language === 'ar' ? 'يرجى اختيار اللون' : 'Select color'); return; }
                   addProductToCart(selectedProduct, selectedUnit, selectedColor);
-                }} className="w-full">{language === 'ar' ? 'إضافة إلى الفاتورة' : 'Add to Invoice'}</Button>
+                }} className="w-full">
+                  {language === 'ar' ? 'إضافة إلى الفاتورة' : 'Add to Invoice'}
+                </Button>
               </>
             )}
           </div>
