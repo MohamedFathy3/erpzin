@@ -47,6 +47,7 @@ interface InvoiceTableRow {
   treasury_name: string;
   total_amount: number;
   payment_method: string;
+  discount_total: string;
   invoice_date: string;
   due_date: string;
   items_count: number;
@@ -121,15 +122,15 @@ const Purchasing = () => {
     queryFn: async () => {
       console.log('🔍 Current branch in Purchasing:', currentBranch);
       console.log('🔍 Branch ID (string):', currentBranch?.id);
-      
+
       const apiFilters: any = { ...invoiceFilters };
-      
+
       if (currentBranch?.id) {
         apiFilters.branch_id = currentBranch.id;
       }
-      
+
       console.log('📦 Final filters to API:', apiFilters);
-      
+
       return purchaseInvoiceService.getInvoices({
         page: currentPage,
         showAll: showAllInvoices,
@@ -144,7 +145,7 @@ const Purchasing = () => {
     invoice_number: invoice.invoice_number,
     supplier_name: (() => {
       // API يرسل supplier_name مباشرة
-      return language === 'ar' 
+      return language === 'ar'
         ? (invoice.supplier_name_ar || invoice.supplier_name)
         : invoice.supplier_name;
     })(),
@@ -153,6 +154,7 @@ const Purchasing = () => {
       return invoice.treasury_name || '-';
     })(),
     total_amount: invoice.total_amount,
+    discount_total: invoice.discount_total,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,
@@ -334,15 +336,15 @@ const Purchasing = () => {
     refetchSuppliers();
     queryClient.invalidateQueries({ queryKey: ['purchase_orders_stats'] });
     queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
-        queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
 
   };
 
   useEffect(() => {
-  if (activeTab === 'invoices') {
-    refetchInvoices();
-  }
-}, [currentBranch?.id, activeTab]);
+    if (activeTab === 'invoices') {
+      refetchInvoices();
+    }
+  }, [currentBranch?.id, activeTab]);
   // ========== Invoice filter fields ==========
   const invoiceFilterFields: FilterField[] = [
     {
@@ -496,6 +498,7 @@ const Purchasing = () => {
                         <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'الخصم' : 'Discount'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
                         <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                         <TableHead>{language === 'ar' ? 'الأصناف' : 'Items'}</TableHead>
@@ -527,6 +530,9 @@ const Purchasing = () => {
                             <TableCell>{inv.treasury_name}</TableCell>
                             <TableCell>{inv.total_amount.toLocaleString()} YER</TableCell>
                             <TableCell className="text-green-600">{inv.paid_amount.toLocaleString()} YER</TableCell>
+                            <TableCell className="text-red-500 font-medium">
+                              -{inv.discount_total?.toLocaleString() || 0} YER
+                            </TableCell>
                             <TableCell className={inv.remaining_amount > 0 ? 'text-orange-500' : ''}>
                               {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} YER
                             </TableCell>
@@ -948,26 +954,26 @@ const Purchasing = () => {
       )}
 
       {/* ========== Modal تعديل الفاتورة ========== */}
-     {/* ========== Modal تعديل الفاتورة ========== */}
-{editingInvoice && (
-  <PurchaseInvoiceForm
-    key={editingInvoice.id} // مهم جداً لإعادة تحميل المكون
-    isOpen={showEditInvoiceForm}
-    onClose={() => {
-      setShowEditInvoiceForm(false);
-      setEditingInvoice(null);
-    }}
-    onSave={() => {
-      refetchAll();
-      setShowEditInvoiceForm(false);
-      setEditingInvoice(null);
-    }}
-    onSaveAndNew={() => {
-      refetchAll();
-    }}
-    invoiceToEdit={editingInvoice}
-  />
-)}
+      {/* ========== Modal تعديل الفاتورة ========== */}
+      {editingInvoice && (
+        <PurchaseInvoiceForm
+          key={editingInvoice.id} // مهم جداً لإعادة تحميل المكون
+          isOpen={showEditInvoiceForm}
+          onClose={() => {
+            setShowEditInvoiceForm(false);
+            setEditingInvoice(null);
+          }}
+          onSave={() => {
+            refetchAll();
+            setShowEditInvoiceForm(false);
+            setEditingInvoice(null);
+          }}
+          onSaveAndNew={() => {
+            refetchAll();
+          }}
+          invoiceToEdit={editingInvoice}
+        />
+      )}
 
       {/* Modals */}
       <SupplierForm

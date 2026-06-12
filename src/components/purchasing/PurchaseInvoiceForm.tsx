@@ -66,7 +66,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const invoicePrintRef = useRef<HTMLDivElement>(null);
   const [showPrint, setShowPrint] = useState(false);
   const [printData, setPrintData] = useState<any>(null);
-  
+
   // States for API data fetching
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [fullInvoiceData, setFullInvoiceData] = useState<any>(null);
@@ -122,8 +122,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           setFullInvoiceData(invoiceToEdit);
           toast({
             title: language === 'ar' ? 'خطأ' : 'Error',
-            description: language === 'ar' 
-              ? 'فشل في تحميل بيانات الفاتورة' 
+            description: language === 'ar'
+              ? 'فشل في تحميل بيانات الفاتورة'
               : 'Failed to load invoice data',
             variant: 'destructive',
           });
@@ -131,7 +131,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           setLoadingInvoice(false);
         }
       };
-      
+
       fetchInvoiceDetails();
     } else {
       setFullInvoiceData(null);
@@ -141,16 +141,16 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   // ========== Load invoice data from API response ==========
   const loadInvoiceDataFromApi = useCallback((invoiceData: any) => {
     if (!invoiceData) return;
-    
+
     console.log('Loading invoice data from API:', invoiceData);
-    
+
     // نتأكد من وجود الخيارات المطلوبة قبل تعيين القيم
     const supplierExists = suppliers.some(s => s.id === invoiceData.supplier_id);
     const branchExists = branches.some(b => b.id === invoiceData.branch_id);
     const warehouseExists = warehouses.some(w => w.id === invoiceData.warehouse_id);
     const currencyExists = currencies.some(c => c.id === invoiceData.currency_id);
     const treasuryExists = treasuries.some(t => t.id === invoiceData.treasury_id);
-    
+
     setFormData({
       supplier_id: supplierExists ? invoiceData.supplier_id?.toString() || '' : '',
       branch_id: branchExists ? invoiceData.branch_id?.toString() || '' : '',
@@ -187,7 +187,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
     const recalculatedItems = loadedItems.map(item => productManager.calculateItemTotals(item));
     setItems(recalculatedItems);
-    
+
     if (invoiceData.paid_amount > 0) {
       setShowPaymentDetails(true);
     }
@@ -251,30 +251,51 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     }
   };
 
+  const normalize = (v: any) => (v === null || v === undefined ? 0 : Number(v));
+  const makeKey = (productId: any, unitId: any, colorId: any) => {
+    return `${Number(productId ?? 0)}|${Number(unitId ?? 0)}|${Number(colorId ?? 0)}`;
+  };
+  const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
 
-const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
-  // ✅ التحقق من الـ duplicate باستخدام product_id + unit_id + color_id
-  const existingIndex = productManager.checkDuplicateProduct(items, product.id, unitId, colorId);
-  
-  if (existingIndex >= 0) {
-    // نفس المنتج ونفس المقاس ونفس اللون - زيادة الكمية
-    const newItems = productManager.incrementQuantity(items, existingIndex);
-    setItems(newItems);
-    toast({
-      title: language === 'ar' ? 'تم التحديث' : 'Updated',
-      description: language === 'ar' ? 'تم زيادة الكمية' : 'Quantity increased'
-    });
-  } else {
-    // منتج جديد أو نفس المنتج بمقاس أو لون مختلف - إضافة سطر جديد
-    const newItem = productManager.createItemFromProduct(product, language, unitId, colorId, stockOverride);
-    setItems([...items, newItem]);
-    toast({
-      title: language === 'ar' ? 'تمت الإضافة' : 'Added',
-      description: language === 'ar' ? 'تم إضافة المنتج' : 'Product added'
-    });
-  }
-};
+    const targetKey = makeKey(product.id, unitId, colorId);
+    console.log("TARGET:", product.id, unitId, colorId);
 
+    console.log("EXISTING:", items.map(i => ({
+      p: i.product_id,
+      u: i.product_unit_id,
+      c: i.color_id
+    })));
+    const existingIndex = items.findIndex(item =>
+      Number(item.product_id) === Number(product.id) &&
+      // Number(item.product_unit_id ?? 0) === Number(unitId ?? 0) &&
+      Number(item.color_id ?? 0) === Number(colorId ?? 0)
+    );
+
+    if (existingIndex !== -1) {
+      const updated = [...items];
+
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        quantity: updated[existingIndex].quantity + 1
+      };
+
+      setItems(updated.map(i => productManager.calculateItemTotals(i)));
+
+    } else {
+      const newItem = productManager.createItemFromProduct(
+        product,
+        language,
+        unitId,
+        colorId,
+        stockOverride
+      );
+
+      setItems(prev => [
+        ...prev,
+        productManager.calculateItemTotals(newItem)
+      ]);
+    }
+  };
   const addVariant = (variant: {
     product_id: string;
     variant_id: string;
@@ -296,7 +317,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
 
   const updateItem = (index: number, field: keyof InvoiceItem, value: number) => {
     let newItems = [...items];
-    
+
     switch (field) {
       case 'quantity':
         newItems = productManager.updateItemQuantity(newItems, index, value);
@@ -314,7 +335,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
         (newItems[index] as any)[field] = value;
         newItems = productManager.recalculateItem(newItems, index);
     }
-    
+
     setItems(newItems);
   };
 
@@ -342,9 +363,9 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
   // ========== Submit Handlers ==========
   const handleSubmit = async (action: 'save' | 'save_and_new' | 'save_and_print') => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
-    
+
     const payload = {
       supplier_id: Number(formData.supplier_id),
       branch_id: formData.branch_id ? Number(formData.branch_id) : null,
@@ -360,7 +381,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
       treasury_id: formData.treasury_id ? Number(formData.treasury_id) : null,
       items: productManager.preparePayloadItems(items)
     };
-    
+
     try {
       let response;
       if (isEditMode && invoiceToEdit) {
@@ -368,20 +389,20 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
       } else {
         response = await purchaseInvoiceService.createInvoice(payload);
       }
-      
+
       toast({
         title: language === 'ar' ? (isEditMode ? 'تم التحديث' : 'تم الحفظ') : (isEditMode ? 'Updated' : 'Saved'),
-        description: language === 'ar' 
-          ? `تم ${isEditMode ? 'تحديث' : 'إنشاء'} فاتورة الشراء بنجاح` 
+        description: language === 'ar'
+          ? `تم ${isEditMode ? 'تحديث' : 'إنشاء'} فاتورة الشراء بنجاح`
           : `Purchase invoice ${isEditMode ? 'updated' : 'created'} successfully`
       });
-      
+
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['treasury'] });
-      
+
       // Handle print
       if (action === 'save_and_print') {
         const printInvoiceData = {
@@ -406,12 +427,12 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
           payment_method: formData.payment_method,
           notes: formData.notes,
         };
-        
+
         setPrintData(printInvoiceData);
         setShowPrint(true);
         setTimeout(() => handlePrint(), 100);
       }
-      
+
       // Handle save and new
       if (action === 'save_and_new' && onSaveAndNew) {
         resetForm();
@@ -431,7 +452,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
       setLoading(false);
     }
   };
-  
+
   const handlePrint = useReactToPrint({
     contentRef: invoicePrintRef,
     documentTitle: `فاتورة-مشتريات-${Date.now()}`,
@@ -440,11 +461,11 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
       setPrintData(null);
     },
   });
-  
+
   const resetForm = () => {
     const defaultCurrency = currencies.find((c: any) => c.default === true) || currencies[0];
     const defaultTax = taxes.find((t: any) => t.default === true) || taxes[0];
-    
+
     setFormData({
       supplier_id: '',
       branch_id: '',
@@ -462,21 +483,21 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
     setShowPaymentDetails(false);
     setErrors({});
   };
-  
+
   const formatCurrency = (amount: number) => {
     const currency = currencies.find((c: any) => c.id === Number(formData.currency_id));
     return `${amount.toLocaleString()} ${currency?.symbol || ''}`;
   };
-  
+
   const disabled = loading;
   const isDataLoading = loadingInvoice || loadingSuppliers || loadingBranches || loadingCurrencies || loadingTaxes;
-  
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="max-w-5xl max-h-[95vh] overflow-hidden flex flex-col p-0">
           <FormHeader isEditMode={isEditMode} invoiceToEdit={invoiceToEdit} />
-          
+
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {isDataLoading && isEditMode ? (
               <div className="flex justify-center items-center py-12">
@@ -506,7 +527,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                   }}
                   disabled={disabled || loadingInvoice}
                 />
-                
+
                 {/* Products Section */}
                 <Card>
                   <CardHeader className="py-2 px-3">
@@ -525,7 +546,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                       products={products}
                       disabled={disabled || loadingInvoice}
                     />
-                    
+
                     {/* Items Table */}
                     <div className="border rounded-lg overflow-hidden overflow-x-auto">
                       <Table>
@@ -569,15 +590,15 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                                   <div className={cn(
                                     "text-xs font-mono px-1 py-0.5 rounded",
                                     item.stock === 0 ? "bg-destructive text-destructive" :
-                                    item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
-                                    "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                      item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
+                                        "bg-emerald-100 text-emerald-900 border border-emerald-300"
                                   )}>
                                     {item.stock}
                                   </div>
                                 </TableCell>
                                 <TableCell className="py-2 text-center">
                                   <Input
-                                  className="w-20"
+                                    className="w-20"
                                     type="number"
                                     min="1"
                                     max={99999}
@@ -644,7 +665,8 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                     )}
                   </CardContent>
                 </Card>
-                
+
+                {/* Payment Section */}
                 {/* Payment Section */}
                 <Card className="border-primary/20 bg-primary/5">
                   <CardContent className="p-4">
@@ -657,12 +679,12 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                         disabled={disabled || loadingInvoice}
                       >
                         <DollarSign size={16} />
-                        {showPaymentDetails 
+                        {showPaymentDetails
                           ? (language === 'ar' ? 'إخفاء تفاصيل الدفع' : 'Hide Payment Details')
                           : (language === 'ar' ? 'إظهار تفاصيل الدفع' : 'Show Payment Details')
                         }
                       </Button>
-                      
+
                       <div className="flex items-center gap-4">
                         <div className="text-end">
                           <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
@@ -677,7 +699,60 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                         </div>
                       </div>
                     </div>
-                    
+
+                    {/* ✅ Treasury - دايماً ظاهر مش محتاج paid_amount */}
+                    {(formData.payment_method === 'cash' || formData.payment_method === 'credit') && (
+                      <div className="mb-3">
+                        <Label className="flex items-center gap-1 mb-1.5 font-medium">
+                          <Landmark size={16} className="text-primary" />
+                          {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                        </Label>
+
+                        {!formData.branch_id ? (
+                          <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                            {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
+                          </div>
+                        ) : treasuryLoading ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
+                          </div>
+                        ) : treasuries.length === 0 ? (
+                          <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
+                            {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
+                          </div>
+                        ) : (
+                          <select
+                            value={formData.treasury_id}
+                            onChange={(e) => setFormData(prev => ({ ...prev, treasury_id: e.target.value }))}
+                            className={cn(
+                              "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
+                              "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
+                              "transition-all duration-200",
+                              errors.treasury_id
+                                ? "border-destructive bg-destructive/5"
+                                : "border-input hover:border-primary/50"
+                            )}
+                            disabled={disabled || loadingInvoice}
+                          >
+                            <option value="">
+                              {language === 'ar' ? '-- اختر الخزينة (اختياري) --' : '-- Select treasury (optional) --'}
+                            </option>
+                            {treasuries.map((treasury: Treasury) => (
+                              <option key={treasury.id} value={treasury.id.toString()}>
+                                {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
+                                {treasury.is_main && ` (${language === 'ar' ? 'رئيسية' : 'Main'})`}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {errors.treasury_id && (
+                          <p className="text-xs text-destructive mt-1">{errors.treasury_id}</p>
+                        )}
+                      </div>
+                    )}
+
                     {showPaymentDetails && (
                       <div className="space-y-4 mt-4 pt-4 border-t border-primary/20">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -694,73 +769,20 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                               disabled={disabled || loadingInvoice}
                             />
                           </div>
-                          
-                          {(formData.payment_method === 'cash' || formData.payment_method === 'credit') && (
-                            <div>
-                              <Label className="flex items-center gap-1 mb-1.5 font-medium">
-                                <Landmark size={16} className="text-primary" />
-                                {language === 'ar' ? 'الخزينة' : 'Treasury'}
-                                {formData.paid_amount > 0 && <span className="text-destructive">*</span>}
-                              </Label>
-                              
-                              {!formData.branch_id ? (
-                                <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-                                  {language === 'ar' ? '⏳ اختر الفرع أولاً' : '⏳ Select branch first'}
-                                </div>
-                              ) : treasuryLoading ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  {language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...'}
-                                </div>
-                              ) : treasuries.length === 0 ? (
-                                <div className="text-sm text-muted-foreground p-2.5 border rounded-md bg-muted/20 border-dashed">
-                                  {language === 'ar' ? '❌ لا يوجد خزائن لهذا الفرع' : '❌ No treasuries for this branch'}
-                                </div>
-                              ) : (
-                                <select
-                                  value={formData.treasury_id}
-                                  onChange={(e) => setFormData(prev => ({ ...prev, treasury_id: e.target.value }))}
-                                  className={cn(
-                                    "w-full px-3 py-2.5 border rounded-md bg-background text-foreground",
-                                    "focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary",
-                                    "transition-all duration-200",
-                                    errors.treasury_id 
-                                      ? "border-destructive bg-destructive/5" 
-                                      : "border-input hover:border-primary/50"
-                                  )}
-                                  disabled={disabled || loadingInvoice}
-                                >
-                                  <option value="" disabled>
-                                    {language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --'}
-                                  </option>
-                                  {treasuries.map((treasury: Treasury) => (
-                                    <option key={treasury.id} value={treasury.id.toString()}>
-                                      {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
-                                      {treasury.is_main && ` (${language === 'ar' ? 'رئيسية' : 'Main'})`}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                              
-                              {errors.treasury_id && (
-                                <p className="text-xs text-destructive mt-1">{errors.treasury_id}</p>
-                              )}
-                            </div>
-                          )}
                         </div>
-                        
+
                         {remainingAmount > 0 && (
                           <div className="bg-warning/10 p-3 rounded-lg flex items-center gap-2">
                             <DollarSign size={18} className="text-warning" />
                             <p className="text-sm text-warning">
-                              {language === 'ar' 
+                              {language === 'ar'
                                 ? `المتبقي للمورد: ${formatCurrency(remainingAmount)}`
                                 : `Remaining for supplier: ${formatCurrency(remainingAmount)}`
                               }
                             </p>
                           </div>
                         )}
-                        
+
                         {remainingAmount === 0 && totals.total > 0 && (
                           <div className="bg-success/10 p-3 rounded-lg flex items-center gap-2">
                             <BadgeCheck size={18} className="text-success" />
@@ -773,7 +795,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                     )}
                   </CardContent>
                 </Card>
-                
+
                 {/* Notes */}
                 <div className="space-y-1">
                   <Label className="text-xs">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
@@ -789,7 +811,7 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
               </>
             )}
           </div>
-          
+
           <DialogFooter className="p-4 pt-3 border-t bg-muted/30 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">{language === 'ar' ? 'الإجمالي:' : 'Total:'} {formatCurrency(totals.total)}</span>
@@ -799,17 +821,17 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                 </span>
               )}
             </div>
-            
+
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose} size="sm" disabled={disabled || loadingInvoice}>
                 <XCircle size={14} className="me-1.5" />
                 {language === 'ar' ? 'إلغاء' : 'Cancel'}
               </Button>
-              
-              <Button 
-                onClick={() => handleSubmit('save')} 
-                disabled={disabled || !isFormValid || loadingInvoice} 
-                size="sm" 
+
+              <Button
+                onClick={() => handleSubmit('save')}
+                disabled={disabled || !isFormValid || loadingInvoice}
+                size="sm"
                 className="min-w-24"
               >
                 {disabled ? (
@@ -821,23 +843,23 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
                   </>
                 )}
               </Button>
-              
+
               {!isEditMode && onSaveAndNew && (
-                <Button 
-                  onClick={() => handleSubmit('save_and_new')} 
-                  disabled={disabled || !isFormValid || loadingInvoice} 
-                  size="sm" 
+                <Button
+                  onClick={() => handleSubmit('save_and_new')}
+                  disabled={disabled || !isFormValid || loadingInvoice}
+                  size="sm"
                   variant="secondary"
                 >
                   <Copy size={14} className="me-1.5" />
                   {language === 'ar' ? 'حفظ وإضافة' : 'Save & New'}
                 </Button>
               )}
-              
-              <Button 
-                onClick={() => handleSubmit('save_and_print')} 
-                disabled={disabled || !isFormValid || loadingInvoice} 
-                size="sm" 
+
+              <Button
+                onClick={() => handleSubmit('save_and_print')}
+                disabled={disabled || !isFormValid || loadingInvoice}
+                size="sm"
                 variant="default"
                 className="bg-green-600 hover:bg-green-700"
               >
@@ -848,13 +870,13 @@ const addProduct = (product: Product, unitId?: number, colorId?: number, stockOv
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {showPrint && printData && (
         <div style={{ display: 'none' }}>
           <PurchaseInvoiceTemplate ref={invoicePrintRef} invoiceData={printData} />
         </div>
       )}
-      
+
       {variantProduct && (
         <PurchaseVariantSelector
           isOpen={!!variantProduct}

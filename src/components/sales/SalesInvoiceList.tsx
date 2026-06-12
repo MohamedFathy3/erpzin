@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Plus, Eye, Receipt, RotateCcw, X, Filter, Search, 
-  ChevronDown, ChevronUp, Printer, FileSpreadsheet, 
-  DollarSign, CreditCard, Wallet, Calendar, User, 
+import {
+  Plus, Eye, Receipt, RotateCcw, X, Filter, Search,
+  ChevronDown, ChevronUp, Printer, FileSpreadsheet,
+  DollarSign, CreditCard, Wallet, Calendar, User,
   Building2, Package, Truck, Hash, Clock, Percent,
   Tag, Info, Download, Share2
 } from "lucide-react";
@@ -30,12 +30,12 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
   ({ invoice, companyInfo, language }, ref) => {
     const isArabic = language === 'ar';
 
-    const subtotal = invoice.items?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0;
-    const discountAmount = invoice.discount_amount || 0;
-    const discountPercent = invoice.discount_percent || 0;
+    const subtotal = parseFloat(invoice.total_amount) || 0;
+    const discountAmount = parseFloat(invoice.discount_amount) || 0;
+    const discountPercent = parseFloat(invoice.discount_percentage) || 0;
     const taxAmount = invoice.tax_amount || 0;
     const taxRate = invoice.tax_rate || 0;
-    const total = parseFloat(invoice.total_amount) || 0;
+    const total = parseFloat(invoice.net_total) || 0;
     const paidAmount = invoice.paid_amount || 0;
     const remainingAmount = invoice.remaining_amount || total - paidAmount;
 
@@ -78,7 +78,7 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
                 {companyInfo.tax_id && <div>🆔 {isArabic ? 'الرقم الضريبي' : 'Tax ID'}: {companyInfo.tax_id}</div>}
               </div>
             </div>
-            
+
             <div className="text-right">
               <div className="text-3xl font-bold text-primary mb-2">
                 {isArabic ? 'فاتورة ضريبية' : 'TAX INVOICE'}
@@ -107,7 +107,7 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
               {invoice.customer?.tax_number && <div><span className="font-medium">{isArabic ? 'الرقم الضريبي' : 'Tax Number'}:</span> {invoice.customer.tax_number}</div>}
             </div>
           </div>
-          
+
           <div className="border rounded-lg p-4 bg-gray-50">
             <div className="flex items-center gap-2 mb-3 pb-2 border-b">
               <Building2 size={18} className="text-primary" />
@@ -172,42 +172,46 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
         <div className="flex justify-end mb-6">
           <div className="w-80 space-y-2">
             <div className="flex justify-between py-2 border-b">
-              <span className="font-medium">{isArabic ? 'المجموع الفرعي' : 'Subtotal'}:</span>
+              <span>{isArabic ? 'الإجمالي قبل الخصم' : 'Subtotal'}:</span>
               <span>{subtotal.toLocaleString()} {invoice.currency}</span>
             </div>
-            
+
             {discountAmount > 0 && (
               <div className="flex justify-between py-2 border-b text-red-600">
-                <span className="font-medium">{isArabic ? 'الخصم' : 'Discount'} ({discountPercent}%):</span>
+                <span>
+                  {isArabic ? 'الخصم' : 'Discount'} ({discountPercent}%):
+                </span>
                 <span>- {discountAmount.toLocaleString()} {invoice.currency}</span>
               </div>
             )}
-            
+
             {taxAmount > 0 && (
               <div className="flex justify-between py-2 border-b">
                 <span className="font-medium">{isArabic ? 'الضريبة' : 'Tax'} ({taxRate}%):</span>
                 <span>{taxAmount.toLocaleString()} {invoice.currency}</span>
               </div>
             )}
-            
-            <div className="flex justify-between py-3 border-t-2 border-b-2 font-bold text-lg">
-              <span>{isArabic ? 'الإجمالي' : 'Total'}:</span>
-              <span className="text-primary">{total.toLocaleString()} {invoice.currency}</span>
+
+            <div className="flex justify-between py-3 border-t-2 font-bold text-lg">
+              <span>{isArabic ? 'الإجمالي النهائي' : 'Net Total'}:</span>
+              <span className="text-primary">
+                {total.toLocaleString()} {invoice.currency}
+              </span>
             </div>
-            
+
             {paidAmount > 0 && (
               <div className="flex justify-between py-2 text-green-600">
                 <span className="font-medium">{isArabic ? 'المدفوع' : 'Paid'}:</span>
                 <span>{paidAmount.toLocaleString()} {invoice.currency}</span>
               </div>
             )}
-            
-            {remainingAmount > 0 && (
+
+            {/* {remainingAmount > 0 && (
               <div className="flex justify-between py-2 text-orange-600">
                 <span className="font-medium">{isArabic ? 'المتبقي' : 'Remaining'}:</span>
                 <span>{remainingAmount.toLocaleString()} {invoice.currency}</span>
               </div>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -235,7 +239,7 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
               )}
             </div>
           </div>
-          
+
           <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="flex items-center gap-2 mb-2">
               <Info size={18} className="text-blue-600" />
@@ -359,6 +363,8 @@ interface SalesInvoice {
   subtotal?: number;
   discount_percent?: number;
   discount_amount?: number;
+  discount_percentage: string;
+  net_total: string;
   total_amount: string;
   paid_amount?: number;
   remaining_amount?: number;
@@ -584,7 +590,7 @@ const SalesInvoiceList = () => {
     try {
       toast.loading(language === 'ar' ? 'جاري تحميل الفاتورة...' : 'Loading invoice...');
       const response = await api.get(`/sales-invoices/${invoiceId}`);
-      
+
       if (response.data.result === 'Success') {
         setInvoiceToPrint(response.data.data);
         setShowPrintDialog(true);
@@ -635,11 +641,11 @@ const SalesInvoiceList = () => {
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sales Invoices');
-    
+
     const fileName = `sales-invoices-${new Date().toISOString().split('T')[0]}.xlsx`;
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     saveAs(new Blob([excelBuffer], { type: 'application/octet-stream' }), fileName);
-    
+
     toast.success(language === 'ar' ? 'تم التصدير بنجاح' : 'Exported successfully');
   };
 
@@ -695,23 +701,23 @@ const SalesInvoiceList = () => {
   // ========== Helper Functions ==========
   const getPaymentMethodBadge = (method: string) => {
     const config: Record<string, { label: string; className: string; icon: JSX.Element }> = {
-      cash: { 
-        label: language === 'ar' ? 'نقدي' : 'Cash', 
+      cash: {
+        label: language === 'ar' ? 'نقدي' : 'Cash',
         className: 'bg-emerald-500/10 text-emerald-600 border-emerald-200',
         icon: <DollarSign size={12} />
       },
-      card: { 
-        label: language === 'ar' ? 'بطاقة' : 'Card', 
+      card: {
+        label: language === 'ar' ? 'بطاقة' : 'Card',
         className: 'bg-blue-500/10 text-blue-600 border-blue-200',
         icon: <CreditCard size={12} />
       },
-      wallet: { 
-        label: language === 'ar' ? 'محفظة' : 'Wallet', 
+      wallet: {
+        label: language === 'ar' ? 'محفظة' : 'Wallet',
         className: 'bg-purple-500/10 text-purple-600 border-purple-200',
         icon: <Wallet size={12} />
       },
-      credit: { 
-        label: language === 'ar' ? 'آجل' : 'Credit', 
+      credit: {
+        label: language === 'ar' ? 'آجل' : 'Credit',
         className: 'bg-amber-500/10 text-amber-600 border-amber-200',
         icon: <Clock size={12} />
       }
@@ -736,6 +742,19 @@ const SalesInvoiceList = () => {
     return <Badge className={c.className}>{c.label}</Badge>;
   };
 
+  const getInvoiceDiscount = (invoice: SalesInvoice) => {
+    return Number(invoice.discount_amount || 0);
+  };
+
+  const getItemsDiscount = (invoice: SalesInvoice) => {
+    return invoice.items?.reduce((sum, item: any) => {
+      return sum + Number(item.discount_amount || 0);
+    }, 0) || 0;
+  };
+
+  const getTotalDiscount = (invoice: SalesInvoice) => {
+    return getInvoiceDiscount(invoice) + getItemsDiscount(invoice);
+  };
   // ========== Render ==========
   return (
     <>
@@ -751,13 +770,13 @@ const SalesInvoiceList = () => {
                 {language === 'ar' ? 'فواتير المبيعات' : 'Sales Invoices'}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {language === 'ar' 
-                  ? `عرض ${invoices.length} من أصل ${totalInvoices} فاتورة` 
+                {language === 'ar'
+                  ? `عرض ${invoices.length} من أصل ${totalInvoices} فاتورة`
                   : `Showing ${invoices.length} of ${totalInvoices} invoices`}
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button variant="outline" onClick={exportToExcel} className="gap-2">
               <FileSpreadsheet size={16} />
@@ -844,7 +863,7 @@ const SalesInvoiceList = () => {
               </div>
             </div>
           </CardHeader>
-          
+
           {!filtersCollapsed && (
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -926,7 +945,7 @@ const SalesInvoiceList = () => {
               </div>
             </CardContent>
           )}
-          
+
           {filtersCollapsed && activeFiltersCount > 0 && (
             <div className="px-6 pb-3 pt-0">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -950,6 +969,9 @@ const SalesInvoiceList = () => {
                     <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
                     <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
                     <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                    <TableHead className="text-right">
+                      {language === 'ar' ? 'الخصم' : 'Discount'}
+                    </TableHead>
                     <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                     <TableHead className="text-center">{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                   </TableRow>
@@ -994,16 +1016,55 @@ const SalesInvoiceList = () => {
                             </div>
                           </div>
                         </TableCell>
+
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium">{formatDate(invoice.created_at)}</span>
                             <span className="text-xs text-muted-foreground">{new Date(invoice.created_at).toLocaleTimeString()}</span>
                           </div>
                         </TableCell>
+
                         <TableCell className="text-right">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-primary">{Number(invoice.total_amount).toLocaleString()}</span>
-                            <span className="text-xs text-muted-foreground">{invoice.currency || 'YER'}</span>
+                          <div className="flex flex-col gap-1">
+
+                            {/* قبل الخصم */}
+                            <span className="text-sm text-muted-foreground line-through">
+                              {Number(invoice.total_amount).toLocaleString()}
+                            </span>
+
+                            {/* قيمة الخصم */}
+                            <span className="text-xs text-red-600">
+                              - {Number(invoice.discount_amount || 0).toLocaleString()}
+                              {invoice.discount_percentage &&
+                                ` (${invoice.discount_percentage}%)`}
+                            </span>
+
+                            {/* بعد الخصم */}
+                            <span className="font-bold text-primary">
+                              {Number(invoice.net_total || invoice.total_amount).toLocaleString()}
+                            </span>
+
+                            <span className="text-xs text-muted-foreground">
+                              {invoice.currency || 'YER'}
+                            </span>
+
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-col gap-1">
+
+                            <span className="text-red-600 font-semibold">
+                              {getTotalDiscount(invoice).toLocaleString()}
+                            </span>
+
+                            <span className="text-xs text-muted-foreground">
+                              Invoice: {Number(invoice.discount_amount || 0).toLocaleString()}
+                            </span>
+
+                            <span className="text-xs text-muted-foreground">
+                              Items: {getItemsDiscount(invoice).toLocaleString()}
+                            </span>
+
                           </div>
                         </TableCell>
                         <TableCell>{getPaymentMethodBadge(invoice.payment_method)}</TableCell>
@@ -1032,11 +1093,11 @@ const SalesInvoiceList = () => {
 
       {/* Modals */}
       <SalesInvoiceForm isOpen={showForm} onClose={() => setShowForm(false)} />
-      
+
       {selectedInvoice && (
         <InvoiceDetails invoice={selectedInvoice} isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} />
       )}
-      
+
       <InvoiceReturnForm isOpen={showReturnForm} onClose={() => { setShowReturnForm(false); setSelectedInvoiceForReturn(null); }} invoiceData={selectedInvoiceForReturn} />
 
       {/* Print Dialog Modal */}
@@ -1053,10 +1114,10 @@ const SalesInvoiceList = () => {
               </Button>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              <AdvancedPrintTemplate 
-                ref={printRef} 
-                invoice={invoiceToPrint} 
-                companyInfo={companyInfo} 
+              <AdvancedPrintTemplate
+                ref={printRef}
+                invoice={invoiceToPrint}
+                companyInfo={companyInfo}
                 language={language}
               />
             </div>

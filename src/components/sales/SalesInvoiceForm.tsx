@@ -368,7 +368,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     queryFn: async () => {
       try {
         if (!formData.warehouse_id) return [];
-        
+
         // eslint-disable-next-line prefer-const
         let filters: any = { active: true };
         if (searchQuery && searchQuery.trim()) {
@@ -454,17 +454,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       // خصم المنتج (المحسوب مسبقاً وحفظ في discount_amount)
       return sum + (itemGrossTotal - item.discount_amount);
     }, 0);
-    
+
     // الخطوة 2: حساب خصم الفاتورة
     const invoiceDiscountAmount = (subtotalAfterItemDiscounts * formData.discount_percent) / 100;
     const afterInvoiceDiscount = subtotalAfterItemDiscounts - invoiceDiscountAmount;
-    
+
     // الخطوة 3: حساب الضريبة
     const selectedTax = taxes.find(t => t.id === Number(formData.tax_id));
     const taxPercent = selectedTax?.rate || 0;
     const taxAmount = (afterInvoiceDiscount * taxPercent) / 100;
     const totalAmount = afterInvoiceDiscount + taxAmount;
-    
+
     return {
       subtotal: subtotalAfterItemDiscounts,
       invoiceDiscountAmount,
@@ -474,7 +474,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       invoiceDiscountPercent: formData.discount_percent
     };
   };
-  
+
   const totals = calculateTotals();
 
   // تحديث عنصر في السلة مع إعادة حساب خصم المنتج
@@ -482,13 +482,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     const updated = items.map(item => {
       if (item.id === id) {
         const newItem = { ...item, [field]: value };
-        
+
         // إعادة حساب إجمالي المنتج وخصمه
         const grossTotal = newItem.quantity * newItem.unit_price;
         const itemDiscountAmount = (grossTotal * newItem.discount_percent) / 100;
         newItem.discount_amount = itemDiscountAmount;
         newItem.total_price = grossTotal - itemDiscountAmount;
-        
+
         return newItem;
       }
       return item;
@@ -596,15 +596,15 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   };
 
   // ========== useEffect للتهيئة - مع منع الحلقات اللانهائية ==========
-  
+
   useEffect(() => {
     if (!isOpen) return;
     if (initializedRef.current) return;
-    
+
     let hasChanges = false;
     let newCurrencyId = formData.currency_id;
     let newTaxId = formData.tax_id;
-    
+
     if (!newCurrencyId && currencies.length > 0) {
       const defaultCurr = currencies.find(c => c.default === true && c.active === true);
       if (defaultCurr) {
@@ -618,7 +618,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         }
       }
     }
-    
+
     if (!newTaxId && taxes.length > 0) {
       const defaultTax = taxes.find(t => t.default === true && t.active === true);
       if (defaultTax) {
@@ -632,7 +632,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         }
       }
     }
-    
+
     if (hasChanges) {
       setFormData(prev => ({
         ...prev,
@@ -640,7 +640,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         tax_id: newTaxId || prev.tax_id
       }));
     }
-    
+
     if (currencies.length > 0 && taxes.length > 0) {
       initializedRef.current = true;
     }
@@ -661,7 +661,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   useEffect(() => {
     if (!isOpen) return;
     if (isSettingTreasuryRef.current) return;
-    
+
     if (formData.branch_id && treasuries.length === 1) {
       const treasuryId = treasuries[0].id.toString();
       if (formData.treasury_id !== treasuryId) {
@@ -756,10 +756,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       const itemGrossTotal = item.quantity * item.unit_price;
       return sum + (itemGrossTotal - item.discount_amount);
     }, 0);
-    
+
     const discountAmount = (subtotalAfterItemDiscounts * formData.discount_percent) / 100;
     const netTotal = subtotalAfterItemDiscounts - discountAmount;
-    
+
     const selectedTax = taxes.find(t => t.id === Number(formData.tax_id));
     const taxPercent = selectedTax?.rate || 0;
     const taxAmount = (netTotal * taxPercent) / 100;
@@ -796,13 +796,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
 
     try {
       const response = await api.post('/sales-invoice/store', payload);
-      
-      if (response.data.result === 'Success') {
+      const data = response.data;
+      if (data?.data?.id) {
         toast.success(language === 'ar' ? '✅ تم إنشاء الفاتورة بنجاح' : '✅ Invoice created successfully');
         queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
         queryClient.invalidateQueries({ queryKey: ['customers'] });
         queryClient.invalidateQueries({ queryKey: ['products-form'] });
-        
+
         if (action === 'print') {
           // محاولة طباعة الفاتورة
           try {
@@ -822,7 +822,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
             console.error('Print error:', printError);
           }
         }
-        
+
         resetForm();
         onClose();
       } else {
@@ -1052,7 +1052,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                                     {item.color_name && (
                                       <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-full">
                                         {language === 'ar' ? 'لون:' : 'Color:'}
-                                        <div 
+                                        <div
                                           style={{
                                             width: '14px',
                                             height: '14px',
@@ -1075,13 +1075,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                               <TableCell><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} className="w-20 text-center mx-auto h-8" /></TableCell>
                               <TableCell><Input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)} className="w-24 text-right h-8" /></TableCell>
                               <TableCell>
-                                <Input 
-                                  type="number" 
-                                  min="0" 
-                                  max="100" 
-                                  value={item.discount_percent} 
-                                  onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)} 
-                                  className="w-20 text-center mx-auto h-8" 
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={item.discount_percent}
+                                  onChange={(e) => updateItem(item.id, 'discount_percent', parseFloat(e.target.value) || 0)}
+                                  className="w-20 text-center mx-auto h-8"
                                 />
                               </TableCell>
                               <TableCell className="font-medium text-right text-sm">{item.total_price.toLocaleString()}</TableCell>
@@ -1109,12 +1109,12 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
               <Card>
                 <CardContent className="pt-4">
                   <Label className="mb-2 block">{language === 'ar' ? 'ملاحظات' : 'Notes'}</Label>
-                  <Textarea 
-                    value={formData.notes} 
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
-                    rows={2} 
-                    placeholder={language === 'ar' ? 'أضف ملاحظات للفاتورة...' : 'Add invoice notes...'} 
-                    className="resize-none" 
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={2}
+                    placeholder={language === 'ar' ? 'أضف ملاحظات للفاتورة...' : 'Add invoice notes...'}
+                    className="resize-none"
                   />
                 </CardContent>
               </Card>
@@ -1135,17 +1135,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     <Select value={formData.currency_id} onValueChange={(value) => setFormData({ ...formData, currency_id: value })}>
                       <SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {loadingCurrencies ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : 
+                        {loadingCurrencies ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> :
                           currencies.map((c: Currency) => <SelectItem key={c.id} value={c.id.toString()}>{getCurrencyName(c)} ({c.symbol})</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="flex justify-between items-center py-2 border-b">
                     <span className="text-muted-foreground">{language === 'ar' ? 'المجموع بعد خصم المنتجات' : 'Subtotal after item discounts'}</span>
                     <span className="font-medium text-lg">{formatAmount(totals.subtotal, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <Label className="text-sm text-muted-foreground">{language === 'ar' ? 'خصم الفاتورة' : 'Invoice Discount'}</Label>
@@ -1153,24 +1153,24 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex-1 relative">
-                        <Input 
-                          type="number" 
-                          min="0" 
-                          max="100" 
-                          value={formData.discount_percent} 
-                          onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })} 
-                          className="pl-8 pr-4 text-center" 
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={formData.discount_percent}
+                          onChange={(e) => setFormData({ ...formData, discount_percent: parseFloat(e.target.value) || 0 })}
+                          className="pl-8 pr-4 text-center"
                         />
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between items-center py-2 border-t">
                     <span className="text-muted-foreground">{language === 'ar' ? 'المجموع بعد خصم الفاتورة' : 'Net Total'}</span>
                     <span className="font-medium">{formatAmount(totals.totalAmount - totals.taxAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <Label className="text-sm text-muted-foreground">{language === 'ar' ? 'الضريبة' : 'Tax'} <span className="text-destructive">*</span></Label>
@@ -1179,32 +1179,32 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     <Select value={formData.tax_id} onValueChange={(value) => setFormData({ ...formData, tax_id: value })}>
                       <SelectTrigger className="bg-muted/30"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {loadingTaxes ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> : 
+                        {loadingTaxes ? <div className="flex justify-center p-4"><Loader2 className="h-5 w-5 animate-spin" /></div> :
                           taxes.map((t: Tax) => <SelectItem key={t.id} value={t.id.toString()}>{getTaxName(t)} ({t.rate}%)</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="border-t pt-4">
                     <div className="flex justify-between items-center">
                       <span className="text-lg font-bold">{language === 'ar' ? 'الإجمالي النهائي' : 'Total'}</span>
                       <span className="text-2xl font-bold text-primary">{formatAmount(totals.totalAmount, currencies.find(c => c.id === Number(formData.currency_id))?.code)}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col gap-3 pt-4">
-                    <Button 
-                      onClick={() => handleSave('save')} 
-                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id} 
+                    <Button
+                      onClick={() => handleSave('save')}
+                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id}
                       className="w-full gap-2 h-11 text-base"
                     >
                       <Save className="h-4 w-4" />
                       {language === 'ar' ? 'حفظ الفاتورة' : 'Save Invoice'}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleSaveAndPrint} 
-                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id} 
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveAndPrint}
+                      disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id}
                       className="w-full gap-2 h-11"
                     >
                       <Printer className="h-4 w-4" />
@@ -1252,7 +1252,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       <SelectTrigger className="flex items-center justify-between">
                         <SelectValue placeholder={language === 'ar' ? 'اختر اللون' : 'Select color'} />
                         {selectedColor && (
-                          <div 
+                          <div
                             style={{
                               width: '18px',
                               height: '18px',
@@ -1268,7 +1268,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                         {selectedUnit.colors.map(color => (
                           <SelectItem key={color.color_id} value={color.color_id.toString()}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div 
+                              <div
                                 style={{
                                   width: '20px',
                                   height: '20px',
