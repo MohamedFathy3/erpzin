@@ -213,6 +213,14 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
     setShowProductSearch(false);
   };
 
+
+
+
+
+
+
+
+  
   const updateItem = (index: number, field: string, value: number) => {
     const newItems = [...items];
     if (field === 'quantity') {
