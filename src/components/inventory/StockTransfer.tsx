@@ -44,12 +44,33 @@ interface WarehouseProduct {
   warehouse_name: string;
   stock: number;
   cost: string;
-  sku?: string;
-  barcode?: string;
+  product?: {
+    id: number;
+    name: string;
+    sku: string;
+    barcode: string;
+    units: Array<{
+      id: number;
+      unit_id: number;
+      unit_name: string;
+      cost_price: string;
+      sell_price: string;
+      barcode: string;
+      colors: Array<{
+        id: number;
+        color_id: number;
+        color: string;
+        stock: number;
+        hex_code: string;
+      }>;
+    }>;
+  };
 }
 
 interface TransferProduct {
   product_id: number;
+  product_unit_id: number;
+  color_id: number;
   quantity: number;
   note?: string;
 }
@@ -193,15 +214,15 @@ const WarehouseTransfer = () => {
   });
 
   // ========== 3. جلب منتجات المخزن المصدر (للمودال) ==========
-  const { 
-    data: modalProducts = [], 
-    isLoading: modalLoading, 
-    refetch: refetchModal 
+  const {
+    data: modalProducts = [],
+    isLoading: modalLoading,
+    refetch: refetchModal
   } = useQuery({
     queryKey: ['modal-warehouse-products', fromWarehouse, modalSearchText],
     queryFn: async () => {
       if (!fromWarehouse) return [];
-      
+
       const payload: any = {
         orderBy: 'id',
         perPage: 1000,
@@ -259,8 +280,16 @@ const WarehouseTransfer = () => {
         to_warehouse_id: parseInt(toWarehouse),
         products: transferItems.map(item => ({
           product_id: item.product_id,
+          product_unit_id: item.product_unit_id,
+          color_id: item.color_id,
           quantity: item.quantity,
-          ...(productNotes[item.product_id] ? { note: productNotes[item.product_id] } : {})
+          ...(item.product_unit_id !== 0 && { product_unit_id: item.product_unit_id }),
+          ...(item.color_id !== 0 && { color_id: item.color_id }),
+          quantity: item.quantity,
+          ...(productNotes[`${item.product_id}-${item.product_unit_id}-${item.color_id}`]
+            ? { note: productNotes[`...`] }
+            : {})
+
         }))
       };
 
@@ -281,66 +310,68 @@ const WarehouseTransfer = () => {
       setModalSearchText('');
     },
     onError: (error: AxiosError) => {
+      const data = error.response?.data as any;
+      console.log('Validation errors:', JSON.stringify(data, null, 2));
+      // هتشوف exactly أي field فيه مشكلة
       toast({
         title: t.error,
-        description: (error.response?.data as any)?.message || error.message,
+        description: data?.errors
+          ? Object.values(data.errors).flat().join(', ')
+          : data?.message || error.message,
         variant: 'destructive'
       });
     }
   });
 
   // ========== 6. إضافة منتج للتحويل ==========
-  const handleAddProduct = (product: WarehouseProduct) => {
-    const productId = product.product_id || product.id;
-    const exists = transferItems.find(item => item.product_id === productId);
-    
+  const handleAddProduct = (rowKey: string, productId: number, unitId: number, colorId: number) => {
+    const exists = transferItems.find(item => item.product_id === productId && item.product_unit_id === unitId && item.color_id === colorId);
     if (exists) {
       setTransferItems(prev =>
         prev.map(item =>
-          item.product_id === productId
+          item.product_id === productId && item.product_unit_id === unitId && item.color_id === colorId
             ? { ...item, quantity: item.quantity + 1 }
             : item
         )
       );
     } else {
-      setTransferItems(prev => [
-        ...prev,
-        {
-          product_id: productId,
-          quantity: 1
-        }
-      ]);
+      setTransferItems(prev => [...prev, { product_id: productId, product_unit_id: unitId, color_id: colorId, quantity: 1 }]);
     }
   };
 
   // ========== 7. تغيير الكمية ==========
-  const handleQuantityChange = (productId: number, quantity: number) => {
-    const product = modalProducts.find((p: WarehouseProduct) => (p.product_id || p.id) === productId);
-    if (!product) return;
-    
+
+  const handleQuantityChange = (productId: number, unitId: number, colorId: number, quantity: number) => {
+    const row = flattenedModalProducts.find(r => r.productId === productId && r.unitId === unitId && r.colorId === colorId);
+    if (!row) return;
     setTransferItems(prev =>
       prev.map(item =>
-        item.product_id === productId
-          ? { ...item, quantity: Math.min(Math.max(1, quantity), product.stock) }
+        item.product_id === productId && item.product_unit_id === unitId && item.color_id === colorId
+          ? { ...item, quantity: Math.min(Math.max(1, quantity), row.stock) }
           : item
       )
     );
   };
 
   // ========== 8. تغيير الملاحظة ==========
-  const handleNoteChange = (productId: number, note: string) => {
+  // ========== 8. تغيير الملاحظة ==========
+  const handleNoteChange = (noteKey: string, note: string) => {
     setProductNotes(prev => ({
       ...prev,
-      [productId]: note
+      [noteKey]: note
     }));
   };
 
   // ========== 9. حذف منتج ==========
-  const handleRemoveProduct = (productId: number) => {
-    setTransferItems(prev => prev.filter(item => item.product_id !== productId));
+  // ========== 9. حذف منتج ==========
+  const handleRemoveProduct = (productId: number, unitId: number, colorId: number) => {
+    const noteKey = `${productId}-${unitId}-${colorId}`;
+    setTransferItems(prev =>
+      prev.filter(item => !(item.product_id === productId && item.product_unit_id === unitId && item.color_id === colorId))
+    );
     setProductNotes(prev => {
       const newNotes = { ...prev };
-      delete newNotes[productId];
+      delete newNotes[noteKey];
       return newNotes;
     });
   };
@@ -377,6 +408,67 @@ const WarehouseTransfer = () => {
     if (!w) return '-';
     return language === 'ar' ? w.name_ar || w.name : w.name;
   };
+
+
+  // تحويل المنتجات لصفوف مسطحة (unit × color)
+  const flattenedModalProducts = useMemo(() => {
+    const rows: Array<{
+      rowKey: string;
+      productId: number;
+      productName: string;
+      unitId: number;
+      unitName: string;
+      colorId: number;
+      colorName: string;
+      hexCode: string;
+      barcode: string;
+      stock: number;
+    }> = [];
+
+    modalProducts.forEach((item: WarehouseProduct) => {
+      console.log('item.id:', item.id);
+      console.log('item.product_id:', item.product_id);
+      console.log('item.product?.id:', item.product?.id);
+      const productId = item.product?.id || item.product_id || item.id;
+      const units = item.product?.units || [];
+
+      if (units.length === 0) {
+        // منتج بدون variants
+        rows.push({
+          rowKey: `${productId}-0-0`,
+          productId,
+          productName: item.product_name,
+          unitId: 0,
+          unitName: '',
+          colorId: 0,
+          colorName: '',
+          hexCode: '',
+          barcode: item.product?.barcode || '',
+          stock: item.stock,
+        });
+      } else {
+        units.forEach(unit => {
+          unit.colors.forEach(color => {
+            rows.push({
+              rowKey: `${productId}-${unit.id}-${color.id}`,
+              productId,
+              productName: item.product_name,
+              unitId: unit.unit_id,
+              unitName: unit.unit_name,
+              colorId: color.color_id,
+              colorName: color.color,
+              hexCode: color.hex_code,
+              barcode: unit.barcode || item.product?.barcode || '',
+              stock: color.stock,
+            });
+          });
+        });
+      }
+    });
+
+    return rows;
+  }, [modalProducts]);
+
 
   return (
     <div className="space-y-4">
@@ -484,7 +576,7 @@ const WarehouseTransfer = () => {
                   <TableHead className="text-center">{t.stock}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody> 
+              <TableBody>
                 {isLoading ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-8">
@@ -558,8 +650,8 @@ const WarehouseTransfer = () => {
               </div>
               <div className="space-y-2">
                 <Label>{t.toWarehouse} <span className="text-destructive">*</span></Label>
-                <Select 
-                  value={toWarehouse} 
+                <Select
+                  value={toWarehouse}
                   onValueChange={setToWarehouse}
                   disabled={!fromWarehouse}
                 >
@@ -624,23 +716,23 @@ const WarehouseTransfer = () => {
                       <TableHeader className="sticky top-0 bg-background">
                         <TableRow>
                           <TableHead>{t.product}</TableHead>
+                          <TableHead>{language === 'ar' ? 'المقاس' : 'Size'}</TableHead>
+                          <TableHead>{language === 'ar' ? 'اللون' : 'Color'}</TableHead>
                           <TableHead>{t.barcode}</TableHead>
                           <TableHead className="w-24 text-center">{t.stock}</TableHead>
                           <TableHead className="w-24 text-center">{t.quantity}</TableHead>
                           <TableHead className="w-32">{t.note}</TableHead>
-                          <TableHead className="w-20 text-center"></TableHead>
+                          <TableHead className="w-10"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {modalLoading ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8">
-                              {t.loading}
-                            </TableCell>
+                            <TableCell colSpan={8} className="text-center py-8">{t.loading}</TableCell>
                           </TableRow>
-                        ) : modalProducts.length === 0 ? (
+                        ) : flattenedModalProducts.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                               <Package className="h-10 w-10 mx-auto mb-2 opacity-20" />
                               {modalSearchText ? (
                                 <span>{t.noData} <span className="font-mono">"{modalSearchText}"</span></span>
@@ -650,67 +742,77 @@ const WarehouseTransfer = () => {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          modalProducts.map((product: WarehouseProduct) => {
-                            const productId = product.product_id || product.id;
-                            const transferItem = transferItems.find(item => item.product_id === productId);
+                          flattenedModalProducts.map((row) => {
+                            const transferItem = transferItems.find(
+                              item => item.product_id === row.productId && item.product_unit_id === row.unitId && item.color_id === row.colorId
+                            );
+                            const noteKey = `${row.productId}-${row.unitId}-${row.colorId}`;
                             return (
-                              <TableRow key={product.id} className={transferItem ? 'bg-primary/5' : ''}>
-                                <TableCell className="font-medium">
-                                  {product.product_name}
-                                  {transferItem && (
-                                    <Badge variant="outline" className="mr-2 text-xs">
-                                      ✓
-                                    </Badge>
-                                  )}
+                              <TableRow key={row.rowKey} className={transferItem ? 'bg-primary/5' : ''}>
+                                <TableCell className="font-medium text-xs">{row.productName}</TableCell>
+                                <TableCell>
+                                  {row.unitName ? (
+                                    <Badge variant="secondary" className="text-xs">{row.unitName}</Badge>
+                                  ) : '-'}
                                 </TableCell>
                                 <TableCell>
-                                  <Badge variant="outline" className="font-mono text-xs">
-                                    {product.barcode || '-'}
-                                  </Badge>
+                                  {row.colorName ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className="inline-block w-4 h-4 rounded-full border border-border"
+                                        style={{ backgroundColor: row.hexCode }}
+                                      />
+                                      <span className="text-xs">{row.colorName}</span>
+                                    </div>
+                                  ) : '-'}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="font-mono text-xs">{row.barcode || '-'}</Badge>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <Badge variant={product.stock > 0 ? 'secondary' : 'destructive'}>
-                                    {product.stock}
-                                  </Badge>
+                                  <Badge variant={row.stock > 0 ? 'secondary' : 'destructive'}>{row.stock}</Badge>
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <Input
                                     type="number"
                                     min="1"
-                                    max={product.stock}
+                                    max={row.stock}
                                     value={transferItem?.quantity || ''}
                                     onChange={(e) => {
                                       const qty = parseInt(e.target.value) || 0;
                                       if (qty > 0) {
                                         if (transferItem) {
-                                          handleQuantityChange(productId, qty);
+                                          handleQuantityChange(row.productId, row.unitId, row.colorId, qty);
                                         } else {
-                                          handleAddProduct(product);
-                                          setTimeout(() => handleQuantityChange(productId, qty), 0);
+                                          setTransferItems(prev => [
+                                            ...prev,
+                                            { product_id: row.productId, product_unit_id: row.unitId, color_id: row.colorId, quantity: qty }
+                                          ]);
                                         }
                                       } else if (transferItem) {
-                                        handleRemoveProduct(productId);
+                                        handleRemoveProduct(row.productId, row.unitId, row.colorId);
                                       }
                                     }}
                                     className="w-20 text-center mx-auto"
                                     placeholder="0"
+                                    disabled={row.stock === 0}
                                   />
                                 </TableCell>
                                 <TableCell>
                                   <Input
-                                    value={productNotes[productId] || ''}
-                                    onChange={(e) => handleNoteChange(productId, e.target.value)}
+                                    value={productNotes[noteKey] || ''}
+                                    onChange={(e) => handleNoteChange(noteKey, e.target.value)}
                                     placeholder={t.note}
                                     disabled={!transferItem}
-                                    className="h-8"
+                                    className="h-8 text-xs"
                                   />
                                 </TableCell>
-                                <TableCell className="text-center">
+                                <TableCell>
                                   {transferItem && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      onClick={() => handleRemoveProduct(productId)}
+                                      onClick={() => handleRemoveProduct(row.productId, row.unitId, row.colorId)}
                                       className="h-8 w-8 text-destructive hover:text-destructive"
                                     >
                                       <X className="h-4 w-4" />
