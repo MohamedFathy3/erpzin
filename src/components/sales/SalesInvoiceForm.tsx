@@ -154,6 +154,9 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // ========== أضف هذا ==========
+  const printRef = useRef<HTMLDivElement>(null);
+
   // ========== Refs لمنع الحلقات اللانهائية ==========
   const initializedRef = useRef(false);
   const prevBranchRef = useRef<string | null>(null);
@@ -181,6 +184,12 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const [selectedUnit, setSelectedUnit] = useState<UnitOption | null>(null);
   const [selectedColor, setSelectedColor] = useState<ColorOption | null>(null);
   const [showVariantDialog, setShowVariantDialog] = useState(false);
+
+
+  // ========== State للطباعة ==========
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [invoiceToPrint, setInvoiceToPrint] = useState<any>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // ========== Queries ==========
 
@@ -442,10 +451,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const getTaxName = (tax: Tax) => language === 'ar' ? (tax.name_ar || tax.name) : tax.name;
 
   // ========== Cart Calculations ==========
-  // حساب إجمالي الفاتورة بشكل صحيح مع مراعاة:
-  // 1. خصم كل منتج على حدة (discount_percent)
-  // 2. خصم الفاتورة الكلي (formData.discount_percent)
-  // 3. الضريبة
+
   const calculateTotals = () => {
     // الخطوة 1: حساب المجموع الفرعي بعد خصم المنتجات
     const subtotalAfterItemDiscounts = items.reduce((sum, item) => {
@@ -714,10 +720,39 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       currency_id: currencies.find(c => c.is_default)?.id?.toString() || currencies[0]?.id?.toString() || "",
       notes: ""
     });
+    // ========== أضف هذا ==========
+    setShowPrintDialog(false);
+    setInvoiceToPrint(null);
     setSearchQuery("");
     setShowProductList(false);
     initializedRef.current = false;
     prevBranchRef.current = null;
+  };
+
+
+
+  // ========== جلب الفاتورة للطباعة ==========
+  const fetchInvoiceForPrint = async (invoiceId: number) => {
+    try {
+      setIsPrinting(true);
+      toast.loading(language === 'ar' ? 'جاري تحميل الفاتورة...' : 'Loading invoice...');
+
+      const response = await api.get(`/sales-invoices/${invoiceId}`);
+
+      if (response.data.result === 'Success') {
+        setInvoiceToPrint(response.data.data);
+        setShowPrintDialog(true);
+        toast.dismiss();
+      } else {
+        toast.error(language === 'ar' ? 'خطأ في تحميل الفاتورة' : 'Error loading invoice');
+      }
+    } catch (error) {
+      console.error('Error fetching invoice:', error);
+      toast.error(language === 'ar' ? 'خطأ في تحميل الفاتورة' : 'Error loading invoice');
+    } finally {
+      setIsPrinting(false);
+      toast.dismiss();
+    }
   };
 
   // ========== حفظ الفاتورة مع البيانات الصحيحة ==========
@@ -765,6 +800,9 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     const taxAmount = (netTotal * taxPercent) / 100;
     const totalAmount = netTotal + taxAmount;
 
+
+
+
     const payload = {
       customer_id: Number(formData.customer_id),
       sales_representative_id: formData.sales_representative_id ? Number(formData.sales_representative_id) : null,
@@ -794,6 +832,8 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       }))
     };
 
+
+
     try {
       const response = await api.post('/sales-invoice/store', payload);
       const data = response.data;
@@ -803,24 +843,22 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         queryClient.invalidateQueries({ queryKey: ['customers'] });
         queryClient.invalidateQueries({ queryKey: ['products-form'] });
 
+
         if (action === 'print') {
-          // محاولة طباعة الفاتورة
-          try {
-            const invoiceId = response.data.data?.id;
-            if (invoiceId) {
-              // فتح صفحة الطباعة في نافذة جديدة
-              const printWindow = window.open(`/sales-invoice/print/${invoiceId}`, '_blank');
-              if (printWindow) {
-                toast.success(language === 'ar' ? 'تم فتح صفحة الطباعة' : 'Print page opened');
-              } else {
-                toast.warning(language === 'ar' ? 'الرجاء السماح بالنوافذ المنبثقة للطباعة' : 'Please allow popups for printing');
-              }
-            } else {
-              toast.info(language === 'ar' ? 'جاري تجهيز الطباعة...' : 'Preparing print...');
-            }
-          } catch (printError) {
-            console.error('Print error:', printError);
+          const invoiceId = response.data.data?.id;
+          if (invoiceId) {
+            // جلب الفاتورة وعرض dialogue الطباعة
+            await fetchInvoiceForPrint(invoiceId);
+            return;
+            // ⚠️ هنا نتوقف ولا نستدعي resetForm و onClose
+          } else {
+            toast.error(language === 'ar' ? 'لم يتم العثور على رقم الفاتورة' : 'Invoice ID not found');
+            resetForm();
+            onClose();
           }
+        } else {
+          resetForm();
+          onClose();
         }
 
         resetForm();
@@ -1203,7 +1241,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={handleSaveAndPrint}
+                      onClick={() => handleSave('print')}
                       disabled={items.length === 0 || !formData.customer_id || !formData.currency_id || !formData.tax_id || !formData.branch_id || !formData.warehouse_id || !formData.treasury_id}
                       className="w-full gap-2 h-11"
                     >
@@ -1296,6 +1334,298 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                 </Button>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* Dialog للطباعة */}
+      <Dialog open={showPrintDialog} onOpenChange={setShowPrintDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="h-5 w-5" />
+              {language === 'ar' ? 'طباعة الفاتورة' : 'Print Invoice'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto bg-gray-100 p-4" style={{ maxHeight: '60vh' }}>
+            {invoiceToPrint ? (
+              <div
+                ref={printRef}
+                style={{
+                  width: "300px",
+                  maxWidth: "300px",
+                  margin: "0 auto",
+                  fontFamily: "Tahoma",
+                  direction: "rtl",
+                  background: "#fff",
+                  padding: "10px",
+                  fontSize: "13px",
+                  lineHeight: "1.8"
+                }}
+              >
+                <h2 style={{ textAlign: "center", marginBottom: "5px" }}>
+                  فاتورة مبيعات
+                </h2>
+
+                <div style={{ textAlign: "center", fontSize: "12px" }}>
+                  {invoiceToPrint.created_at}
+                </div>
+
+                <hr />
+
+                <div className="mt-3">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{invoiceToPrint.invoice_number}</span>
+                    <strong>رقم الفاتورة :</strong>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{invoiceToPrint.customer?.name}</span>
+                    <strong>العميل :</strong>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{invoiceToPrint.payment_method}</span>
+                    <strong>طريقة الدفع :</strong>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{invoiceToPrint.branch}</span>
+                    <strong>الفرع :</strong>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{invoiceToPrint.treasury}</span>
+                    <strong>الخزينة :</strong>
+                  </div>
+                </div>
+
+                <hr />
+
+                <div
+                  style={{
+                    background: "#eee",
+                    textAlign: "center",
+                    padding: "6px",
+                    fontWeight: "bold"
+                  }}
+                >
+                  المنتجات
+                </div>
+
+                {invoiceToPrint.items?.map((item: any, index: number) => (
+                  <div
+                    key={index}
+                    style={{
+                      borderBottom: "1px dashed #ccc",
+                      padding: "8px 0"
+                    }}
+                  >
+                    <div>
+                      {item.product_name}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: "13px"
+                      }}
+                    >
+                      <span>
+                        {Number(item.total).toLocaleString()}
+                      </span>
+
+                      <span>
+                        {item.quantity} × {Number(item.price).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                <hr />
+
+                <div
+                  style={{
+                    background: "#eee",
+                    textAlign: "center",
+                    padding: "6px",
+                    fontWeight: "bold"
+                  }}
+                >
+                  ملخص الفاتورة
+                </div>
+
+                <div style={{ paddingTop: "10px" }}>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between"
+                    }}
+                  >
+                    <span>
+                      {Number(invoiceToPrint.total_amount).toLocaleString()}
+                    </span>
+
+                    <strong>الإجمالي قبل الخصم :</strong>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "red"
+                    }}
+                  >
+                    <span>
+                      {invoiceToPrint.discount_percentage}%
+                    </span>
+
+                    <strong>نسبة الخصم :</strong>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "red"
+                    }}
+                  >
+                    <span>
+                      {Number(invoiceToPrint.discount_amount).toLocaleString()}
+                    </span>
+
+                    <strong>قيمة الخصم :</strong>
+                  </div>
+
+                  <hr />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontWeight: "bold",
+                      fontSize: "20px"
+                    }}
+                  >
+                    <span>
+                      {Number(invoiceToPrint.net_total).toLocaleString()}
+                    </span>
+
+                    <strong>الصافي :</strong>
+                  </div>
+                </div>
+
+                <hr />
+
+                <div
+                  style={{
+                    marginTop: "25px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "12px"
+                  }}
+                >
+                  <div>
+                    توقيع العميل
+                    <br />
+                    ------------------
+                  </div>
+
+                  <div>
+                    توقيع البائع
+                    <br />
+                    ------------------
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 p-4 border-t">
+            <Button variant="outline" onClick={() => setShowPrintDialog(false)}>
+              {language === 'ar' ? 'إغلاق' : 'Close'}
+            </Button>
+            <Button
+              onClick={() => {
+                const printContent = printRef.current;
+                if (printContent) {
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.write(`
+<html dir="rtl" lang="ar">
+<head>
+<title>Invoice</title>
+
+<style>
+
+@page{
+   size: 80mm auto;
+   margin: 5mm;
+}
+
+body{
+   width:300px;
+   margin:0 auto;
+   padding:0;
+   font-family:Tahoma;
+   direction:rtl;
+   font-size:13px;
+}
+
+h2{
+   margin:0;
+   padding:0;
+   font-size:20px;
+}
+
+hr{
+   border:none;
+   border-top:1px dashed #000;
+   margin:8px 0;
+}
+
+.receipt-row{
+   display:flex;
+   justify-content:space-between;
+   margin:4px 0;
+}
+
+.section-title{
+   background:#eee;
+   text-align:center;
+   padding:5px;
+   font-weight:bold;
+   margin:10px 0;
+}
+
+</style>
+
+</head>
+
+<body>
+${printContent.innerHTML}
+</body>
+
+</html>
+`);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }
+                }
+              }}
+              disabled={!invoiceToPrint || isPrinting}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'طباعة' : 'Print'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
