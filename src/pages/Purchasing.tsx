@@ -154,7 +154,7 @@ const Purchasing = () => {
       return invoice.treasury_name || '-';
     })(),
     total_amount: invoice.total_amount,
-    discount_total: invoice.discount_total,
+    discount_total: (Number(invoice.subtotal) * Number(invoice.discount_total)) / 100,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,

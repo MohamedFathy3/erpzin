@@ -257,31 +257,22 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   };
   const addProduct = (product: Product, unitId?: number, colorId?: number, stockOverride?: number) => {
 
-    const targetKey = makeKey(product.id, unitId, colorId);
-    console.log("TARGET:", product.id, unitId, colorId);
-
-    console.log("EXISTING:", items.map(i => ({
-      p: i.product_id,
-      u: i.product_unit_id,
-      c: i.color_id
-    })));
     const existingIndex = items.findIndex(item =>
       Number(item.product_id) === Number(product.id) &&
-      // Number(item.product_unit_id ?? 0) === Number(unitId ?? 0) &&
+      Number(item.product_unit_id ?? 0) === Number(unitId ?? 0) &&
       Number(item.color_id ?? 0) === Number(colorId ?? 0)
     );
 
     if (existingIndex !== -1) {
+      // نفس المنتج + نفس المقاس + نفس اللون → زود الكمية
       const updated = [...items];
-
       updated[existingIndex] = {
         ...updated[existingIndex],
         quantity: updated[existingIndex].quantity + 1
       };
-
       setItems(updated.map(i => productManager.calculateItemTotals(i)));
-
     } else {
+      // مقاس أو لون مختلف → سطر جديد
       const newItem = productManager.createItemFromProduct(
         product,
         language,
@@ -289,7 +280,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
         colorId,
         stockOverride
       );
-
       setItems(prev => [
         ...prev,
         productManager.calculateItemTotals(newItem)
