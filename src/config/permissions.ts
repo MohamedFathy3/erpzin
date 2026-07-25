@@ -27,6 +27,14 @@ export const PAGES: PagePermission[] = [
     icon: 'ShoppingCart',
     allowedRoles: ['admin', 'Cashier', 'Manager', 'Sales'],
   },
+    {
+    id: 'posreturn',
+    path: '/POSRetrun',
+    label: 'POS Return',
+    labelAr: 'إرجاع نقاط البيع',
+    icon: 'RotateCcw',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'Sales'],
+  },
   {
     id: 'inventory',
     path: '/inventory',

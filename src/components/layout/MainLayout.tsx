@@ -41,7 +41,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       hr: '/hr',
       crm: '/crm',
       reports: '/reports',
-      settings: '/settings'
+      settings: '/settings',
+      posreturn: '/POSRetrun',
     };
     navigate(routes[item] || '/');
   };

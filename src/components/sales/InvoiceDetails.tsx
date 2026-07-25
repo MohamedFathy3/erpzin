@@ -27,10 +27,21 @@ interface InvoiceDetailsProps {
 const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) => {
   const isArabic = language === 'ar';
 
+  // حساب خصم المنتجات
+  const getItemsDiscount = () => {
+    return invoice.items?.reduce((sum: number, item: any) => {
+      const itemDiscount = item.discount_amount || 
+                          (item.price * item.quantity - item.total) || 0;
+      return sum + Number(itemDiscount);
+    }, 0) || 0;
+  };
+
   // حساب التفاصيل المالية
   const subtotal = Number(invoice.total_amount || 0);
+  const itemsDiscount = getItemsDiscount();
   const discountPercent = Number(invoice.discount_percentage || 0);
   const discountAmount = Number(invoice.discount_amount || 0);
+  const totalDiscount = itemsDiscount + discountAmount;
   const netTotal = Number(invoice.net_total || subtotal);
   const taxAmount = Number(invoice.tax_amount || 0);
   const total = netTotal + taxAmount;
@@ -38,8 +49,6 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
 
   const paidAmount = Number(invoice.paid_amount || 0);
   const remainingAmount = Number(invoice.remaining_amount || 0);
-  // const paidAmount = invoice.paid_amount || 0;
-  //const remainingAmount = invoice.remaining_amount || total - paidAmount;
 
   const getPaymentMethodText = (method: string) => {
     const methods: Record<string, { ar: string; en: string }> = {
@@ -83,7 +92,7 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
 
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#2563eb', marginBottom: '8px' }}>
-              {isArabic ? 'فاتورة ضريبية' : 'TAX INVOICE'}
+              {isArabic ? 'فاتورة مبيعات ' : 'TAX INVOICE'}
             </div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: 'monospace', color: '#374151' }}>
               #{invoice.invoice_number}
@@ -136,7 +145,7 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span><strong>{isArabic ? 'العملة' : 'Currency'}:</strong></span>
-              <span>{invoice.currency || '	ر.ي'}</span>
+              <span>{invoice.currency || 'ر.ي'}</span>
             </div>
             {invoice.tax && invoice.tax !== '0' && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -162,136 +171,110 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </tr>
           </thead>
           <tbody>
-            {invoice.items?.map((item: any, idx: number) => (
-              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{idx + 1}</td>
-                <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
-                  <div style={{ fontWeight: '500' }}>{item.product_name}</div>
-                  {item.product_id && <div style={{ fontSize: '11px', color: '#6b7280' }}>ID: {item.product_id}</div>}
-                </td>
-                <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.quantity}</td>
-                <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb' }}>{formatCurrency(Number(item.price))}</td>
-                <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
-                <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>{formatCurrency(Number(item.total || item.price * item.quantity))}</td>
-              </tr>
-            ))}
+            {invoice.items?.map((item: any, idx: number) => {
+              const itemDiscountAmount = item.discount_amount || 
+                                        (item.price * item.quantity - item.total) || 0;
+              const itemDiscountPercent = item.discount_percentage || 
+                                         item.discount_percent || 
+                                         (itemDiscountAmount > 0 ? (itemDiscountAmount / (item.price * item.quantity)) * 100 : 0);
+              
+              return (
+                <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{idx + 1}</td>
+                  <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
+                    <div style={{ fontWeight: '500' }}>{item.product_name}</div>
+                    {item.product_id && <div style={{ fontSize: '11px', color: '#6b7280' }}>ID: {item.product_id}</div>}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.quantity}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb' }}>{formatCurrency(Number(item.price))}</td>
+                  <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                    {itemDiscountAmount > 0 ? (
+                      <div>
+                        <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                          {formatCurrency(itemDiscountAmount)}
+                        </span>
+                        <div style={{ fontSize: '10px', color: '#9ca3af' }}>
+                          ({Number(itemDiscountPercent).toFixed(1)}%)
+                        </div>
+                      </div>
+                    ) : '-'}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb', fontWeight: 'bold' }}>
+                    <div>
+                      {itemDiscountAmount > 0 && (
+                        <div style={{ fontSize: '11px', color: '#9ca3af', textDecoration: 'line-through' }}>
+                          {formatCurrency(Number(item.price * item.quantity))}
+                        </div>
+                      )}
+                      {formatCurrency(Number(item.total || item.price * item.quantity))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* Summary Section */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          marginBottom: "24px",
-        }}
-      >
-        <div style={{ width: "320px" }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
+        <div style={{ width: '360px' }}>
           {/* Subtotal */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "8px 0",
-              borderBottom: "1px solid #e5e7eb",
-            }}
-          >
-            <span>
-              <strong>{isArabic ? "المجموع الفرعي" : "Subtotal"}:</strong>
-            </span>
-            <span>
-              {formatCurrency(Number(invoice.total_amount || 0))}
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+            <span><strong>{isArabic ? 'المجموع الفرعي' : 'Subtotal'}:</strong></span>
+            <span>{formatCurrency(Number(invoice.total_amount || 0))}</span>
           </div>
 
-          {/* Discount */}
-          {discountAmount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px 0",
-                color: "#dc2626",
-              }}
-            >
-              <span>
-                <strong>
-                  {isArabic ? "الخصم" : "Discount"} ({discountPercent}%):
-                </strong>
-              </span>
+          {/* Items Discount */}
+          {itemsDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#dc2626' }}>
+              <span><strong>{isArabic ? 'خصم المنتجات' : 'Items Discount'}:</strong></span>
+              <span>- {formatCurrency(itemsDiscount)}</span>
+            </div>
+          )}
 
+          {/* Invoice Discount */}
+          {discountAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#dc2626' }}>
+              <span><strong>{isArabic ? 'خصم الفاتورة' : 'Invoice Discount'} ({discountPercent}%):</strong></span>
               <span>- {formatCurrency(discountAmount)}</span>
+            </div>
+          )}
+
+          {/* Total Discount */}
+          {totalDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb', color: '#b91c1c', fontWeight: 'bold' }}>
+              <span><strong>{isArabic ? 'إجمالي الخصم' : 'Total Discount'}:</strong></span>
+              <span>- {formatCurrency(totalDiscount)}</span>
             </div>
           )}
 
           {/* Tax */}
           {taxAmount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px 0",
-                borderBottom: "1px solid #e5e7eb",
-              }}
-            >
-              <span>
-                <strong>
-                  {isArabic ? "الضريبة" : "Tax"} ({taxRate || 0}%):
-                </strong>
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+              <span><strong>{isArabic ? 'الضريبة' : 'Tax'} ({taxRate || 0}%):</strong></span>
               <span>{formatCurrency(taxAmount)}</span>
             </div>
           )}
 
-          {/* Total */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "12px 0",
-              borderTop: "2px solid #e5e7eb",
-              borderBottom: "2px solid #e5e7eb",
-              fontWeight: "bold",
-              fontSize: "16px",
-            }}
-          >
-            <span>{isArabic ? "الإجمالي" : "Total"}:</span>
-            <span style={{ color: "#2563eb" }}>
-              {formatCurrency(total)}
-            </span>
+          {/* Net Total */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px' }}>
+            <span>{isArabic ? 'الصافي' : 'Net Total'}:</span>
+            <span style={{ color: '#2563eb' }}>{formatCurrency(netTotal)}</span>
           </div>
 
           {/* Paid */}
           {paidAmount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px 0",
-                color: "#10b981",
-              }}
-            >
-              <span>
-                <strong>{isArabic ? "المدفوع" : "Paid"}:</strong>
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#10b981' }}>
+              <span><strong>{isArabic ? 'المدفوع' : 'Paid'}:</strong></span>
               <span>{formatCurrency(paidAmount)}</span>
             </div>
           )}
 
           {/* Remaining */}
           {remainingAmount > 0 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "8px 0",
-                color: "#f59e0b",
-              }}
-            >
-              <span>
-                <strong>{isArabic ? "المتبقي" : "Remaining"}:</strong>
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#f59e0b' }}>
+              <span><strong>{isArabic ? 'المتبقي' : 'Remaining'}:</strong></span>
               <span>{formatCurrency(remainingAmount)}</span>
             </div>
           )}
@@ -365,6 +348,19 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
   const total = parseFloat(invoice?.total_amount) || 0;
   const discountAmount = subtotal - total;
 
+  // حساب خصم المنتجات
+  const getItemsDiscount = (invoice: any) => {
+    return invoice.items?.reduce((sum: number, item: any) => {
+      const itemDiscount = item.discount_amount || 
+                          (item.price * item.quantity - item.total) || 0;
+      return sum + Number(itemDiscount);
+    }, 0) || 0;
+  };
+
+  const getTotalDiscount = (invoice: any) => {
+    return Number(invoice.discount_amount || 0) + getItemsDiscount(invoice);
+  };
+
   // دالة عرض طريقة الدفع
   const getPaymentMethodBadge = (method: string) => {
     const methodConfig: Record<string, { label: string; className: string; icon: JSX.Element }> = {
@@ -433,20 +429,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
   });
 
   if (!invoice) return null;
-  const getItemsDiscount = (invoice: any) => {
-    return invoice.items?.reduce(
-      (sum: number, item: any) =>
-        sum + Number(item.discount_amount || 0),
-      0
-    ) || 0;
-  };
 
-  const getTotalDiscount = (invoice: any) => {
-    return (
-      Number(invoice.discount_amount || 0) +
-      getItemsDiscount(invoice)
-    );
-  };
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -483,8 +466,8 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-blue-600">{language === 'ar' ? 'إجمالي الفاتورة' : 'Total'}</p>
-                      <p className="text-xl font-bold text-blue-700">{formatCurrency(total)}</p>
+                      <p className="text-xs text-blue-600">{language === 'ar' ? 'الصافي' : 'Net Total'}</p>
+                      <p className="text-xl font-bold text-blue-700">{formatCurrency(Number(invoice.net_total || invoice.total_amount))}</p>
                     </div>
                     <div className="p-2 bg-blue-200/50 rounded-lg"><DollarSign className="h-5 w-5 text-blue-600" /></div>
                   </div>
@@ -512,14 +495,14 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50">
+              <Card className="bg-gradient-to-br from-red-50 to-red-100/50">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-amber-600">{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</p>
-                      <div className="mt-1">{getPaymentMethodBadge(invoice.payment_method)}</div>
+                      <p className="text-xs text-red-600">{language === 'ar' ? 'إجمالي الخصم' : 'Total Discount'}</p>
+                      <p className="text-xl font-bold text-red-700">{formatCurrency(getTotalDiscount(invoice))}</p>
                     </div>
-                    <div className="p-2 bg-amber-200/50 rounded-lg"><CreditCard className="h-5 w-5 text-amber-600" /></div>
+                    <div className="p-2 bg-red-200/50 rounded-lg"><Percent className="h-5 w-5 text-red-600" /></div>
                   </div>
                 </CardContent>
               </Card>
@@ -600,109 +583,46 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead className="w-12">#</TableHead>
-
-                    <TableHead>
-                      {language === 'ar' ? 'المنتج' : 'Product'}
-                    </TableHead>
-
-                    <TableHead className="text-center w-20">
-                      {language === 'ar' ? 'الكمية' : 'Qty'}
-                    </TableHead>
-
-                    <TableHead className="text-right w-32">
-                      {language === 'ar'
-                        ? 'السعر قبل الخصم'
-                        : 'Price Before'}
-                    </TableHead>
-
-                    <TableHead className="text-right w-32">
-                      {language === 'ar'
-                        ? 'الخصم'
-                        : 'Discount'}
-                    </TableHead>
-
-                    <TableHead className="text-right w-32">
-                      {language === 'ar'
-                        ? 'السعر بعد الخصم'
-                        : 'Price After'}
-                    </TableHead>
-
-                    <TableHead className="text-right w-32">
-                      {language === 'ar'
-                        ? 'الإجمالي'
-                        : 'Total'}
-                    </TableHead>
+                    <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                    <TableHead className="text-center w-20">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                    <TableHead className="text-right w-32">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
+                    <TableHead className="text-right w-32">{language === 'ar' ? 'الخصم' : 'Discount'}</TableHead>
+                    <TableHead className="text-right w-32">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                   </TableRow>
                 </TableHeader>
-
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-8 text-muted-foreground"
-                      >
-                        {language === 'ar'
-                          ? 'لا توجد أصناف'
-                          : 'No items found'}
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        {language === 'ar' ? 'لا توجد أصناف' : 'No items found'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     items.map((item: any, index: number) => {
                       const qty = Number(item.quantity || 0);
-
-                      const discount =
-                        Number(item.discount_amount || 0);
-
-                      const priceAfterDiscount =
-                        Number(item.price || 0);
-
-                      const priceBeforeDiscount =
-                        priceAfterDiscount + discount;
-
-                      const total =
-                        Number(item.total || priceAfterDiscount * qty);
+                      const itemDiscountAmount = item.discount_amount || 
+                                                (item.price * qty - item.total) || 0;
+                      const total = Number(item.total || item.price * qty);
 
                       return (
                         <TableRow key={item.product_id || index}>
-                          <TableCell className="font-mono text-sm">
-                            {index + 1}
-                          </TableCell>
-
+                          <TableCell className="font-mono text-sm">{index + 1}</TableCell>
                           <TableCell>
-                            <div className="font-medium">
-                              {item.product_name}
-                            </div>
-
-                            <div className="text-xs text-muted-foreground">
-                              ID: {item.product_id}
-                            </div>
+                            <div className="font-medium">{item.product_name}</div>
+                            <div className="text-xs text-muted-foreground">ID: {item.product_id}</div>
                           </TableCell>
-
-                          <TableCell className="text-center font-medium">
-                            {qty}
-                          </TableCell>
-
-                          <TableCell className="text-right font-mono">
-                            {formatCurrency(priceBeforeDiscount)}
-                          </TableCell>
-
+                          <TableCell className="text-center font-medium">{qty}</TableCell>
+                          <TableCell className="text-right font-mono">{formatCurrency(Number(item.price))}</TableCell>
                           <TableCell className="text-right">
-                            {discount > 0 ? (
+                            {itemDiscountAmount > 0 ? (
                               <span className="text-red-600 font-medium">
-                                - {formatCurrency(discount)}
+                                - {formatCurrency(itemDiscountAmount)}
+                                {item.discount_percentage && 
+                                  ` (${item.discount_percentage}%)`
+                                }
                               </span>
-                            ) : (
-                              "-"
-                            )}
+                            ) : "-"}
                           </TableCell>
-
-                          <TableCell className="text-right">
-                            <span className="text-green-600 font-medium">
-                              {formatCurrency(priceAfterDiscount)}
-                            </span>
-                          </TableCell>
-
                           <TableCell className="text-right font-bold font-mono text-primary">
                             {formatCurrency(total)}
                           </TableCell>
@@ -716,72 +636,50 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
 
             {/* ملخص الفاتورة */}
             <div className="flex justify-end">
-              <div className="w-80 space-y-2">
+              <div className="w-96 space-y-2">
                 <div className="space-y-2">
-
-                  {/* قبل الخصم */}
+                  {/* السعر الأصلي */}
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {language === 'ar' ? 'الإجمالي قبل الخصم:' : 'Before Discount'}
-                    </span>
-
-                    <span className="line-through text-muted-foreground font-mono">
-                      {formatCurrency(Number(invoice.total_amount || 0))}
-                    </span>
+                    <span className="text-muted-foreground">{language === 'ar' ? 'السعر الأصلي:' : 'Original Price:'}</span>
+                    <span className="font-mono">{formatCurrency(Number(invoice.total_amount || 0))}</span>
                   </div>
+
+                  {/* خصم المنتجات */}
+                  {getItemsDiscount(invoice) > 0 && (
+                    <div className="flex justify-between text-sm text-red-500">
+                      <span>{language === 'ar' ? 'خصم المنتجات:' : 'Items Discount:'}</span>
+                      <span className="font-mono">- {formatCurrency(getItemsDiscount(invoice))}</span>
+                    </div>
+                  )}
 
                   {/* خصم الفاتورة */}
                   {Number(invoice.discount_amount) > 0 && (
                     <div className="flex justify-between text-sm text-red-600">
-                      <span>
-                        {language === 'ar' ? 'خصم الفاتورة:' : 'Invoice Discount'}
-                      </span>
-
+                      <span>{language === 'ar' ? 'خصم الفاتورة:' : 'Invoice Discount:'}</span>
                       <span className="font-mono">
                         - {formatCurrency(Number(invoice.discount_amount))}
-                        {invoice.discount_percentage &&
-                          ` (${invoice.discount_percentage}%)`}
+                        {invoice.discount_percentage && 
+                          ` (${invoice.discount_percentage}%)`
+                        }
                       </span>
                     </div>
                   )}
 
-                  {/* خصم الأصناف */}
-                  {Number(getItemsDiscount(invoice)) > 0 && (
-                    <div className="flex justify-between text-sm text-red-600">
-                      <span>
-                        {language === 'ar' ? 'خصم الأصناف:' : 'Items Discount'}
-                      </span>
-
-                      <span className="font-mono">
-                        - {formatCurrency(getItemsDiscount(invoice))}
-                      </span>
+                  {/* إجمالي الخصم */}
+                  {getTotalDiscount(invoice) > 0 && (
+                    <div className="flex justify-between text-sm font-semibold text-red-700 border-t pt-2">
+                      <span>{language === 'ar' ? 'إجمالي الخصم:' : 'Total Discount:'}</span>
+                      <span className="font-mono">- {formatCurrency(getTotalDiscount(invoice))}</span>
                     </div>
                   )}
-
-                  {/* إجمالي الخصومات */}
-                  <div className="flex justify-between text-sm font-semibold text-red-700">
-                    <span>
-                      {language === 'ar' ? 'إجمالي الخصومات:' : 'Total Discounts'}
-                    </span>
-
-                    <span>
-                      {formatCurrency(getTotalDiscount(invoice))}
-                    </span>
-                  </div>
 
                   {/* الصافي */}
                   <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
-                    <span>
-                      {language === 'ar' ? 'الصافي:' : 'Net Total'}
-                    </span>
-
+                    <span>{language === 'ar' ? 'الصافي:' : 'Net Total:'}</span>
                     <span className="text-primary font-mono">
-                      {formatCurrency(
-                        Number(invoice.net_total || invoice.total_amount)
-                      )}
+                      {formatCurrency(Number(invoice.net_total || invoice.total_amount))}
                     </span>
                   </div>
-
                 </div>
               </div>
             </div>

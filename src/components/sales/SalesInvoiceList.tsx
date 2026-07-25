@@ -30,9 +30,20 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
   ({ invoice, companyInfo, language }, ref) => {
     const isArabic = language === 'ar';
 
+    // حساب الخصم الكلي للمنتجات
+    const getItemsTotalDiscount = () => {
+      return invoice.items?.reduce((sum: number, item: any) => {
+        const itemDiscount = item.discount_amount || 
+                            (item.price * item.quantity - item.total) || 0;
+        return sum + Number(itemDiscount);
+      }, 0) || 0;
+    };
+
     const subtotal = parseFloat(invoice.total_amount) || 0;
+    const itemsDiscount = getItemsTotalDiscount();
     const discountAmount = parseFloat(invoice.discount_amount) || 0;
     const discountPercent = parseFloat(invoice.discount_percentage) || 0;
+    const totalDiscount = itemsDiscount + discountAmount;
     const taxAmount = invoice.tax_amount || 0;
     const taxRate = invoice.tax_rate || 0;
     const total = parseFloat(invoice.net_total) || 0;
@@ -150,38 +161,84 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
               </tr>
             </thead>
             <tbody>
-              {invoice.items?.map((item: any, idx: number) => (
-                <tr key={idx} className="border-b hover:bg-gray-50">
-                  <td className="p-3 border">{idx + 1}</td>
-                  <td className="p-3 border">
-                    <div className="font-medium">{item.product_name}</div>
-                    {item.unit_name && <div className="text-xs text-gray-500">{isArabic ? 'المقاس' : 'Size'}: {item.unit_name}</div>}
-                    {item.color && <div className="text-xs text-gray-500">{isArabic ? 'اللون' : 'Color'}: {item.color}</div>}
-                  </td>
-                  <td className="p-3 text-center border">{item.quantity}</td>
-                  <td className="p-3 text-right border">{Number(item.price).toLocaleString()}</td>
-                  <td className="p-3 text-center border">{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
-                  <td className="p-3 text-right border font-medium">{Number(item.total || item.price * item.quantity).toLocaleString()}</td>
-                </tr>
-              ))}
+              {invoice.items?.map((item: any, idx: number) => {
+                const itemDiscountAmount = item.discount_amount || 
+                                          (item.price * item.quantity - item.total) || 0;
+                const itemDiscountPercent = item.discount_percentage || 
+                                           item.discount_percent || 
+                                           (itemDiscountAmount > 0 ? (itemDiscountAmount / (item.price * item.quantity)) * 100 : 0);
+                
+                return (
+                  <tr key={idx} className="border-b hover:bg-gray-50">
+                    <td className="p-3 border">{idx + 1}</td>
+                    <td className="p-3 border">
+                      <div className="font-medium">{item.product_name}</div>
+                      {item.unit_name && <div className="text-xs text-gray-500">{isArabic ? 'المقاس' : 'Size'}: {item.unit_name}</div>}
+                      {item.color && <div className="text-xs text-gray-500">{isArabic ? 'اللون' : 'Color'}: {item.color}</div>}
+                    </td>
+                    <td className="p-3 text-center border">{item.quantity}</td>
+                    <td className="p-3 text-right border">{Number(item.price).toLocaleString()}</td>
+                    <td className="p-3 text-center border">
+                      {itemDiscountAmount > 0 ? (
+                        <div className="flex flex-col items-center">
+                          <span className="text-red-600 font-medium">
+                            {itemDiscountAmount.toLocaleString()}
+                          </span>
+                          <span className="text-xs text-red-400">
+                            ({Number(itemDiscountPercent).toFixed(1)}%)
+                          </span>
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td className="p-3 text-right border font-medium">
+                      <div className="flex flex-col">
+                        {itemDiscountAmount > 0 && (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {Number(item.price * item.quantity).toLocaleString()}
+                          </span>
+                        )}
+                        <span>{Number(item.total || item.price * item.quantity).toLocaleString()}</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Summary Section */}
         <div className="flex justify-end mb-6">
-          <div className="w-80 space-y-2">
+          <div className="w-96 space-y-2">
             <div className="flex justify-between py-2 border-b">
               <span>{isArabic ? 'الإجمالي قبل الخصم' : 'Subtotal'}:</span>
               <span>{subtotal.toLocaleString()} {invoice.currency}</span>
             </div>
 
+            {itemsDiscount > 0 && (
+              <div className="flex justify-between py-2 border-b text-red-500">
+                <span>
+                  {isArabic ? 'خصم المنتجات' : 'Items Discount'}:
+                </span>
+                <span>- {itemsDiscount.toLocaleString()} {invoice.currency}</span>
+              </div>
+            )}
+
             {discountAmount > 0 && (
               <div className="flex justify-between py-2 border-b text-red-600">
                 <span>
-                  {isArabic ? 'الخصم' : 'Discount'} ({discountPercent}%):
+                  {isArabic ? 'خصم الفاتورة' : 'Invoice Discount'} ({discountPercent}%):
                 </span>
                 <span>- {discountAmount.toLocaleString()} {invoice.currency}</span>
+              </div>
+            )}
+
+            {totalDiscount > 0 && (
+              <div className="flex justify-between py-2 border-b text-red-700 font-medium">
+                <span>
+                  {isArabic ? 'إجمالي الخصم' : 'Total Discount'}:
+                </span>
+                <span>- {totalDiscount.toLocaleString()} {invoice.currency}</span>
               </div>
             )}
 
@@ -205,13 +262,6 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
                 <span>{paidAmount.toLocaleString()} {invoice.currency}</span>
               </div>
             )}
-
-            {/* {remainingAmount > 0 && (
-              <div className="flex justify-between py-2 text-orange-600">
-                <span className="font-medium">{isArabic ? 'المتبقي' : 'Remaining'}:</span>
-                <span>{remainingAmount.toLocaleString()} {invoice.currency}</span>
-              </div>
-            )} */}
           </div>
         </div>
 
@@ -330,6 +380,7 @@ interface SalesInvoiceItem {
   price: number;
   discount_percent?: number;
   discount_amount?: number;
+  discount_percentage?: number;
   total?: number;
   unit_name?: string;
   color?: string;
@@ -634,7 +685,9 @@ const SalesInvoiceList = () => {
       [language === 'ar' ? 'الفرع' : 'Branch']: invoice.branch,
       [language === 'ar' ? 'المخزن' : 'Warehouse']: invoice.warehouse,
       [language === 'ar' ? 'المندوب' : 'Sales Rep']: invoice.sales_representative?.name,
-      [language === 'ar' ? 'المجموع' : 'Total']: Number(invoice.total_amount),
+      [language === 'ar' ? 'الإجمالي' : 'Total']: Number(invoice.total_amount),
+      [language === 'ar' ? 'خصم الفاتورة' : 'Invoice Discount']: Number(invoice.discount_amount || 0),
+      [language === 'ar' ? 'الصافي' : 'Net Total']: Number(invoice.net_total),
       [language === 'ar' ? 'الملاحظات' : 'Notes']: invoice.note || '',
     }));
 
@@ -742,19 +795,25 @@ const SalesInvoiceList = () => {
     return <Badge className={c.className}>{c.label}</Badge>;
   };
 
+  // حساب خصم الفاتورة
   const getInvoiceDiscount = (invoice: SalesInvoice) => {
     return Number(invoice.discount_amount || 0);
   };
 
+  // حساب خصم المنتجات
   const getItemsDiscount = (invoice: SalesInvoice) => {
     return invoice.items?.reduce((sum, item: any) => {
-      return sum + Number(item.discount_amount || 0);
+      const itemDiscount = item.discount_amount || 
+                          (item.price * item.quantity - item.total) || 0;
+      return sum + Number(itemDiscount);
     }, 0) || 0;
   };
 
+  // حساب إجمالي الخصم
   const getTotalDiscount = (invoice: SalesInvoice) => {
     return getInvoiceDiscount(invoice) + getItemsDiscount(invoice);
   };
+
   // ========== Render ==========
   return (
     <>
@@ -994,8 +1053,9 @@ const SalesInvoiceList = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    invoices.map((invoice: SalesInvoice, index: number) => (
+                    invoices.map((invoice: SalesInvoice) => (
                       <TableRow key={invoice.id} className="group cursor-pointer hover:bg-primary/5 transition-all" onClick={() => setSelectedInvoice(invoice)}>
+                        {/* رقم الفاتورة */}
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-1 h-8 bg-primary/30 rounded-full group-hover:bg-primary transition-colors" />
@@ -1005,6 +1065,8 @@ const SalesInvoiceList = () => {
                             </div>
                           </div>
                         </TableCell>
+
+                        {/* العميل */}
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
@@ -1017,6 +1079,7 @@ const SalesInvoiceList = () => {
                           </div>
                         </TableCell>
 
+                        {/* التاريخ */}
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="text-sm font-medium">{formatDate(invoice.created_at)}</span>
@@ -1024,22 +1087,34 @@ const SalesInvoiceList = () => {
                           </div>
                         </TableCell>
 
+                        {/* الإجمالي */}
                         <TableCell className="text-right">
                           <div className="flex flex-col gap-1">
-
-                            {/* قبل الخصم */}
+                            {/* السعر الأصلي */}
                             <span className="text-sm text-muted-foreground line-through">
                               {Number(invoice.total_amount).toLocaleString()}
                             </span>
 
-                            {/* قيمة الخصم */}
-                            <span className="text-xs text-red-600">
-                              - {Number(invoice.discount_amount || 0).toLocaleString()}
-                              {invoice.discount_percentage &&
-                                ` (${invoice.discount_percentage}%)`}
-                            </span>
+                            {/* خصم المنتجات */}
+                            {getItemsDiscount(invoice) > 0 && (
+                              <span className="text-xs text-red-500">
+                                {language === 'ar' ? 'خصم منتجات:' : 'Items:'} 
+                                - {getItemsDiscount(invoice).toLocaleString()}
+                              </span>
+                            )}
 
-                            {/* بعد الخصم */}
+                            {/* خصم الفاتورة */}
+                            {Number(invoice.discount_amount) > 0 && (
+                              <span className="text-xs text-red-600">
+                                {language === 'ar' ? 'خصم فاتورة:' : 'Invoice:'} 
+                                - {Number(invoice.discount_amount).toLocaleString()}
+                                {invoice.discount_percentage && 
+                                  ` (${invoice.discount_percentage}%)`
+                                }
+                              </span>
+                            )}
+
+                            {/* الصافي */}
                             <span className="font-bold text-primary">
                               {Number(invoice.net_total || invoice.total_amount).toLocaleString()}
                             </span>
@@ -1047,36 +1122,93 @@ const SalesInvoiceList = () => {
                             <span className="text-xs text-muted-foreground">
                               {invoice.currency || 'YER'}
                             </span>
-
                           </div>
                         </TableCell>
+
+                        {/* الخصم */}
                         <TableCell className="text-right">
                           <div className="flex flex-col gap-1">
-
+                            {/* إجمالي الخصم */}
                             <span className="text-red-600 font-semibold">
                               {getTotalDiscount(invoice).toLocaleString()}
                             </span>
-
+                            
+                            {/* خصم الفاتورة */}
                             <span className="text-xs text-muted-foreground">
-                              Invoice: {Number(invoice.discount_amount || 0).toLocaleString()}
+                              {language === 'ar' ? 'خصم الفاتورة:' : 'Invoice:'} 
+                              {Number(invoice.discount_amount || 0).toLocaleString()}
+                              {invoice.discount_percentage && 
+                                ` (${invoice.discount_percentage}%)`
+                              }
+                            </span>
+                            
+                            {/* خصم المنتجات */}
+                            <span className="text-xs text-muted-foreground">
+                              {language === 'ar' ? 'خصم المنتجات:' : 'Items:'} 
+                              {getItemsDiscount(invoice).toLocaleString()}
                             </span>
 
-                            <span className="text-xs text-muted-foreground">
-                              Items: {getItemsDiscount(invoice).toLocaleString()}
-                            </span>
-
+                            {/* تفاصيل خصم كل منتج */}
+                            {invoice.items?.map((item: any, idx: number) => {
+                              const itemDiscount = item.discount_amount || 
+                                                  (item.price * item.quantity - item.total) || 0;
+                              if (itemDiscount > 0) {
+                                return (
+                                  <span key={idx} className="text-xs text-muted-foreground/70">
+                                    • {item.product_name}: {itemDiscount.toLocaleString()}
+                                    {item.discount_percentage && 
+                                      ` (${item.discount_percentage}%)`
+                                    }
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })}
                           </div>
                         </TableCell>
-                        <TableCell>{getPaymentMethodBadge(invoice.payment_method)}</TableCell>
+
+                        {/* طريقة الدفع */}
+                        <TableCell>
+                          {getPaymentMethodBadge(invoice.payment_method)}
+                        </TableCell>
+
+                        {/* الإجراءات */}
                         <TableCell>
                           <div className="flex items-center justify-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); setSelectedInvoice(invoice); }} title={language === 'ar' ? 'عرض' : 'View'}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 hover:bg-primary/10" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setSelectedInvoice(invoice); 
+                              }} 
+                              title={language === 'ar' ? 'عرض' : 'View'}
+                            >
                               <Eye size={16} />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-500/10" onClick={(e) => { e.stopPropagation(); fetchInvoiceDetails(invoice.id); }} title={language === 'ar' ? 'طباعة' : 'Print'}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 hover:bg-blue-500/10" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                fetchInvoiceDetails(invoice.id); 
+                              }} 
+                              title={language === 'ar' ? 'طباعة' : 'Print'}
+                            >
                               <Printer size={16} />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-amber-500/10" onClick={async (e) => { e.stopPropagation(); await fetchInvoiceForReturn(invoice.id); }} title={language === 'ar' ? 'مرتجع' : 'Return'}>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 hover:bg-amber-500/10" 
+                              onClick={async (e) => { 
+                                e.stopPropagation(); 
+                                await fetchInvoiceForReturn(invoice.id); 
+                              }} 
+                              title={language === 'ar' ? 'مرتجع' : 'Return'}
+                            >
                               <RotateCcw size={16} />
                             </Button>
                           </div>

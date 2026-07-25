@@ -1,0 +1,1249 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// POS.tsx - النسخة الكاملة للمرتجع (Purchase Return)
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useApp } from '@/contexts/AppContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { cn } from '@/lib/utils';
+import { 
+  Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, 
+  Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
+  ShoppingBag, AlertCircle, CheckCircle2,
+  UserCheck, Package, X
+} from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
+import { useCategories, useProducts, useProductByBarcode, Product } from '@/hooks/usePOSData';
+import { useNavigate } from 'react-router-dom';
+import POSProductGrid from '@/components/pos_return/POSProductGrid';
+import POSCart from '@/components/pos_return/POSCart';
+import POSPaymentModal from '@/components/pos_return/POSPaymentModal';
+import POSHeldOrders from '@/components/pos_return/POSHeldOrders';
+import POSCategories from '@/components/pos_return/POSCategories';
+import POSVariantSelector from '@/components/pos_return/POSVariantSelector';
+import POSCustomerSelector from '@/components/pos_return/POSCustomerSelector';
+import POSShiftManagement from '@/components/pos_return/POSShiftManagement';
+import POSShortcutsBar from '@/components/pos_return/POSShortcutsBar';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Link } from 'react-router-dom';
+import { 
+  saveOrderOffline, 
+  getUnsyncedOrders, 
+  markOrderSynced, 
+  getOfflineStats 
+} from '@/lib/offlineDB';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { format } from 'date-fns';
+import POSDeliverySelector from '@/components/pos_return/POSDeliverySelector';
+import POSSalesRepSelector from '@/components/pos_return/POSSalesRepSelector';
+import api from '@/lib/api';
+
+// ==================== Interfaces ====================
+interface DeliveryMan {
+  id: number;
+  name: string;
+  nameAr?: string;
+  phone: string;
+  vehicle_type: string;
+  vehicle_number?: string;
+  created_at?: string;
+}
+
+interface CartItem {
+  id: string;
+  variantId?: string;
+  name: string;
+  nameAr: string;
+  price: number;
+  quantity: number;
+  sku: string;
+  sizeName?: string;
+  colorName?: string;
+  unitId?: number;
+  colorId?: number;
+  stock?: number;
+  discount_percentage?: number;
+  reason?: 'defective' | 'wrong_item' | 'damaged' | 'customer_change' | 'other';
+}
+
+interface SalesRepresentative {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  commission_rate: string;
+  active: boolean;
+  branch_id: number;
+  branch_name: string;
+  employee_id: number;
+  employee_name: string;
+}
+
+interface HeldOrder {
+  id: string;
+  items: CartItem[];
+  total: number;
+  heldAt: Date;
+  note?: string;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  name_ar: string | null;
+  phone: string | null;
+  address: string | null;
+  loyalty_points: number | null;
+}
+
+interface DeliveryPerson {
+  id: string;
+  name: string;
+  nameAr: string;
+  phone: string;
+}
+
+interface Supplier {
+  id: number;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+}
+
+interface OfflineStats {
+  products: number;
+  customers: number;
+  orders: number;
+  categories: number;
+  unsyncedOrders: number;
+  lastUpdated: string;
+}
+
+// ==================== Main Component ====================
+const POS: React.FC = () => {
+  const { language } = useLanguage();
+  const { userBranch, currentBranch } = useApp();
+  const { formatCurrency } = useRegionalSettings();
+  const { taxRates } = useCurrencyTax();
+  const navigate = useNavigate();
+  
+  // ==================== States ====================
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+  const [showPayment, setShowPayment] = useState(false);
+  const [showHeldOrders, setShowHeldOrders] = useState(false);
+  const [showVariantSelector, setShowVariantSelector] = useState(false);
+  const [showCustomerSelector, setShowCustomerSelector] = useState(false);
+  const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
+  const [showDeliverySelector, setShowDeliverySelector] = useState(false);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
+  const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
+  const [currentShift, setCurrentShift] = useState<any>(null);
+  const [showShiftPanel, setShowShiftPanel] = useState(false);
+  const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
+  const [showOfflineStats, setShowOfflineStats] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
+  // ✅ خصومات المنتجات والفاتورة
+  const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
+  const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
+  
+  // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
+  const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
+  const lastScannedBarcode = useRef<string>('');
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { signOut, user } = useAuth();
+  
+  const [branchDetails, setBranchDetails] = useState<{
+    phone?: string | null;
+    address?: string | null;
+    address_ar?: string | null;
+  } | null>(null);
+
+  // ==================== Fetch Branch Details ====================
+  useEffect(() => {
+    const fetchBranchDetails = async () => {
+      const branch = userBranch || currentBranch;
+      if (!branch?.id) return;
+      
+      try {
+        const response = await api.get(`/branch/${branch.id}`);
+        if (response.data?.data) {
+          setBranchDetails({
+            phone: response.data.data.phone,
+            address: response.data.data.address,
+            address_ar: response.data.data.address_ar
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching branch details:', error);
+      }
+    };
+
+    fetchBranchDetails();
+  }, [userBranch, currentBranch]);
+
+  // ==================== Branch Data ====================
+  const branchData = useMemo(() => {
+    const branch = userBranch || currentBranch;
+    
+    if (!branch) return null;
+    
+    return {
+      id: branch.id,
+      name: branch.name,
+      nameAr: branch.name_ar || branch.name,
+      phone: branchDetails?.phone || null,
+      address: branchDetails?.address || null,
+      addressAr: branchDetails?.address_ar || branchDetails?.address || null
+    };
+  }, [userBranch, currentBranch, branchDetails]);
+  
+  // ==================== Tax Logic ====================
+  const getActiveTax = () => {
+    if (!taxRates || taxRates.length === 0) return null;
+    const activeTaxes = taxRates.filter(tax => tax.active === true);
+    if (activeTaxes.length === 0) return null;
+    return activeTaxes.find(tax => tax.default === true) || activeTaxes[0];
+  };
+
+  const activeTax = getActiveTax();
+  const taxRate = Number(activeTax?.rate ?? 0);
+
+  // ==================== Offline Mode Management ====================
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      toast({
+        title: language === 'ar' ? 'تم الاتصال بالإنترنت' : 'Back online',
+        description: language === 'ar' ? 'سيتم مزامنة البيانات تلقائياً' : 'Data will sync automatically',
+      });
+      checkUnsyncedOrders();
+      loadOfflineStats();
+      syncOfflineOrders();
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast({
+        title: language === 'ar' ? 'أنت الآن في وضع عدم الاتصال' : 'You are offline',
+        description: language === 'ar' 
+          ? 'سيتم حفظ الفواتير محلياً ومزامنتها لاحقاً' 
+          : 'Invoices will be saved locally and synced later',
+        variant: 'destructive',
+      });
+      loadOfflineStats();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    checkUnsyncedOrders();
+    loadOfflineStats();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [language]);
+
+  const loadOfflineStats = async () => {
+    try {
+      const stats = await getOfflineStats();
+      setOfflineStats(stats);
+    } catch (error) {
+      console.error('Error loading offline stats:', error);
+    }
+  };
+
+  const checkUnsyncedOrders = async () => {
+    try {
+      const orders = await getUnsyncedOrders();
+      setUnsyncedCount(orders.length);
+    } catch (error) {
+      console.error('Error checking unsynced orders:', error);
+      setUnsyncedCount(0);
+    }
+  };
+
+  const syncOfflineOrders = async () => {
+    if (!navigator.onLine) {
+      toast({
+        title: language === 'ar' ? 'لا يوجد اتصال بالإنترنت' : 'No internet connection',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const unsyncedOrders = await getUnsyncedOrders();
+      
+      if (unsyncedOrders.length === 0) {
+        toast({
+          title: language === 'ar' ? 'لا توجد طلبات للمزامنة' : 'No orders to sync',
+        });
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const order of unsyncedOrders) {
+        try {
+          const response = await fetch('/api/invoice/store', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              customer_id: parseInt(order.customer_id || '1'),
+              items: order.items.map((item: any) => ({
+                product_id: parseInt(item.id),
+                quantity: item.quantity,
+                price: item.price,
+                color: item.colorName || null,
+                size: item.sizeName || null
+              })),
+              payments: order.payments || [],
+              subtotal: order.subtotal,
+              tax: order.tax,
+              total: order.total,
+            })
+          });
+
+          if (response.ok) {
+            await markOrderSynced(order.id);
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          failCount++;
+        }
+      }
+
+      await checkUnsyncedOrders();
+      await loadOfflineStats();
+      
+      toast({
+        title: language === 'ar' ? 'تمت المزامنة' : 'Sync completed',
+        description: language === 'ar' 
+          ? `تمت مزامنة ${successCount} طلب، فشل ${failCount}`
+          : `${successCount} orders synced, ${failCount} failed`,
+        variant: failCount > 0 ? 'destructive' : 'default',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'ar' ? 'حدث خطأ في المزامنة' : 'Sync failed',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // ==================== Data Fetching ====================
+  const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
+  const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(selectedCategory);
+  
+  const { data: barcodeProduct } = useProductByBarcode(searchQuery);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (value.length >= 3) {
+      setIsBarcodeScanning(true);
+      
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+        setIsBarcodeScanning(false);
+      }, 1000);
+    } else {
+      setIsBarcodeScanning(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log('🔍 Barcode scan result:', { 
+      barcodeProduct, 
+      searchQuery,
+    });
+    
+    if (barcodeProduct && barcodeProduct.id) {
+      console.log('✅ Adding product to cart:', barcodeProduct.name);
+      
+      addToCart(barcodeProduct as Product);
+      setSearchQuery('');
+      
+      toast({
+        title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
+        description: language === 'ar' 
+          ? (barcodeProduct.name_ar || barcodeProduct.name)
+          : barcodeProduct.name,
+      });
+    }
+  }, [barcodeProduct]);
+
+  // ==================== Data Transformation ====================
+  const transformedCategories = useMemo(() => [
+    { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
+    ...(categories?.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      nameAr: cat.name_ar || cat.name,
+      icon: getIconEmoji(cat.icon)
+    })) || [])
+  ], [categories]);
+
+  const transformedProducts = useMemo(() => {
+    if (!products) return [];
+    
+    return products.map((prod: Product) => ({
+      id: prod.id.toString(),
+      name: prod.name,
+      nameAr: prod.name_ar || prod.name,
+      price: prod.price,
+      sku: prod.sku,
+      barcode: prod.barcode || '',
+      stock: prod.stock || 0,
+      category_id: prod.category_id,
+      image_url: prod.image_url,
+      imageUrl: prod.imageUrl,
+      image: prod.image,
+      hasVariants: prod.has_variants,
+      units: prod.units || [],
+    }));
+  }, [products]);
+
+  useEffect(() => {
+    setSearchQuery('');
+    setIsBarcodeScanning(false);
+  }, [selectedCategory]);
+
+  // ==================== Cart Operations ====================
+  const addToCart = (product: Product) => {
+    if (product.units && product.units.length > 0) {
+      setSelectedProductForVariant(product);
+      setShowVariantSelector(true);
+      return;
+    }
+
+    setCartItems(prev => {
+      const existing = prev.find(item => item.id === product.id && !item.variantId);
+      if (existing) {
+        return prev.map(item =>
+          item.id === product.id && !item.variantId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, {
+        id: product.id,
+        name: product.name,
+        nameAr: product.name_ar || product.name,
+        price: product.price,
+        quantity: 1,
+        sku: product.sku,
+        stock: product.stock,
+        discount_percentage: 0,
+        reason: 'defective', // ✅ سبب افتراضي للمرتجع
+      }];
+    });
+  };
+
+  const addVariantToCart = (variant: {
+    productId: string;
+    unitId: number;
+    colorId: number;
+    size: string;
+    color: string;
+    price: number;
+    sku: string;
+    stock: number;
+  }) => {
+    if (!selectedProductForVariant) return;
+
+    const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
+    
+    setCartItems(prev => {
+      const existing = prev.find(item => item.variantId === variantId);
+      if (existing) {
+        if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+          toast({
+            title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
+            variant: 'destructive',
+          });
+          return prev;
+        }
+        return prev.map(item =>
+          item.variantId === variantId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, {
+        id: selectedProductForVariant.id,
+        variantId: variantId,
+        name: selectedProductForVariant.name,
+        nameAr: selectedProductForVariant.name_ar || selectedProductForVariant.name,
+        price: variant.price,
+        quantity: 1,
+        sku: variant.sku,
+        sizeName: variant.size,
+        colorName: variant.color,
+        unitId: variant.unitId,
+        colorId: variant.colorId,
+        stock: variant.stock,
+        discount_percentage: 0,
+        reason: 'defective', // ✅ سبب افتراضي للمرتجع
+      }];
+    });
+
+    setShowVariantSelector(false);
+    setSelectedProductForVariant(null);
+  };
+
+  const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
+    if (quantity < 1) {
+      removeItem(itemKey, variantId);
+    } else {
+      setCartItems(prev =>
+        prev.map(item => {
+          const match = variantId 
+            ? item.variantId === variantId 
+            : item.id === itemKey && !item.variantId;
+          if (match) {
+            if (item.stock !== undefined && quantity > item.stock) {
+              toast({
+                title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
+                description: language === 'ar' 
+                  ? `الحد الأقصى ${item.stock} قطعة فقط`
+                  : `Maximum ${item.stock} items only`,
+                variant: 'destructive',
+              });
+              return item;
+            }
+            return { ...item, quantity };
+          }
+          return item;
+        })
+      );
+    }
+  };
+
+  const removeItem = (itemKey: string, variantId?: string) => {
+    setCartItems(prev => prev.filter(item => {
+      if (variantId) {
+        return item.variantId !== variantId;
+      }
+      return !(item.id === itemKey && !item.variantId);
+    }));
+  };
+
+  const clearCart = () => setCartItems([]);
+
+  const holdOrder = () => {
+    if (cartItems.length === 0) return;
+    
+    const subtotal = calculateSubtotalAfterItemDiscounts();
+    const tax = (subtotal * taxRate) / 100;
+    const total = subtotal + tax;
+
+    const newHeldOrder: HeldOrder = {
+      id: `HOLD-${Date.now()}`,
+      items: [...cartItems],
+      total,
+      heldAt: new Date()
+    };
+
+    setHeldOrders(prev => [...prev, newHeldOrder]);
+    setCartItems([]);
+    
+    toast({
+      title: language === 'ar' ? 'تم تعليق الطلب' : 'Order held',
+      description: language === 'ar' ? `رقم الطلب: ${newHeldOrder.id.slice(-4)}` : `Order #${newHeldOrder.id.slice(-4)}`
+    });
+  };
+
+  const restoreOrder = (order: HeldOrder) => {
+    setCartItems(order.items);
+    setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+  };
+
+  const deleteHeldOrder = (orderId: string) => {
+    setHeldOrders(prev => prev.filter(o => o.id !== orderId));
+  };
+
+  const handleItemDiscountChange = (itemId: string, percentage: number, variantId?: string) => {
+    setCartItems(prev => prev.map(item => {
+      const match = variantId 
+        ? item.variantId === variantId 
+        : item.id === itemId && !item.variantId;
+      if (match) {
+        return { ...item, discount_percentage: percentage };
+      }
+      return item;
+    }));
+  };
+
+  const handleInvoiceDiscountChange = (percentage: number, amount: number) => {
+    setInvoiceDiscountPercentage(percentage);
+    setInvoiceDiscountAmount(amount);
+  };
+
+  // ==================== Calculations ====================
+  const calculateSubtotalAfterItemDiscounts = () => {
+    return cartItems.reduce((sum, item) => {
+      const itemTotal = item.price * item.quantity;
+      const discountRate = (item.discount_percentage || 0) / 100;
+      return sum + (itemTotal * (1 - discountRate));
+    }, 0);
+  };
+  
+  const calculateSubtotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const calculateItemDiscountsTotal = () => {
+    return cartItems.reduce((sum, item) => {
+      const itemTotal = item.price * item.quantity;
+      const discountRate = (item.discount_percentage || 0) / 100;
+      return sum + (itemTotal * discountRate);
+    }, 0);
+  };
+  
+  const calculateSubtotalAfterAllDiscounts = () => {
+    const afterItemDiscounts = calculateSubtotalAfterItemDiscounts();
+    const invoiceDiscount = (afterItemDiscounts * invoiceDiscountPercentage) / 100;
+    return afterItemDiscounts - invoiceDiscount;
+  };
+  
+  const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
+  const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
+
+  // ==================== Payment Handlers ====================
+  // ✅ تم تعديلها: المرتجع بيتنفذ من جوة المودال، احنا بس بننضف الشاشة
+  const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string) => {
+    console.log('📄 Return completed with:', { payments, invoiceNum });
+    
+    // ✅ المرتجع اتنفذ خلاص من جوة المودال
+    // احنا هنا بننضف الكارت ونقفل المودال بس
+    
+    setShowPayment(false);
+    setCartItems([]);
+    setSelectedCustomer(null);
+    setSelectedDelivery(null);
+    setInvoiceDiscountPercentage(0);
+    setInvoiceDiscountAmount(0);
+    
+    if (invoiceNum) {
+      setInvoiceNumber(invoiceNum);
+    }
+    
+    toast({
+      title: language === 'ar' ? 'تم إتمام المرتجع' : 'Return completed',
+      description: language === 'ar' 
+        ? `رقم المرتجع: ${invoiceNum || 'N/A'}`
+        : `Return #: ${invoiceNum || 'N/A'}`,
+    });
+  };
+
+  // ==================== Return Handlers ====================
+  const handleReturnComplete = (amount: number) => {
+    toast({
+      title: language === 'ar' ? 'تم تسجيل المرتجع' : 'Return recorded',
+      description: `${formatCurrency(amount)} ${language === 'ar' ? 'تم إرجاعها' : 'returned'}`,
+    });
+  };
+
+  // ==================== Delivery Selection Handler ====================
+  const handleSelectDelivery = (delivery: DeliveryMan | null) => {
+    if (delivery) {
+      setSelectedDelivery({
+        id: String(delivery.id),
+        name: delivery.name,
+        nameAr: delivery.nameAr || delivery.name,
+        phone: delivery.phone || ''
+      });
+    } else {
+      setSelectedDelivery(null);
+    }
+  };
+
+  // ==================== UI Handlers ====================
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  const handleFocusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  const handleCloseAllModals = useCallback(() => {
+    if (showPayment) setShowPayment(false);
+    else if (showHeldOrders) setShowHeldOrders(false);
+    else if (showCustomerSelector) setShowCustomerSelector(false);
+    else if (showDeliverySelector) setShowDeliverySelector(false);
+    else if (showShiftPanel) setShowShiftPanel(false);
+    else if (showVariantSelector) setShowVariantSelector(false);
+  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showShiftPanel, showVariantSelector]);
+
+  const handleIncreaseQuantity = useCallback(() => {
+    if (cartItems.length > 0) {
+      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+      const item = cartItems[index];
+      if (item) {
+        updateQuantity(item.id, item.quantity + 1, item.variantId);
+      }
+    }
+  }, [cartItems, selectedCartItemIndex]);
+
+  const handleDecreaseQuantity = useCallback(() => {
+    if (cartItems.length > 0) {
+      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+      const item = cartItems[index];
+      if (item) {
+        updateQuantity(item.id, item.quantity - 1, item.variantId);
+      }
+    }
+  }, [cartItems, selectedCartItemIndex]);
+
+  // ==================== Keyboard Shortcuts ====================
+  const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showShiftPanel || showVariantSelector;
+
+  const posShortcuts = getPOSShortcuts({
+    onPay: () => cartItems.length > 0 && setShowPayment(true),
+    onHold: holdOrder,
+    onClearCart: clearCart,
+    onFocusSearch: handleFocusSearch,
+    onShowHeldOrders: () => setShowHeldOrders(true),
+    onShowCustomer: () => setShowCustomerSelector(true),
+    onShowDelivery: () => setShowDeliverySelector(true),
+    onShowShift: () => setShowShiftPanel(true),
+    onGoHome: () => navigate('/'),
+    onEscape: handleCloseAllModals,
+    onIncreaseQuantity: handleIncreaseQuantity,
+    onDecreaseQuantity: handleDecreaseQuantity,
+  });
+
+  usePOSKeyboardShortcuts(posShortcuts, !isAnyModalOpen);
+
+  const isLoading = categoriesLoading || productsLoading;
+
+  // ==================== Render ====================
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        {/* POS Header */}
+        <header className="h-14 bg-gradient-to-r from-rose-600 to-rose-700 flex items-center justify-between px-4 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-white" />
+              <h1 className="text-xl font-bold text-white">
+                {language === 'ar' ? 'مرتجع نقطه البيع' : 'pos Return'}
+              </h1>
+            </div>
+            
+            {/* Offline/Online Status */}
+            <div className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
+              isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+            )}>
+              {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
+              <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
+            </div>
+            
+            {/* Branch Info */}
+            {(userBranch || currentBranch) && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
+                <Building2 size={14} />
+                <span>
+                  {userBranch 
+                    ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
+                    : currentBranch 
+                      ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
+                      : null
+                  }
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
+              {/* Customer */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowCustomerSelector(true)}
+                className={cn(
+                  "gap-1.5 px-2",
+                  selectedCustomer 
+                    ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" 
+                    : "text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/20"
+                )}
+              >
+                <User size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'العميل' : 'Customer'}</span>
+              </Button>
+
+              {/* Delivery Man Button */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowDeliverySelector(true)}
+                className={cn(
+                  "gap-1.5 px-2",
+                  selectedDelivery 
+                    ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20" 
+                    : "text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/20"
+                )}
+              >
+                <Truck size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
+                {selectedDelivery && (
+                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-orange-500 rounded-full" />
+                )}
+              </Button>
+
+              {/* Sales Rep */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowSalesRepSelector(true)}
+                className={cn(
+                  "gap-1.5 px-2",
+                  selectedSalesRep 
+                    ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20" 
+                    : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
+                )}
+              >
+                <UserCheck size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'مندوب المبيعات' : 'Sales Rep'}</span>
+                {selectedSalesRep && (
+                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
+                )}
+              </Button>
+
+              {/* Shift */}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowShiftPanel(true)}
+                className={cn(
+                  "gap-1.5 px-2",
+                  currentShift 
+                    ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20" 
+                    : "text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
+                )}
+              >
+                <DollarSign size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'الوردية' : 'Shift'}</span>
+              </Button>
+            </div>
+
+            {/* Selected Customer Display */}
+            {selectedCustomer && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
+                <span className="text-white/90 text-sm">
+                  {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Crown size={14} className="text-warning" />
+                  <span className="text-warning font-semibold text-xs">
+                    {selectedCustomer.loyalty_points || 0}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Selected Delivery Display */}
+            {selectedDelivery && (
+              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+                <span className="text-white/90 text-sm">
+                  {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
+                </span>
+              </div>
+            )}
+
+            {/* Selected Sales Rep Display */}
+            {selectedSalesRep && (
+              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+                <span className="text-white/90 text-sm">{selectedSalesRep.name}</span>
+                {selectedSalesRep.commission_rate && (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
+                    {selectedSalesRep.commission_rate}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Offline Stats Button */}
+            {isOffline && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowOfflineStats(!showOfflineStats)}
+                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
+                  >
+                    <AlertCircle size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <span>{language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}</span>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Home */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link to="/">
+                  <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
+                    <Home size={20} />
+                  </Button>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Logout */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  className="text-white/80 hover:text-white hover:bg-white/10"
+                >
+                  <LogOut size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-card border border-border">
+                <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Products Section */}
+          <div className="flex-1 flex flex-col p-4 overflow-hidden">
+            <div className="space-y-3 mb-4 flex-shrink-0">
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                  <Input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.length >= 3) {
+                        setIsBarcodeScanning(true);
+                      }
+                    }}
+                    className="ps-10 pe-10 h-12 text-base"
+                  />
+                  <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                </div>
+                
+                {searchQuery.length >= 3 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsBarcodeScanning(true)}
+                    className="h-12 px-4"
+                  >
+                    <Barcode size={18} className="me-1" />
+                    {language === 'ar' ? 'إضافة' : 'Add'}
+                  </Button>
+                )}
+              </div>
+              
+              {isBarcodeScanning && (
+                <div className="flex items-center gap-1 text-xs text-green-500">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>{language === 'ar' ? 'جاري معالجة الباركود...' : 'Processing barcode...'}</span>
+                </div>
+              )}
+              
+              {categoriesOffline && (
+                <div className="flex items-center gap-1 text-xs text-amber-500">
+                  <WifiOff size={12} />
+                  <span>{language === 'ar' ? 'الفئات من الذاكرة المحلية' : 'Categories from offline storage'}</span>
+                </div>
+              )}
+
+              <POSCategories
+                categories={transformedCategories}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+              />
+            </div>
+
+            {/* Offline Stats Panel */}
+            {showOfflineStats && offlineStats && (
+              <Card className="mb-4 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-sm flex items-center gap-1">
+                      <AlertCircle size={14} className="text-amber-600" />
+                      {language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}
+                    </h4>
+                    <Badge variant="outline" className="text-xs">
+                      {format(new Date(offlineStats.lastUpdated), 'HH:mm')}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'منتجات' : 'Products'}:</span>
+                      <span className="font-medium">{offlineStats.products}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'عملاء' : 'Customers'}:</span>
+                      <span className="font-medium">{offlineStats.customers}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'فئات' : 'Categories'}:</span>
+                      <span className="font-medium">{offlineStats.categories}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{language === 'ar' ? 'غير متزامنة' : 'Unsynced'}:</span>
+                      <span className="font-medium text-amber-600">{offlineStats.unsyncedOrders}</span>
+                    </div>
+                  </div>
+                  {unsyncedCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={syncOfflineOrders}
+                      disabled={syncing}
+                      className="w-full mt-2 h-7 text-xs"
+                    >
+                      {syncing ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                      )}
+                      {language === 'ar' ? 'مزامنة' : 'Sync Now'}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex-1 overflow-y-auto">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <>
+                  {productsOffline && (
+                    <div className="mb-2 flex items-center gap-1 text-xs text-amber-500">
+                      <WifiOff size={12} />
+                      <span>{language === 'ar' ? 'المنتجات من الذاكرة المحلية' : 'Products from offline storage'}</span>
+                    </div>
+                  )}
+                  <POSProductGrid
+                    products={transformedProducts}
+                    onAddToCart={addToCart}
+                    searchQuery={searchQuery}
+                    selectedCategory={selectedCategory}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Cart Section */}
+          <div className="w-[380px] p-4 ps-0 flex-shrink-0">
+            <POSCart
+              items={cartItems}
+              onUpdateQuantity={updateQuantity}
+              onRemoveItem={removeItem}
+              onClearCart={clearCart}
+              onHoldOrder={holdOrder}
+              onPay={() => setShowPayment(true)}
+              heldOrdersCount={heldOrders.length}
+              invoiceDiscountPercentage={invoiceDiscountPercentage}
+              invoiceDiscountAmount={invoiceDiscountAmount}
+              onInvoiceDiscountChange={handleInvoiceDiscountChange}
+              onItemDiscountChange={handleItemDiscountChange}
+            />
+          </div>
+        </div>
+
+        {/* Shortcuts Bar */}
+        <POSShortcutsBar
+          onPay={() => cartItems.length > 0 && setShowPayment(true)}
+          onHold={holdOrder}
+          onClearCart={clearCart}
+          onShowHeldOrders={() => setShowHeldOrders(true)}
+          onShowCustomer={() => setShowCustomerSelector(true)}
+          onShowDelivery={() => setShowDeliverySelector(true)}
+          onShowShift={() => setShowShiftPanel(true)}
+          onFocusSearch={handleFocusSearch}
+          onGoHome={() => navigate('/')}
+          cartItemsCount={cartItems.length}
+          heldOrdersCount={heldOrders.length}
+          hasShift={!!currentShift}
+        />
+
+        {/* Payment Modal - Return Mode */}
+        <POSPaymentModal
+          isOpen={showPayment}
+          onClose={() => setShowPayment(false)}
+          total={calculateTotal()}
+          subtotal={calculateSubtotalAfterAllDiscounts()}
+          tax={calculateTax()}
+          cartItems={cartItems}
+          mode="return"  // ✅ مهم جداً: وضع المرتجع
+          customer={selectedCustomer ? { 
+            id: selectedCustomer.id, 
+            name: selectedCustomer.name, 
+            name_ar: selectedCustomer.name_ar || undefined,
+            phone: selectedCustomer.phone || undefined,
+            loyalty_points: selectedCustomer.loyalty_points 
+          } : null}
+          deliveryPerson={selectedDelivery ? { 
+            id: selectedDelivery.id, 
+            name: selectedDelivery.name,
+            phone: selectedDelivery.phone
+          } : null}
+          salesRepresentative={selectedSalesRep ? { 
+            id: selectedSalesRep.id, 
+            name: selectedSalesRep.name,
+            commission_rate: selectedSalesRep.commission_rate 
+          } : null}
+          shiftId={currentShift?.id || null}
+          branchId={branchData?.id || null}
+          branchName={branchData?.name}
+          branchNameAr={branchData?.nameAr}
+          branchPhone={branchData?.phone}
+          branchAddress={branchData?.address}
+          branchAddressAr={branchData?.addressAr}
+          companyInfo={{
+            name: user?.name || 'متجرك',
+            nameAr: user?.name,
+            logo: user?.logoUrl,
+            address: user?.address,
+            addressAr: user?.address,
+            phone: user?.phone,
+            email: user?.email,
+            tax_id: user?.tax_id,
+            commercial_register: user?.commercial_register,
+            website: user?.website,
+            currency: user?.currency || 'YER'
+          }}
+          invoiceDiscountPercentage={invoiceDiscountPercentage}
+          invoiceDiscountAmount={invoiceDiscountAmount}
+          onComplete={(payments, invoiceNum) => {
+            console.log('📄 Return Number from modal:', invoiceNum);
+            handlePaymentComplete(payments, invoiceNum);
+          }}
+        />
+
+        <POSHeldOrders
+          isOpen={showHeldOrders}
+          onClose={() => setShowHeldOrders(false)}
+          orders={heldOrders}
+          onRestoreOrder={restoreOrder}
+          onDeleteOrder={deleteHeldOrder}
+        />
+
+        {selectedProductForVariant && (
+          <POSVariantSelector
+            isOpen={showVariantSelector}
+            onClose={() => {
+              setShowVariantSelector(false);
+              setSelectedProductForVariant(null);
+            }}
+            product={selectedProductForVariant}
+            onSelectVariant={addVariantToCart}
+          />
+        )}
+
+        <POSCustomerSelector
+          isOpen={showCustomerSelector}
+          onClose={() => setShowCustomerSelector(false)}
+          onSelectCustomer={setSelectedCustomer}
+          selectedCustomer={selectedCustomer}
+        />
+
+        {showSalesRepSelector && (
+          <POSSalesRepSelector
+            isOpen={showSalesRepSelector}
+            onClose={() => setShowSalesRepSelector(false)}
+            onSelectRep={setSelectedSalesRep}
+            selectedRep={selectedSalesRep}
+            branchId={userBranch?.id || currentBranch?.id}
+          />
+        )}
+
+        <POSDeliverySelector
+          isOpen={showDeliverySelector}
+          onClose={() => setShowDeliverySelector(false)}
+          onSelectDelivery={handleSelectDelivery}
+          selectedDelivery={selectedDelivery ? {
+            id: Number(selectedDelivery.id),
+            name: selectedDelivery.name,
+            nameAr: selectedDelivery.nameAr,
+            phone: selectedDelivery.phone,
+            vehicle_type: ''
+          } : null}
+        />
+
+        <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
+          <DialogContent className="sm:max-w-md">
+            <POSShiftManagement
+              currentShift={currentShift}
+              onShiftChange={setCurrentShift}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TooltipProvider>
+  );
+};
+
+// ==================== Helper Functions ====================
+function getIconEmoji(iconName: string | null): string {
+  const iconMap: Record<string, string> = {
+    'Smartphone': '📱',
+    'Shirt': '👔',
+    'Coffee': '☕',
+    'Home': '🏠',
+    'Dumbbell': '🏋️',
+    'Package': '📦',
+  };
+  return iconMap[iconName || ''] || '📦';
+}
+
+export default POS;
