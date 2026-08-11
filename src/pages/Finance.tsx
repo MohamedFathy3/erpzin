@@ -31,7 +31,7 @@ const Finance = () => {
     { id: 'revenues', label: language === 'ar' ? 'الإيرادات' : 'Revenues', icon: TrendingUp },
     { id: 'expenses', label: language === 'ar' ? 'المصروفات' : 'Expenses', icon: Receipt },
     { id: 'treasury', label: language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks', icon: Wallet },
-    { id: 'accounts', label: language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts', icon: FolderTree },
+    // { id: 'accounts', label: language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts', icon: FolderTree },
   ];
 
   // Finance filter fields based on active tab
@@ -102,7 +102,7 @@ const Finance = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon size={16} />
@@ -143,9 +143,9 @@ const Finance = () => {
             <TreasuryBankManager language={language} />
           </TabsContent>
 
-          <TabsContent value="accounts" className="mt-6">
+          {/* <TabsContent value="accounts" className="mt-6">
             <ChartOfAccounts language={language} />
-          </TabsContent>
+          </TabsContent> */}
 
         </Tabs>
       </div>

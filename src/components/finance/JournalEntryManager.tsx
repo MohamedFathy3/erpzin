@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,14 @@ interface Account {
   is_header: boolean;
 }
 
+interface Treasury {
+  id: number;
+  name: string;
+  name_ar: string | null;
+  balance: number;
+  is_main: boolean;
+}
+
 interface JournalEntry {
   id: number;
   entry_date: string;
@@ -49,6 +58,8 @@ interface JournalEntry {
   reference_type?: string;
   reference_id?: number;
   entry_number?: string;
+  treasury_id?: number | null;
+  treasury?: Treasury;
 }
 
 interface JournalEntryLine {
@@ -113,6 +124,13 @@ interface JournalEntryPostResponse {
 
 interface AccountsResponse {
   data: Account[];
+  result: string;
+  message: string;
+  status: number;
+}
+
+interface TreasuriesResponse {
+  data: Treasury[];
   result: string;
   message: string;
   status: number;
@@ -252,7 +270,6 @@ const PrintTemplate = React.forwardRef<HTMLDivElement, {
           </div>
         </div>
         
-        {/* Logo Section */}
         <div className="mb-4">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-[#941885] to-[#941885]/70 rounded-xl mb-2">
             <FileText className="w-6 h-6 text-white" />
@@ -299,7 +316,8 @@ const PrintTemplate = React.forwardRef<HTMLDivElement, {
             <th className="border border-gray-300 p-2 text-right w-32">{isRTL ? 'المدين' : 'Debit'}</th>
             <th className="border border-gray-300 p-2 text-right w-32">{isRTL ? 'الدائن' : 'Credit'}</th>
             <th className="border border-gray-300 p-2 text-center w-24">{isRTL ? 'الحالة' : 'Status'}</th>
-           </tr>
+            <th className="border border-gray-300 p-2 text-center w-28">{isRTL ? 'الخزينة' : 'Treasury'}</th>
+          </tr>
         </thead>
         <tbody>
           {entries.map((entry, index) => (
@@ -320,7 +338,16 @@ const PrintTemplate = React.forwardRef<HTMLDivElement, {
                   {getStatusText(entry.status)}
                 </span>
               </td>
-             </tr>
+              <td className="border border-gray-300 p-2 text-center">
+                {entry.treasury ? (
+                  <span className="text-xs">
+                    {isRTL ? (entry.treasury.name_ar || entry.treasury.name) : entry.treasury.name}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">-</span>
+                )}
+              </td>
+            </tr>
           ))}
         </tbody>
         <tfoot>
@@ -331,7 +358,8 @@ const PrintTemplate = React.forwardRef<HTMLDivElement, {
             <td className="border border-gray-300 p-2 text-right">{formatAmount(totalStats.totalDebit)}</td>
             <td className="border border-gray-300 p-2 text-right">{formatAmount(totalStats.totalCredit)}</td>
             <td className="border border-gray-300 p-2"></td>
-           </tr>
+            <td className="border border-gray-300 p-2"></td>
+          </tr>
         </tfoot>
       </table>
 
@@ -409,7 +437,8 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     entry_date: format(new Date(), 'yyyy-MM-dd'),
     description_en: '',
     description_ar: '',
-    notes: ''
+    notes: '',
+    treasury_id: ''
   });
   
   const [lines, setLines] = useState<JournalEntryLineInput[]>([
@@ -482,6 +511,33 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     }
   });
   const accounts = accountsData?.data || [];
+
+  const { data: treasuriesData, isLoading: treasuriesLoading } = useQuery<TreasuriesResponse>({
+    queryKey: ['treasuries-for-entries'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index');
+      return response.data;
+    }
+  });
+  const treasuries = treasuriesData?.data || [];
+
+  // ✅ جلب حسابات الخزينة فقط
+  const treasuryAccounts = useMemo(() => {
+    return accounts.filter(acc => acc.account_type === 'treasury');
+  }, [accounts]);
+
+  // ✅ البحث عن حساب الخزينة المرتبط بـ treasury_id
+  const getTreasuryAccountId = useCallback((treasuryId: string) => {
+    const treasury = treasuries.find(t => t.id.toString() === treasuryId);
+    if (!treasury) return null;
+    
+    // البحث عن حساب الخزينة بالكود
+    const account = accounts.find(a => 
+      a.account_type === 'treasury' && 
+      a.code === `treasury_${treasuryId}`
+    );
+    return account?.id.toString() || null;
+  }, [treasuries, accounts]);
 
   const { data: entriesResponse, isLoading: entriesLoading, refetch } = useQuery<JournalEntryResponse>({
     queryKey: ['journal-entries', currentPage, perPage, statusFilter, dateFrom, dateTo, debouncedSearch],
@@ -575,6 +631,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
         description_ar: formData.description_ar || null,
         notes: formData.notes || null,
         status: 'draft',
+        treasury_id: formData.treasury_id ? parseInt(formData.treasury_id) : null,
         lines: lines
           .filter(l => l.account_id && (l.debit > 0 || l.credit > 0))
           .map(l => ({
@@ -771,7 +828,8 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
       entry_date: format(new Date(), 'yyyy-MM-dd'),
       description_en: '',
       description_ar: '',
-      notes: ''
+      notes: '',
+      treasury_id: ''
     });
     setLines([
       { account_id: '', debit: 0, credit: 0, description: '' },
@@ -805,6 +863,54 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     setFormErrors({});
   }, []);
 
+  // ✅ دالة لإضافة حساب الخزينة تلقائياً
+  const handleAddTreasuryAccount = useCallback(() => {
+    if (!formData.treasury_id) {
+      toast.error(t('يجب اختيار الخزينة أولاً', 'Please select a treasury first'));
+      return;
+    }
+
+    const treasuryAccountId = getTreasuryAccountId(formData.treasury_id);
+    if (!treasuryAccountId) {
+      toast.error(t('لا يوجد حساب خزينة مرتبط بهذه الخزينة', 'No treasury account found for this treasury'));
+      return;
+    }
+
+    // ✅ البحث عن بند فارغ أو إضافة بند جديد
+    const emptyLineIndex = lines.findIndex(l => !l.account_id);
+    
+    setLines(prev => {
+      const newLines = [...prev];
+      
+      if (emptyLineIndex > -1) {
+        // استخدم بند فارغ
+        newLines[emptyLineIndex] = {
+          ...newLines[emptyLineIndex],
+          account_id: treasuryAccountId,
+          debit: 0,
+          credit: 0,
+          description: t('حساب الخزينة', 'Treasury Account')
+        };
+      } else {
+        // أضف بند جديد
+        newLines.push({
+          account_id: treasuryAccountId,
+          debit: 0,
+          credit: 0,
+          description: t('حساب الخزينة', 'Treasury Account')
+        });
+      }
+      
+      return newLines;
+    });
+
+    // ✅ البحث عن اسم الخزينة لعرضه في الـ Toast
+    const treasury = treasuries.find(t => t.id.toString() === formData.treasury_id);
+    const treasuryName = t(treasury?.name_ar || treasury?.name || '', treasury?.name || '');
+    
+    toast.success(t(`تم إضافة حساب الخزينة "${treasuryName}"`, `Treasury account "${treasuryName}" added`));
+  }, [formData.treasury_id, lines, getTreasuryAccountId, treasuries, t]);
+
   const handleSubmit = useCallback(() => {
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
@@ -837,14 +943,15 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
 
   const handleExport = useCallback(() => {
     try {
-      const headers = ['ID', 'Date', 'Description', 'Debit', 'Credit', 'Status'];
+      const headers = ['ID', 'Date', 'Description', 'Debit', 'Credit', 'Status', 'Treasury'];
       const data = filteredEntries.map(e => [
         e.id,
         formatDate(e.entry_date || e.created_at),
         getDescription(e),
         e.total_debit || '0',
         e.total_credit || '0',
-        e.status
+        e.status,
+        e.treasury ? (isRTL ? e.treasury.name_ar || e.treasury.name : e.treasury.name) : ''
       ]);
       
       const csv = [headers, ...data].map(row => row.join(',')).join('\n');
@@ -859,7 +966,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
     } catch (error) {
       toast.error(t('حدث خطأ أثناء التصدير', 'Export failed'));
     }
-  }, [filteredEntries, formatDate, getDescription, t]);
+  }, [filteredEntries, formatDate, getDescription, t, isRTL]);
 
   // ==================== Render ====================
   return (
@@ -957,7 +1064,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
               <Card>
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between">
@@ -1017,6 +1124,18 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                   </div>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t('الخزائن', 'Treasuries')}</p>
+                      <p className="text-2xl font-bold">{treasuries.length}</p>
+                    </div>
+                    <Landmark className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Entries Table */}
@@ -1039,20 +1158,21 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                         <TableHead className="text-right w-32">{t('مدين', 'Debit')}</TableHead>
                         <TableHead className="text-right w-32">{t('دائن', 'Credit')}</TableHead>
                         <TableHead className="text-center w-28">{t('الحالة', 'Status')}</TableHead>
+                        <TableHead className="text-center w-28">{t('الخزينة', 'Treasury')}</TableHead>
                         <TableHead className="text-center w-24">{t('إجراءات', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {entriesLoading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12">
+                          <TableCell colSpan={8} className="text-center py-12">
                             <Loader2 size={32} className="animate-spin mx-auto text-primary" />
                             <p className="mt-2 text-muted-foreground">{t('جاري التحميل...', 'Loading...')}</p>
                           </TableCell>
                         </TableRow>
                       ) : filteredEntries.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12">
+                          <TableCell colSpan={8} className="text-center py-12">
                             <FileText size={32} className="mx-auto text-muted-foreground mb-2" />
                             <p className="text-muted-foreground">{t('لا توجد قيود', 'No entries found')}</p>
                           </TableCell>
@@ -1066,6 +1186,16 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                             <TableCell className="text-right font-medium">{formatAmount(entry.total_debit || '0')}</TableCell>
                             <TableCell className="text-right font-medium">{formatAmount(entry.total_credit || '0')}</TableCell>
                             <TableCell className="text-center">{getStatusBadge(entry.status)}</TableCell>
+                            <TableCell className="text-center">
+                              {entry.treasury ? (
+                                <Badge variant="outline" className="bg-primary/5 gap-1">
+                                  <Landmark size={12} />
+                                  {t(entry.treasury.name_ar || entry.treasury.name, entry.treasury.name)}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewEntry(entry)} title={t('عرض', 'View')}>
@@ -1237,6 +1367,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                         <TableHead className="text-right">{t('المدين', 'Debit')}</TableHead>
                         <TableHead className="text-right">{t('الدائن', 'Credit')}</TableHead>
                         <TableHead className="text-center">{t('الحالة', 'Status')}</TableHead>
+                        <TableHead className="text-center">{t('الخزينة', 'Treasury')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1248,6 +1379,15 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                           <TableCell className="text-right">{formatAmount(entry.total_debit || '0')}</TableCell>
                           <TableCell className="text-right">{formatAmount(entry.total_credit || '0')}</TableCell>
                           <TableCell className="text-center">{getStatusBadge(entry.status)}</TableCell>
+                          <TableCell className="text-center">
+                            {entry.treasury ? (
+                              <Badge variant="outline" className="bg-primary/5">
+                                {t(entry.treasury.name_ar || entry.treasury.name, entry.treasury.name)}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1337,7 +1477,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
 
           <div className="flex-1 overflow-y-auto min-h-0 px-1">
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1">
                     <Calendar size={14} />
@@ -1369,6 +1509,39 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                     placeholder={t('وصف القيد بالعربية', 'Entry description in Arabic')}
                   />
                 </div>
+
+                {/* ✅ حقل الخزينة */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1">
+                    <Landmark size={14} />
+                    {t('الخزينة', 'Treasury')}
+                  </Label>
+                  <Select 
+                    value={formData.treasury_id} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, treasury_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('اختر الخزينة', 'Select treasury')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {treasuriesLoading ? (
+                        <div className="p-2 text-center"><Loader2 size={16} className="animate-spin mx-auto" /></div>
+                      ) : (
+                        treasuries.map((treasury) => (
+                          <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                            <div className="flex items-center gap-2">
+                              <Landmark size={14} className="text-muted-foreground" />
+                              <span>{t(treasury.name_ar || treasury.name, treasury.name)}</span>
+                              <span className="text-xs text-muted-foreground ms-1">
+                                ({Number(treasury.balance).toLocaleString()})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1377,10 +1550,25 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                     {t('بنود القيد', 'Entry Lines')}
                     <span className="text-red-500">*</span>
                   </Label>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddLine}>
-                    <Plus size={16} className="me-1" />
-                    {t('إضافة بند', 'Add Line')}
-                  </Button>
+                  <div className="flex gap-2">
+                    {/* ✅ زر إضافة حساب الخزينة */}
+                    {formData.treasury_id && (
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleAddTreasuryAccount}
+                        className="gap-1 border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <Landmark size={14} className="text-emerald-500" />
+                        {t('إضافة الخزينة', 'Add Treasury')}
+                      </Button>
+                    )}
+                    <Button type="button" variant="outline" size="sm" onClick={handleAddLine}>
+                      <Plus size={16} className="me-1" />
+                      {t('إضافة بند', 'Add Line')}
+                    </Button>
+                  </div>
                 </div>
                 
                 {formErrors.lines && <p className="text-xs text-red-500">{formErrors.lines}</p>}
@@ -1399,45 +1587,67 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {lines.map((line, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <Select value={line.account_id} onValueChange={(v) => handleLineChange(index, 'account_id', v)}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t('اختر حساب', 'Select account')} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {accountsLoading ? (
-                                    <div className="p-2 text-center"><Loader2 size={16} className="animate-spin mx-auto" /></div>
-                                  ) : (
-                                    accounts.map(acc => (
-                                      <SelectItem key={acc.id} value={acc.id.toString()}>
-                                        <span className="font-mono text-muted-foreground me-2">{acc.code}</span>
-                                        {t(acc.name_ar || acc.name, acc.name)}
-                                      </SelectItem>
-                                    ))
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <Input type="number" min="0" step="0.01" value={line.debit || ''} onChange={(e) => handleLineChange(index, 'debit', parseFloat(e.target.value) || 0)} className="text-center" placeholder="0.00" />
-                            </TableCell>
-                            <TableCell>
-                              <Input type="number" min="0" step="0.01" value={line.credit || ''} onChange={(e) => handleLineChange(index, 'credit', parseFloat(e.target.value) || 0)} className="text-center" placeholder="0.00" />
-                            </TableCell>
-                            <TableCell>
-                              <Input value={line.description} onChange={(e) => handleLineChange(index, 'description', e.target.value)} placeholder={t('وصف البند', 'Line description')} />
-                            </TableCell>
-                            <TableCell>
-                              {lines.length > 2 && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveLine(index)}>
-                                  <X size={16} />
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {lines.map((line, index) => {
+                          const isTreasury = line.account_id && accounts.find(a => a.id.toString() === line.account_id)?.account_type === 'treasury';
+                          return (
+                            <TableRow key={index} className={isTreasury ? 'bg-emerald-50/30' : ''}>
+                              <TableCell>
+                                <Select value={line.account_id} onValueChange={(v) => handleLineChange(index, 'account_id', v)}>
+                                  <SelectTrigger className={isTreasury ? 'border-emerald-400 bg-emerald-50/50' : ''}>
+                                    <SelectValue placeholder={t('اختر حساب', 'Select account')} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {accountsLoading ? (
+                                      <div className="p-2 text-center"><Loader2 size={16} className="animate-spin mx-auto" /></div>
+                                    ) : (
+                                      <>
+                                        {/* حسابات الخزينة في الأعلى */}
+                                        {treasuryAccounts.map(acc => (
+                                          <SelectItem key={acc.id} value={acc.id.toString()} className="bg-emerald-50/50">
+                                            <div className="flex items-center gap-2">
+                                              <Landmark size={14} className="text-emerald-600" />
+                                              <span className="font-mono text-muted-foreground me-2">{acc.code}</span>
+                                              <span className="font-medium">{t(acc.name_ar || acc.name, acc.name)}</span>
+                                              <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">
+                                                {t('خزينة', 'Treasury')}
+                                              </Badge>
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                        
+                                        {/* باقي الحسابات */}
+                                        {accounts.filter(a => a.account_type !== 'treasury').map(acc => (
+                                          <SelectItem key={acc.id} value={acc.id.toString()}>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-mono text-muted-foreground me-2">{acc.code}</span>
+                                              <span>{t(acc.name_ar || acc.name, acc.name)}</span>
+                                            </div>
+                                          </SelectItem>
+                                        ))}
+                                      </>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell>
+                                <Input type="number" min="0" step="0.01" value={line.debit || ''} onChange={(e) => handleLineChange(index, 'debit', parseFloat(e.target.value) || 0)} className="text-center" placeholder="0.00" />
+                              </TableCell>
+                              <TableCell>
+                                <Input type="number" min="0" step="0.01" value={line.credit || ''} onChange={(e) => handleLineChange(index, 'credit', parseFloat(e.target.value) || 0)} className="text-center" placeholder="0.00" />
+                              </TableCell>
+                              <TableCell>
+                                <Input value={line.description} onChange={(e) => handleLineChange(index, 'description', e.target.value)} placeholder={t('وصف البند', 'Line description')} />
+                              </TableCell>
+                              <TableCell>
+                                {lines.length > 2 && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveLine(index)}>
+                                    <X size={16} />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -1486,10 +1696,17 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
           {selectedEntry && (
             <div className="flex-1 overflow-y-auto min-h-0 px-1">
               <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 p-4 bg-muted/30 rounded-lg">
                   <div><p className="text-sm text-muted-foreground">{t('رقم القيد', 'Entry #')}</p><p className="font-mono font-medium">{String(selectedEntry.id).padStart(4, '0')}</p></div>
                   <div><p className="text-sm text-muted-foreground">{t('التاريخ', 'Date')}</p><p className="font-medium">{formatDate(selectedEntry.entry_date || selectedEntry.created_at)}</p></div>
                   <div><p className="text-sm text-muted-foreground">{t('الحالة', 'Status')}</p><div className="mt-1">{getStatusBadge(selectedEntry.status)}</div></div>
+                  <div><p className="text-sm text-muted-foreground">{t('الخزينة', 'Treasury')}</p>
+                    {selectedEntry.treasury ? (
+                      <p className="font-medium">{t(selectedEntry.treasury.name_ar || selectedEntry.treasury.name, selectedEntry.treasury.name)}</p>
+                    ) : (
+                      <p className="text-muted-foreground">-</p>
+                    )}
+                  </div>
                   <div><p className="text-sm text-muted-foreground">{t('تاريخ الإنشاء', 'Created')}</p><p className="text-sm">{formatDateTime(selectedEntry.created_at)}</p></div>
                 </div>
 
@@ -1554,14 +1771,11 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
               </Button>
             )}
             {selectedEntry?.status === 'posted' && (
-              <>
-                <Button onClick={() => markAsPaidMutation.mutate(selectedEntry.id)} disabled={markAsPaidMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700">
-                  {markAsPaidMutation.isPending && <Loader2 size={16} className="animate-spin me-2" />}
-                  <CreditCard size={16} className="me-2" />
-                  {t('تحديد كمدفوع', 'Mark as Paid')}
-                </Button>
-              
-              </>
+              <Button onClick={() => markAsPaidMutation.mutate(selectedEntry.id)} disabled={markAsPaidMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700">
+                {markAsPaidMutation.isPending && <Loader2 size={16} className="animate-spin me-2" />}
+                <CreditCard size={16} className="me-2" />
+                {t('تحديد كمدفوع', 'Mark as Paid')}
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>

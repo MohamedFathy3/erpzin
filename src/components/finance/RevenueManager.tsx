@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useApp } from '@/contexts/AppContext'; // ✅ إضافة
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Calendar as CalendarIcon, Filter, TrendingUp, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Calendar as CalendarIcon, Filter, TrendingUp, ChevronLeft, ChevronRight, X, Landmark, Building2, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatDate, cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -23,9 +25,25 @@ interface RevenueManagerProps {
   language: string;
 }
 
+interface Treasury {
+  id: number;
+  name: string;
+  name_ar: string | null;
+  balance: number;
+}
+
+interface Currency {
+  id: number;
+  code: string;
+  name: string;
+  name_ar: string | null;
+  symbol: string;
+}
+
 const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
   const { formatCurrency } = useRegionalSettings();
+  const { userBranch, currentBranch } = useApp(); // ✅ جلب الفرع
   const [showForm, setShowForm] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,14 +54,45 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
   const [perPage, setPerPage] = useState(10);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
+  // ✅ جلب الخزائن
+  const { data: treasuriesData } = useQuery({
+    queryKey: ['treasuries-for-revenue'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index');
+      return response.data;
+    }
+  });
+  const treasuries = treasuriesData?.data || [];
+
+  // ✅ جلب العملات
+  const { data: currenciesData } = useQuery({
+    queryKey: ['currencies-for-revenue'],
+    queryFn: async () => {
+      const response = await api.post('/currency/index');
+      return response.data;
+    }
+  });
+  const currencies = currenciesData?.data || [];
+
   const [formData, setFormData] = useState({
     category: '',
     amount: '',
     description: '',
     date: new Date(),
     payment_method: 'cash',
-    reference_number: ''
+    reference_number: '',
+    treasury_id: '', // ✅ إضافة الخزينة
+    currency_id: '', // ✅ إضافة العملة
+    branch_id: '' // ✅ إضافة الفرع
   });
+
+  // ✅ تعيين الفرع الحالي تلقائياً
+  React.useEffect(() => {
+    const branchId = userBranch?.id || currentBranch?.id;
+    if (branchId) {
+      setFormData(prev => ({ ...prev, branch_id: branchId.toString() }));
+    }
+  }, [userBranch, currentBranch]);
 
   const categories = [
     { value: 'sales', label: language === 'ar' ? 'مبيعات' : 'Sales', color: 'bg-green-500' },
@@ -62,24 +111,12 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
     { value: 'credit_card', label: language === 'ar' ? 'بطاقة' : 'Card' }
   ];
 
-  // بناء الفلاتر للبحث
   const buildFilters = () => {
     const filters: any = {};
-    
-    if (categoryFilter) {
-      filters.category = categoryFilter;
-    }
-    
-    if (searchQuery) {
-      filters.description = searchQuery;
-      
-    }
-
-    if (dateFrom) {
-      filters.date = format(dateFrom, 'yyyy-MM-dd');
-    }
-
-    
+    if (categoryFilter) filters.category = categoryFilter;
+    if (searchQuery) filters.description = searchQuery;
+    if (dateFrom) filters.date_from = format(dateFrom, 'yyyy-MM-dd');
+    if (dateTo) filters.date_to = format(dateTo, 'yyyy-MM-dd');
     return filters;
   };
 
@@ -93,7 +130,6 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
         perPage: perPage,
         paginate: true
       });
-      
       return response.data;
     }
   });
@@ -101,7 +137,6 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
   const revenues = revenueData?.data || [];
   const meta = revenueData?.meta || {};
 
-  // create mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const response = await api.post('/revenue', {
@@ -110,7 +145,10 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
         description: data.description,
         date: format(data.date, 'yyyy-MM-dd'),
         payment_method: data.payment_method,
-        reference_number: data.reference_number
+        reference_number: data.reference_number,
+        treasury_id: data.treasury_id ? parseInt(data.treasury_id) : null,
+        currency_id: data.currency_id ? parseInt(data.currency_id) : null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null
       });
       return response.data;
     },
@@ -124,7 +162,6 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
     }
   });
 
-  // update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
       const response = await api.put(`/revenue/${id}`, {
@@ -134,7 +171,10 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
         description: data.description,
         date: format(data.date, 'yyyy-MM-dd'),
         payment_method: data.payment_method,
-        reference_number: data.reference_number
+        reference_number: data.reference_number,
+        treasury_id: data.treasury_id ? parseInt(data.treasury_id) : null,
+        currency_id: data.currency_id ? parseInt(data.currency_id) : null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null
       });
       return response.data;
     },
@@ -148,11 +188,9 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
     }
   });
 
-  // delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
       const response = await api.delete('/revenue/delete', {
-
         data: { items: ids }
       });
       return response.data;
@@ -176,7 +214,10 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
       description: '',
       date: new Date(),
       payment_method: 'cash',
-      reference_number: ''
+      reference_number: '',
+      treasury_id: '',
+      currency_id: '',
+      branch_id: userBranch?.id?.toString() || currentBranch?.id?.toString() || ''
     });
   };
 
@@ -188,7 +229,10 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
       description: revenue.description || '',
       date: new Date(revenue.date),
       payment_method: revenue.payment_method || 'cash',
-      reference_number: revenue.reference_number || ''
+      reference_number: revenue.reference_number || '',
+      treasury_id: revenue.treasury_id?.toString() || '',
+      currency_id: revenue.currency_id?.toString() || '',
+      branch_id: revenue.branch_id?.toString() || userBranch?.id?.toString() || currentBranch?.id?.toString() || ''
     });
     setShowForm(true);
   };
@@ -257,18 +301,18 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
     );
   };
 
-  // حساب إجمالي الإيرادات
   const totalAmount = revenues.reduce((sum: number, rev: any) => sum + Number(rev.amount), 0);
 
-  function handlePageChange(arg0: number): void {
-    throw new Error('Function not implemented.');
-  }
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= meta.last_page) {
+      setCurrentPage(page);
+    }
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-wrap items-center gap-4">
-          {/* بحث */}
           <div className="relative">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
             <Input
@@ -282,7 +326,6 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
             />
           </div>
 
-          {/* فلتر الفئة */}
           <Select 
             value={categoryFilter} 
             onValueChange={(value) => {
@@ -307,12 +350,11 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
             </SelectContent>
           </Select>
 
-          {/* فلتر التاريخ من */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-40 justify-start">
                 <CalendarIcon className="me-2 h-4 w-4" />
-                {dateFrom ? format(dateFrom, 'yyyy/MM/dd') : (language === 'ar' ? ' تاريخ' : ' date')}
+                {dateFrom ? format(dateFrom, 'yyyy/MM/dd') : (language === 'ar' ? 'من تاريخ' : 'From date')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -327,10 +369,25 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
             </PopoverContent>
           </Popover>
 
-          {/* فلتر التاريخ إلى */}
-         
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-40 justify-start">
+                <CalendarIcon className="me-2 h-4 w-4" />
+                {dateTo ? format(dateTo, 'yyyy/MM/dd') : (language === 'ar' ? 'إلى تاريخ' : 'To date')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={dateTo}
+                onSelect={(date) => {
+                  setDateTo(date);
+                  setCurrentPage(1);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
 
-          {/* زر مسح الفلاتر */}
           {(searchQuery || categoryFilter || dateFrom || dateTo) && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-2">
               <X size={16} />
@@ -411,19 +468,21 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                   <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                   <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
                   <TableHead>{language === 'ar' ? 'المرجع' : 'Reference'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                     </TableCell>
                   </TableRow>
                 ) : revenues.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       {language === 'ar' ? 'لا توجد إيرادات' : 'No revenues found'}
                     </TableCell>
                   </TableRow>
@@ -455,6 +514,24 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {revenue.reference_number || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {revenue.treasury ? (
+                          <Badge variant="outline" className="bg-primary/5 gap-1">
+                            <Landmark size={12} />
+                            {language === 'ar' 
+                              ? (revenue.treasury.name_ar || revenue.treasury.name)
+                              : revenue.treasury.name}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {revenue.currency ? (
+                          <Badge variant="outline" className="bg-blue-50/50 gap-1">
+                            <DollarSign size={12} />
+                            {revenue.currency.code}
+                          </Badge>
+                        ) : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -493,7 +570,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
+              onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
             >
               <ChevronRight size={16} />
@@ -511,16 +588,12 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                 }
                 
                 if (pageNum > 0 && pageNum <= meta.last_page) {
-                  function handlePageChange(pageNum: number): void {
-                    throw new Error('Function not implemented.');
-                  }
-
                   return (
                     <Button
                       key={pageNum}
                       variant={currentPage === pageNum ? "default" : "outline"}
                       size="sm"
-                      onClick={() => handlePageChange(pageNum)}
+                      onClick={() => goToPage(pageNum)}
                       className="w-10"
                     >
                       {pageNum}
@@ -533,7 +606,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
+              onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === meta.last_page}
             >
               {language === 'ar' ? 'التالي' : 'Next'}
@@ -543,8 +616,9 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
         </div>
       )}
 
+      {/* Dialog Form */}
       <Dialog open={showForm} onOpenChange={handleCloseForm}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingRevenue
@@ -645,6 +719,77 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                 onChange={(e) => setFormData(prev => ({ ...prev, reference_number: e.target.value }))}
                 placeholder={language === 'ar' ? 'رقم الفاتورة أو المرجع' : 'Invoice or reference number'}
               />
+            </div>
+
+            {/* ✅ حقل الخزينة */}
+<div className="space-y-2">
+  <Label className="flex items-center gap-1">
+    <Landmark size={14} />
+    {language === 'ar' ? 'الخزينة' : 'Treasury'}
+  </Label>
+  <Select
+    value={formData.treasury_id || "none"}
+    onValueChange={(v) => setFormData(prev => ({ ...prev, treasury_id: v === "none" ? "" : v }))}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="none">{language === 'ar' ? 'بدون خزينة' : 'No treasury'}</SelectItem>
+      {treasuries.map((treasury: Treasury) => (
+        <SelectItem key={treasury.id} value={treasury.id.toString()}>
+          <div className="flex items-center gap-2">
+            <Landmark size={14} className="text-muted-foreground" />
+            {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
+            <span className="text-xs text-muted-foreground">
+              ({formatCurrency(Number(treasury.balance))})
+            </span>
+          </div>
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+
+         {/* ✅ حقل العملة */}
+<div className="space-y-2">
+  <Label className="flex items-center gap-1">
+    <DollarSign size={14} />
+    {language === 'ar' ? 'العملة' : 'Currency'}
+  </Label>
+  <Select
+    value={formData.currency_id || "none"}
+    onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v === "none" ? "" : v }))}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="none">{language === 'ar' ? 'العملة الافتراضية' : 'Default currency'}</SelectItem>
+      {currencies.map((currency: Currency) => (
+        <SelectItem key={currency.id} value={currency.id.toString()}>
+          <div className="flex items-center gap-2">
+            <DollarSign size={14} className="text-muted-foreground" />
+            {currency.code} - {language === 'ar' ? (currency.name_ar || currency.name) : currency.name}
+          </div>
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+
+            {/* ✅ حقل الفرع (مخفي أو للقراءة فقط) */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <Building2 size={14} />
+                {language === 'ar' ? 'الفرع' : 'Branch'}
+              </Label>
+              <Input
+                value={userBranch?.name || currentBranch?.name || (language === 'ar' ? 'الفرع الرئيسي' : 'Main Branch')}
+                disabled
+                className="bg-muted/50"
+              />
+              <input type="hidden" value={formData.branch_id} />
             </div>
           </div>
 

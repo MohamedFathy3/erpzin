@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
@@ -21,13 +22,14 @@ import {
   Trash2, 
   Calendar as CalendarIcon,
   Filter,
-  TrendingDown,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Landmark,
+  DollarSign,
+  Building2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
 import api from '@/lib/api';
 
 interface ExpenseManagerProps {
@@ -45,6 +47,27 @@ interface Expense {
   payment_method: string;
   payment_method_arabic: string;
   reference_number: string | null;
+  treasury_id?: number | null;
+  currency_id?: number | null;
+  branch_id?: number | null;
+  treasury?: {
+    id: number;
+    name: string;
+    name_ar: string | null;
+    balance: string;
+  };
+  currency?: {
+    id: number;
+    code: string;
+    name: string;
+    name_ar: string | null;
+    symbol: string;
+  };
+  branch?: {
+    id: number;
+    name: string;
+    name_ar: string | null;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -52,25 +75,58 @@ interface Expense {
 const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
   const { formatCurrency } = useRegionalSettings();
+  const { userBranch, currentBranch } = useApp();
+  
   const [showForm, setShowForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all'); // ✅ القيمة الافتراضية all بدلاً من ''
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
+  // ✅ جلب الخزائن
+  const { data: treasuriesData } = useQuery({
+    queryKey: ['treasuries-for-expense'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index');
+      return response.data;
+    }
+  });
+  const treasuries = treasuriesData?.data || [];
+
+  // ✅ جلب العملات
+  const { data: currenciesData } = useQuery({
+    queryKey: ['currencies-for-expense'],
+    queryFn: async () => {
+      const response = await api.post('/currency/index');
+      return response.data;
+    }
+  });
+  const currencies = currenciesData?.data || [];
+
   // Form state
   const [formData, setFormData] = useState({
-    category: '',
+    category: 'all', // ✅ القيمة الافتراضية all
     amount: '',
     description: '',
     date: new Date(),
     payment_method: 'cash',
-    reference_number: ''
+    reference_number: '',
+    treasury_id: 'none',
+    currency_id: 'none',
+    branch_id: ''
   });
+
+  // ✅ تعيين الفرع الحالي تلقائياً
+  useEffect(() => {
+    const branchId = userBranch?.id || currentBranch?.id;
+    if (branchId) {
+      setFormData(prev => ({ ...prev, branch_id: branchId.toString() }));
+    }
+  }, [userBranch, currentBranch]);
 
   const categories = [
     { value: 'rent', label: language === 'ar' ? 'إيجار' : 'Rent', color: 'bg-blue-500' },
@@ -92,23 +148,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     { value: 'credit_card', label: language === 'ar' ? 'بطاقة' : 'Credit Card' }
   ];
 
-  // بناء الفلاتر للبحث
   const buildFilters = () => {
     const filters: any = {};
-    
-    if (categoryFilter) {
-      filters.category = categoryFilter;
-    }
-    
-    if (searchQuery) {
-      filters.description = searchQuery;
-    }
-
-    if (dateFrom) {
-      filters.date = format(dateFrom, 'yyyy-MM-dd');
-    }
-
-   
+    // ✅ لا نرسل الفئة إذا كانت 'all'
+    if (categoryFilter && categoryFilter !== 'all') filters.category = categoryFilter;
+    if (searchQuery) filters.description = searchQuery;
+    if (dateFrom) filters.date_from = format(dateFrom, 'yyyy-MM-dd');
+    if (dateTo) filters.date_to = format(dateTo, 'yyyy-MM-dd');
     return filters;
   };
 
@@ -123,7 +169,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
         perPage: perPage,
         paginate: true
       });
-      
       return response.data;
     }
   });
@@ -135,12 +180,15 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const response = await api.post('/finance', {
-        category: data.category,
+        category: data.category === 'all' ? '' : data.category, // ✅ تحويل all إلى فارغ للسيرفر
         amount: parseFloat(data.amount),
         description: data.description,
         date: format(data.date, 'yyyy-MM-dd'),
         payment_method: data.payment_method,
-        reference_number: data.reference_number
+        reference_number: data.reference_number,
+        treasury_id: data.treasury_id && data.treasury_id !== 'none' ? parseInt(data.treasury_id) : null,
+        currency_id: data.currency_id && data.currency_id !== 'none' ? parseInt(data.currency_id) : null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null
       });
       return response.data;
     },
@@ -158,12 +206,15 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
       const response = await api.put(`/finance/${id}`, {
-        category: data.category,
+        category: data.category === 'all' ? '' : data.category, // ✅ تحويل all إلى فارغ للسيرفر
         amount: parseFloat(data.amount),
         description: data.description,
         date: format(data.date, 'yyyy-MM-dd'),
         payment_method: data.payment_method,
-        reference_number: data.reference_number
+        reference_number: data.reference_number,
+        treasury_id: data.treasury_id && data.treasury_id !== 'none' ? parseInt(data.treasury_id) : null,
+        currency_id: data.currency_id && data.currency_id !== 'none' ? parseInt(data.currency_id) : null,
+        branch_id: data.branch_id ? parseInt(data.branch_id) : null
       });
       return response.data;
     },
@@ -199,30 +250,36 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     setShowForm(false);
     setEditingExpense(null);
     setFormData({
-      category: '',
+      category: 'all',
       amount: '',
       description: '',
       date: new Date(),
       payment_method: 'cash',
-      reference_number: ''
+      reference_number: '',
+      treasury_id: 'none',
+      currency_id: 'none',
+      branch_id: userBranch?.id?.toString() || currentBranch?.id?.toString() || ''
     });
   };
 
   const handleEdit = (expense: Expense) => {
     setEditingExpense(expense);
     setFormData({
-      category: expense.category,
+      category: expense.category || 'all',
       amount: expense.amount.toString(),
       description: expense.description || '',
       date: new Date(expense.date),
       payment_method: expense.payment_method || 'cash',
-      reference_number: expense.reference_number || ''
+      reference_number: expense.reference_number || '',
+      treasury_id: expense.treasury_id?.toString() || 'none',
+      currency_id: expense.currency_id?.toString() || 'none',
+      branch_id: expense.branch_id?.toString() || userBranch?.id?.toString() || currentBranch?.id?.toString() || ''
     });
     setShowForm(true);
   };
 
   const handleSubmit = () => {
-    if (!formData.category || !formData.amount) {
+    if (!formData.category || formData.category === 'all' || !formData.amount) {
       toast.error(language === 'ar' ? 'يرجى ملء الحقول المطلوبة' : 'Please fill required fields');
       return;
     }
@@ -268,7 +325,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   };
 
   const clearFilters = () => {
-    setCategoryFilter('');
+    setCategoryFilter('all');
     setSearchQuery('');
     setDateFrom(undefined);
     setDateTo(undefined);
@@ -285,222 +342,160 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     );
   };
 
-  // حساب إجمالي المصروفات
   const totalAmount = expenses.reduce((sum: number, exp: any) => sum + Number(exp.amount), 0);
 
   return (
     <div className="space-y-4">
-      {/* Header with filters */}
+      {/* Header & Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <Input
-              placeholder={language === 'ar' ? 'بحث في الوصف...' : 'Search description...'}
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="ps-10 w-64"
-            />
-          </div>
-
-          {/* Category filter */}
-          <Select 
-            value={categoryFilter} 
-            onValueChange={(value) => {
-              setCategoryFilter(value);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <Filter size={16} className="me-2" />
-              <SelectValue placeholder={language === 'ar' ? 'الفئة' : 'Category'} />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map(cat => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${cat.color}`} />
-                    {cat.label}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Date from filter */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-40 justify-start">
-                <CalendarIcon className="me-2 h-4 w-4" />
-                {dateFrom ? format(dateFrom, 'yyyy/MM/dd') : (language === 'ar' ? 'من تاريخ' : 'From date')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={dateFrom}
-                onSelect={(date) => {
-                  setDateFrom(date);
-                  setCurrentPage(1);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-
-          {/* Date to filter */}
-        
-
-          {/* Clear filters button */}
-          {(searchQuery || categoryFilter || dateFrom || dateTo) && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-2">
-              <X size={16} />
-              {language === 'ar' ? 'مسح الكل' : 'Clear all'}
-            </Button>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold tracking-tight">
+            {language === 'ar' ? 'المصروفات' : 'Expenses'}
+          </h2>
+          {selectedItems.length > 0 && (
+            <Badge variant="destructive" className="ml-2">
+              {selectedItems.length} {language === 'ar' ? 'محدد' : 'selected'}
+            </Badge>
           )}
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedItems.length > 0 && (
-            <Button variant="destructive" size="sm" onClick={handleDeleteSelected} className="gap-2">
-              <Trash2 size={16} />
-              {language === 'ar' ? `حذف (${selectedItems.length})` : `Delete (${selectedItems.length})`}
+            <Button variant="destructive" size="sm" onClick={handleDeleteSelected}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              {language === 'ar' ? 'حذف المحدد' : 'Delete Selected'}
             </Button>
           )}
-          <Button onClick={() => setShowForm(true)} className="gap-2">
-            <Plus size={18} />
-            {language === 'ar' ? 'مصروف جديد' : 'New Expense'}
+          <Button onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'إضافة مصروف' : 'Add Expense'}
           </Button>
         </div>
       </div>
 
-      {/* Summary Card */}
-      <Card className="bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-200 dark:border-red-800">
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <TrendingDown className="h-8 w-8 text-red-600" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'إجمالي المصروفات (الصفحة الحالية)' : 'Total Expenses (Current Page)'}
-                </p>
-                <p className="text-2xl font-bold text-red-600">
-                  {formatCurrency(totalAmount)}
-                </p>
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={language === 'ar' ? 'بحث...' : 'Search...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="text-lg px-4 py-2">
-                {meta.total || 0} {language === 'ar' ? 'إجمالي المصروفات' : 'total expenses'}
-              </Badge>
-              <Select value={perPage.toString()} onValueChange={(value) => {
-                setPerPage(parseInt(value));
-                setCurrentPage(1);
-              }}>
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* ✅ تم إصلاح الـ Select هنا لاستخدام 'all' بدلاً من '' */}
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder={language === 'ar' ? 'الفئة' : 'Category'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{language === 'ar' ? 'الكل' : 'All'}</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-[150px] justify-start">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFrom ? format(dateFrom, 'yyyy/MM/dd') : (language === 'ar' ? 'من' : 'From')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} />
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full sm:w-[150px] justify-start">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? format(dateTo, 'yyyy/MM/dd') : (language === 'ar' ? 'إلى' : 'To')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} />
+                </PopoverContent>
+              </Popover>
+              <Button variant="ghost" size="icon" onClick={clearFilters}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Expenses Table */}
+      {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <ScrollArea className="h-[500px]">
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
-                    <input
-                      type="checkbox"
+                  <TableHead className="w-[40px]">
+                    <input 
+                      type="checkbox" 
                       checked={selectedItems.length === expenses.length && expenses.length > 0}
                       onChange={handleSelectAll}
                       className="rounded border-gray-300"
                     />
                   </TableHead>
                   <TableHead>{language === 'ar' ? 'الفئة' : 'Category'}</TableHead>
-                  <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
                   <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
-                  <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'الوصف' : 'Description'}</TableHead>
                   <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
-                  <TableHead>{language === 'ar' ? 'المرجع' : 'Reference'}</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
+                  <TableHead className="text-right">{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                     </TableCell>
                   </TableRow>
                 ) : expenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {language === 'ar' ? 'لا توجد مصروفات' : 'No expenses found'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  expenses.map((expense: Expense) => (
+                  expenses.map((expense: any) => (
                     <TableRow key={expense.id}>
                       <TableCell>
-                        <input
-                          type="checkbox"
+                        <input 
+                          type="checkbox" 
                           checked={selectedItems.includes(expense.id)}
                           onChange={() => handleSelectItem(expense.id)}
                           className="rounded border-gray-300"
                         />
                       </TableCell>
                       <TableCell>{getCategoryBadge(expense.category)}</TableCell>
-                      <TableCell className="max-w-48 truncate">
+                      <TableCell className="font-medium text-red-600">
+                        {formatCurrency(Number(expense.amount))}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">
                         {expense.description || '-'}
                       </TableCell>
-                      <TableCell className="font-bold text-red-600">
-                        {expense.formatted_amount || formatCurrency(Number(expense.amount))}
-                      </TableCell>
+                      <TableCell>{expense.date_formatted}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">
-                          {language === 'ar' 
-                            ? (expense.payment_method_arabic || paymentMethods.find(p => p.value === expense.payment_method)?.label || expense.payment_method)
-                            : (paymentMethods.find(p => p.value === expense.payment_method)?.label || expense.payment_method)
-                          }
-                        </Badge>
+                        {language === 'ar' ? expense.payment_method_arabic : expense.payment_method}
                       </TableCell>
-                      <TableCell>
-                        {expense.date_formatted || format(new Date(expense.date), 'yyyy/MM/dd', { locale: language === 'ar' ? ar : undefined })}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {expense.reference_number || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(expense)}
-                          >
-                            <Edit size={16} />
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)}>
+                            <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(expense.id)}
-                          >
-                            <Trash2 size={16} />
+                          <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(expense.id)}>
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -509,72 +504,41 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
+          
+          {/* Pagination & Summary Footer */}
+          <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              {language === 'ar' ? 'الإجمالي' : 'Total'}: <span className="font-bold text-red-600">{formatCurrency(totalAmount)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm">
+                {currentPage} / {meta.last_page || 1}
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                disabled={currentPage === (meta.last_page || 1)}
+                onClick={() => setCurrentPage(p => p + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {meta.last_page > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            {language === 'ar' 
-              ? `عرض ${meta.from || 0} إلى ${meta.to || 0} من ${meta.total || 0} نتيجة`
-              : `Showing ${meta.from || 0} to ${meta.to || 0} of ${meta.total || 0} results`
-            }
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronRight size={16} />
-              {language === 'ar' ? 'السابق' : 'Previous'}
-            </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, meta.last_page) }, (_, i) => {
-                let pageNum = currentPage;
-                if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= meta.last_page - 2) {
-                  pageNum = meta.last_page - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                
-                if (pageNum > 0 && pageNum <= meta.last_page) {
-                  return (
-                    <Button
-                      key={pageNum}
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(pageNum)}
-                      className="w-10"
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                }
-                return null;
-              })}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(meta.last_page, prev + 1))}
-              disabled={currentPage === meta.last_page}
-            >
-              {language === 'ar' ? 'التالي' : 'Next'}
-              <ChevronLeft size={16} />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Add/Edit Dialog */}
+      {/* Dialog Form */}
       <Dialog open={showForm} onOpenChange={handleCloseForm}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {editingExpense 
@@ -587,8 +551,9 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{language === 'ar' ? 'الفئة' : 'Category'} *</Label>
+                {/* ✅ تم إصلاح الـ Select هنا أيضاً لاستخدام 'all' بدلاً من '' */}
                 <Select 
-                  value={formData.category} 
+                  value={formData.category || 'all'} 
                   onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
                 >
                   <SelectTrigger>
@@ -675,6 +640,77 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
                 onChange={(e) => setFormData(prev => ({ ...prev, reference_number: e.target.value }))}
                 placeholder={language === 'ar' ? 'رقم الإيصال أو المرجع' : 'Receipt or reference number'}
               />
+            </div>
+
+            {/* ✅ حقل الخزينة */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <Landmark size={14} />
+                {language === 'ar' ? 'الخزينة' : 'Treasury'}
+              </Label>
+              <Select
+                value={formData.treasury_id}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, treasury_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{language === 'ar' ? 'بدون خزينة' : 'No treasury'}</SelectItem>
+                  {treasuries.map((treasury: any) => (
+                    <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <Landmark size={14} className="text-muted-foreground" />
+                        {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
+                        <span className="text-xs text-muted-foreground">
+                          ({formatCurrency(Number(treasury.balance))})
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ✅ حقل العملة */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <DollarSign size={14} />
+                {language === 'ar' ? 'العملة' : 'Currency'}
+              </Label>
+              <Select
+                value={formData.currency_id}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, currency_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{language === 'ar' ? 'العملة الافتراضية' : 'Default currency'}</SelectItem>
+                  {currencies.map((currency: any) => (
+                    <SelectItem key={currency.id} value={currency.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <DollarSign size={14} className="text-muted-foreground" />
+                        {currency.code} - {language === 'ar' ? (currency.name_ar || currency.name) : currency.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ✅ حقل الفرع */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <Building2 size={14} />
+                {language === 'ar' ? 'الفرع' : 'Branch'}
+              </Label>
+              <Input
+                value={userBranch?.name || currentBranch?.name || (language === 'ar' ? 'الفرع الرئيسي' : 'Main Branch')}
+                disabled
+                className="bg-muted/50"
+              />
+              <input type="hidden" value={formData.branch_id} />
             </div>
           </div>
 

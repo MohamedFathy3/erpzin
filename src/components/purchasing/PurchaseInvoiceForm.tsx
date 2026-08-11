@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // components/purchase/PurchaseInvoiceForm.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -165,8 +166,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       treasury_id: treasuryExists ? invoiceData.treasury_id?.toString() || '' : ''
     });
 
+    // ✅ استخدام crypto.randomUUID() لتوليد Key فريد 100%
     const loadedItems: InvoiceItem[] = (invoiceData.items || []).map((item: any, index: number) => ({
-      id: `edit-${index}-${Date.now()}`,
+      id: crypto.randomUUID(),
       product_id: item.product_id,
       product_variant_id: item.product_variant_id,
       product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,
@@ -344,6 +346,23 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   // ========== Validation ==========
   const validateForm = (): boolean => {
     const newErrors = PurchaseInvoiceValidator.validateForm(formData, items, language);
+
+    // ✅ التحقق من أن تاريخ الفاتورة لا يتجاوز تاريخ الاستحقاق
+    if (formData.invoice_date && formData.due_date) {
+      const invoiceDate = new Date(formData.invoice_date);
+      const dueDate = new Date(formData.due_date);
+      
+      // تجاهل الوقت والمقارنة باليوم فقط
+      invoiceDate.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      if (invoiceDate > dueDate) {
+        newErrors.invoice_date = language === 'ar' 
+          ? 'تاريخ الفاتورة لا يمكن أن يكون بعد تاريخ الاستحقاق' 
+          : 'Invoice date cannot be after due date';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -561,9 +580,9 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                               </TableCell>
                             </TableRow>
                           ) : (
-                            items.map((item, index) => (
+                            items.map((item) => (
                               <TableRow key={item.id}>
-                                <TableCell className="py-1.5 text-xs text-center">{index + 1}</TableCell>
+                                <TableCell className="py-1.5 text-xs text-center"> {/* تم إزالة index وعرض الرقم بشكل منفصل لو حبيت */}</TableCell>
                                 <TableCell className="py-1.5">
                                   <div>
                                     <p className="font-medium text-xs">{item.product_name}</p>
@@ -656,7 +675,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                   </CardContent>
                 </Card>
 
-                {/* Payment Section */}
                 {/* Payment Section */}
                 <Card className="border-primary/20 bg-primary/5">
                   <CardContent className="p-4">
