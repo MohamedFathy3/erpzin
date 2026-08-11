@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import InvoiceTemplate from './InvoiceTemplate';
-import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X, RotateCcw } from 'lucide-react';
+import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X, RotateCcw, Clock, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { saveOrderOffline } from '@/lib/offlineDB';
 import { toast } from '@/hooks/use-toast';
@@ -13,6 +13,8 @@ import { Button } from '../ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import api from '@/lib/api';
+import { useQuery } from '@tanstack/react-query'; // ✅ إضافة useQuery
 
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
@@ -98,9 +100,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   deliveryPerson,
   salesRepresentative,
   supplier,
-  mode = 'return', // ✅ الـ default بقى return
-  shiftId,
-  branchId,
+  mode = 'return',
+  shiftId: shiftIdFromProps, // ✅ إعادة تسمية shiftId من props
+  branchId: branchIdFromProps,
   branchName,
   branchNameAr,
   branchPhone,
@@ -131,6 +133,48 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   const { activeTaxRates } = useCurrencyTax();
   const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
+
+  // ✅ جلب الوردية الحالية من الـ API
+  const { 
+    data: currentShiftFromAPI,
+    isLoading: shiftLoading,
+    refetch: refetchShift
+  } = useQuery({
+    queryKey: ['current-shift-modal'],
+    queryFn: async () => {
+      try {
+        console.log('🔄 Fetching current shift from API (inside modal)...');
+        const response = await api.get('/shifts/current');
+        console.log('📥 Shift API response (modal):', response.data);
+        
+        if (response.data.status && response.data.data) {
+          console.log('✅ Shift found in modal:', response.data.data.id);
+          return response.data.data;
+        }
+        console.log('⚠️ No active shift found in modal');
+        return null;
+      } catch (error) {
+        console.error('❌ Error fetching current shift (modal):', error);
+        return null;
+      }
+    },
+    // ✅ يجيب الـ shift فور فتح المودال
+    enabled: isOpen, // فقط لما المودال مفتوح
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 10000,
+  });
+
+  // ✅ استخدم shiftId من الـ API أو من الـ props
+  const actualShiftId = currentShiftFromAPI?.id || shiftIdFromProps;
+  const actualBranchId = branchIdFromProps || user?.branch_id || null;
+
+  useEffect(() => {
+    if (currentShiftFromAPI) {
+      console.log('🔄 Shift loaded in modal from API:', currentShiftFromAPI);
+      console.log('🆔 Shift ID in modal:', currentShiftFromAPI.id);
+    }
+  }, [currentShiftFromAPI]);
 
   const handlePrint = useReactToPrint({
     contentRef: invoiceRef,
@@ -245,10 +289,24 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       let invoiceNumberFromServer = '';
       let success = false;
 
+      // ✅ استخدام الـ shiftId من الـ API
+      const shiftIdValue = actualShiftId ? parseInt(String(actualShiftId)) : null;
+      const branchIdValue = actualBranchId ? parseInt(String(actualBranchId)) : null;
+
+      console.log('🔑 Shift ID from API:', currentShiftFromAPI);
+      console.log('🔑 Shift ID from props:', shiftIdFromProps);
+      console.log('🔑 Final Shift ID:', actualShiftId);
+      console.log('🔑 Shift ID parsed:', shiftIdValue);
+      console.log('🏢 Branch ID:', actualBranchId);
+      console.log('🏢 Branch ID parsed:', branchIdValue);
+      console.log('📋 Mode:', mode);
+
       // ==================== RETURN MODE (الافتراضي) ====================
       if (mode === 'return') {
+        const customerIdValue = customer?.id ? parseInt(customer.id) : null;
+
         const returnPayload = {
-          sales_invoice_id: customer?.id ? parseInt(customer.id) : null,
+          sales_invoice_id: customerIdValue,
           return_method: paymentMethod,
           note: language === 'ar' ? 'مرتجع منتجات' : 'Products return',
           items: cartItems.map(item => ({
@@ -257,27 +315,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             price: item.price,
             reason: item.reason || 'defective'
           })),
-          branch_id: branchId ? parseInt(String(branchId)) : null,
-          shift_id: shiftId ? parseInt(String(shiftId)) : null,
+          branch_id: branchIdValue,
+          shift_id: shiftIdValue,
         };
 
-        console.log('📦 Return Payload:', returnPayload);
+        console.log('📦 Return Payload:', JSON.stringify(returnPayload, null, 2));
 
-        const response = await fetch('/api/invoice-return/direct/store', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(returnPayload)
-        });
+        // ✅ استخدم api بدلاً من fetch
+        const response = await api.post('/invoice-return/direct/store', returnPayload);
+        const result = response.data;
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create return');
-        }
-
-        const result = await response.json();
         console.log('📦 Return response:', result);
 
         invoiceId = result.data?.id || `RET-${Date.now()}`;
@@ -309,8 +356,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           subtotal: subtotal,
           tax: tax,
           total: total,
-          shift_id: shiftId ? parseInt(String(shiftId)) : null,
-          branch_id: branchId ? parseInt(String(branchId)) : null,
+          shift_id: shiftIdValue,
+          branch_id: branchIdValue,
           delivery_id: deliveryPerson ? parseInt(String(deliveryPerson.id)) : null,
         };
 
@@ -344,21 +391,14 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             throw new Error('Failed to save offline');
           }
         } else {
-          response = await fetch('/api/invoice/store', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: JSON.stringify(invoiceData)
-          });
+          response = await api.post('/invoice/store', invoiceData);
 
           if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Failed to create invoice');
           }
 
-          const result = await response.json();
+          const result = response.data;
           console.log('📦 Server response:', result);
           
           invoiceId = result.data?.id || `INV-${Date.now()}`;
@@ -442,7 +482,13 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         }
       }
     } catch (error: any) {
-      console.error('Error:', error);
+      console.error('❌ Error in handleSaveAndPrint:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: error.response?.data?.message || error.message || (language === 'ar' ? 'فشل في الحفظ' : 'Failed to save'),
@@ -634,6 +680,19 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
                 <span>{language === 'ar' ? 'بدون نت' : 'Offline'}</span>
               </div>
             )}
+            {/* ✅ عرض الـ shift ID في الـ header */}
+            {actualShiftId && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-full text-xs">
+                <Clock size={12} />
+                <span>{language === 'ar' ? 'وردية' : 'Shift'} #{actualShiftId}</span>
+              </div>
+            )}
+            {shiftLoading && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-full text-xs">
+                <Loader2 size={12} className="animate-spin" />
+                <span>{language === 'ar' ? 'جاري...' : 'Loading...'}</span>
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -644,6 +703,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div className="p-6">
+          {/* ... باقي الكود كما هو ... */}
           {/* Customer/Supplier Info */}
           {(customer || supplier || deliveryPerson) && (
             <div className="flex gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
@@ -753,7 +813,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         <div className="p-4 border-t border-border bg-muted/30 space-y-2">
           <Button
             onClick={handleSaveAndPrintNow}
-            disabled={!canComplete() || isProcessing}
+            disabled={!canComplete() || isProcessing || shiftLoading}
             className={cn(
               'w-full h-14 text-lg font-bold relative overflow-hidden',
               mode === 'return'
@@ -762,10 +822,13 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               'text-white transition-all duration-300'
             )}
           >
-            {isProcessing ? (
+            {isProcessing || shiftLoading ? (
               <span className="flex items-center gap-2">
                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                {language === 'ar' ? 'جاري المعالجة...' : 'Processing...'}
+                {shiftLoading 
+                  ? (language === 'ar' ? 'جلب الوردية...' : 'Fetching shift...')
+                  : (language === 'ar' ? 'جاري المعالجة...' : 'Processing...')
+                }
               </span>
             ) : (
               <span className="flex items-center justify-center gap-3">
@@ -782,7 +845,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           <div className="flex gap-2">
             <Button
               onClick={handleComplete}
-              disabled={!canComplete() || isProcessing}
+              disabled={!canComplete() || isProcessing || shiftLoading}
               variant="outline"
               className={cn(
                 'flex-1 h-12 relative',
@@ -799,8 +862,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               </kbd>
             </Button>
 
-            <Button
-              onClick={onClose}
+            <Button              onClick={onClose}
               variant="ghost"
               className="h-12 px-6"
             >
