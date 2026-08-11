@@ -752,201 +752,194 @@ const POS: React.FC = () => {
     <TooltipProvider delayDuration={300}>
       <div className="h-screen flex flex-col bg-background overflow-hidden">
         {/* POS Header */}
-        <header className="h-14 bg-gradient-to-r from-rose-600 to-rose-700 flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-white" />
-              <h1 className="text-xl font-bold text-white">
-                {language === 'ar' ? 'مرتجع نقطه البيع' : 'pos Return'}
-              </h1>
-            </div>
-            
-            {/* Offline/Online Status */}
-            <div className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
-              isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
-            )}>
-              {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
-              <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
-            </div>
-            
-            {/* Branch Info */}
-            {(userBranch || currentBranch) && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
-                <Building2 size={14} />
-                <span>
-                  {userBranch 
-                    ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
-                    : currentBranch 
-                      ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
-                      : null
-                  }
-                </span>
-              </div>
-            )}
-          </div>
+{/* POS Header */}
+<header className="h-14 bg-gradient-to-r from-rose-600 to-rose-700 flex items-center justify-between px-4 flex-shrink-0">
+  <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2">
+      <RotateCcw className="h-5 w-5 text-white" />
+      <h1 className="text-xl font-bold text-white">
+        {language === 'ar' ? 'مرتجع نقطه البيع' : 'POS Return'}
+      </h1>
+    </div>
+    
+    {/* Offline/Online Status */}
+    <div className={cn(
+      "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
+      isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+    )}>
+      {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
+      <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
+    </div>
+    
+    {/* Branch Info */}
+    {(userBranch || currentBranch) && (
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-white/20 text-white rounded-full text-sm font-medium">
+        <Building2 size={14} />
+        <span>
+          {userBranch 
+            ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
+            : currentBranch 
+              ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
+              : null
+          }
+        </span>
+      </div>
+    )}
+  </div>
 
-          <div className="flex items-center gap-1">
-            {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
-              {/* Customer */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowCustomerSelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedCustomer 
-                    ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" 
-                    : "text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/20"
-                )}
-              >
-                <User size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'العميل' : 'Customer'}</span>
-              </Button>
+  <div className="flex items-center gap-1">
+    {/* Quick Action Buttons - مع ألوان أفضل */}
+    <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
+      {/* Customer */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => setShowCustomerSelector(true)}
+        className={cn(
+          "gap-1.5 px-2 text-white/80 hover:text-white hover:bg-white/15",
+          selectedCustomer && "bg-white/20 text-white"
+        )}
+      >
+        <User size={16} />
+        <span className="text-xs font-medium hidden sm:inline">{language === 'ar' ? 'العميل' : 'Customer'}</span>
+      </Button>
 
-              {/* Delivery Man Button */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowDeliverySelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedDelivery 
-                    ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20" 
-                    : "text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/20"
-                )}
-              >
-                <Truck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
-                {selectedDelivery && (
-                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-orange-500 rounded-full" />
-                )}
-              </Button>
+      {/* Delivery Man Button */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => setShowDeliverySelector(true)}
+        className={cn(
+          "gap-1.5 px-2 text-white/80 hover:text-white hover:bg-white/15",
+          selectedDelivery && "bg-white/20 text-white"
+        )}
+      >
+        <Truck size={16} />
+        <span className="text-xs font-medium hidden sm:inline">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
+        {selectedDelivery && (
+          <span className="absolute -top-1 -end-1 w-2 h-2 bg-orange-400 rounded-full" />
+        )}
+      </Button>
 
-              {/* Sales Rep */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowSalesRepSelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedSalesRep 
-                    ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20" 
-                    : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
-                )}
-              >
-                <UserCheck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'مندوب المبيعات' : 'Sales Rep'}</span>
-                {selectedSalesRep && (
-                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
-                )}
-              </Button>
+      {/* Sales Rep */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => setShowSalesRepSelector(true)}
+        className={cn(
+          "gap-1.5 px-2 text-white/80 hover:text-white hover:bg-white/15",
+          selectedSalesRep && "bg-white/20 text-white"
+        )}
+      >
+        <UserCheck size={16} />
+        <span className="text-xs font-medium hidden sm:inline">{language === 'ar' ? 'مندوب' : 'Sales Rep'}</span>
+        {selectedSalesRep && (
+          <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-400 rounded-full" />
+        )}
+      </Button>
 
-              {/* Shift */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowShiftPanel(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  currentShift 
-                    ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20" 
-                    : "text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
-                )}
-              >
-                <DollarSign size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'الوردية' : 'Shift'}</span>
-              </Button>
-            </div>
+      {/* Shift */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={() => setShowShiftPanel(true)}
+        className={cn(
+          "gap-1.5 px-2 text-white/80 hover:text-white hover:bg-white/15",
+          currentShift && "bg-white/20 text-white"
+        )}
+      >
+        <DollarSign size={16} />
+        <span className="text-xs font-medium hidden sm:inline">{language === 'ar' ? 'الوردية' : 'Shift'}</span>
+      </Button>
+    </div>
 
-            {/* Selected Customer Display */}
-            {selectedCustomer && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">
-                  {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Crown size={14} className="text-warning" />
-                  <span className="text-warning font-semibold text-xs">
-                    {selectedCustomer.loyalty_points || 0}
-                  </span>
-                </div>
-              </div>
-            )}
+    {/* Selected Customer Display */}
+    {selectedCustomer && (
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-white/15 rounded-lg text-white">
+        <span className="text-sm">
+          {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
+        </span>
+        <div className="flex items-center gap-1">
+          <Crown size={14} className="text-yellow-400" />
+          <span className="text-yellow-400 font-semibold text-xs">
+            {selectedCustomer.loyalty_points || 0}
+          </span>
+        </div>
+      </div>
+    )}
 
-            {/* Selected Delivery Display */}
-            {selectedDelivery && (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">
-                  {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
-                </span>
-              </div>
-            )}
+    {/* Selected Delivery Display */}
+    {selectedDelivery && (
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-white/15 rounded-lg text-white">
+        <span className="text-sm">
+          {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
+        </span>
+      </div>
+    )}
 
-            {/* Selected Sales Rep Display */}
-            {selectedSalesRep && (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">{selectedSalesRep.name}</span>
-                {selectedSalesRep.commission_rate && (
-                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
-                    {selectedSalesRep.commission_rate}%
-                  </span>
-                )}
-              </div>
-            )}
+    {/* Selected Sales Rep Display */}
+    {selectedSalesRep && (
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-white/15 rounded-lg text-white">
+        <span className="text-sm">{selectedSalesRep.name}</span>
+        {selectedSalesRep.commission_rate && (
+          <span className="text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">
+            {selectedSalesRep.commission_rate}%
+          </span>
+        )}
+      </div>
+    )}
 
-            {/* Offline Stats Button */}
-            {isOffline && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowOfflineStats(!showOfflineStats)}
-                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
-                  >
-                    <AlertCircle size={18} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <span>{language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}</span>
-                </TooltipContent>
-              </Tooltip>
-            )}
+    {/* Offline Stats Button */}
+    {isOffline && (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowOfflineStats(!showOfflineStats)}
+            className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
+          >
+            <AlertCircle size={18} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span>{language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}</span>
+        </TooltipContent>
+      </Tooltip>
+    )}
 
-            {/* Home */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link to="/">
-                  <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
-                    <Home size={20} />
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-card border border-border">
-                <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
-              </TooltipContent>
-            </Tooltip>
+    {/* Home */}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link to="/">
+          <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/15">
+            <Home size={20} />
+          </Button>
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="bg-card border border-border">
+        <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
+      </TooltipContent>
+    </Tooltip>
 
-            {/* Logout */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={handleLogout}
-                  className="text-white/80 hover:text-white hover:bg-white/10"
-                >
-                  <LogOut size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-card border border-border">
-                <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </header>
+    {/* Logout */}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handleLogout}
+          className="text-white/80 hover:text-white hover:bg-white/15"
+        >
+          <LogOut size={20} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="bg-card border border-border">
+        <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
+      </TooltipContent>
+    </Tooltip>
+  </div>
+</header>
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
