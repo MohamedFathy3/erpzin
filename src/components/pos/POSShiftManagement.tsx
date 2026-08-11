@@ -667,7 +667,7 @@ const handleCloseShift = () => {
               <div className="space-y-2">
                 <Label htmlFor="closing-amount">{t.actualAmount} <span className="text-destructive">*</span></Label>
                 <div className="relative">
-                  <Input id="closing-amount" type="number" placeholder="0" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="text-left text-lg pl-16 h-12" dir="ltr" autoFocus />
+                  <Input id="closing-amount" type="text" placeholder="0" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="text-left text-lg pl-16 h-12" dir="ltr" autoFocus />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">ر.ي</span>
                 </div>
               </div>
