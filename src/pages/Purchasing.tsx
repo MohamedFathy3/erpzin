@@ -101,7 +101,7 @@ const Purchasing = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<any | null>(null);
-  const { currentBranch } = useApp(); // ← أضف هذا السطر
+  const { currentBranch } = useApp();
 
   // دالة الطباعة
   const handlePrint = useReactToPrint({
@@ -144,13 +144,11 @@ const Purchasing = () => {
     id: invoice.id,
     invoice_number: invoice.invoice_number,
     supplier_name: (() => {
-      // API يرسل supplier_name مباشرة
       return language === 'ar'
         ? (invoice.supplier_name_ar || invoice.supplier_name)
         : invoice.supplier_name;
     })(),
     treasury_name: (() => {
-      // API يرسل treasury_name مباشرة
       return invoice.treasury_name || '-';
     })(),
     total_amount: invoice.total_amount,
@@ -171,7 +169,7 @@ const Purchasing = () => {
     queryFn: async () => {
       if (!selectedInvoiceId) throw new Error('No invoice selected');
       const response = await api.get(`/purchases-invoices/${selectedInvoiceId}`);
-      return response.data; // API يرسل { data, result, message, status }
+      return response.data;
     },
     enabled: !!selectedInvoiceId && showInvoiceDetails,
   });
@@ -345,6 +343,7 @@ const Purchasing = () => {
       refetchInvoices();
     }
   }, [currentBranch?.id, activeTab]);
+
   // ========== Invoice filter fields ==========
   const invoiceFilterFields: FilterField[] = [
     {
@@ -856,6 +855,8 @@ const Purchasing = () => {
                         <TableRow className="bg-muted/50">
                           <TableHead className="w-16">#</TableHead>
                           <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'الوحدة' : 'Unit'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'اللون' : 'Color'}</TableHead>
                           <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
@@ -870,6 +871,18 @@ const Purchasing = () => {
                                 {language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name}
                               </div>
                               <div className="text-xs text-muted-foreground">{item.product_sku}</div>
+                            </TableCell>
+                            <TableCell className="text-center">{item.unit_name || '-'}</TableCell>
+                            <TableCell className="text-center">
+                              {item.color_name ? (
+                                <span className="flex items-center justify-center gap-1">
+                                  <span 
+                                    className="w-3 h-3 rounded-full border" 
+                                    style={{ backgroundColor: item.color_code || '#000' }}
+                                  />
+                                  {item.color_name}
+                                </span>
+                              ) : '-'}
                             </TableCell>
                             <TableCell className="text-center">{item.quantity}</TableCell>
                             <TableCell className="text-right">{formatAmount(item.price)} YER</TableCell>
@@ -954,10 +967,9 @@ const Purchasing = () => {
       )}
 
       {/* ========== Modal تعديل الفاتورة ========== */}
-      {/* ========== Modal تعديل الفاتورة ========== */}
       {editingInvoice && (
         <PurchaseInvoiceForm
-          key={editingInvoice.id} // مهم جداً لإعادة تحميل المكون
+          key={editingInvoice.id}
           isOpen={showEditInvoiceForm}
           onClose={() => {
             setShowEditInvoiceForm(false);

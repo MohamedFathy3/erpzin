@@ -38,7 +38,7 @@ export interface PurchaseInvoicePayload {
 
 export interface PurchaseInvoiceItemPayload {
   product_id: number;
-  product_variant_id: number | null;
+  // product_variant_id: number | null;
   quantity: number;
   price: number;
   discount: number;

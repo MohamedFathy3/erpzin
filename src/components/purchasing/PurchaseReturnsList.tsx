@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign, Printer } from "lucide-react";
+import { RotateCcw, Eye, FileText, Package, Building2, Calendar, DollarSign, Printer, Landmark } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import AdvancedFilter, { FilterField, FilterValues } from "@/components/ui/advanced-filter";
@@ -26,14 +26,18 @@ interface PrintItem {
   quantity: number;
   unit_price: string;
   total_price: string;
+  unit_name?: string;
+  color_name?: string;
 }
 
 const transformItems = (items: ReturnItem[]): PrintItem[] =>
   items.map(item => ({
     product: item.product_name || 'غير معروف',
     quantity: item.quantity || 0,
-    unit_price: item.price?.toString() || '0',
-    total_price: ((item.quantity || 0) * (item.price || 0)).toString()
+    unit_price: item.unit_price?.toString() || '0',
+    total_price: ((item.quantity || 0) * (item.unit_price || 0)).toString(),
+    unit_name: item.unit_name || '-',
+    color_name: item.color_name || '-',
   }));
 
 const PurchaseReturnsList = () => {
@@ -99,6 +103,7 @@ const PurchaseReturnsList = () => {
   const paginationMeta = returnsResponse?.meta;
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
     try {
       return format(new Date(dateStr), 'yyyy/MM/dd', {
         locale: language === 'ar' ? ar : undefined
@@ -108,7 +113,21 @@ const PurchaseReturnsList = () => {
     }
   };
 
-  const formatAmount = (amount: string) => Number(amount).toLocaleString();
+  const formatAmount = (amount: number | string) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return isNaN(num) ? '0' : num.toLocaleString();
+  };
+
+  const getPaymentMethodLabel = (method: string) => {
+    const methods: Record<string, { en: string; ar: string }> = {
+      cash: { en: 'Cash', ar: 'نقداً' },
+      credit: { en: 'Credit', ar: 'آجل' },
+      check: { en: 'Check', ar: 'شيك' },
+    };
+    return language === 'ar'
+      ? (methods[method]?.ar || method || '-')
+      : (methods[method]?.en || method || '-');
+  };
 
   const transformedItems = selectedReturn ? transformItems(selectedReturn.items) : [];
 
@@ -144,6 +163,8 @@ const PurchaseReturnsList = () => {
                   <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                   <TableHead>{language === 'ar' ? 'عدد الأصناف' : 'Items'}</TableHead>
                   <TableHead className="text-right">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'الخزنة' : 'Treasury'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'العملة' : 'Currency'}</TableHead>
                   <TableHead>{language === 'ar' ? 'السبب' : 'Reason'}</TableHead>
                   <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
                   <TableHead className="text-center">{language === 'ar' ? 'عرض' : 'View'}</TableHead>
@@ -152,7 +173,7 @@ const PurchaseReturnsList = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
                         <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
                         {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
@@ -161,7 +182,7 @@ const PurchaseReturnsList = () => {
                   </TableRow>
                 ) : returns.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       {language === 'ar' ? 'لا توجد مرتجعات' : 'No returns found'}
                     </TableCell>
                   </TableRow>
@@ -175,7 +196,9 @@ const PurchaseReturnsList = () => {
                       <TableCell className="text-right font-semibold">
                         {formatAmount(ret.total_amount)} YER
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
+                      <TableCell>{ret.treasury_name || '-'}</TableCell>
+                      <TableCell>{ret.currency_code || '-'}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">
                         {ret.reason || '-'}
                       </TableCell>
                       <TableCell>{formatDate(ret.created_at)}</TableCell>
@@ -212,8 +235,9 @@ const PurchaseReturnsList = () => {
         </CardContent>
       </Card>
 
+      {/* ========== Modal عرض التفاصيل ========== */}
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
@@ -232,6 +256,7 @@ const PurchaseReturnsList = () => {
 
           {selectedReturn && (
             <div className="space-y-4">
+              {/* Info Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="pt-4">
@@ -240,7 +265,7 @@ const PurchaseReturnsList = () => {
                       {language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}
                     </div>
                     <div className="font-mono font-medium text-lg">
-                      {selectedReturn.invoice_number}
+                      {selectedReturn.invoice_number || '-'}
                     </div>
                   </CardContent>
                 </Card>
@@ -264,7 +289,7 @@ const PurchaseReturnsList = () => {
                       {language === 'ar' ? 'عدد الأصناف' : 'Items'}
                     </div>
                     <div className="font-medium text-lg">
-                      {selectedReturn.items.length}
+                      {selectedReturn.items?.length || 0}
                     </div>
                   </CardContent>
                 </Card>
@@ -282,6 +307,37 @@ const PurchaseReturnsList = () => {
                 </Card>
               </div>
 
+              {/* Additional Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'الخزنة' : 'Treasury'}
+                  </p>
+                  <p className="font-medium flex items-center gap-1">
+                    <Landmark size={14} className="text-primary" />
+                    {selectedReturn.treasury_name || '-'}
+                  </p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'العملة' : 'Currency'}
+                  </p>
+                  <p className="font-medium">{selectedReturn.currency_code || '-'}</p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'المخزن' : 'Warehouse'}
+                  </p>
+                  <p className="font-medium">{selectedReturn.warehouse_name || '-'}</p>
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {language === 'ar' ? 'طريقة الدفع' : 'Payment'}
+                  </p>
+                  <p className="font-medium">{getPaymentMethodLabel(selectedReturn.payment_method)}</p>
+                </div>
+              </div>
+
               {selectedReturn.reason && (
                 <div className="p-3 bg-muted/30 rounded-lg border">
                   <div className="text-sm text-muted-foreground mb-1">
@@ -291,6 +347,7 @@ const PurchaseReturnsList = () => {
                 </div>
               )}
 
+              {/* Items Table */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -305,18 +362,32 @@ const PurchaseReturnsList = () => {
                         <TableRow className="bg-muted/50">
                           <TableHead className="w-16">#</TableHead>
                           <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'الوحدة' : 'Unit'}</TableHead>
+                          <TableHead className="text-center">{language === 'ar' ? 'اللون' : 'Color'}</TableHead>
                           <TableHead className="text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'سعر الوحدة' : 'Unit Price'}</TableHead>
                           <TableHead className="text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {transformedItems.map((item, idx) => (
+                        {(selectedReturn.items || []).map((item, idx) => (
                           <TableRow key={idx}>
                             <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                            <TableCell className="font-medium">{item.product}</TableCell>
-                            <TableCell className="text-center">{item.quantity}</TableCell>
-                            <TableCell className="text-right">{formatAmount(item.unit_price)}</TableCell>
+                            <TableCell className="font-medium">{item.product_name || '-'}</TableCell>
+                            <TableCell className="text-center">{item.unit_name || '-'}</TableCell>
+                            <TableCell className="text-center">
+                              {item.color_name ? (
+                                <span className="flex items-center justify-center gap-1">
+                                  <span 
+                                    className="w-3 h-3 rounded-full border" 
+                                    style={{ backgroundColor: item.color_code || '#000' }}
+                                  />
+                                  {item.color_name}
+                                </span>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell className="text-center">{item.quantity || 0}</TableCell>
+                            <TableCell className="text-right">{formatAmount(item.unit_price)} YER</TableCell>
                             <TableCell className="text-right font-semibold">
                               {formatAmount(item.total_price)} YER
                             </TableCell>
@@ -344,6 +415,7 @@ const PurchaseReturnsList = () => {
         </DialogContent>
       </Dialog>
 
+      {/* ========== طباعة ========== */}
       {showPrint && selectedReturn && (
         <div style={{ display: 'none' }}>
           <PurchaseReturnPrintTemplate
@@ -355,6 +427,10 @@ const PurchaseReturnsList = () => {
               items: transformedItems,
               total_amount: selectedReturn.total_amount,
               reason: selectedReturn.reason,
+              treasury_name: selectedReturn.treasury_name,
+              currency_code: selectedReturn.currency_code,
+              warehouse_name: selectedReturn.warehouse_name,
+              payment_method: selectedReturn.payment_method,
             }}
           />
         </div>
@@ -364,4 +440,3 @@ const PurchaseReturnsList = () => {
 };
 
 export default PurchaseReturnsList;
-

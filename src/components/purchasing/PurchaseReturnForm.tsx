@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
-import { RotateCcw, Package, Loader2, AlertCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RotateCcw, Package, Loader2, AlertCircle, Landmark, DollarSign, Building2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/components/ui/use-toast';
 import api from '@/lib/api';
@@ -28,15 +29,22 @@ interface PurchaseReturnFormProps {
 interface PurchaseInvoice {
   id: number;
   invoice_number: string;
-  supplier: {
-    id: number;
-    name: string;
-  };
+  supplier_id: number;
+  supplier_name: string;
+  treasury_id?: number;
+  currency_id?: number;
+  warehouse_id?: number;
+  payment_method?: string;
   items: Array<{
     product_id: number;
     product_name: string;
+    product_name_ar?: string;
     quantity: number;
     price: string;
+    product_unit_id?: number;
+    unit_name?: string;
+    color_id?: number;
+    color_name?: string;
   }>;
 }
 
@@ -46,6 +54,10 @@ interface ReturnItem {
   max_quantity: number;
   quantity: number;
   unit_price: number;
+  product_unit_id?: number;
+  unit_name?: string;
+  color_id?: number;
+  color_name?: string;
 }
 
 const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
@@ -57,27 +69,60 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [treasuryId, setTreasuryId] = useState<string>('');
+  const [currencyId, setCurrencyId] = useState<string>('');
+  const [warehouseId, setWarehouseId] = useState<string>('');
 
   // ========== جلب تفاصيل الفاتورة ==========
-
   const { data: invoice, isLoading: invoiceLoading } = useQuery<PurchaseInvoice>({
     queryKey: ['purchase-invoice', invoiceId],
     queryFn: async () => {
       if (!invoiceId) throw new Error('No invoice ID');
-
       const response = await api.get(`/purchases-invoices/${invoiceId}`);
-
       if (response.data.result === 'Success') {
         return response.data.data;
       }
-
       throw new Error(response.data.message || 'Failed to fetch invoice');
     },
     enabled: isOpen && !!invoiceId,
   });
 
+  // ========== جلب الخزنات ==========
+  const { data: treasuries = [] } = useQuery({
+    queryKey: ['treasuries'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index', {
+        perPage: 1000,
+        paginate: false,
+      });
+      return response.data.data || [];
+    },
+  });
 
+  // ========== جلب العملات ==========
+  const { data: currencies = [] } = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => {
+      const response = await api.post('/currency/index', {
+        perPage: 1000,
+        paginate: false,
+      });
+      return response.data.data || [];
+    },
+  });
 
+  // ========== جلب المخازن ==========
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const response = await api.post('/warehouse/index', {
+        perPage: 1000,
+        paginate: false,
+      });
+      return response.data.data || [];
+    },
+  });
 
   // State for items
   const [items, setItems] = useState<ReturnItem[]>([]);
@@ -87,14 +132,25 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     if (invoice?.items) {
       setItems(invoice.items.map(item => ({
         product_id: item.product_id,
-        product_name: item.product_name,
+        product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,
         max_quantity: item.quantity,
         quantity: 0,
-        unit_price: parseFloat(item.price)
+        unit_price: parseFloat(item.price),
+        product_unit_id: item.product_unit_id,
+        unit_name: item.unit_name,
+        color_id: item.color_id,
+        color_name: item.color_name,
       })));
     }
     setReason('');
-  }, [invoice]);
+    
+    if (invoice) {
+      setTreasuryId(invoice.treasury_id?.toString() || '');
+      setCurrencyId(invoice.currency_id?.toString() || '');
+      setWarehouseId(invoice.warehouse_id?.toString() || '');
+      setPaymentMethod(invoice.payment_method || 'cash');
+    }
+  }, [invoice, language]);
 
   const updateItemQuantity = (productId: number, quantity: number) => {
     setItems(prev => prev.map(item =>
@@ -115,13 +171,20 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
         throw new Error('No invoice selected');
       }
 
+      // ✅ هنا الأسماء الصحيحة زي ما الباك بيستقبل
       const payload = {
         purchase_invoices_id: invoiceId,
         reason: reason || null,
+        payment_method: paymentMethod,
+        treasury_id: Number(treasuryId),
+        currency_id: Number(currencyId),
+        warehouse_id: Number(warehouseId),
         items: selectedItems.map(item => ({
           product_id: item.product_id,
+          product_unit_id: item.product_unit_id,
+          color_id: item.color_id,
           quantity: item.quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price,
         }))
       };
 
@@ -161,6 +224,24 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
       return;
     }
 
+    if (!treasuryId) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يرجى اختيار الخزنة' : 'Please select a treasury',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    if (!currencyId) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يرجى اختيار العملة' : 'Please select a currency',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     createReturnMutation.mutate();
   };
 
@@ -169,25 +250,13 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     onClose();
   };
 
-  // دالة مساعدة لجلب اسم المورد بأمان
   const getSupplierName = () => {
     if (!invoice) return '-';
-    
-    // ✅ التعامل مع الشكلين المحتملين للبيانات
-    // الشكل الأول: invoice.supplier.name
-    if (invoice.supplier?.name) {
-      return invoice.supplier.name;
-    }
-    
-    // الشكل الثاني: invoice.supplier_name
-    if ((invoice as any).supplier_name) {
-      return (invoice as any).supplier_name;
-    }
-    
+    if (invoice.supplier_name) return invoice.supplier_name;
+    if ((invoice as any).supplier?.name) return (invoice as any).supplier.name;
     return '-';
   };
 
-  // لو لسه بيجيب بيانات الفاتورة
   if (isOpen && invoiceLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
@@ -232,12 +301,85 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                     <p className="text-xs text-muted-foreground">
                       {language === 'ar' ? 'المورد' : 'Supplier'}
                     </p>
-                    {/* ✅ هنا الحل - استخدام الدالة المساعدة */}
                     <p className="font-medium">{getSupplierName()}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* الخزنة والعملة والمخزن */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Landmark className="h-4 w-4" />
+                  {language === 'ar' ? 'الخزنة' : 'Treasury'} *
+                </Label>
+                <Select value={treasuryId} onValueChange={setTreasuryId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الخزنة' : 'Select treasury'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {treasuries.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        {language === 'ar' ? t.name_ar || t.name : t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  {language === 'ar' ? 'العملة' : 'Currency'} *
+                </Label>
+                <Select value={currencyId} onValueChange={setCurrencyId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر العملة' : 'Select currency'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>
+                        {c.code} - {language === 'ar' ? c.name_ar || c.name : c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  {language === 'ar' ? 'المخزن' : 'Warehouse'}
+                </Label>
+                <Select value={warehouseId} onValueChange={setWarehouseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر المخزن' : 'Select warehouse'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w: any) => (
+                      <SelectItem key={w.id} value={w.id.toString()}>
+                        {language === 'ar' ? w.name_ar || w.name : w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                    <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                    <SelectItem value="check">{language === 'ar' ? 'شيك' : 'Check'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             {/* Reason */}
             <div className="space-y-2">
@@ -268,7 +410,9 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                          <TableHead className="text-center w-24">{language === 'ar' ? 'متاح' : 'Available'}</TableHead>
+                          <TableHead className="text-center w-20">{language === 'ar' ? 'الوحدة' : 'Unit'}</TableHead>
+                          <TableHead className="text-center w-20">{language === 'ar' ? 'اللون' : 'Color'}</TableHead>
+                          <TableHead className="text-center w-20">{language === 'ar' ? 'متاح' : 'Available'}</TableHead>
                           <TableHead className="text-center w-24">{language === 'ar' ? 'الكمية' : 'Quantity'}</TableHead>
                           <TableHead className="text-right w-28">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
                           <TableHead className="text-right w-32">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
@@ -278,6 +422,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                         {items.map((item) => (
                           <TableRow key={item.product_id}>
                             <TableCell className="font-medium">{item.product_name}</TableCell>
+                            <TableCell className="text-center">{item.unit_name || '-'}</TableCell>
+                            <TableCell className="text-center">{item.color_name || '-'}</TableCell>
                             <TableCell className="text-center">{item.max_quantity}</TableCell>
                             <TableCell className="text-center">
                               <Input
@@ -299,7 +445,6 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                     </Table>
                   </div>
 
-                  {/* Total */}
                   {hasItems && (
                     <div className="flex justify-end mt-4">
                       <div className="w-64 p-4 bg-orange-50 rounded-lg border border-orange-200">
@@ -313,7 +458,6 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                     </div>
                   )}
 
-                  {/* Warning if no items selected */}
                   {!hasItems && (
                     <div className="flex items-center gap-2 p-3 bg-amber-50 text-amber-600 rounded-lg border border-amber-200">
                       <AlertCircle size={16} />
