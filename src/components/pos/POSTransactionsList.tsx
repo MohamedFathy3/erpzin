@@ -88,26 +88,30 @@ interface Sale {
   payments: Payment[];
   created_at: string;
   cashier: string;
-    discount_percentage?: number;
+  discount_percentage?: number;
   discount_amount?: number;
-  
 }
 
+// ✅ تحديث واجهة ReturnItem
 interface ReturnItem {
   id: number;
   product_id: number;
-  product?: {           // ✅ أضف كائن product
+  product?: {
     id: number;
     name: string;
   };
-  product_name?: string;  // ✅ خليها اختيارية
+  product_name?: string;
   quantity: number;
   unit_price: number;
   total_price: number;
-  color?: string | null;
-  size?: string | null;
+  color?: string | null;   // ✅ اللون
+  size?: string | null;    // ✅ المقاس
+  price?: number;          // ✅ بديل unit_price
+  total?: number;          // ✅ بديل total_price
+  name?: string;           // ✅ اسم المنتج
 }
 
+// ✅ تحديث واجهة ReturnInvoice
 interface ReturnInvoice {
   id: number;
   return_number: string;
@@ -122,9 +126,9 @@ interface ReturnInvoice {
     id: number;
     invoice_number: string;
     customer: Customer;
-    items?: any[];  // ✅ أضف items للفاتورة الأصلية
+    items?: any[];  // ✅ الفاتورة الأصلية فيها اللون والمقاس
   };
-  items?: ReturnItem[];  // ✅ اسمها "items" مش "return_items"
+  items?: ReturnItem[];
   refund_method: 'cash' | 'card' | 'wallet' | 'credit';
   created_at: string;
   updated_at: string;
@@ -256,6 +260,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     paidAmount: language === 'ar' ? 'المبلغ المدفوع' : 'Paid Amount',
     remainingAmount: language === 'ar' ? 'المبلغ المتبقي' : 'Remaining Amount',
     overpaid: language === 'ar' ? 'مدفوع زيادة' : 'Overpaid',
+    color: language === 'ar' ? 'اللون' : 'Color',
+    size: language === 'ar' ? 'المقاس' : 'Size',
   };
 
   // ========== Queries ==========
@@ -295,13 +301,59 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           orderByDirection: 'desc',
           perPage: 100,
           paginate: false,
-          with: ['customer', 'return_items', 'invoice.customer']
+          with: ['customer', 'return_items', 'invoice.customer', 'invoice.items']  // ✅ أضفنا invoice.items
         };
 
         const response = await api.post('/return-invoices/index', payload);
 
         if (response.data.result === 'Success') {
-          return response.data.data || [];
+          // ✅ معالجة البيانات لإضافة اللون والمقاس من الفاتورة الأصلية
+          const returnData = response.data.data || [];
+          
+          const enrichedReturns = returnData.map((ret: ReturnInvoice) => {
+            // إذا كان فيه فاتورة أصلية وعندها items
+            if (ret.invoice && ret.invoice.items && ret.items) {
+              // إنشاء map للعناصر في الفاتورة الأصلية
+              const invoiceItemsMap = new Map();
+              ret.invoice.items.forEach((invItem: any) => {
+                invoiceItemsMap.set(invItem.product_id, invItem);
+              });
+              
+              // إضافة اللون والمقاس من الفاتورة الأصلية
+              const enrichedItems = ret.items.map((item: ReturnItem) => {
+                const invoiceItem = invoiceItemsMap.get(item.product_id);
+                return {
+                  ...item,
+                  color: invoiceItem?.color || item.color || null,
+                  size: invoiceItem?.size || item.size || null,
+                  // تأكد من وجود price و total
+                  price: item.price || item.unit_price || 0,
+                  total: item.total || item.total_price || 0,
+                  name: item.product?.name || item.product_name || item.name || 'غير معروف',
+                };
+              });
+              
+              return {
+                ...ret,
+                items: enrichedItems,
+              };
+            }
+            
+            // إذا مافيش فاتورة أصلية، نرجع البيانات زي ما هي
+            const formattedItems = ret.items?.map((item: ReturnItem) => ({
+              ...item,
+              price: item.price || item.unit_price || 0,
+              total: item.total || item.total_price || 0,
+              name: item.product?.name || item.product_name || item.name || 'غير معروف',
+            })) || [];
+            
+            return {
+              ...ret,
+              items: formattedItems,
+            };
+          });
+          
+          return enrichedReturns;
         }
         return [];
       } catch (error) {
@@ -772,7 +824,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                     <TableBody>
                       {salesLoading ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8">
+                          <TableCell colSpan={7} className="text-center py-8">
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin text-primary" />
                               <span className="text-muted-foreground">{t.loading}</span>
@@ -781,7 +833,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         </TableRow>
                       ) : filteredSales.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             <Receipt className="mx-auto h-12 w-12 mb-4 opacity-20" />
                             <p>{t.noData}</p>
                           </TableCell>
@@ -803,7 +855,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 </span>
                               </div>
                             </TableCell>
-                             <TableCell>
+                            <TableCell>
                               <div className="flex items-center gap-2 whitespace-nowrap">
                                 <User size={14} className="text-muted-foreground shrink-0" />
                                 <span className="truncate max-w-[200px]">
@@ -814,7 +866,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 </span>
                               </div>
                             </TableCell>
-                              <TableCell>
+                            <TableCell>
                               <div className="flex items-center gap-2 whitespace-nowrap">
                                 <User size={14} className="text-muted-foreground shrink-0" />
                                 <span className="truncate max-w-[200px]">
@@ -1067,7 +1119,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                   </div>
                 )}
 
-                {/* Items Table */}
+                {/* Items Table with Color & Size */}
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
                     <Receipt size={16} className="text-primary" />
@@ -1079,7 +1131,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         <TableHeader>
                           <TableRow>
                             <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-                            <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
+                            <TableHead className="min-w-[80px] text-center">{t.color}</TableHead>
+                            <TableHead className="min-w-[70px] text-center">{t.size}</TableHead>
+                            <TableHead className="min-w-[60px] text-center">{t.quantity}</TableHead>
                             <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
                             <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
                           </TableRow>
@@ -1088,15 +1142,25 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                           {selectedSale.items?.map((item: SaleItem, index: number) => (
                             <TableRow key={index}>
                               <TableCell>
-                                <div>
-                                  <span className="font-medium">{item.product_name || '-'}</span>
-                                  {(item.color || item.size) && (
-                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                      {item.color && <span>🎨 {item.color}</span>}
-                                      {item.size && <span>📏 {item.size}</span>}
-                                    </div>
-                                  )}
-                                </div>
+                                <span className="font-medium">{item.product_name || '-'}</span>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.color ? (
+                                  <Badge variant="outline" className="bg-primary/5 border-primary/20">
+                                    <span 
+                                      className="inline-block w-2.5 h-2.5 rounded-full mr-1.5" 
+                                      style={{ backgroundColor: item.color }}
+                                    />
+                                    {item.color}
+                                  </Badge>
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.size ? (
+                                  <Badge variant="outline" className="bg-secondary/5 border-secondary/20">
+                                    {item.size}
+                                  </Badge>
+                                ) : '-'}
                               </TableCell>
                               <TableCell className="text-center">{item.quantity || 0}</TableCell>
                               <TableCell className="text-right">{formatNumber(item.price || '0')}</TableCell>
@@ -1116,168 +1180,159 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         </DialogContent>
       </Dialog>
 
-      {/* Return Details Modal */}
-{/* ========== Return Details Modal ========== */}
-<Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
-  <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-    <DialogHeader className="p-4 border-b">
-      <DialogTitle className="flex items-center gap-2">
-        <RotateCcw size={20} className="text-primary" />
-        {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
-      </DialogTitle>
-      <DialogDescription className="sr-only">
-        {language === 'ar' 
-          ? `تفاصيل مرتجع رقم ${selectedReturn?.return_number}` 
-          : `Return details for ${selectedReturn?.return_number}`}
-      </DialogDescription>
-    </DialogHeader>
-    {selectedReturn && (
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {/* Return Info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
-            <div>
-              <p className="text-xs text-muted-foreground">{t.date}</p>
-              <p className="text-sm font-medium">
-                {selectedReturn.return_date ? format(new Date(selectedReturn.return_date), 'yyyy-MM-dd HH:mm') : '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t.customer}</p>
-              <p className="text-sm font-medium">
-                {selectedReturn.invoice?.customer 
-                  ? (language === 'ar' 
-                      ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name 
-                      : selectedReturn.invoice.customer.name)
-                  : selectedReturn.customer
-                    ? (language === 'ar' 
-                        ? selectedReturn.customer.name_ar || selectedReturn.customer.name 
-                        : selectedReturn.customer.name)
-                    : '-'
-                }
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t.refundMethod}</p>
-              <div className="mt-1">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t.status}</p>
-              <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
-            </div>
-          </div>
+      {/* ========== Return Details Modal (المعدل) ========== */}
+      <Dialog open={!!selectedReturn} onOpenChange={() => setSelectedReturn(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw size={20} className="text-primary" />
+              {t.returnDetails} - <span className="font-mono">{selectedReturn?.return_number}</span>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {language === 'ar' 
+                ? `تفاصيل مرتجع رقم ${selectedReturn?.return_number}` 
+                : `Return details for ${selectedReturn?.return_number}`}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedReturn && (
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {/* Return Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.date}</p>
+                    <p className="text-sm font-medium">
+                      {selectedReturn.return_date ? format(new Date(selectedReturn.return_date), 'yyyy-MM-dd HH:mm') : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.customer}</p>
+                    <p className="text-sm font-medium">
+                      {selectedReturn.invoice?.customer 
+                        ? (language === 'ar' 
+                            ? selectedReturn.invoice.customer.name_ar || selectedReturn.invoice.customer.name 
+                            : selectedReturn.invoice.customer.name)
+                        : selectedReturn.customer
+                          ? (language === 'ar' 
+                              ? selectedReturn.customer.name_ar || selectedReturn.customer.name 
+                              : selectedReturn.customer.name)
+                          : '-'
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.refundMethod}</p>
+                    <div className="mt-1">{getPaymentMethodBadge(selectedReturn.refund_method || 'cash')}</div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t.status}</p>
+                    <div className="mt-1">{getStatusBadge(selectedReturn.status || 'completed')}</div>
+                  </div>
+                </div>
 
-          {/* Return Amount */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-red-500/5 rounded-lg border border-red-500/20 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{t.total}</p>
-              <p className="text-2xl font-bold text-red-600">
-                -{formatNumber(selectedReturn.refunded_amount || selectedReturn.total_amount || 0)}
-              </p>
-            </div>
-            {selectedReturn.reason && (
-              <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/20">
-                <p className="text-xs text-muted-foreground mb-1">{t.reason}</p>
-                <p className="text-sm font-medium">{selectedReturn.reason}</p>
-              </div>
-            )}
-          </div>
+                {/* Return Amount */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-red-500/5 rounded-lg border border-red-500/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">{t.total}</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      -{formatNumber(selectedReturn.refunded_amount || selectedReturn.total_amount || 0)}
+                    </p>
+                  </div>
+                  {selectedReturn.reason && (
+                    <div className="p-4 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                      <p className="text-xs text-muted-foreground mb-1">{t.reason}</p>
+                      <p className="text-sm font-medium">{selectedReturn.reason}</p>
+                    </div>
+                  )}
+                </div>
 
-<div className="space-y-2">
-  <h3 className="text-sm font-semibold flex items-center gap-2">
-    <Receipt size={16} className="text-primary" />
-    {t.items}
-  </h3>
-  
-  <div className="border rounded-lg overflow-hidden">
-    <div className="overflow-x-auto">
-      <Table>
-      <TableHeader>
-  <TableRow>
-    <TableHead className="min-w-[250px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
-    <TableHead className="min-w-[80px] text-center">{t.quantity}</TableHead>
-    <TableHead className="min-w-[150px] text-right">{language === 'ar' ? 'السعر × الكمية' : 'Price × Qty'}</TableHead>
-    <TableHead className="min-w-[120px] text-right">{language === 'ar' ? 'الإجمالي قبل الخصم' : 'Total before Discount'}</TableHead>
-  </TableRow>
-</TableHeader>
-<TableBody>
-  {selectedReturn.items?.map((item: any, index: number) => {
-    const price = item.price || item.unit_price || 0;
-    const quantity = item.quantity || 0;
-    const subtotal = price * quantity;  // قبل الخصم
-    const total = item.total || item.total_price || 0;  // بعد الخصم
-    const discountAmount = subtotal - total;
-    const discountPercent = item.discount_percentage || (discountAmount > 0 ? (discountAmount / subtotal * 100).toFixed(1) : 0);
-    
-    return (
-      <TableRow key={index}>
-        <TableCell>
-          <div>
-            <span className="font-medium">{item.product?.name || item.name || item.product_name || '-'}</span>
-            {(item.color || item.size) && (
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                {item.color && <span>🎨 {item.color}</span>}
-                {item.size && <span>📏 {item.size}</span>}
-              </div>
-            )}
-          </div>
-        </TableCell>
-        
-        {/* الكمية */}
-        <TableCell className="text-center font-medium">{quantity}</TableCell>
-        
-        {/* السعر × الكمية (قبل الخصم) */}
-        <TableCell className="text-right">
-          <div className="space-y-0.5">
-            <div className="text-sm">
-              {formatNumber(price)} × {quantity}
-            </div>
-            <div className="text-xs text-muted-foreground line-through">
-              = {formatNumber(subtotal)}
-            </div>
-          </div>
-        </TableCell>
-        
-        {/* الإجمالي قبل الخصم */}
-        <TableCell className="text-right">
-          <div className="space-y-0.5">
-            <div className="text-sm font-bold text-red-600">
-              -{formatNumber(total)}
-            </div>
-            {discountAmount > 0 && (
-              <div className="text-[10px] text-emerald-600">
-                {language === 'ar' ? 'وفرت' : 'saved'}: {formatNumber(discountAmount)} ({discountPercent}%)
-              </div>
-            )}
-          </div>
-        </TableCell>
-      </TableRow>
-    );
-  })}
-</TableBody>
-      </Table>
-    </div>
-  </div>
-</div>
+                {/* Items Table with Color & Size for Returns */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Receipt size={16} className="text-primary" />
+                    {t.items}
+                  </h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[200px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                            <TableHead className="min-w-[80px] text-center">{t.color}</TableHead>
+                            <TableHead className="min-w-[70px] text-center">{t.size}</TableHead>
+                            <TableHead className="min-w-[60px] text-center">{t.quantity}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.price}</TableHead>
+                            <TableHead className="min-w-[120px] text-right">{t.total}</TableHead>
+                            <TableHead className="min-w-[120px]">{t.reason}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedReturn.items?.map((item: any, index: number) => {
+                            const price = item.price || item.unit_price || 0;
+                            const quantity = item.quantity || 0;
+                            const total = item.total || item.total_price || 0;
+                            const name = item.product?.name || item.name || item.product_name || 'غير معروف';
+                            
+                            return (
+                              <TableRow key={index}>
+                                <TableCell>
+                                  <span className="font-medium">{name}</span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {item.color ? (
+                                    <Badge variant="outline" className="bg-primary/5 border-primary/20">
+                                      <span 
+                                        className="inline-block w-2.5 h-2.5 rounded-full mr-1.5" 
+                                        style={{ backgroundColor: item.color }}
+                                      />
+                                      {item.color}
+                                    </Badge>
+                                  ) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {item.size ? (
+                                    <Badge variant="outline" className="bg-secondary/5 border-secondary/20">
+                                      {item.size}
+                                    </Badge>
+                                  ) : '-'}
+                                </TableCell>
+                                <TableCell className="text-center font-medium">{quantity}</TableCell>
+                                <TableCell className="text-right">{formatNumber(price)}</TableCell>
+                                <TableCell className="text-right font-bold text-red-600">
+                                  -{formatNumber(total)}
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm text-muted-foreground">
+                                    {item.reason || '-'}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
 
-          {/* Invoice Reference */}
-          {selectedReturn.invoice && (
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'مرتجع عن فاتورة' : 'Return for Invoice'}:
-                </span>
-                <span className="font-mono font-semibold">
-                  {selectedReturn.invoice.invoice_number}
-                </span>
+                {/* Invoice Reference */}
+                {selectedReturn.invoice && (
+                  <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        {language === 'ar' ? 'مرتجع عن فاتورة' : 'Return for Invoice'}:
+                      </span>
+                      <span className="font-mono font-semibold">
+                        {selectedReturn.invoice.invoice_number}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            </ScrollArea>
           )}
-        </div>
-      </ScrollArea>
-    )}
-  </DialogContent>
-</Dialog>
+        </DialogContent>
+      </Dialog>
 
       {/* Print Dialog */}
       <Dialog open={showPrintDialog} onOpenChange={() => {
