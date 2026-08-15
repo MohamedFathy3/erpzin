@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Printer, DollarSign, CreditCard, Wallet, Clock, User, Building2, Package, Truck, Calendar, Hash, Percent, Tag, Info, Receipt, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Printer, DollarSign, CreditCard, Wallet, Clock, User, Building2, Package, Truck, Calendar, Hash, Percent, Tag, Info, Receipt, TrendingUp, TrendingDown, Minus, Palette, Ruler } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import CompanyHeader from "@/components/shared/CompanyHeader";
 import api from "@/lib/api";
@@ -23,7 +23,7 @@ interface InvoiceDetailsProps {
   onClose: () => void;
 }
 
-// مكون الطباعة المتقدم
+// ========== مكون الطباعة المتقدم مع اللون والوحدة ==========
 const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) => {
   const isArabic = language === 'ar';
 
@@ -92,7 +92,7 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
 
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#2563eb', marginBottom: '8px' }}>
-              {isArabic ? 'فاتورة مبيعات ' : 'TAX INVOICE'}
+              {isArabic ? 'فاتورة مبيعات' : 'TAX INVOICE'}
             </div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: 'monospace', color: '#374151' }}>
               #{invoice.invoice_number}
@@ -157,13 +157,15 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Items Table مع اللون والوحدة */}
       <div style={{ marginBottom: '24px', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#2563eb', color: 'white' }}>
               <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #3b82f6' }}>#</th>
               <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #3b82f6' }}>{isArabic ? 'المنتج' : 'Product'}</th>
+              <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'الوحدة' : 'Unit'}</th>
+              <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'اللون' : 'Color'}</th>
               <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'الكمية' : 'Qty'}</th>
               <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #3b82f6' }}>{isArabic ? 'السعر' : 'Price'}</th>
               <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #3b82f6' }}>{isArabic ? 'الخصم' : 'Discount'}</th>
@@ -178,12 +180,45 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
                                          item.discount_percent || 
                                          (itemDiscountAmount > 0 ? (itemDiscountAmount / (item.price * item.quantity)) * 100 : 0);
               
+              // ✅ اللون والوحدة من البيانات
+              const unitName = item.unit_name || item.size || item.size_name || '-';
+              const colorName = item.color || item.color_name || '-';
+              const colorHex = item.color_hex || item.hex_code || '#CCCCCC';
+              
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>{idx + 1}</td>
                   <td style={{ padding: '12px', border: '1px solid #e5e7eb' }}>
                     <div style={{ fontWeight: '500' }}>{item.product_name}</div>
                     {item.product_id && <div style={{ fontSize: '11px', color: '#6b7280' }}>ID: {item.product_id}</div>}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                    {unitName !== '-' ? (
+                      <span style={{ 
+                        backgroundColor: '#e5e7eb', 
+                        padding: '2px 8px', 
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {unitName}
+                      </span>
+                    ) : '-'}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>
+                    {colorName !== '-' ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <span style={{ 
+                          display: 'inline-block',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          backgroundColor: colorHex,
+                          border: '1px solid #ccc'
+                        }} />
+                        <span>{colorName}</span>
+                      </span>
+                    ) : '-'}
                   </td>
                   <td style={{ padding: '12px', textAlign: 'center', border: '1px solid #e5e7eb' }}>{item.quantity}</td>
                   <td style={{ padding: '12px', textAlign: 'right', border: '1px solid #e5e7eb' }}>{formatCurrency(Number(item.price))}</td>
@@ -219,13 +254,11 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
       {/* Summary Section */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
         <div style={{ width: '360px' }}>
-          {/* Subtotal */}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
             <span><strong>{isArabic ? 'المجموع الفرعي' : 'Subtotal'}:</strong></span>
             <span>{formatCurrency(Number(invoice.total_amount || 0))}</span>
           </div>
 
-          {/* Items Discount */}
           {itemsDiscount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#dc2626' }}>
               <span><strong>{isArabic ? 'خصم المنتجات' : 'Items Discount'}:</strong></span>
@@ -233,7 +266,6 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </div>
           )}
 
-          {/* Invoice Discount */}
           {discountAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#dc2626' }}>
               <span><strong>{isArabic ? 'خصم الفاتورة' : 'Invoice Discount'} ({discountPercent}%):</strong></span>
@@ -241,7 +273,6 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </div>
           )}
 
-          {/* Total Discount */}
           {totalDiscount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb', color: '#b91c1c', fontWeight: 'bold' }}>
               <span><strong>{isArabic ? 'إجمالي الخصم' : 'Total Discount'}:</strong></span>
@@ -249,7 +280,6 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </div>
           )}
 
-          {/* Tax */}
           {taxAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
               <span><strong>{isArabic ? 'الضريبة' : 'Tax'} ({taxRate || 0}%):</strong></span>
@@ -257,13 +287,11 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </div>
           )}
 
-          {/* Net Total */}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb', fontWeight: 'bold', fontSize: '16px' }}>
             <span>{isArabic ? 'الصافي' : 'Net Total'}:</span>
             <span style={{ color: '#2563eb' }}>{formatCurrency(netTotal)}</span>
           </div>
 
-          {/* Paid */}
           {paidAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#10b981' }}>
               <span><strong>{isArabic ? 'المدفوع' : 'Paid'}:</strong></span>
@@ -271,7 +299,6 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
             </div>
           )}
 
-          {/* Remaining */}
           {remainingAmount > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', color: '#f59e0b' }}>
               <span><strong>{isArabic ? 'المتبقي' : 'Remaining'}:</strong></span>
@@ -322,6 +349,7 @@ const PrintTemplate = ({ invoice, companyInfo, language, formatCurrency }: any) 
   );
 };
 
+// ========== InvoiceDetails Component ==========
 const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
@@ -394,7 +422,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
     );
   };
 
-  // دالة عرض حالة الفرق (للمقارنة بين المجموع الفرعي والإجمالي)
+  // دالة عرض الفرق
   const getDifferenceBadge = () => {
     const diff = subtotal - total;
     if (diff > 0) {
@@ -434,7 +462,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full print:overflow-visible p-0">
-          {/* رأس الديالوج - يختفي عند الطباعة */}
+          {/* Header - يختفي عند الطباعة */}
           <div className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between print:hidden">
             <DialogTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5 text-primary" />
@@ -448,7 +476,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
             </div>
           </div>
 
-          {/* محتوى الفاتورة - للطباعة */}
+          {/* محتوى الطباعة */}
           <div ref={printRef}>
             <PrintTemplate
               invoice={invoice}
@@ -458,7 +486,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
             />
           </div>
 
-          {/* محتوى العرض في الديالوج - نسخة محسنة للشاشة */}
+          {/* ========== محتوى العرض في الديالوج مع اللون والوحدة ========== */}
           <div className="p-6 space-y-6 print:hidden">
             {/* بطاقة الملخص السريع */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -577,13 +605,15 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
               </Card>
             </div>
 
-            {/* جدول المنتجات */}
+            {/* جدول المنتجات مع اللون والوحدة */}
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                    <TableHead className="text-center w-24">{language === 'ar' ? 'الوحدة' : 'Unit'}</TableHead>
+                    <TableHead className="text-center w-24">{language === 'ar' ? 'اللون' : 'Color'}</TableHead>
                     <TableHead className="text-center w-20">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
                     <TableHead className="text-right w-32">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
                     <TableHead className="text-right w-32">{language === 'ar' ? 'الخصم' : 'Discount'}</TableHead>
@@ -593,7 +623,7 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         {language === 'ar' ? 'لا توجد أصناف' : 'No items found'}
                       </TableCell>
                     </TableRow>
@@ -603,6 +633,11 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                       const itemDiscountAmount = item.discount_amount || 
                                                 (item.price * qty - item.total) || 0;
                       const total = Number(item.total || item.price * qty);
+                      
+                      // ✅ اللون والوحدة
+                      const unitName = item.unit_name || item.size || item.size_name || '-';
+                      const colorName = item.color || item.color_name || '-';
+                      const colorHex = item.color_hex || item.hex_code || '#CCCCCC';
 
                       return (
                         <TableRow key={item.product_id || index}>
@@ -610,6 +645,26 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                           <TableCell>
                             <div className="font-medium">{item.product_name}</div>
                             <div className="text-xs text-muted-foreground">ID: {item.product_id}</div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {unitName !== '-' ? (
+                              <Badge variant="outline" className="bg-secondary/5 border-secondary/20">
+                                <Ruler className="h-3 w-3 mr-1" />
+                                {unitName}
+                              </Badge>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {colorName !== '-' ? (
+                              <Badge variant="outline" className="bg-primary/5 border-primary/20 flex items-center justify-center gap-1">
+                                <span 
+                                  className="inline-block w-3 h-3 rounded-full border" 
+                                  style={{ backgroundColor: colorHex }}
+                                />
+                                <Palette className="h-3 w-3" />
+                                {colorName}
+                              </Badge>
+                            ) : '-'}
                           </TableCell>
                           <TableCell className="text-center font-medium">{qty}</TableCell>
                           <TableCell className="text-right font-mono">{formatCurrency(Number(item.price))}</TableCell>
@@ -638,13 +693,11 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
             <div className="flex justify-end">
               <div className="w-96 space-y-2">
                 <div className="space-y-2">
-                  {/* السعر الأصلي */}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{language === 'ar' ? 'السعر الأصلي:' : 'Original Price:'}</span>
                     <span className="font-mono">{formatCurrency(Number(invoice.total_amount || 0))}</span>
                   </div>
 
-                  {/* خصم المنتجات */}
                   {getItemsDiscount(invoice) > 0 && (
                     <div className="flex justify-between text-sm text-red-500">
                       <span>{language === 'ar' ? 'خصم المنتجات:' : 'Items Discount:'}</span>
@@ -652,7 +705,6 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                     </div>
                   )}
 
-                  {/* خصم الفاتورة */}
                   {Number(invoice.discount_amount) > 0 && (
                     <div className="flex justify-between text-sm text-red-600">
                       <span>{language === 'ar' ? 'خصم الفاتورة:' : 'Invoice Discount:'}</span>
@@ -665,7 +717,6 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                     </div>
                   )}
 
-                  {/* إجمالي الخصم */}
                   {getTotalDiscount(invoice) > 0 && (
                     <div className="flex justify-between text-sm font-semibold text-red-700 border-t pt-2">
                       <span>{language === 'ar' ? 'إجمالي الخصم:' : 'Total Discount:'}</span>
@@ -673,7 +724,6 @@ const InvoiceDetails = ({ invoice, isOpen, onClose }: InvoiceDetailsProps) => {
                     </div>
                   )}
 
-                  {/* الصافي */}
                   <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
                     <span>{language === 'ar' ? 'الصافي:' : 'Net Total:'}</span>
                     <span className="text-primary font-mono">
