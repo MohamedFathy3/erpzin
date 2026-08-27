@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // components/sales/InvoiceReturnForm.tsx
 import { useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useRegionalSettings } from "@/contexts/RegionalSettingsContext";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Trash2, Save, Loader2, RotateCcw, ArrowLeftRight, X } from "lucide-react";
+import { Trash2, Save, Loader2, RotateCcw, ArrowLeftRight, X, Building2 } from "lucide-react";
 import api from "@/lib/api";
 
 interface ReturnItem {
@@ -23,6 +24,14 @@ interface ReturnItem {
   quantity: number;
   price: number;
   reason: string;
+}
+
+interface Treasury {
+  id: number;
+  name: string;
+  balance: number;
+  currency: string;
+  branch_id?: number;
 }
 
 interface InvoiceReturnFormProps {
@@ -40,8 +49,9 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [formData, setFormData] = useState({
     sales_invoice_id: "",
-    return_method: "نقدي",
-    note: ""
+    return_method: "cash",
+    note: "",
+    treasury_id: "" // ✅ أضفنا treasury_id
   });
   const [returnNumber, setReturnNumber] = useState<string>("");
 
@@ -57,13 +67,39 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
     }
   }, [isOpen]);
 
+  // ========== جلب الخزائن ==========
+  const { data: treasuries = [], isLoading: loadingTreasuries } = useQuery({
+    queryKey: ['treasuries-form'],
+    queryFn: async () => {
+      try {
+        const response = await api.post('/treasury/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        });
+        
+        if (response.data.result === 'Success') {
+          return response.data.data || [];
+        }
+        return [];
+      } catch (error) {
+        console.error('Error fetching treasuries:', error);
+        return [];
+      }
+    },
+    enabled: isOpen
+  });
+
   // ========== Load Invoice Data ==========
   useEffect(() => {
     if (isOpen && invoiceData) {
-      // ✅ حط رقم الفاتورة
+      // ✅ حط رقم الفاتورة و treasury_id من الفاتورة
       setFormData(prev => ({
         ...prev,
-        sales_invoice_id: invoiceData.id
+        sales_invoice_id: invoiceData.id,
+        treasury_id: invoiceData.treasury_id || ""
       }));
       
       // ✅ حول الأصناف من الفاتورة
@@ -111,8 +147,9 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
     setItems([]);
     setFormData({
       sales_invoice_id: "",
-      return_method: "نقدي",
-      note: ""
+      return_method: "cash",
+      note: "",
+      treasury_id: ""
     });
   };
 
@@ -122,6 +159,9 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
       // التحقق من البيانات المطلوبة
       if (!formData.sales_invoice_id) {
         throw new Error(language === 'ar' ? 'رقم الفاتورة مطلوب' : 'Invoice number is required');
+      }
+      if (!formData.treasury_id) {
+        throw new Error(language === 'ar' ? 'يجب اختيار الخزينة' : 'Treasury is required');
       }
       if (items.length === 0) {
         throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
@@ -133,11 +173,12 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         throw new Error(language === 'ar' ? 'يجب كتابة سبب الإرجاع لجميع الأصناف' : 'Reason is required for all items');
       }
 
-      // ✅ تجهيز payload
+      // ✅ تجهيز payload مع treasury_id
       const payload = {
         sales_invoice_id: Number(formData.sales_invoice_id),
         return_method: formData.return_method,
         note: formData.note || null,
+        treasury_id: Number(formData.treasury_id), // ✅ أضفنا treasury_id
         items: items.map(item => ({
           product_id: Number(item.product_id),
           quantity: Number(item.quantity),
@@ -146,7 +187,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         }))
       };
 
-      console.log('📦 Sending payload to /invoice-return/store:', JSON.stringify(payload, null, 2));
+      console.log('📦 Sending payload to /sales-invoice-return/store:', JSON.stringify(payload, null, 2));
 
       const response = await api.post('/sales-invoice-return/store', payload);
       return response.data;
@@ -157,6 +198,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
       // تحديث البيانات
       queryClient.invalidateQueries({ queryKey: ['invoice-returns'] });
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['treasuries-form'] });
       
       // إغلاق النموذج وإعادة تعيينه
       resetForm();
@@ -251,30 +293,82 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
               </Card>
             )}
 
-            {/* Return Method */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <div className="w-1 h-5 bg-amber-500 rounded-full" />
-                  {language === 'ar' ? 'طريقة الإرجاع' : 'Return Method'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Select
-                  value={formData.return_method}
-                  onValueChange={(value) => setFormData({ ...formData, return_method: value })}
-                >
-                  <SelectTrigger className="w-full md:w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="نقدي">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
-                    <SelectItem value="بطاقة">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                    <SelectItem value="رصيد">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </CardContent>
-            </Card>
+            {/* Return Method & Treasury */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Return Method */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="w-1 h-5 bg-amber-500 rounded-full" />
+                    {language === 'ar' ? 'طريقة الإرجاع' : 'Return Method'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={formData.return_method}
+                    onValueChange={(value) => setFormData({ ...formData, return_method: value })}
+                  >
+                    <SelectTrigger className="w-full md:w-64">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
+                      <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
+                      <SelectItem value="credit">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+
+              {/* ✅ Treasury Selection - جديدة */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <div className="w-1 h-5 bg-blue-500 rounded-full" />
+                    <Building2 className="h-4 w-4 text-blue-500" />
+                    {language === 'ar' ? 'الخزينة' : 'Treasury'}
+                    <span className="text-destructive ml-1">*</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={formData.treasury_id}
+                    onValueChange={(value) => setFormData({ ...formData, treasury_id: value })}
+                    disabled={loadingTreasuries}
+                  >
+                    <SelectTrigger className="w-full md:w-64">
+                      <SelectValue placeholder={
+                        loadingTreasuries 
+                          ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...')
+                          : (language === 'ar' ? 'اختر الخزينة' : 'Select Treasury')
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingTreasuries ? (
+                        <SelectItem value="" disabled>
+                          {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+                        </SelectItem>
+                      ) : treasuries.length === 0 ? (
+                        <SelectItem value="" disabled>
+                          {language === 'ar' ? 'لا توجد خزائن' : 'No treasuries found'}
+                        </SelectItem>
+                      ) : (
+                        treasuries.map((treasury: Treasury) => (
+                          <SelectItem key={treasury.id} value={String(treasury.id)}>
+                            <div className="flex items-center justify-between w-full">
+                              <span>{treasury.name}</span>
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {formatCurrency(treasury.balance)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Return Items */}
             <Card>
@@ -425,7 +519,8 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                     onClick={() => createReturnMutation.mutate()}
                     disabled={
                       createReturnMutation.isPending || 
-                      items.length === 0
+                      items.length === 0 ||
+                      !formData.treasury_id
                     }
                     className="w-full md:w-auto gap-2 h-11 px-6 bg-amber-600 hover:bg-amber-700"
                     size="lg"
