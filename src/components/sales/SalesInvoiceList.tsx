@@ -24,7 +24,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-
+import { Loader2 } from "lucide-react";
 // ========== مكون الطباعة المتقدم ==========
 const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
   ({ invoice, companyInfo, language }, ref) => {
@@ -33,8 +33,8 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
     // حساب الخصم الكلي للمنتجات
     const getItemsTotalDiscount = () => {
       return invoice.items?.reduce((sum: number, item: any) => {
-        const itemDiscount = item.discount_amount || 
-                            (item.price * item.quantity - item.total) || 0;
+        const itemDiscount = item.discount_amount ||
+          (item.price * item.quantity - item.total) || 0;
         return sum + Number(itemDiscount);
       }, 0) || 0;
     };
@@ -162,12 +162,12 @@ const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
             </thead>
             <tbody>
               {invoice.items?.map((item: any, idx: number) => {
-                const itemDiscountAmount = item.discount_amount || 
-                                          (item.price * item.quantity - item.total) || 0;
-                const itemDiscountPercent = item.discount_percentage || 
-                                           item.discount_percent || 
-                                           (itemDiscountAmount > 0 ? (itemDiscountAmount / (item.price * item.quantity)) * 100 : 0);
-                
+                const itemDiscountAmount = item.discount_amount ||
+                  (item.price * item.quantity - item.total) || 0;
+                const itemDiscountPercent = item.discount_percentage ||
+                  item.discount_percent ||
+                  (itemDiscountAmount > 0 ? (itemDiscountAmount / (item.price * item.quantity)) * 100 : 0);
+
                 return (
                   <tr key={idx} className="border-b hover:bg-gray-50">
                     <td className="p-3 border">{idx + 1}</td>
@@ -703,18 +703,54 @@ const SalesInvoiceList = () => {
   };
 
   // ========== جلب فاتورة للمرتجع ==========
+  // ========== جلب فاتورة للمرتجع ==========
   const fetchInvoiceForReturn = async (invoiceId: number) => {
     try {
+      // عرض رسالة تحميل
+      const loadingToast = toast.loading(
+        language === 'ar' ? 'جاري تحميل الفاتورة...' : 'Loading invoice...'
+      );
+
       const response = await api.get(`/sales-invoices/${invoiceId}`);
+
+      // إلغاء رسالة التحميل
+      toast.dismiss(loadingToast);
+
       if (response.data.result === 'Success') {
-        setSelectedInvoiceForReturn(response.data.data);
+        // تأكد من أن البيانات تحتوي على العناصر المطلوبة
+        const invoiceData = response.data.data;
+
+        // تحقق من وجود items في الفاتورة
+        if (!invoiceData.items || invoiceData.items.length === 0) {
+          toast.warning(
+            language === 'ar'
+              ? 'هذه الفاتورة لا تحتوي على أصناف للمرتجع'
+              : 'This invoice has no items to return'
+          );
+          return;
+        }
+
+        // تعيين البيانات وفتح الفورم
+        setSelectedInvoiceForReturn(invoiceData);
         setShowReturnForm(true);
+
       } else {
-        toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error fetching invoice');
+        toast.error(
+          language === 'ar'
+            ? 'خطأ في جلب الفاتورة: ' + (response.data.message || '')
+            : 'Error fetching invoice: ' + (response.data.message || '')
+        );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching invoice for return:', error);
-      toast.error(language === 'ar' ? 'خطأ في جلب الفاتورة' : 'Error fetching invoice');
+
+      // عرض رسالة خطأ مفصلة
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      toast.error(
+        language === 'ar'
+          ? `خطأ في جلب الفاتورة: ${errorMessage}`
+          : `Error fetching invoice: ${errorMessage}`
+      );
     }
   };
 
@@ -803,8 +839,8 @@ const SalesInvoiceList = () => {
   // حساب خصم المنتجات
   const getItemsDiscount = (invoice: SalesInvoice) => {
     return invoice.items?.reduce((sum, item: any) => {
-      const itemDiscount = item.discount_amount || 
-                          (item.price * item.quantity - item.total) || 0;
+      const itemDiscount = item.discount_amount ||
+        (item.price * item.quantity - item.total) || 0;
       return sum + Number(itemDiscount);
     }, 0) || 0;
   };
@@ -1098,7 +1134,7 @@ const SalesInvoiceList = () => {
                             {/* خصم المنتجات */}
                             {getItemsDiscount(invoice) > 0 && (
                               <span className="text-xs text-red-500">
-                                {language === 'ar' ? 'خصم منتجات:' : 'Items:'} 
+                                {language === 'ar' ? 'خصم منتجات:' : 'Items:'}
                                 - {getItemsDiscount(invoice).toLocaleString()}
                               </span>
                             )}
@@ -1106,9 +1142,9 @@ const SalesInvoiceList = () => {
                             {/* خصم الفاتورة */}
                             {Number(invoice.discount_amount) > 0 && (
                               <span className="text-xs text-red-600">
-                                {language === 'ar' ? 'خصم فاتورة:' : 'Invoice:'} 
+                                {language === 'ar' ? 'خصم فاتورة:' : 'Invoice:'}
                                 - {Number(invoice.discount_amount).toLocaleString()}
-                                {invoice.discount_percentage && 
+                                {invoice.discount_percentage &&
                                   ` (${invoice.discount_percentage}%)`
                                 }
                               </span>
@@ -1132,31 +1168,31 @@ const SalesInvoiceList = () => {
                             <span className="text-red-600 font-semibold">
                               {getTotalDiscount(invoice).toLocaleString()}
                             </span>
-                            
+
                             {/* خصم الفاتورة */}
                             <span className="text-xs text-muted-foreground">
-                              {language === 'ar' ? 'خصم الفاتورة:' : 'Invoice:'} 
+                              {language === 'ar' ? 'خصم الفاتورة:' : 'Invoice:'}
                               {Number(invoice.discount_amount || 0).toLocaleString()}
-                              {invoice.discount_percentage && 
+                              {invoice.discount_percentage &&
                                 ` (${invoice.discount_percentage}%)`
                               }
                             </span>
-                            
+
                             {/* خصم المنتجات */}
                             <span className="text-xs text-muted-foreground">
-                              {language === 'ar' ? 'خصم المنتجات:' : 'Items:'} 
+                              {language === 'ar' ? 'خصم المنتجات:' : 'Items:'}
                               {getItemsDiscount(invoice).toLocaleString()}
                             </span>
 
                             {/* تفاصيل خصم كل منتج */}
                             {invoice.items?.map((item: any, idx: number) => {
-                              const itemDiscount = item.discount_amount || 
-                                                  (item.price * item.quantity - item.total) || 0;
+                              const itemDiscount = item.discount_amount ||
+                                (item.price * item.quantity - item.total) || 0;
                               if (itemDiscount > 0) {
                                 return (
                                   <span key={idx} className="text-xs text-muted-foreground/70">
                                     • {item.product_name}: {itemDiscount.toLocaleString()}
-                                    {item.discount_percentage && 
+                                    {item.discount_percentage &&
                                       ` (${item.discount_percentage}%)`
                                     }
                                   </span>
@@ -1175,38 +1211,39 @@ const SalesInvoiceList = () => {
                         {/* الإجراءات */}
                         <TableCell>
                           <div className="flex items-center justify-center gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 hover:bg-primary/10" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setSelectedInvoice(invoice); 
-                              }} 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-primary/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedInvoice(invoice);
+                              }}
                               title={language === 'ar' ? 'عرض' : 'View'}
                             >
                               <Eye size={16} />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 hover:bg-blue-500/10" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                fetchInvoiceDetails(invoice.id); 
-                              }} 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-blue-500/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fetchInvoiceDetails(invoice.id);
+                              }}
                               title={language === 'ar' ? 'طباعة' : 'Print'}
                             >
                               <Printer size={16} />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 hover:bg-amber-500/10" 
-                              onClick={async (e) => { 
-                                e.stopPropagation(); 
-                                await fetchInvoiceForReturn(invoice.id); 
-                              }} 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-amber-500/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // console.log('🔄 Return button clicked for invoice:', invoice.id);
+                                fetchInvoiceForReturn(invoice.id);
+                              }}
                               title={language === 'ar' ? 'مرتجع' : 'Return'}
                             >
                               <RotateCcw size={16} />

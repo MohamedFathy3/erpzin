@@ -44,16 +44,18 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const { formatCurrency } = useRegionalSettings();
-  
+
   // ========== State ==========
   const [items, setItems] = useState<ReturnItem[]>([]);
   const [formData, setFormData] = useState({
     sales_invoice_id: "",
     return_method: "cash",
     note: "",
-    treasury_id: "" // ✅ أضفنا treasury_id
+    treasury_id: "",
+    branch_id: ""
   });
   const [returnNumber, setReturnNumber] = useState<string>("");
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
   // ========== Generate Return Number ==========
   useEffect(() => {
@@ -67,19 +69,51 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
     }
   }, [isOpen]);
 
+  // ========== Load Invoice Data ==========
+  useEffect(() => {
+    if (isOpen && invoiceData) {
+      // ✅ حط رقم الفاتورة و treasury_id و branch_id من الفاتورة
+      setFormData(prev => ({
+        ...prev,
+        sales_invoice_id: invoiceData.id,
+        treasury_id: invoiceData.treasury_id || "",
+        branch_id: invoiceData.branch_id || invoiceData.branch?.id || "" // ✅ جيب الـ branch_id
+      }));
+
+      setSelectedInvoice(invoiceData);
+
+      if (invoiceData.items?.length > 0) {
+        const returnItems = invoiceData.items.map((item: any) => ({
+          id: crypto.randomUUID(),
+          product_id: item.product_id,
+          product_name: item.product_name,
+          sku: item.sku || '',
+          // quantity: 1,
+          quantity: Math.min(1, item.quantity || 1),
+          price: Number(item.price) || 0,
+          reason: ""
+        }));
+        setItems(returnItems);
+      }
+    }
+  }, [isOpen, invoiceData]);
+
   // ========== جلب الخزائن ==========
   const { data: treasuries = [], isLoading: loadingTreasuries } = useQuery({
-    queryKey: ['treasuries-form'],
+    queryKey: ['treasuries-form', formData.branch_id],
     queryFn: async () => {
       try {
+        const filters: any = {};
+        if (formData.branch_id) filters.branch_id = Number(formData.branch_id);
+
         const response = await api.post('/treasury/index', {
-          filters: {},
+          filters,
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 100,
           paginate: false
         });
-        
+
         if (response.data.result === 'Success') {
           return response.data.data || [];
         }
@@ -89,34 +123,8 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         return [];
       }
     },
-    enabled: isOpen
+    enabled: isOpen // ✅ يشتغل دايماً لما الفورم مفتوح
   });
-
-  // ========== Load Invoice Data ==========
-  useEffect(() => {
-    if (isOpen && invoiceData) {
-      // ✅ حط رقم الفاتورة و treasury_id من الفاتورة
-      setFormData(prev => ({
-        ...prev,
-        sales_invoice_id: invoiceData.id,
-        treasury_id: invoiceData.treasury_id || ""
-      }));
-      
-      // ✅ حول الأصناف من الفاتورة
-      if (invoiceData.items?.length > 0) {
-        const returnItems = invoiceData.items.map((item: any) => ({
-          id: crypto.randomUUID(),
-          product_id: item.product_id,
-          product_name: item.product_name,
-          sku: item.sku || '',
-          quantity: 1,
-          price: Number(item.price) || 0,
-          reason: ""
-        }));
-        setItems(returnItems);
-      }
-    }
-  }, [isOpen, invoiceData]);
 
   // ========== Calculations ==========
   const totals = {
@@ -125,7 +133,6 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
 
   // ========== Handlers ==========
 
-  // ✅ تحديث منتج
   const updateItem = (id: string, field: string, value: number | string) => {
     const updated = items.map(item => {
       if (item.id === id) {
@@ -136,27 +143,26 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
     setItems(updated);
   };
 
-  // ✅ حذف منتج
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
     toast.success(language === 'ar' ? 'تم حذف المنتج' : 'Product removed');
   };
 
-  // ✅ إعادة تعيين النموذج
   const resetForm = () => {
     setItems([]);
+    setSelectedInvoice(null);
     setFormData({
       sales_invoice_id: "",
       return_method: "cash",
       note: "",
-      treasury_id: ""
+      treasury_id: "",
+      branch_id: ""
     });
   };
 
-  // ✅ إنشاء مرتجع فاتورة - POST /invoice-return/store
+  // ========== إنشاء مرتجع فاتورة ==========
   const createReturnMutation = useMutation({
     mutationFn: async () => {
-      // التحقق من البيانات المطلوبة
       if (!formData.sales_invoice_id) {
         throw new Error(language === 'ar' ? 'رقم الفاتورة مطلوب' : 'Invoice number is required');
       }
@@ -167,18 +173,16 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
       }
 
-      // ✅ التأكد إن كل item عنده سبب
       const invalidItems = items.filter(item => !item.reason || item.reason.trim() === '');
       if (invalidItems.length > 0) {
         throw new Error(language === 'ar' ? 'يجب كتابة سبب الإرجاع لجميع الأصناف' : 'Reason is required for all items');
       }
 
-      // ✅ تجهيز payload مع treasury_id
       const payload = {
         sales_invoice_id: Number(formData.sales_invoice_id),
         return_method: formData.return_method,
         note: formData.note || null,
-        treasury_id: Number(formData.treasury_id), // ✅ أضفنا treasury_id
+        treasury_id: Number(formData.treasury_id),
         items: items.map(item => ({
           product_id: Number(item.product_id),
           quantity: Number(item.quantity),
@@ -187,31 +191,29 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         }))
       };
 
-      console.log('📦 Sending payload to /sales-invoice-return/store:', JSON.stringify(payload, null, 2));
+      console.log('📦 Sending payload:', JSON.stringify(payload, null, 2));
 
       const response = await api.post('/sales-invoice-return/store', payload);
       return response.data;
     },
     onSuccess: (data) => {
       toast.success(language === 'ar' ? '✅ تم إنشاء مرتجع الفاتورة بنجاح' : '✅ Invoice return created successfully');
-      
-      // تحديث البيانات
+
       queryClient.invalidateQueries({ queryKey: ['invoice-returns'] });
       queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['treasuries-form'] });
-      
-      // إغلاق النموذج وإعادة تعيينه
+
       resetForm();
       onClose();
     },
     onError: (error: any) => {
-      console.error('❌ Error creating invoice return:', error.response?.data || error);
-      
+      console.error('❌ Error:', error.response?.data || error);
+
       const errorData = error.response?.data;
       let errorMessage = errorData?.message || error.message;
-      
+
       toast.error(
-        language === 'ar' 
+        language === 'ar'
           ? `❌ خطأ: ${errorMessage}`
           : `❌ Error: ${errorMessage}`
       );
@@ -220,8 +222,8 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
 
   // ========== Render ==========
   return (
-    <Dialog 
-      open={isOpen} 
+    <Dialog
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
           resetForm();
@@ -254,7 +256,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         <div className="p-6">
           <div className="space-y-6">
             {/* Invoice Info */}
-            {invoiceData && (
+            {selectedInvoice && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -269,7 +271,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                         {language === 'ar' ? 'رقم الفاتورة' : 'Invoice Number'}
                       </p>
                       <p className="font-bold text-green-700 dark:text-green-400 font-mono">
-                        {invoiceData.invoice_number}
+                        {selectedInvoice.invoice_number}
                       </p>
                     </div>
                     <div>
@@ -277,16 +279,16 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                         {language === 'ar' ? 'العميل' : 'Customer'}
                       </p>
                       <p className="font-medium">
-                        {language === 'ar' 
-                          ? invoiceData.customer?.name_ar || invoiceData.customer?.name 
-                          : invoiceData.customer?.name}
+                        {language === 'ar'
+                          ? selectedInvoice.customer?.name_ar || selectedInvoice.customer?.name
+                          : selectedInvoice.customer?.name}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">
                         {language === 'ar' ? 'التاريخ' : 'Date'}
                       </p>
-                      <p className="font-medium">{invoiceData.due_date}</p>
+                      <p className="font-medium">{selectedInvoice.invoice_date}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -308,19 +310,20 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                     value={formData.return_method}
                     onValueChange={(value) => setFormData({ ...formData, return_method: value })}
                   >
-                    <SelectTrigger className="w-full md:w-64">
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cash">{language === 'ar' ? 'نقداً' : 'Cash'}</SelectItem>
                       <SelectItem value="card">{language === 'ar' ? 'بطاقة' : 'Card'}</SelectItem>
-                      <SelectItem value="credit">{language === 'ar' ? 'رصيد' : 'Store Credit'}</SelectItem>
+                      <SelectItem value="wallet">{language === 'ar' ? 'محفظة' : 'Wallet'}</SelectItem>
+                      <SelectItem value="bank">{language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer'}</SelectItem>
                     </SelectContent>
                   </Select>
                 </CardContent>
               </Card>
 
-              {/* ✅ Treasury Selection - جديدة */}
+              {/* Treasury Selection */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -336,19 +339,15 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                     onValueChange={(value) => setFormData({ ...formData, treasury_id: value })}
                     disabled={loadingTreasuries}
                   >
-                    <SelectTrigger className="w-full md:w-64">
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder={
-                        loadingTreasuries 
+                        loadingTreasuries
                           ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...')
                           : (language === 'ar' ? 'اختر الخزينة' : 'Select Treasury')
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      {loadingTreasuries ? (
-                        <SelectItem value="" disabled>
-                          {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
-                        </SelectItem>
-                      ) : treasuries.length === 0 ? (
+                      {treasuries.length === 0 && !loadingTreasuries ? (
                         <SelectItem value="" disabled>
                           {language === 'ar' ? 'لا توجد خزائن' : 'No treasuries found'}
                         </SelectItem>
@@ -366,6 +365,11 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                       )}
                     </SelectContent>
                   </Select>
+                  {treasuries.length === 0 && !loadingTreasuries && (
+                    <p className="text-xs text-destructive mt-2">
+                      {language === 'ar' ? 'لا توجد خزائن متاحة' : 'No treasuries available'}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -384,7 +388,6 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Items Table */}
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader className="bg-muted/50">
@@ -399,7 +402,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                           {language === 'ar' ? 'السعر' : 'Price'}
                         </TableHead>
                         <TableHead className="min-w-[200px]">
-                          {language === 'ar' ? 'سبب الإرجاع' : 'Reason'} 
+                          {language === 'ar' ? 'سبب الإرجاع' : 'Reason'}
                           <span className="text-destructive ml-1">*</span>
                         </TableHead>
                         <TableHead className="w-28 text-right">
@@ -415,8 +418,8 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                             <div className="flex flex-col items-center gap-3">
                               <ArrowLeftRight size={32} className="opacity-30" />
                               <span className="text-sm">
-                                {language === 'ar' 
-                                  ? 'لا توجد أصناف في الفاتورة' 
+                                {language === 'ar'
+                                  ? 'لا توجد أصناف في الفاتورة'
                                   : 'No items in this invoice'}
                               </span>
                             </div>
@@ -435,7 +438,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                               <Input
                                 type="number"
                                 min="1"
-                                max={invoiceData?.items?.find((i: any) => i.product_id === item.product_id)?.quantity || 99}
+                                max={selectedInvoice?.items?.find((i: any) => i.product_id === item.product_id)?.quantity || 99}
                                 value={item.quantity}
                                 onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
                                 className="w-16 text-center mx-auto"
@@ -518,7 +521,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                   <Button
                     onClick={() => createReturnMutation.mutate()}
                     disabled={
-                      createReturnMutation.isPending || 
+                      createReturnMutation.isPending ||
                       items.length === 0 ||
                       !formData.treasury_id
                     }
