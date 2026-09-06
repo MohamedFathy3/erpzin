@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe, Upload } from 'lucide-react';
+import { Loader2, LogIn, UserPlus, Mail, Lock, User, Globe, Upload, ArrowRight, ShieldCheck, BarChart3, Boxes } from 'lucide-react';
 import { z } from 'zod';
 import logoFull from '@/assets/logo-full.png';
 import FileUploader from '@/components/FileUploader';
@@ -239,97 +239,59 @@ const Auth = () => {
   };
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center p-4 relative"
-      style={{ background: 'linear-gradient(135deg, hsl(224 70% 12%) 0%, hsl(224 65% 22%) 52%, hsl(187 78% 31%) 100%)' }}
+    <div
+      className="relative min-h-screen overflow-hidden bg-[#071329] p-4 text-foreground sm:p-6 lg:p-10"
       dir={direction}
     >
-      {/* Language Selector */}
-      <div className="absolute top-4 end-4">
+      <div className="pointer-events-none absolute -start-24 -top-24 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 -end-20 h-96 w-96 rounded-full bg-violet-500/20 blur-3xl" />
+
+      <div className="absolute end-5 top-5 z-10 sm:end-8 sm:top-8">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
-              <Globe size={16} className="me-2" />
-              {language === 'ar' ? 'العربية' : 'English'}
+            <Button variant="outline" size="sm" className="border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white">
+              <Globe size={16} className="me-2" /> {language === 'ar' ? 'العربية' : 'English'}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setLanguage('ar')} className="flex items-center gap-2">
-              <span>🇾🇪</span>
-              <span>العربية</span>
-              {language === 'ar' && <span className="ms-auto text-primary">✓</span>}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLanguage('en')} className="flex items-center gap-2">
-              <span>🇺🇸</span>
-              <span>English</span>
-              {language === 'en' && <span className="ms-auto text-primary">✓</span>}
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLanguage('ar')}>العربية {language === 'ar' && <span className="ms-auto text-primary">✓</span>}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLanguage('en')}>English {language === 'en' && <span className="ms-auto text-primary">✓</span>}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <Card className="w-full max-w-md shadow-2xl border-0">
-        <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-4">
-            <img src={logoFull} alt="Fusion X ERP" className="h-16 object-contain" />
-          </div>
-          <CardTitle className="text-xl">{t.welcome}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-1 mb-6">
-              <TabsTrigger value="login" className="flex items-center gap-2">
-                <LogIn size={16} />
-                {t.loginTitle}
-              </TabsTrigger>
-            </TabsList>
+      <div className="relative mx-auto grid min-h-[calc(100vh-2rem)] w-full max-w-6xl items-center overflow-hidden rounded-[2rem] border border-white/10 bg-white shadow-2xl shadow-black/30 lg:min-h-[680px] lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="order-2 flex min-h-[560px] items-center justify-center bg-white px-6 py-12 sm:px-12 lg:order-1 lg:px-16">
+          <div className="w-full max-w-md">
+            <div className="mb-10 lg:hidden"><img src={logoFull} alt="Fusion X ERP" className="h-12 w-auto object-contain" /></div>
+            <div className="mb-8">
+              <p className="mb-3 text-sm font-semibold tracking-[0.2em] text-cyan-600">FUSION X ERP</p>
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">{t.welcome}</h1>
+              <p className="mt-3 text-sm leading-7 text-slate-500">{language === 'ar' ? 'أدخل بياناتك للوصول إلى مساحة العمل وإدارة مؤسستك بكل سهولة.' : 'Sign in to manage your workspace and run your business with clarity.'}</p>
+            </div>
 
-            {/* Login Tab */}
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-identifier" className="flex items-center gap-2">
-                    <User size={14} />
-                    {t.identifier}
-                  </Label>
-                  <Input
-                    id="login-identifier"
-                    type="text"
-                    placeholder={t.identifierPlaceholder}
-                    value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password" className="flex items-center gap-2">
-                    <Lock size={14} />
-                    {t.password}
-                  </Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder={t.passwordPlaceholder}
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <Button type="submit" className="w-full gradient-primary" disabled={loading}>
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin me-2" />
-                  ) : (
-                    <LogIn size={16} className="me-2" />
-                  )}
-                  {t.login}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-7 grid w-full grid-cols-1 rounded-xl bg-slate-100 p-1">
+                <TabsTrigger value="login" className="rounded-lg py-2.5 font-semibold data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"><LogIn size={16} className="me-2" />{t.loginTitle}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div className="space-y-2"><Label htmlFor="login-identifier" className="text-sm font-semibold text-slate-700">{t.identifier}</Label><div className="relative"><User className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><Input id="login-identifier" type="text" placeholder={t.identifierPlaceholder} value={loginIdentifier} onChange={(e) => setLoginIdentifier(e.target.value)} required dir="ltr" className="h-12 rounded-xl border-slate-200 ps-10 focus-visible:ring-cyan-500" /></div></div>
+                  <div className="space-y-2"><Label htmlFor="login-password" className="text-sm font-semibold text-slate-700">{t.password}</Label><div className="relative"><Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><Input id="login-password" type="password" placeholder={t.passwordPlaceholder} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required dir="ltr" className="h-12 rounded-xl border-slate-200 ps-10 focus-visible:ring-cyan-500" /></div></div>
+                  <Button type="submit" className="h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-base font-bold shadow-lg shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-blue-700" disabled={loading}>{loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ArrowRight size={17} className="me-2" />}{t.login}</Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+            <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck size={15} className="text-emerald-500" /> {language === 'ar' ? 'بياناتك محمية ومشفرة' : 'Your data is protected and encrypted'}</div>
+          </div>
+        </section>
+
+        <section className="relative order-1 hidden min-h-[680px] overflow-hidden bg-gradient-to-br from-[#0d1b3d] via-[#14275a] to-[#075e75] p-12 text-white lg:order-2 lg:flex lg:flex-col lg:justify-between">
+          <div className="absolute -end-28 -top-24 h-80 w-80 rounded-full border border-cyan-300/20" /><div className="absolute -bottom-28 -start-24 h-80 w-80 rounded-full border border-violet-300/20" />
+          <div className="relative"><img src={logoFull} alt="Fusion X ERP" className="h-14 w-auto object-contain brightness-0 invert" /><div className="mt-20 max-w-md"><p className="mb-4 text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">Enterprise • Connected • Simple</p><h2 className="text-4xl font-extrabold leading-tight">{language === 'ar' ? 'كل أعمالك في مكان واحد.' : 'Your whole business, connected.'}</h2><p className="mt-5 text-base leading-8 text-slate-300">{language === 'ar' ? 'من المبيعات والمخزون إلى المصانع والمقاولات والمالية، Fusion X يربط كل خطوة في دورة عمل واضحة.' : 'From sales and inventory to manufacturing, projects, and finance — Fusion X connects every step.'}</p></div></div>
+          <div className="relative grid grid-cols-3 gap-3"><div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur"><Boxes className="mb-3 text-cyan-300" size={22} /><p className="text-sm font-semibold">{language === 'ar' ? 'قطاعات متعددة' : 'Multi-sector'}</p></div><div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur"><BarChart3 className="mb-3 text-violet-300" size={22} /><p className="text-sm font-semibold">{language === 'ar' ? 'قرارات أذكى' : 'Better insight'}</p></div><div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur"><ShieldCheck className="mb-3 text-emerald-300" size={22} /><p className="text-sm font-semibold">{language === 'ar' ? 'تحكم آمن' : 'Secure control'}</p></div></div>
+        </section>
+      </div>
     </div>
   );
 };
