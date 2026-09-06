@@ -100,6 +100,22 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
+    id: 'manufacturing',
+    path: '/manufacturing',
+    label: 'Manufacturing',
+    labelAr: 'المصانع والإنتاج',
+    icon: 'Factory',
+    allowedRoles: ['admin', 'Manager', 'warehouse', 'purchasing', 'Accountant'],
+  },
+  {
+    id: 'projects',
+    path: '/projects',
+    label: 'Projects',
+    labelAr: 'المقاولات والمشروعات',
+    icon: 'HardHat',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales'],
+  },
+  {
     id: 'settings',
     path: '/settings',
     label: 'Settings',
