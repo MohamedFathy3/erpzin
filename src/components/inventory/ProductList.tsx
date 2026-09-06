@@ -35,6 +35,7 @@ export interface Product {
   image_url?: string | null;
   description?: string;
   active?: boolean;
+  warehouseIds?: string[];
   // ✅ إضافة units من API
   units?: Array<{
     id: number;
@@ -164,7 +165,8 @@ export const transformApiProduct = (apiProduct: any): Product => {
     status: mapProductStatus(apiProduct),
     hasVariants: (apiProduct.units && apiProduct.units.length > 0) || false, // ✅ true إذا في units
     active: apiProduct.active || false,
-    units: apiProduct.units || [] // ✅ تمرير units كاملة
+    units: apiProduct.units || [], // ✅ تمرير units كاملة
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids) ? apiProduct.warehouse_ids.map((id: number | string) => String(id)) : []
   };
 
   console.log('✅ Transformed product:', {

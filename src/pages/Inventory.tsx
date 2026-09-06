@@ -334,7 +334,7 @@ const Inventory: React.FC = () => {
       // ✅ البحث (الاسم - SKU - الباركود)
       const matchesSearch = searchQuery === '' ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.nameAr.includes(searchQuery) ||
+        (product.nameAr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (product.barcode && product.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -344,7 +344,8 @@ const Inventory: React.FC = () => {
       else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
 
-      return matchesSearch && matchesStock;
+      const matchesWarehouse = warehouseFilter === 'all' || product.warehouseIds?.includes(warehouseFilter);
+      return matchesSearch && matchesStock && matchesWarehouse;
     });
 
     // ✅ ترتيب المنتجات
@@ -377,7 +378,7 @@ const Inventory: React.FC = () => {
     });
 
     return filtered;
-  }, [products, searchQuery, stockFilter, sortBy, language]);
+  }, [products, searchQuery, stockFilter, warehouseFilter, sortBy, language]);
 
   // ========== Pagination ==========
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
