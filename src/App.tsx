@@ -23,6 +23,7 @@ import Settings from "./pages/Settings";
 import Industries from "./pages/Industries";
 import Manufacturing from "./pages/Manufacturing";
 import Projects from "./pages/Projects";
+import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />
                 <Route path="/manufacturing" element={<ProtectedRoute><Manufacturing /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+                <Route path="/workflow" element={<ProtectedRoute><Workflow /></ProtectedRoute>} />
                 <Route path="/POSRetrun" element={<ProtectedRoute><POSRetrun /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

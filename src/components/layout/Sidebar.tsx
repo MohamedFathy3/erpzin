@@ -53,6 +53,7 @@ const getIcon = (iconName: string) => {
     Warehouse: Icons.Warehouse,
     Factory: Icons.Factory,
     HardHat: Icons.HardHat,
+    Activity: Icons.Activity,
   };
   
   const Icon = icons[iconName] || Icons.LayoutDashboard;

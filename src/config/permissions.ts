@@ -116,6 +116,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales'],
   },
   {
+    id: 'workflow',
+    path: '/workflow',
+    label: 'Workflow Center',
+    labelAr: 'مركز ترابط العمليات',
+    icon: 'Activity',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
     id: 'settings',
     path: '/settings',
     label: 'Settings',
