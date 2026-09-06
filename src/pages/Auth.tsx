@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getAllowedPages } from '@/config/permissions'; // استيراد دالة الصلاحيات
+import { getAllowedPages, UserRole } from '@/config/permissions'; // استيراد دالة الصلاحيات
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, { message: 'اسم المستخدم أو البريد الإلكتروني مطلوب' }),
@@ -37,8 +37,8 @@ const signupSchema = z.object({
 });
 
 // دالة لتحديد الصفحة الافتراضية بناءً على دور المستخدم
-const getDefaultRoute = (role: string): string => {
-  const allowedPages = getAllowedPages(role as any);
+const getDefaultRoute = (role: UserRole): string => {
+  const allowedPages = getAllowedPages(role);
   
   // ترتيب الأولويات للصفحات
   const priorityPages = ['dashboard', 'pos', 'sales', 'inventory'];
@@ -80,7 +80,7 @@ const Auth = () => {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
 
-  const from = (location.state as any)?.from?.pathname || '/';
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
   // توجيه المستخدم بعد تسجيل الدخول بناءً على دوره
   useEffect(() => {
@@ -90,7 +90,7 @@ const Auth = () => {
         navigate(from, { replace: true });
       } else {
         // وإلا، استخدم الصفحة الافتراضية بناءً على الدور
-        const defaultRoute = getDefaultRoute(user.role);
+        const defaultRoute = getDefaultRoute(user.role as UserRole);
         navigate(defaultRoute, { replace: true });
       }
     }

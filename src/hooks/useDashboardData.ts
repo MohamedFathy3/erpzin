@@ -124,7 +124,7 @@ export const useDashboardData = () => {
     queryKey: ['revenue-report', currentBranch?.id],
     queryFn: async () => {
       try {
-        const params: any = {};
+        const params: Record<string, number> = {};
         if (currentBranch?.id) {
           params.branch_id = currentBranch.id;
         }
