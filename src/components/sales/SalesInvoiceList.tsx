@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo, useRef, forwardRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import {
   ChevronDown, ChevronUp, Printer, FileSpreadsheet,
   DollarSign, CreditCard, Wallet, Calendar, User,
   Building2, Package, Truck, Hash, Clock, Percent,
-  Tag, Info, Download, Share2
+  Tag, Info, Download, Share2, XCircle
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import SalesInvoiceForm from "./SalesInvoiceForm";
@@ -422,6 +422,7 @@ interface SalesInvoice {
   items: SalesInvoiceItem[];
   created_at: string;
   updated_at: string;
+  workflow_status?: string;
 }
 
 interface InvoiceFilters {
@@ -452,6 +453,21 @@ const SalesInvoiceList = () => {
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [invoiceToPrint, setInvoiceToPrint] = useState<SalesInvoice | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const cancelInvoiceMutation = useMutation({
+    mutationFn: (invoiceId: number) => api.post(`/sales-invoices/${invoiceId}/cancel`),
+    onSuccess: () => {
+      toast.success(language === 'ar' ? 'تم إلغاء الفاتورة وعكس الأثر المالي والمخزني' : 'Invoice cancelled and financial/inventory effects reversed');
+      queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || (language === 'ar' ? 'تعذر إلغاء الفاتورة' : 'Unable to cancel invoice')),
+  });
+
+  const handleCancelInvoice = (invoice: SalesInvoice) => {
+    if (invoice.workflow_status === 'cancelled') return;
+    const confirmed = window.confirm(language === 'ar' ? `هل تريد إلغاء الفاتورة ${invoice.invoice_number}؟ سيتم عكس المخزون والقيد والخزينة.` : `Cancel invoice ${invoice.invoice_number}? Inventory, journal and treasury effects will be reversed.`);
+    if (confirmed) cancelInvoiceMutation.mutate(invoice.id);
+  };
 
   // Company Info للطباعة
   const companyInfo = {
@@ -1248,6 +1264,11 @@ const SalesInvoiceList = () => {
                             >
                               <RotateCcw size={16} />
                             </Button>
+                            {invoice.workflow_status !== 'cancelled' && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-500/10" onClick={(e) => { e.stopPropagation(); handleCancelInvoice(invoice); }} disabled={cancelInvoiceMutation.isPending} title={language === 'ar' ? 'إلغاء وعكس الأثر' : 'Cancel and reverse effects'}>
+                                <XCircle size={16} />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
