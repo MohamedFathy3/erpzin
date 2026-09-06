@@ -30,7 +30,8 @@ import {
   CheckCircle,
   XCircle,
   Edit,
-  Trash2
+  Trash2,
+  FileText
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Switch } from '@/components/ui/switch';
@@ -60,6 +61,17 @@ interface Customer {
     active?: boolean
 }
 
+interface CustomerStatementTransaction {
+  id: number;
+  source: string;
+  number: string | null;
+  date: string | null;
+  total: number;
+  paid: number;
+  due: number;
+  status: string;
+}
+
 const CRM = () => {
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
@@ -75,6 +87,7 @@ const CRM = () => {
 const [showEditCustomer, setShowEditCustomer] = useState<Customer | null>(null);
 const [showDeleteDialog, setShowDeleteDialog] = useState<Customer | null>(null);
 const [isDeleting, setIsDeleting] = useState(false);
+const [statementCustomerId, setStatementCustomerId] = useState<string | null>(null);
 const [editCustomer, setEditCustomer] = useState({
   name: '',
   name_ar: '',
@@ -323,6 +336,12 @@ const [editCustomer, setEditCustomer] = useState({
         return [];
       }
     }
+  });
+
+  const { data: customerStatement, isLoading: statementLoading } = useQuery({
+    queryKey: ['customer-statement', statementCustomerId],
+    enabled: !!statementCustomerId,
+    queryFn: async () => (await api.get(`/customer/${statementCustomerId}/statement`)).data.data,
   });
 
   // ========== Mutations ==========
@@ -902,6 +921,11 @@ const handleToggleStatus = (customer: Customer) => {
                 {language === 'ar' ? 'تعديل' : 'Edit'}
               </Button>
 
+              <Button variant="outline" size="sm" onClick={() => setStatementCustomerId(customer.id)} className="gap-1">
+                <FileText size={14} />
+                {language === 'ar' ? 'كشف الحساب' : 'Statement'}
+              </Button>
+
               {/* Redeem Points Button */}
               <Button
                 variant="outline"
@@ -1272,6 +1296,19 @@ const handleToggleStatus = (customer: Customer) => {
             })()}
           </DialogContent>
         </Dialog>
+
+{/* ========== Customer 360 Dialog ========== */}
+<Dialog open={!!statementCustomerId} onOpenChange={() => setStatementCustomerId(null)}>
+  <DialogContent className="max-w-4xl" dir={direction}>
+    <DialogHeader><DialogTitle>{language === 'ar' ? 'كشف حساب العميل 360°' : 'Customer 360 Statement'}</DialogTitle></DialogHeader>
+    {statementLoading ? <div className="py-10 text-center text-muted-foreground">{language === 'ar' ? 'جاري تحميل كل المعاملات...' : 'Loading transactions...'}</div> : customerStatement && <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {[['المعاملات', customerStatement.summary.transactions_count], ['إجمالي المشتريات', `${Number(customerStatement.summary.total_purchases).toLocaleString()} YER`], ['المدفوع', `${Number(customerStatement.summary.total_paid).toLocaleString()} YER`], ['المتبقي', `${Number(customerStatement.summary.outstanding_balance).toLocaleString()} YER`], ['المتاح الائتماني', `${Number(customerStatement.summary.available_credit).toLocaleString()} YER`]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-bold">{value}</p></div>)}
+      </div>
+      <div className="max-h-80 overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>المصدر</TableHead><TableHead>الإجمالي</TableHead><TableHead>المدفوع</TableHead><TableHead>المتبقي</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader><TableBody>{customerStatement.transactions.map((transaction: CustomerStatementTransaction) => <TableRow key={`${transaction.source}-${transaction.id}`}><TableCell>{transaction.date || '-'}</TableCell><TableCell>{transaction.number || '-'}</TableCell><TableCell>{transaction.source === 'pos' ? 'POS' : 'Sales'}</TableCell><TableCell>{Number(transaction.total).toLocaleString()}</TableCell><TableCell>{Number(transaction.paid).toLocaleString()}</TableCell><TableCell>{Number(transaction.due).toLocaleString()}</TableCell><TableCell><Badge variant={transaction.status === 'paid' ? 'default' : 'secondary'}>{transaction.status}</Badge></TableCell></TableRow>)}</TableBody></Table></div>
+    </div>}
+  </DialogContent>
+</Dialog>
 
 {/* ========== Edit Customer Dialog ========== */}
 <Dialog open={!!showEditCustomer} onOpenChange={() => setShowEditCustomer(null)}>

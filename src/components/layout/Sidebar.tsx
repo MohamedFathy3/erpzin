@@ -51,6 +51,7 @@ const getIcon = (iconName: string) => {
     Settings: Icons.Settings,
     LogOut: Icons.LogOut,
     Warehouse: Icons.Warehouse,
+    Factory: Icons.Factory,
   };
   
   const Icon = icons[iconName] || Icons.LayoutDashboard;
@@ -153,9 +154,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         collapsed ? 'justify-center p-3' : 'justify-center p-4'
       )}>
         <div className="relative w-full h-12 flex items-center justify-center">
+          {!collapsed && <div className="text-center leading-none"><div className="text-xl font-extrabold tracking-tight text-[#18255a]">Fusion <span className="text-cyan-600">X</span></div><div className="mt-1 text-[9px] font-semibold tracking-[0.18em] text-slate-500">TECH SOLUTIONS</div></div>}
           <img 
             src={logoIcon} 
-            alt="INJAZ" 
+            alt="Fusion X"
             className={cn(
               'absolute object-contain transition-all duration-300 ease-in-out',
               collapsed 
@@ -165,7 +167,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
           />
           <img 
             src={logoFull} 
-            alt="INJAZ ERP" 
+            alt="Fusion X ERP"
             className={cn(
               'object-contain transition-all duration-300 ease-in-out',
               collapsed 

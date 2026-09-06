@@ -41,6 +41,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       hr: '/hr',
       crm: '/crm',
       reports: '/reports',
+      industries: '/industries',
       settings: '/settings',
       posreturn: '/POSRetrun',
     };

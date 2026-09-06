@@ -92,6 +92,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
+    id: 'industries',
+    path: '/industries',
+    label: 'Industries',
+    labelAr: 'القطاعات والوحدات',
+    icon: 'Factory',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
+  },
+  {
     id: 'settings',
     path: '/settings',
     label: 'Settings',
