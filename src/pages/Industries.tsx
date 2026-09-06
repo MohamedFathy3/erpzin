@@ -4,66 +4,56 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Building2, Factory, HardHat, Search, Boxes, Users, Wallet, BarChart3, Link2, CheckCircle2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Building2, Factory, HardHat, Search, Boxes, Users, Wallet, BarChart3, Link2, CheckCircle2, Cog, ClipboardCheck, Wrench, FileSpreadsheet } from 'lucide-react';
 
-const sectors = [
-  { id: 'general', name: 'ERP أساسي متعدد القطاعات', nameEn: 'Core ERP', icon: Building2, color: 'from-blue-500 to-cyan-500', modules: ['المبيعات', 'المشتريات', 'المخزون', 'المالية', 'CRM', 'الموارد البشرية'] },
-  { id: 'manufacturing', name: 'المصانع والتصنيع', nameEn: 'Manufacturing', icon: Factory, color: 'from-violet-500 to-fuchsia-500', modules: ['أوامر الإنتاج', 'قوائم المواد BOM', 'مراكز العمل', 'التكاليف الصناعية', 'فحص الجودة', 'الصيانة'] },
-  { id: 'contracting', name: 'المقاولات والمشروعات', nameEn: 'Contracting & Projects', icon: HardHat, color: 'from-amber-500 to-orange-500', modules: ['المشروعات', 'المستخلصات', 'بنود الأعمال', 'المقاولون', 'الموارد والمعدات', 'التدفقات النقدية'] },
-  { id: 'retail', name: 'التجزئة ونقاط البيع', nameEn: 'Retail & POS', icon: Boxes, color: 'from-emerald-500 to-teal-500', modules: ['POS', 'العروض', 'الولاء', 'الفروع', 'التحويلات', 'الجرد'] },
-  { id: 'services', name: 'الخدمات والوكالات', nameEn: 'Services & Agencies', icon: Users, color: 'from-pink-500 to-rose-500', modules: ['العملاء', 'عقود الخدمة', 'ساعات العمل', 'الفوترة الدورية', 'التذاكر', 'مؤشرات الأداء'] },
-  { id: 'distribution', name: 'التوزيع والجملة', nameEn: 'Distribution & Wholesale', icon: Wallet, color: 'from-sky-500 to-indigo-500', modules: ['المندوبون', 'خطوط السير', 'تسعير الجملة', 'حدود الائتمان', 'التحصيل', 'المخازن'] },
-];
+type Sector = { id: string; name: string; group: string; icon: typeof Building2; modules: string[] };
 
-const sharedModules = ['العملاء والموردون', 'المبيعات والمشتريات', 'المخزون والمخازن', 'الحسابات العامة', 'الخزائن والبنوك', 'الموارد البشرية', 'التقارير ولوحات المؤشرات', 'الصلاحيات وسجل النشاط'];
+const groupConfig: Record<string, { icon: typeof Building2; color: string; modules: string[] }> = {
+  production: { icon: Factory, color: 'from-violet-500 to-fuchsia-500', modules: ['أوامر الإنتاج', 'BOM وقوائم المواد', 'التكاليف الصناعية', 'الجودة', 'الصيانة'] },
+  projects: { icon: HardHat, color: 'from-amber-500 to-orange-500', modules: ['المشروعات', 'المستخلصات', 'بنود الأعمال', 'المقاولون', 'المعدات'] },
+  commerce: { icon: Boxes, color: 'from-emerald-500 to-teal-500', modules: ['POS', 'التسعير والعروض', 'المخازن', 'المندوبون', 'التحصيل'] },
+  services: { icon: Users, color: 'from-pink-500 to-rose-500', modules: ['عقود الخدمة', 'التذاكر', 'ساعات العمل', 'الفوترة الدورية', 'مؤشرات الأداء'] },
+  finance: { icon: Wallet, color: 'from-sky-500 to-indigo-500', modules: ['الحسابات', 'الخزائن والبنوك', 'الموازنات', 'الأصول', 'التقارير'] },
+  public: { icon: Building2, color: 'from-blue-500 to-cyan-500', modules: ['الموارد البشرية', 'الموافقات', 'المشتريات', 'الأصول', 'لوحات المؤشرات'] },
+};
+
+const sectorNames = [
+  ['مصانع الأغذية والمشروبات','production'], ['مصانع الأدوية','production'], ['مصانع الكيماويات','production'], ['مصانع البلاستيك','production'], ['مصانع الورق والكرتون','production'], ['مصانع المنسوجات والملابس','production'], ['مصانع الأثاث','production'], ['مصانع الحديد والصلب','production'], ['مصانع الألومنيوم','production'], ['مصانع الأسمنت','production'], ['مصانع الطوب والسيراميك','production'], ['مصانع الزجاج','production'], ['مصانع الكابلات','production'], ['مصانع الأجهزة الكهربائية','production'], ['مصانع الإلكترونيات','production'], ['مصانع السيارات وقطع الغيار','production'], ['مصانع المعدات الثقيلة','production'], ['مصانع مواد التنظيف','production'], ['مصانع مستحضرات التجميل','production'], ['مصانع الأعلاف','production'],
+  ['المقاولات العامة','projects'], ['مقاولات المباني','projects'], ['مقاولات الطرق والكباري','projects'], ['مقاولات البنية التحتية','projects'], ['المقاولات الكهروميكانيكية','projects'], ['مقاولات التشطيبات','projects'], ['مقاولات الأعمال البحرية','projects'], ['مقاولات الطاقة الشمسية','projects'], ['مقاولات الاتصالات','projects'], ['إدارة المشروعات الهندسية','projects'], ['الاستشارات الهندسية','projects'], ['التطوير العقاري','projects'], ['إدارة المجمعات العقارية','projects'], ['صيانة المنشآت','projects'], ['أعمال الحفر والردم','projects'],
+  ['تجارة الجملة','commerce'], ['تجارة التجزئة','commerce'], ['السوبر ماركت','commerce'], ['الإلكترونيات والأجهزة','commerce'], ['قطع غيار السيارات','commerce'], ['الأدوات الصحية','commerce'], ['مواد البناء','commerce'], ['الأثاث والمفروشات','commerce'], ['الملابس والأحذية','commerce'], ['المطاعم والكافيهات','commerce'], ['الفنادق والمنتجعات','commerce'], ['التوزيع FMCG','commerce'], ['التجارة الإلكترونية','commerce'], ['معارض السيارات','commerce'], ['الصيدليات وسلاسلها','commerce'], ['المكتبات والطباعة','commerce'], ['المستلزمات الطبية','commerce'], ['الزراعة والمنتجات الزراعية','commerce'], ['الاستيراد والتصدير','commerce'],
+  ['شركات البرمجيات','services'], ['وكالات التسويق','services'], ['مراكز الاتصال','services'], ['شركات الأمن والحراسة','services'], ['شركات النظافة','services'], ['شركات النقل والشحن','services'], ['شركات التأجير','services'], ['العيادات والمراكز الطبية','services'], ['المستشفيات','services'], ['المعامل الطبية','services'], ['مراكز التدريب','services'], ['المدارس','services'], ['الجامعات','services'], ['الجمعيات الأهلية','services'], ['المحاماة والاستشارات','services'], ['المحاسبة والمراجعة','services'], ['السفر والسياحة','services'], ['الإعلام والإنتاج','services'], ['النوادي الرياضية','services'], ['خدمات الصيانة المنزلية','services'],
+  ['البنوك والتمويل','finance'], ['شركات التأمين','finance'], ['التمويل متناهي الصغر','finance'], ['شركات الاستثمار','finance'], ['مكاتب الصرافة','finance'],
+  ['الجهات الحكومية','public'], ['المنظمات الدولية','public'], ['الهيئات العامة','public'], ['الغرف التجارية','public'], ['النقابات والاتحادات','public'], ['شركات الاتصالات','public'], ['شركات الكهرباء والمياه','public'], ['شركات الغاز والطاقة','public'], ['شركات التعدين','public'], ['الموانئ والمطارات','public'], ['الخدمات اللوجستية','public'], ['المخازن المبردة','public'], ['المزارع والمشاتل','public'], ['الثروة الحيوانية والدواجن','public'], ['إدارة النفايات وإعادة التدوير','public'], ['المختبرات الصناعية','public'], ['مراكز البيانات والاستضافة','public'], ['الإسكان والتعاونيات','public'], ['المتاحف والفعاليات','public'], ['المنشآت الثقافية','public'], ['التجارة البحرية','public'],
+] as const;
+
+const sectors: Sector[] = sectorNames.map(([name, group], index) => ({ id: `sector-${index + 1}`, name, group, icon: groupConfig[group].icon, modules: groupConfig[group].modules }));
+
+const coreModules = ['العملاء والموردون', 'المبيعات والمشتريات', 'المخزون والمخازن', 'الحسابات العامة', 'الخزائن والبنوك', 'الموارد البشرية', 'الصلاحيات وسجل النشاط', 'التقارير ولوحات المؤشرات'];
+const manufacturing = { workflow: ['طلب وتخطيط الإنتاج', 'مراجعة الطاقة ومراكز العمل', 'صرف خامات من المخزن', 'تشغيل أمر الإنتاج', 'فحص الجودة والهالك', 'إضافة المنتج التام للمخزون', 'احتساب التكلفة الفعلية وإغلاق الأمر'], entities: ['المنتج التام ونصف المصنع', 'قائمة المواد BOM والإصدارات', 'مراكز العمل والطاقات', 'أوامر الإنتاج والتشغيلات', 'الفحص والجودة وعدم المطابقة', 'الصيانة الوقائية والتصحيحية'], kpis: ['تكلفة الوحدة الفعلية مقابل المعيارية', 'نسبة الهالك وإعادة التشغيل', 'كفاءة مراكز العمل OEE', 'الالتزام بخطة الإنتاج', 'دوران المواد الخام والمنتج التام'], integrations: ['المخزون: حجز وصرف الخامات وإضافة الناتج', 'المشتريات: احتياجات المواد وأوامر الشراء', 'المالية: تكلفة المواد والأجور والمصاريف غير المباشرة', 'الجودة: نتائج الفحص وحجز الدفعات', 'الصيانة: توقفات الآلات وتكلفة الإصلاح'] };
+const contracting = { workflow: ['إنشاء المشروع والعميل والعقد', 'تقسيم نطاق العمل إلى WBS وبنود', 'إعداد الميزانية والبرنامج الزمني', 'أوامر شراء ومقاولين وموارد', 'قياس الإنجاز وإصدار المستخلص', 'اعتماد المستخلص والتحصيل', 'إقفال المشروع وتحليل الربحية'], entities: ['المشروعات والعقود والمواقع', 'WBS وبنود الأعمال والكميات', 'المستخلصات والمطالبات والتغييرات', 'المقاولون والموردون والضمانات', 'المعدات والساعات والعمالة', 'الميزانية والتدفق النقدي'], kpis: ['نسبة الإنجاز المخطط والفعلي', 'الربحية المتوقعة والمحققة', 'انحراف التكلفة والمدة', 'قيمة المستخلصات المعتمدة', 'أعمار الذمم والاحتجازات'], integrations: ['المبيعات: عروض الأسعار والعقود والفوترة المرحلية', 'المشتريات: أوامر وطلبات شراء مرتبطة ببند المشروع', 'المخزون: عهدة الموقع والتحويلات والاستهلاك', 'المالية: تكلفة المشروع والإيراد المستحق والتدفق النقدي', 'الموارد البشرية: عمالة وساعات وتكلفة مباشرة'] };
 
 export default function Industries() {
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState('manufacturing');
-  const filtered = useMemo(() => sectors.filter((sector) => `${sector.name} ${sector.nameEn}`.toLowerCase().includes(query.toLowerCase())), [query]);
-  const selected = sectors.find((sector) => sector.id === active) || sectors[0];
+  const [activeId, setActiveId] = useState('sector-21');
+  const [group, setGroup] = useState('all');
+  const selected = sectors.find((sector) => sector.id === activeId) || sectors[0];
   const SelectedIcon = selected.icon;
+  const filtered = useMemo(() => sectors.filter((sector) => (group === 'all' || sector.group === group) && sector.name.includes(query)), [group, query]);
 
-  return (
-    <MainLayout>
-      <div className="space-y-6" dir="rtl">
-        <div className="rounded-2xl bg-gradient-to-l from-[#101a3b] via-[#18255a] to-[#273a8a] p-6 text-white shadow-xl">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <Badge className="mb-3 border-white/20 bg-white/10 text-white">Fusion X ERP · Multi-Industry</Badge>
-              <h1 className="text-3xl font-extrabold tracking-tight">منصة واحدة، قطاعات بلا حدود</h1>
-              <p className="mt-2 max-w-2xl text-blue-100">فعّل الوحدات التي يحتاجها نشاطك، واجعل كل معاملة تنتقل تلقائياً إلى المخزون والمالية والعملاء والتقارير.</p>
-            </div>
-            <div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-sm backdrop-blur">
-              <Link2 className="text-cyan-300" size={22} />
-              <span>ترابط البيانات مفعّل من المصدر حتى التقرير</span>
-            </div>
-          </div>
-        </div>
+  return <MainLayout><div className="space-y-6" dir="rtl">
+    <div className="rounded-2xl bg-gradient-to-l from-[#101a3b] via-[#18255a] to-[#273a8a] p-6 text-white shadow-xl"><div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><Badge className="mb-3 border-white/20 bg-white/10 text-white">Fusion X ERP · 100 Industry Templates</Badge><h1 className="text-3xl font-extrabold tracking-tight">منصة واحدة لـ 100 قطاع</h1><p className="mt-2 max-w-3xl text-blue-100">نواة موحدة للبيانات، مع قوالب تشغيل متخصصة. كل بيع أو شراء أو صرف يتحول تلقائياً إلى أثر مخزني ومالي وتقارير قابلة للتتبع.</p></div><div className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-sm backdrop-blur"><Link2 className="text-cyan-300" size={22} /><span>100 قطاع · 6 عائلات تشغيلية · نواة مشتركة</span></div></div></div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-xl font-bold">اختر قطاعك</h2><p className="text-sm text-muted-foreground">ابدأ بالقالب المناسب ثم وسّع النظام مع نمو أعمالك.</p></div>
-          <div className="relative w-full sm:w-80"><Search className="absolute right-3 top-3 text-muted-foreground" size={18} /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث عن قطاع..." className="pr-10" /></div>
-        </div>
+    <div className="grid gap-4 sm:grid-cols-3"><Card><CardContent className="flex items-center gap-3 p-5"><div className="rounded-lg bg-primary/10 p-3 text-primary"><Building2 /></div><div><p className="text-2xl font-bold">100</p><p className="text-sm text-muted-foreground">قطاع جاهز للتفعيل</p></div></CardContent></Card><Card><CardContent className="flex items-center gap-3 p-5"><div className="rounded-lg bg-violet-500/10 p-3 text-violet-600"><Cog /></div><div><p className="text-2xl font-bold">8</p><p className="text-sm text-muted-foreground">وحدات نواة مشتركة</p></div></CardContent></Card><Card><CardContent className="flex items-center gap-3 p-5"><div className="rounded-lg bg-amber-500/10 p-3 text-amber-600"><BarChart3 /></div><div><p className="text-2xl font-bold">2</p><p className="text-sm text-muted-foreground">موديول متخصص بالتفصيل</p></div></CardContent></Card></div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((sector) => {
-            const Icon = sector.icon;
-            const isActive = sector.id === selected.id;
-            return <button key={sector.id} onClick={() => setActive(sector.id)} className={`text-right transition-all ${isActive ? 'scale-[1.01]' : ''}`}>
-              <Card className={`h-full border-2 ${isActive ? 'border-primary shadow-lg' : 'border-transparent hover:border-primary/30'}`}>
-                <CardHeader><div className="flex items-center justify-between"><div className={`rounded-xl bg-gradient-to-br ${sector.color} p-3 text-white`}><Icon size={24} /></div><Badge variant={isActive ? 'default' : 'secondary'}>{sector.modules.length} وحدات</Badge></div><CardTitle className="pt-2">{sector.name}</CardTitle><p className="text-xs text-muted-foreground" dir="ltr">{sector.nameEn}</p></CardHeader>
-                <CardContent><div className="flex flex-wrap gap-2">{sector.modules.slice(0, 4).map((module) => <Badge key={module} variant="outline">{module}</Badge>)}</div></CardContent>
-              </Card>
-            </button>;
-          })}
-        </div>
+    <Card><CardHeader><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><CardTitle>كتالوج القطاعات</CardTitle><p className="mt-1 text-sm text-muted-foreground">ابحث واختر قطاعاً لمشاهدة وحداته المقترحة.</p></div><div className="relative w-full md:w-80"><Search className="absolute right-3 top-3 text-muted-foreground" size={18} /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث في 100 قطاع..." className="pr-10" /></div></div><div className="flex flex-wrap gap-2 pt-3"><Button size="sm" variant={group === 'all' ? 'default' : 'outline'} onClick={() => setGroup('all')}>الكل (100)</Button>{Object.entries(groupConfig).map(([key]) => <Button key={key} size="sm" variant={group === key ? 'default' : 'outline'} onClick={() => setGroup(key)}>{key === 'production' ? 'تصنيع' : key === 'projects' ? 'مشروعات' : key === 'commerce' ? 'تجارة' : key === 'services' ? 'خدمات' : key === 'finance' ? 'مالية' : 'عام'}</Button>)}</div></CardHeader><CardContent><div className="grid max-h-[460px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-4">{filtered.map((sector) => { const Icon = sector.icon; return <button key={sector.id} onClick={() => setActiveId(sector.id)} className={`rounded-xl border p-3 text-right transition-all hover:border-primary/50 ${activeId === sector.id ? 'border-primary bg-primary/5 shadow-sm' : 'bg-card'}`}><div className="flex items-center gap-2"><Icon size={19} className="text-primary" /><span className="text-sm font-semibold">{sector.name}</span></div><p className="mt-2 text-xs text-muted-foreground">{sector.modules.slice(0, 3).join(' · ')}</p></button>; })}</div></CardContent></Card>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card><CardHeader><CardTitle className="flex items-center gap-2"><SelectedIcon className="text-primary" size={22} /> وحدات {selected.name}</CardTitle></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-2">{selected.modules.map((module) => <div key={module} className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3"><CheckCircle2 className="text-emerald-500" size={18} /><span>{module}</span></div>)}</div><Button className="mt-5 w-full">تجهيز قالب القطاع</Button></CardContent></Card>
-          <Card><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="text-primary" size={22} /> النواة المشتركة لكل القطاعات</CardTitle></CardHeader><CardContent><div className="grid gap-2">{sharedModules.map((module) => <div key={module} className="flex items-center gap-2 border-b py-2 last:border-0"><CheckCircle2 className="text-cyan-500" size={17} /><span className="text-sm">{module}</span></div>)}</div></CardContent></Card>
-        </div>
-      </div>
-    </MainLayout>
-  );
+    <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"><Card><CardHeader><CardTitle className="flex items-center gap-2"><SelectedIcon className="text-primary" size={22} /> قالب {selected.name}</CardTitle></CardHeader><CardContent><div className="mb-4 flex flex-wrap gap-2">{selected.modules.map((module) => <Badge key={module} variant="outline">{module}</Badge>)}</div><p className="mb-4 text-sm text-muted-foreground">هذا القالب يرث النواة المشتركة ويضيف عمليات القطاع دون إنشاء قاعدة بيانات منفصلة أو تقارير معزولة.</p><Button className="w-full">تجهيز قالب القطاع</Button></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2"><Link2 className="text-cyan-600" size={22} /> النواة المشتركة</CardTitle></CardHeader><CardContent><div className="grid gap-2 sm:grid-cols-2">{coreModules.map((module) => <div key={module} className="flex items-center gap-2 rounded-lg border bg-muted/30 p-2.5 text-sm"><CheckCircle2 className="text-emerald-500" size={17} />{module}</div>)}</div></CardContent></Card></div>
+
+    <Tabs defaultValue="manufacturing" className="space-y-4"><TabsList className="grid h-auto w-full grid-cols-2"><TabsTrigger value="manufacturing" className="gap-2"><Factory size={17} /> موديول المصانع بالتفصيل</TabsTrigger><TabsTrigger value="contracting" className="gap-2"><HardHat size={17} /> موديول المقاولات بالتفصيل</TabsTrigger></TabsList><TabsContent value="manufacturing"><ModuleDetail title="المصانع والتصنيع" subtitle="من الخامة إلى المنتج التام مع تكلفة وربحية دقيقة" icon={Factory} data={manufacturing} /></TabsContent><TabsContent value="contracting"><ModuleDetail title="المقاولات والمشروعات" subtitle="من العقد والـ WBS إلى المستخلص وإقفال الربحية" icon={HardHat} data={contracting} /></TabsContent></Tabs>
+  </div></MainLayout>;
+}
+
+function ModuleDetail({ title, subtitle, icon: Icon, data }: { title: string; subtitle: string; icon: typeof Factory; data: { workflow: string[]; entities: string[]; kpis: string[]; integrations: string[] } }) {
+  return <div className="space-y-4"><Card className="border-primary/20 bg-primary/[0.02]"><CardHeader><CardTitle className="flex items-center gap-3"><span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon /></span><span>{title}<small className="mt-1 block text-sm font-normal text-muted-foreground">{subtitle}</small></span></CardTitle></CardHeader></Card><div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck size={19} className="text-primary" /> دورة التشغيل</CardTitle></CardHeader><CardContent><ol className="space-y-2">{data.workflow.map((item, index) => <li key={item} className="flex items-start gap-3 text-sm"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{index + 1}</span>{item}</li>)}</ol></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileSpreadsheet size={19} className="text-primary" /> الكيانات والبيانات</CardTitle></CardHeader><CardContent><div className="grid gap-2 sm:grid-cols-2">{data.entities.map((item) => <div key={item} className="flex gap-2 rounded-lg border p-2 text-sm"><CheckCircle2 size={17} className="shrink-0 text-emerald-500" />{item}</div>)}</div></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><BarChart3 size={19} className="text-primary" /> مؤشرات الإدارة</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">{data.kpis.map((item) => <li key={item} className="flex gap-2"><BarChart3 size={16} className="shrink-0 text-amber-500" />{item}</li>)}</ul></CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Link2 size={19} className="text-primary" /> نقاط الربط مع ERP</CardTitle></CardHeader><CardContent><ul className="space-y-2 text-sm">{data.integrations.map((item) => <li key={item} className="flex gap-2"><Wrench size={16} className="shrink-0 text-cyan-600" />{item}</li>)}</ul></CardContent></Card></div></div>;
 }
