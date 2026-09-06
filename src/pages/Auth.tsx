@@ -98,7 +98,7 @@ const Auth = () => {
 
   const translations = {
     en: {
-      welcome: 'Welcome to INJAZ ERP',
+      welcome: 'Welcome to Fusion X ERP',
       loginTitle: 'Sign In',
       signupTitle: 'Create Account',
       loginDesc: 'Enter your credentials to access your account',
@@ -125,7 +125,7 @@ const Auth = () => {
       genericError: 'Something went wrong. Please try again.',
     },
     ar: {
-      welcome: 'مرحباً بك في نظام إنجاز',
+      welcome: 'مرحباً بك في Fusion X ERP',
       loginTitle: 'تسجيل الدخول',
       signupTitle: 'إنشاء حساب',
       loginDesc: 'أدخل بياناتك للوصول إلى حسابك',
@@ -241,7 +241,7 @@ const Auth = () => {
   return (
     <div 
       className="min-h-screen flex items-center justify-center p-4 relative"
-      style={{ background: 'linear-gradient(135deg, hsl(217 47% 14%) 0%, hsl(217 47% 20%) 50%, hsl(160 60% 35%) 100%)' }}
+      style={{ background: 'linear-gradient(135deg, hsl(224 70% 12%) 0%, hsl(224 65% 22%) 52%, hsl(187 78% 31%) 100%)' }}
       dir={direction}
     >
       {/* Language Selector */}
@@ -271,7 +271,7 @@ const Auth = () => {
       <Card className="w-full max-w-md shadow-2xl border-0">
         <CardHeader className="text-center pb-2">
           <div className="flex justify-center mb-4">
-            <img src={logoFull} alt="INJAZ ERP" className="h-16 object-contain" />
+            <img src={logoFull} alt="Fusion X ERP" className="h-16 object-contain" />
           </div>
           <CardTitle className="text-xl">{t.welcome}</CardTitle>
         </CardHeader>

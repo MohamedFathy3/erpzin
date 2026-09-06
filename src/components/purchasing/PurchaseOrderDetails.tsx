@@ -24,8 +24,8 @@ const PurchaseOrderPrintTemplate = React.forwardRef<HTMLDivElement, {
   
   // بيانات الشركة من auth
   const companyInfo = {
-    name: user?.name || 'INJAZ',
-    nameAr: user?.name_ar || user?.name || 'INJAZ',
+    name: user?.name || 'Fusion X',
+    nameAr: user?.name_ar || user?.name || 'Fusion X',
     logo: user?.logoUrl || user?.logo?.fullUrl,
     address: user?.address,
     addressAr: user?.address_ar,
@@ -50,7 +50,7 @@ const PurchaseOrderPrintTemplate = React.forwardRef<HTMLDivElement, {
     notes: isRTL ? 'ملاحظات' : 'Notes',
     grandTotal: isRTL ? 'الإجمالي الكلي' : 'Grand Total',
     thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
-    poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP',
+    poweredBy: isRTL ? 'تم بواسطة Fusion X ERP' : 'Powered by Fusion X ERP',
   };
 
   const getStatusText = (status: string) => {
