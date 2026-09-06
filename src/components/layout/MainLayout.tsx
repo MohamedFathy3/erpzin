@@ -19,6 +19,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const getActiveFromPath = () => {
     const path = location.pathname;
     if (path === '/') return 'dashboard';
+    if (path === '/manufacturing/setup') return 'manufacturingSetup';
     return path.slice(1);
   };
 
@@ -43,6 +44,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       reports: '/reports',
       industries: '/industries',
       manufacturing: '/manufacturing',
+      manufacturingSetup: '/manufacturing/setup',
       projects: '/projects',
       workflow: '/workflow',
       settings: '/settings',

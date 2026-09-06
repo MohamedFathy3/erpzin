@@ -1495,6 +1495,16 @@ const Reports = () => {
   return (
     <MainLayout activeItem="reports">
       <div className="space-y-6 print:p-4" dir={direction} ref={printRef}>
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-[#081126] via-[#172554] to-[#0891b2] p-6 text-white shadow-lg print:hidden">
+          <div className="relative z-10 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-white/15 p-3"><Zap size={24} /></div>
+              <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Fusion X · Executive Intelligence</p><h2 className="mt-1 text-2xl font-extrabold">مركز القرار الموحد</h2><p className="mt-1 text-sm text-cyan-100">رؤية واحدة للمبيعات والمخزون والسيولة والربحية والتشغيل.</p></div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-white/10 px-4 py-2"><p className="text-cyan-200">هامش الربح</p><strong className="text-lg">{stats.profitMargin.toFixed(1)}%</strong></div><div className="rounded-lg bg-white/10 px-4 py-2"><p className="text-cyan-200">طلبات</p><strong className="text-lg">{formatNumber(stats.totalOrders)}</strong></div><div className="rounded-lg bg-white/10 px-4 py-2"><p className="text-cyan-200">منخفض المخزون</p><strong className="text-lg">{stats.lowStockProducts}</strong></div></div>
+          </div>
+          <div className="absolute -left-12 -top-16 h-40 w-40 rounded-full bg-cyan-300/10 blur-2xl" />
+        </div>
         {/* Header */}
         <div className="flex flex-col gap-4 print:hidden">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">

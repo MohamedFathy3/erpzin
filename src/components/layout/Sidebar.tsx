@@ -52,6 +52,7 @@ const getIcon = (iconName: string) => {
     LogOut: Icons.LogOut,
     Warehouse: Icons.Warehouse,
     Factory: Icons.Factory,
+    Settings2: Icons.Settings2,
     HardHat: Icons.HardHat,
     Activity: Icons.Activity,
   };
