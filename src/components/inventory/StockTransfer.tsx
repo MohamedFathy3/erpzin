@@ -280,14 +280,11 @@ const WarehouseTransfer = () => {
         to_warehouse_id: parseInt(toWarehouse),
         products: transferItems.map(item => ({
           product_id: item.product_id,
-          product_unit_id: item.product_unit_id,
-          color_id: item.color_id,
-          quantity: item.quantity,
           ...(item.product_unit_id !== 0 && { product_unit_id: item.product_unit_id }),
           ...(item.color_id !== 0 && { color_id: item.color_id }),
           quantity: item.quantity,
           ...(productNotes[`${item.product_id}-${item.product_unit_id}-${item.color_id}`]
-            ? { note: productNotes[`...`] }
+            ? { note: productNotes[`${item.product_id}-${item.product_unit_id}-${item.color_id}`] }
             : {})
 
         }))

@@ -2,7 +2,8 @@
 export interface InvoiceItem {
   id: string;
   product_id: number | null;
-  product_variant_id?: number;
+  product_variant_id?: number | null;
+  size_id?: number | null;
   product_name: string;
   product_sku: string;
   size_name?: string;
@@ -15,8 +16,8 @@ export interface InvoiceItem {
   tax_percent: number;
   tax_amount: number;
   total_cost: number;
-  product_unit_id?: number;
-    color_id?: number | null;
+  product_unit_id?: number | null;
+  color_id?: number | null;
 
 }
 
@@ -38,7 +39,8 @@ export interface PurchaseInvoicePayload {
 
 export interface PurchaseInvoiceItemPayload {
   product_id: number;
-  // product_variant_id: number | null;
+  product_variant_id?: number | null;
+  size_id?: number | null;
   quantity: number;
   price: number;
   discount: number;

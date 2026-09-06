@@ -136,7 +136,8 @@ class ProductManager {
 
   preparePayloadItems(items: InvoiceItem[]): Array<{
     product_id: number;
-    // product_variant_id: number | null;
+    product_variant_id?: number | null;
+    size_id?: number | null;
     quantity: number;
     price: number;
     discount: number;
@@ -146,12 +147,13 @@ class ProductManager {
   }> {
     return items.map(item => ({
       product_id: item.product_id,
-      // product_variant_id: item.product_variant_id || null,
+      product_variant_id: item.product_variant_id || null,
+      size_id: item.size_id || null,
       quantity: item.quantity,
       price: item.unit_cost,
       discount: item.discount_percent,
       tax: item.tax_percent,
-      unit_id: item.product_unit_id || null,  // unit_id مش product_unit_id
+      unit_id: item.product_unit_id || null,
       color_id: item.color_id || null
     }));
   }

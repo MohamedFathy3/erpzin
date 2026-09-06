@@ -60,6 +60,7 @@ import ReadyReports from '@/components/reports/ReadyReports';
 import ProfitLossReport from '@/components/reports/ProfitLossReport';
 import SalesAnalysisReport from '@/components/reports/SalesAnalysisReport';
 import CustomerSupplierMovement from '@/components/reports/CustomerSupplierMovement';
+import BackendReportsPanel from '@/components/reports/BackendReportsPanel';
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // ==================== Types ====================
@@ -1589,6 +1590,10 @@ const Reports = () => {
               <ClipboardList size={16} />
               {t.readyReports}
             </TabsTrigger>
+            <TabsTrigger value="backendReports" className="gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+              <Activity size={16} />
+              {language === 'ar' ? 'تقارير الباك إند' : 'Backend Reports'}
+            </TabsTrigger>
             <TabsTrigger value="salesAnalysis" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <ShoppingCart size={16} />
               {t.salesAnalysis}
@@ -1855,6 +1860,9 @@ const Reports = () => {
           {/* Ready Reports Tab */}
           <TabsContent value="readyReports" className="mt-6">
             <ReadyReports />
+          </TabsContent>
+          <TabsContent value="backendReports" className="mt-6">
+            <BackendReportsPanel />
           </TabsContent>
 
           {/* Sales Analysis Tab */}
