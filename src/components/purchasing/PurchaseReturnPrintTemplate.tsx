@@ -63,7 +63,7 @@ const PurchaseReturnPrintTemplate = forwardRef<HTMLDivElement, PurchaseReturnPri
       payment: isRTL ? 'طريقة الدفع' : 'Payment',
       phone: isRTL ? 'تليفون' : 'Phone',
       thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
-      poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP',
+      poweredBy: isRTL ? 'تم بواسطة Fusion X ERP' : 'Powered by Fusion X ERP',
     };
 
     const getPaymentMethodLabel = (method: string) => {

@@ -94,7 +94,7 @@ const PurchaseInvoiceA4Template = forwardRef<HTMLDivElement, PurchaseInvoiceA4Te
       remaining: isRTL ? 'المتبقي' : 'Remaining',
       notes: isRTL ? 'ملاحظات' : 'Notes',
       thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
-      poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP',
+      poweredBy: isRTL ? 'تم بواسطة Fusion X ERP' : 'Powered by Fusion X ERP',
       page: isRTL ? 'صفحة' : 'Page',
       of: isRTL ? 'من' : 'of',
     };

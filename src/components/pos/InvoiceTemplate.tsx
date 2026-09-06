@@ -140,7 +140,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       paid: isRTL ? 'المدفوع' : 'Paid',
       change: isRTL ? 'الباقي' : 'Change',
       thankYou: isRTL ? 'شكراً لتعاملكم معنا' : 'Thank you for your business',
-      poweredBy: isRTL ? 'تم بواسطة Zain ERP' : 'Powered by Zain ERP',
+      poweredBy: isRTL ? 'تم بواسطة Fusion X ERP' : 'Powered by Fusion X ERP',
       totalDiscount: isRTL ? 'خصم إجمالي' : 'Total Discount',
     };
 
