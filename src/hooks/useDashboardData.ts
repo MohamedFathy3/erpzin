@@ -77,6 +77,19 @@ export interface DashboardMetrics {
   avgOrderValue: number;
 }
 
+interface DashboardSummary {
+  today_sales: number;
+  month_sales: number;
+  month_purchases: number;
+  net_profit_before_overheads: number;
+  sales_invoices_count: number;
+  purchase_invoices_count: number;
+  customers_count: number;
+  products_count: number;
+  low_stock_count: number;
+  credit_sales: number;
+}
+
 export interface RecentTransaction {
   id: string;
   type: 'sale' | 'purchase';
@@ -92,6 +105,15 @@ export interface RecentTransaction {
 // ==================== Custom Hook ====================
 export const useDashboardData = () => {
   const { currentBranch } = useApp();
+
+  const { data: dashboardSummary, isLoading: loadingSummary, error: summaryError } = useQuery<DashboardSummary>({
+    queryKey: ['dashboard-summary', currentBranch?.id],
+    queryFn: async () => {
+      const response = await api.get('/dashboard/summary', { params: currentBranch?.id ? { branch_id: currentBranch.id } : {} });
+      return response.data?.data;
+    },
+    refetchInterval: 60000,
+  });
 
   // Fetch Revenue Report
   const { 
@@ -172,8 +194,8 @@ export const useDashboardData = () => {
 
   // Calculate Dashboard Metrics
   const dashboardMetrics = useMemo<DashboardMetrics>(() => {
-    const todayRevenue = revenueReport?.today_revenue || 0;
-    const monthRevenue = revenueReport?.month_revenue || 0;
+    const todayRevenue = dashboardSummary?.today_sales ?? revenueReport?.today_revenue ?? 0;
+    const monthRevenue = dashboardSummary?.month_sales ?? revenueReport?.month_revenue ?? 0;
     const threeMonthsRevenue = revenueReport?.three_months_revenue || 0;
     
     // Low stock products - مع التأكد من وجود البيانات
@@ -182,20 +204,20 @@ export const useDashboardData = () => {
     );
     const lowStockCount = lowStockProducts.length;
 
-    const totalOrders = recentSales.length;
+    const totalOrders = dashboardSummary?.sales_invoices_count ?? recentSales.length;
 
     return {
       todaySales: todayRevenue,
       salesChange: 0,
       totalRevenue: monthRevenue,
       threeMonthsRevenue,
-      totalExpenses: 0,
-      netProfit: monthRevenue,
+      totalExpenses: dashboardSummary?.month_purchases ?? 0,
+      netProfit: dashboardSummary?.net_profit_before_overheads ?? (monthRevenue - (dashboardSummary?.month_purchases ?? 0)),
       totalOrders,
       lowStockCount,
       avgOrderValue: totalOrders > 0 ? todayRevenue / totalOrders : 0,
     };
-  }, [revenueReport, products, recentSales]);
+  }, [revenueReport, dashboardSummary, products, recentSales]);
 
   // Prepare Recent Transactions
   const recentTransactions = useMemo<RecentTransaction[]>(() => {
@@ -248,7 +270,7 @@ export const useDashboardData = () => {
     lowStockProducts,
     
     // Loading states
-    isLoading: loadingRevenue,
+    isLoading: loadingRevenue || loadingSummary,
     isSalesLoading: false,
     isPurchasesLoading: false,
     isProductsLoading: false,
@@ -256,6 +278,7 @@ export const useDashboardData = () => {
     // Errors
     errors: {
       revenue: revenueError,
+      summary: summaryError,
     }
   };
 };
