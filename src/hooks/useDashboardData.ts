@@ -88,6 +88,26 @@ interface DashboardSummary {
   products_count: number;
   low_stock_count: number;
   credit_sales: number;
+  projects_finance: {
+    active_count: number;
+    contract_value: number;
+    budget_cost: number;
+    actual_cost: number;
+    claims_gross: number;
+    claims_net: number;
+    claims_paid: number;
+    claims_outstanding: number;
+    pending_claims: number;
+    profit_estimate: number;
+  };
+  manufacturing_summary: {
+    orders_in_progress: number;
+    completed_orders: number;
+    planned_quantity: number;
+    produced_quantity: number;
+    actual_cost: number;
+    planned_cost: number;
+  };
 }
 
 export interface RecentTransaction {
@@ -263,6 +283,7 @@ export const useDashboardData = () => {
     recentSales,
     recentPurchases,
     products,
+    dashboardSummary,
     
     // Computed
     dashboardMetrics,
