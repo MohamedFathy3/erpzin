@@ -55,10 +55,10 @@ const BackendReportsPanel = () => {
           <TabsContent value="movements">
             <div className="overflow-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>الصنف</TableHead><TableHead>الوحدة</TableHead><TableHead>اللون</TableHead><TableHead>الحركة</TableHead><TableHead>الكمية</TableHead><TableHead>الرصيد</TableHead><TableHead>المستند</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>الصنف</TableHead><TableHead>الوحدة</TableHead><TableHead>المقاس</TableHead><TableHead>اللون</TableHead><TableHead>الحركة</TableHead><TableHead>الكمية</TableHead><TableHead>رصيد التركيبة</TableHead><TableHead>المستند</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {(movements.data?.data || []).map((row: any) => <TableRow key={row.id}>
-                    <TableCell>{ar(row.created_at)}</TableCell><TableCell>{ar(row.product?.name)}</TableCell><TableCell>{ar(row.product_unit?.barcode)}</TableCell><TableCell>{ar(row.color?.name)}</TableCell><TableCell>{ar(row.movement_type)}</TableCell><TableCell>{ar(row.quantity_delta)}</TableCell><TableCell>{ar(row.balance_after)}</TableCell><TableCell>{ar(row.reference_id)}</TableCell>
+                    <TableCell>{ar(row.created_at)}</TableCell><TableCell>{ar(row.product?.name)}</TableCell><TableCell>{ar(row.product_unit?.barcode)}</TableCell><TableCell>{ar(row.size?.name)}</TableCell><TableCell>{ar(row.color?.name)}</TableCell><TableCell>{ar(row.movement_type)}</TableCell><TableCell>{ar(row.quantity_delta)}</TableCell><TableCell>{ar(row.variant_stock?.stock ?? row.balance_after)}</TableCell><TableCell>{ar(row.reference_id)}</TableCell>
                   </TableRow>)}
                 </TableBody>
               </Table>
