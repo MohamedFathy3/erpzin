@@ -187,7 +187,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBranches(branchesData || []);
         
         // Load user profile with branch and warehouse
-        if (user) {
+        // Laravel users have numeric IDs; do not query the legacy Supabase
+        // profile tables for them. Those tables expect UUIDs and return 400.
+        if (user && !/^\d+$/.test(String(user.id))) {
           const { data: profileData } = await supabase
             .from('profiles')
             .select('id, full_name, full_name_ar, email, branch_id, warehouse_id')
@@ -274,6 +276,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       
       try {
+        // The active ERP authentication is Laravel Sanctum. Supabase
+        // user_roles expects UUID user IDs and must not be queried for the
+        // numeric Laravel admin/user IDs.
+        if (/^\d+$/.test(String(user.id))) {
+          setPermissions(defaultPermissions);
+          setLoadingPermissions(false);
+          return;
+        }
+
         // Get user role from user_roles table
         // Note: This role is verified server-side by RLS policies for all operations
         const { data: roleData } = await supabase
