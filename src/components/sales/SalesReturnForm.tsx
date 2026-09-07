@@ -23,6 +23,8 @@ interface ReturnItem {
   quantity: number;
   price: number;
   reason: string;
+  color?: string | null;
+  size?: string | null;
 }
 
 interface InvoiceReturnFormProps {
@@ -118,6 +120,8 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
               sku: item.sku || '',
               quantity: 1,
               price: Number(item.price) || 0,
+              color: item.color || item.color_name || null,
+              size: item.size || item.size_name || null,
               reason: ""
             }));
             
@@ -191,13 +195,15 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
 
       // ✅ تجهيز payload بالضبط زي الـ API - بنبعت رقم الفاتورة مش ID
       const payload = {
-        sales_invoice_id: formData.sales_invoice_id, // 👈 هنا رقم الفاتورة زي SI-20260212-7336
+        invoice_number: formData.sales_invoice_id, // رقم الفاتورة الذي يبحث به API
         return_method: formData.return_method,
         note: formData.note || null,
         items: items.map(item => ({
           product_id: Number(item.product_id),
           quantity: Number(item.quantity),
           price: Number(item.price),
+          color: item.color || null,
+          size: item.size || null,
           reason: item.reason
         }))
       };
@@ -469,6 +475,11 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
                               <div className="text-xs text-muted-foreground font-mono">
                                 {item.sku}
                               </div>
+                              {(item.color || item.size) && (
+                                <div className="text-xs text-muted-foreground">
+                                  {[item.size, item.color].filter(Boolean).join(' - ')}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Input
