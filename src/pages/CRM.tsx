@@ -341,7 +341,7 @@ const [editCustomer, setEditCustomer] = useState({
   const { data: customerStatement, isLoading: statementLoading } = useQuery({
     queryKey: ['customer-statement', statementCustomerId],
     enabled: !!statementCustomerId,
-    queryFn: async () => (await api.get(`/customer/${statementCustomerId}/statement`)).data.data,
+    queryFn: async () => (await api.post(`/customer/${statementCustomerId}/statement`, {})).data.data,
   });
 
   // ========== Mutations ==========
