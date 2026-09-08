@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Switch } from '@/components/ui/switch';
+import CrmPipeline from '@/components/crm/CrmPipeline';
 
 
 interface LoyaltySettings {
@@ -783,7 +784,7 @@ const handleToggleStatus = (customer: Customer) => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="customers" className="flex items-center gap-2">
               <Users size={16} />
               {t.customers}
@@ -792,7 +793,14 @@ const handleToggleStatus = (customer: Customer) => {
               <Crown size={16} />
               {t.loyaltyProgram}
             </TabsTrigger>
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <TrendingUp size={16} />
+              CRM Pipeline
+            </TabsTrigger>
           </TabsList>
+          <TabsContent value="pipeline" className="mt-4">
+            <CrmPipeline />
+          </TabsContent>
 
           {/* ========== Customers Tab ========== */}
           <TabsContent value="customers" className="mt-4">
