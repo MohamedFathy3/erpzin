@@ -89,8 +89,8 @@ const Auth = () => {
       if (from !== '/auth' && from !== '/') {
         navigate(from, { replace: true });
       } else {
-        // وإلا، استخدم الصفحة الافتراضية بناءً على الدور
-        const defaultRoute = getDefaultRoute(user.role as UserRole);
+        // مندوب المبيعات يبدأ من مساحته الخاصة، وباقي الأدوار من صفحتها الافتراضية
+        const defaultRoute = user.role === 'Sales' ? '/representative' : getDefaultRoute(user.role as UserRole);
         navigate(defaultRoute, { replace: true });
       }
     }

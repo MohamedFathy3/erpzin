@@ -18,6 +18,8 @@ import { debounce } from "@/lib/utils";
 interface ReturnItem {
   id: string;
   product_id: number;
+  product_unit_id?: number | null;
+  color_id?: number | null;
   product_name: string;
   sku: string;
   quantity: number;
@@ -116,6 +118,8 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
             const returnItems = invoice.items.map((item: any) => ({
               id: crypto.randomUUID(),
               product_id: item.product_id,
+              product_unit_id: item.product_unit_id ?? item.unit_id ?? null,
+              color_id: item.color_id ?? null,
               product_name: item.product_name,
               sku: item.sku || '',
               quantity: 1,
@@ -200,6 +204,8 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
         note: formData.note || null,
         items: items.map(item => ({
           product_id: Number(item.product_id),
+          product_unit_id: item.product_unit_id ? Number(item.product_unit_id) : null,
+          color_id: item.color_id ? Number(item.color_id) : null,
           quantity: Number(item.quantity),
           price: Number(item.price),
           color: item.color || null,

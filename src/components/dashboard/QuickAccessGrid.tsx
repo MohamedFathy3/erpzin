@@ -11,6 +11,8 @@ import {
   FileBarChart,
   Crown,
   Receipt,
+  Activity,
+  UserRound,
 } from 'lucide-react';
 
 interface QuickAccessItem {
@@ -106,6 +108,28 @@ const QuickAccessGrid: React.FC = () => {
       color: 'text-accent',
       bgColor: 'bg-accent/10 hover:bg-accent/20',
       route: '/hr'
+    },
+    {
+      id: 'product-ledger',
+      icon: <Activity size={24} />,
+      label: 'Product Ledger',
+      labelAr: 'كشف حركات المنتج',
+      description: 'Track product movements',
+      descriptionAr: 'تتبع حركة المنتج',
+      color: 'text-cyan-600',
+      bgColor: 'bg-cyan-500/10 hover:bg-cyan-500/20',
+      route: '/product-ledger'
+    },
+    {
+      id: 'representative',
+      icon: <UserRound size={24} />,
+      label: 'Representative',
+      labelAr: 'مساحة المندوب',
+      description: 'My sales workspace',
+      descriptionAr: 'فواتيري وتقاريري',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-500/10 hover:bg-emerald-500/20',
+      route: '/representative'
     },
     { 
       id: 'reports', 

@@ -828,6 +828,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         discount_amount: item.discount_amount,       // قيمة خصم المنتج
         total_price: item.total_price,               // إجمالي المنتج بعد خصمه
         unit_id: item.unit_id ? Number(item.unit_id) : null,
+        product_unit_id: item.unit_id ? Number(item.unit_id) : null,
         color_id: item.color_id ? Number(item.color_id) : null,
       }))
     };

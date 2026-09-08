@@ -124,6 +124,22 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales'],
   },
   {
+    id: 'productLedger',
+    path: '/product-ledger',
+    label: 'Product Ledger',
+    labelAr: 'كشف حركات المنتج',
+    icon: 'Activity',
+    allowedRoles: ['admin', 'Manager', 'Sales', 'Accountant', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
+    id: 'representative',
+    path: '/representative',
+    label: 'Representative Workspace',
+    labelAr: 'مساحة المندوب',
+    icon: 'UserRound',
+    allowedRoles: ['admin', 'Sales'],
+  },
+  {
     id: 'workflow',
     path: '/workflow',
     label: 'Workflow Center',
