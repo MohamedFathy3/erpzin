@@ -33,7 +33,7 @@ import { Home as MarketingHome, About, Services, Pricing, Contact, Signup } from
 import AccessControl from "./pages/AccessControl";
 
 const queryClient = new QueryClient();
-
+const isTenantHost = () => { const host=window.location.hostname.toLowerCase(); const root=(import.meta.env.VITE_TENANT_ROOT_DOMAIN || 'example.com').toLowerCase(); return host.endsWith(`.${root}`) && host !== `www.${root}` && host !== `admin.${root}`; };
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
@@ -51,7 +51,7 @@ const App = () => (
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/signup" element={<Signup />} />
-                <Route path="/" element={<MarketingHome />} />
+                <Route path="/" element={isTenantHost() ? <ProtectedRoute><Dashboard /></ProtectedRoute> : <MarketingHome />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
                 <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
