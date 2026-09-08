@@ -28,6 +28,7 @@ import RepresentativeDashboard from "./pages/RepresentativeDashboard";
 import Projects from "./pages/Projects";
 import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
+import SuperAdmin from "./pages/SuperAdmin";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                 <Route path="/representative" element={<ProtectedRoute><RepresentativeDashboard /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
                 <Route path="/workflow" element={<ProtectedRoute><Workflow /></ProtectedRoute>} />
+                <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
                 <Route path="/POSRetrun" element={<ProtectedRoute><POSRetrun /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

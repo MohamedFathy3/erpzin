@@ -9,6 +9,7 @@ import * as Icons from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
 import logoFull from '@/assets/logo-full.png';
 import { toast } from 'sonner'; // ✅ لإظهار رسالة عند تسجيل الخروج
+import api from '@/lib/api';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -70,6 +71,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
   const { user, signOut } = useAuth(); // ✅ استخدم signOut من useAuth
+  const [enabledModules, setEnabledModules] = React.useState<string[] | null>(null);
+  React.useEffect(() => {
+    if (user?.super_admin) { setEnabledModules(null); return; }
+    api.get('/me/enabled-modules').then(response => setEnabledModules(response.data?.data ?? [])).catch(() => setEnabledModules(null));
+  }, [user?.id, user?.super_admin]);
 
   // جلب الصفحات المسموحة للمستخدم
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,19 +84,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     return allowedPages
+      .filter(page => !enabledModules || enabledModules.includes(page.id))
       .filter(page => page.id !== 'settings')
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
       }));
-  }, [allowedPages, language]);
+  }, [allowedPages, enabledModules, language]);
 
   // عناصر القائمة السفلية
   const bottomItems = React.useMemo(() => {
     const items = [];
     
-    const settingsPage = allowedPages.find(page => page.id === 'settings');
+    const settingsPage = (!enabledModules || enabledModules.includes('settings')) ? allowedPages.find(page => page.id === 'settings') : undefined;
     if (settingsPage) {
       items.push({
         id: 'settings',
@@ -106,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     });
 
     return items;
-  }, [allowedPages, language]);
+  }, [allowedPages, enabledModules, language]);
 
   // ✅ دالة معالجة تسجيل الخروج
   const handleLogout = async () => {
