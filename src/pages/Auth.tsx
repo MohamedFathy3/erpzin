@@ -280,6 +280,9 @@ const Auth = () => {
                   <div className="space-y-2"><Label htmlFor="login-password" className="text-sm font-semibold text-slate-700">{t.password}</Label><div className="relative"><Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><Input id="login-password" type="password" placeholder={t.passwordPlaceholder} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required dir="ltr" className="h-12 rounded-xl border-slate-200 ps-10 focus-visible:ring-cyan-500" /></div></div>
                   <Button type="submit" className="h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-base font-bold shadow-lg shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-blue-700" disabled={loading}>{loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ArrowRight size={17} className="me-2" />}{t.login}</Button>
                 </form>
+                <Button type="button" variant="outline" className="mt-4 h-11 w-full rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => navigate('/representative/login')}>
+                  {language === 'ar' ? 'دخول المندوب' : 'Representative login'}
+                </Button>
               </TabsContent>
             </Tabs>
             <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck size={15} className="text-emerald-500" /> {language === 'ar' ? 'بياناتك محمية ومشفرة' : 'Your data is protected and encrypted'}</div>

@@ -25,6 +25,7 @@ import Manufacturing from "./pages/Manufacturing";
 import ManufacturingSetup from "./pages/ManufacturingSetup";
 import ProductLedger from "./pages/ProductLedger";
 import RepresentativeDashboard from "./pages/RepresentativeDashboard";
+import RepresentativeLogin from "./pages/RepresentativeLogin";
 import Projects from "./pages/Projects";
 import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
@@ -43,6 +44,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/representative/login" element={<RepresentativeLogin />} />
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
                 <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />

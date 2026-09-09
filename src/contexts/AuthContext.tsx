@@ -27,6 +27,8 @@ interface User {
   updated_at: string;
   website?: string | null;
   role: string;
+  sales_representative_id?: number;
+  commission_rate?: number;
   name_ar?: string | null; // ✅ اسم الشركة بالعربي
   address_ar?: string | null; // ✅ العنوان بالعربي
     branch_id?: number | null;
@@ -53,6 +55,11 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (identifier: string, password: string) => Promise<{
+    error: Error | null;
+    user?: User;
+    token?: string;
+  }>;
+  signInRepresentative: (identifier: string, password: string) => Promise<{
     error: Error | null;
     user?: User;
     token?: string;
@@ -87,6 +94,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   // دالة لتحميل المستخدم من الـ API
+  const fetchRepresentative = async (token?: string): Promise<User | null> => {
+    try {
+      const authToken = token || Cookies.get('token');
+      if (!authToken) return null;
+      const response = await api.get('/sales-representative/me', { headers: { Authorization: `Bearer ${authToken}` } });
+      const representative = response.data?.data;
+      return representative ? { ...representative, role: 'Sales', sales_representative_id: representative.id, commission_rate: representative.commission_rate } : null;
+    } catch {
+      return null;
+    }
+  };
+
   const fetchCurrentUser = async (token?: string): Promise<User | null> => {
     try {
       const authToken = token || Cookies.get('token');
@@ -155,6 +174,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Loading session, token:', token);
 
         if (token) {
+          const authType = Cookies.get('auth_type');
+          if (authType === 'representative') {
+            const representative = await fetchRepresentative(token);
+            if (representative) {
+              setUser(representative);
+              setSession({ token, user: representative });
+              setLoading(false);
+              return;
+            }
+            Cookies.remove('token');
+            Cookies.remove('auth_type');
+          }
           // حاول أولاً باستخدام get-admin
           let userData = await fetchCurrentUser(token);
 
@@ -267,6 +298,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInRepresentative = async (identifier: string, password: string) => {
+    try {
+      const response = await api.post<LoginResponse>('/sales-representative/login', { identifier, password });
+      if (!response.data?.token || !response.data?.data) throw new Error('Invalid representative login response');
+      const representative = { ...response.data.data, role: 'Sales', sales_representative_id: response.data.data.id } as User;
+      Cookies.set('token', response.data.token, { expires: 7, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+      Cookies.set('auth_type', 'representative', { expires: 7, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+      setUser(representative);
+      setSession({ token: response.data.token, user: representative });
+      return { error: null, user: representative, token: response.data.token };
+    } catch (error: any) {
+      return { error: new Error(error.response?.data?.message || 'Representative login failed') };
+    }
+  };
+
   // التسجيل
   // في AuthContext.tsx - دالة signUp
   const signUp = async (email: string, password: string, fullName: string, image?: number) => {
@@ -367,17 +413,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Signing out with token:', token);
 
       if (token) {
-        await api.post('/admin/logout', {}, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
+        const authType = Cookies.get('auth_type');
+        await api.post(authType === 'representative' ? '/sales-representative/logout' : '/admin/logout', {}, { headers: { Authorization: `Bearer ${token}` } });
       }
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       // إزالة التوكن والبيانات المحلية
       Cookies.remove('token');
+      Cookies.remove('auth_type');
       localStorage.removeItem('user');
       setUser(null);
       setSession(null);
@@ -451,6 +495,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     loading,
     signIn,
+    signInRepresentative,
     signUp,
     signOut,
     updateUser,
