@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Receipt, ShoppingBag, TrendingDown, TrendingUp, UserRound, Wallet } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { RefreshCw, Receipt, ShoppingBag, TrendingDown, TrendingUp, UserRound, Wallet, UserPlus } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { toast } from 'sonner';
 
 interface Invoice { id: number; invoice_number?: string; invoice_date?: string; created_at?: string; total_amount?: number; net_total?: number; paid_amount?: number; status?: string; customer?: { name?: string; name_ar?: string }; }
 interface Period { period: string; invoice_count: number; sales_total: number; commission: number; }
@@ -22,6 +23,8 @@ export default function RepresentativeDashboard() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
+  const [customer, setCustomer] = useState({ name: '', phone: '', email: '', address: '' });
+  const queryClient = useQueryClient();
   const query = useQuery<DashboardData>({
     queryKey: ['representative-dashboard', from, to],
     queryFn: async () => (await api.get('/sales-representative/dashboard', { params: { from: from || undefined, to: to || undefined } })).data.data,
@@ -29,11 +32,17 @@ export default function RepresentativeDashboard() {
   const data = query.data;
   const invoices = useMemo(() => (data?.invoices || []).filter(invoice => `${invoice.invoice_number || ''} ${invoice.customer?.name || ''} ${invoice.customer?.name_ar || ''}`.toLowerCase().includes(search.toLowerCase())), [data?.invoices, search]);
   const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US') : '-';
+  const customerMutation = useMutation({
+    mutationFn: () => api.post('/sales-representative/customers', customer),
+    onSuccess: (response) => { toast.success(isArabic ? 'تم إنشاء العميل بنجاح' : 'Customer created successfully'); setCustomer({ name: '', phone: '', email: '', address: '' }); queryClient.invalidateQueries({ queryKey: ['representative-dashboard'] }); window.location.href = '/sales'; },
+    onError: (error: any) => toast.error(error?.response?.data?.message || (isArabic ? 'تعذر إنشاء العميل' : 'Unable to create customer')),
+  });
 
   return <MainLayout>
     <div className="space-y-5 p-1" dir={isArabic ? 'rtl' : 'ltr'}>
       <div className="rounded-2xl bg-gradient-to-l from-emerald-900 via-teal-800 to-cyan-700 p-5 text-white shadow-lg sm:p-7"><div className="flex items-center justify-between gap-4"><div><p className="text-sm text-emerald-100">{isArabic ? 'مساحة المندوب' : 'Representative workspace'}</p><h1 className="mt-1 text-2xl font-extrabold sm:text-3xl">{isArabic ? `أهلاً ${user?.name || data?.representative?.name || ''}` : `Welcome ${user?.name || data?.representative?.name || ''}`}</h1><p className="mt-2 text-sm text-emerald-50">{isArabic ? 'فواتيرك وأداؤك وعمولاتك في مكان واحد.' : 'Your invoices, performance and commissions in one place.'}</p></div><UserRound className="hidden h-14 w-14 text-cyan-200 sm:block" /></div></div>
       <Card><CardContent className="grid gap-3 p-4 md:grid-cols-[120px_120px_minmax(0,1fr)_auto] md:items-end"><div><label className="text-sm font-medium">{isArabic ? 'من' : 'From'}</label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} /></div><div><label className="text-sm font-medium">{isArabic ? 'إلى' : 'To'}</label><Input type="date" value={to} onChange={e => setTo(e.target.value)} /></div><Input value={search} onChange={e => setSearch(e.target.value)} placeholder={isArabic ? 'ابحث برقم الفاتورة أو العميل' : 'Search invoice or customer'} /><Button variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw size={16} className={query.isFetching ? 'animate-spin' : ''} /><span className="ms-2">{isArabic ? 'تحديث' : 'Refresh'}</span></Button></CardContent></Card>
+      <Card><CardHeader><CardTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5" />{isArabic ? 'إضافة عميل وإنشاء فاتورة' : 'Add customer and create invoice'}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-4"><Input placeholder={isArabic ? 'اسم العميل *' : 'Customer name *'} value={customer.name} onChange={e => setCustomer({ ...customer, name: e.target.value })} /><Input placeholder={isArabic ? 'رقم الهاتف' : 'Phone'} value={customer.phone} onChange={e => setCustomer({ ...customer, phone: e.target.value })} dir="ltr" /><Input placeholder={isArabic ? 'البريد الإلكتروني' : 'Email'} value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} dir="ltr" /><Input placeholder={isArabic ? 'العنوان' : 'Address'} value={customer.address} onChange={e => setCustomer({ ...customer, address: e.target.value })} /><div className="flex gap-2 md:col-span-4"><Button disabled={!customer.name || customerMutation.isPending} onClick={() => customerMutation.mutate()}><UserPlus className="me-2 h-4 w-4" />{customerMutation.isPending ? (isArabic ? 'جاري الحفظ...' : 'Saving...') : (isArabic ? 'حفظ العميل ثم فتح المبيعات' : 'Save customer and open sales')}</Button><p className="self-center text-xs text-muted-foreground">{isArabic ? 'بعد الحفظ ستفتح شاشة المبيعات لاختيار العميل وإضافة المنتجات وإصدار الفاتورة.' : 'After saving, sales opens so you can select the customer, add products and issue the invoice.'}</p></div></CardContent></Card>
       {query.isError ? <Card><CardContent className="py-8 text-center text-destructive">{isArabic ? 'تعذر تحميل تقرير المندوب. تأكد من تشغيل migration وتسجيل الدخول من شاشة المندوب.' : 'Could not load the representative report. Run the migration and sign in from the representative login.'}</CardContent></Card> : <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<Receipt />} title={isArabic ? 'عدد الفواتير' : 'Invoices'} value={data?.summary.invoice_count || 0} /><Metric icon={<TrendingUp />} title={isArabic ? 'صافي المبيعات' : 'Net sales'} value={money(data?.summary.net_sales)} /><Metric icon={<TrendingDown />} title={isArabic ? 'المرتجعات' : 'Returns'} value={money(data?.summary.returns_total)} /><Metric icon={<Wallet />} title={isArabic ? 'العمولة' : 'Commission'} value={`${money(data?.summary.commission_total)} (${data?.summary.commission_rate || 0}%)`} /></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric icon={<ShoppingBag />} title={isArabic ? 'إجمالي المبيعات' : 'Sales total'} value={money(data?.summary.sales_total)} /><Metric icon={<Wallet />} title={isArabic ? 'المحصل' : 'Collected'} value={money(data?.summary.paid_total)} /><Metric icon={<Receipt />} title={isArabic ? 'عدد المرتجعات' : 'Return count'} value={data?.returns?.length || 0} /><Metric icon={<TrendingUp />} title={isArabic ? 'نسبة العمولة' : 'Commission rate'} value={`${data?.summary.commission_rate || 0}%`} /></div>
