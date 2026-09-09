@@ -48,22 +48,22 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
     if (product.image?.fullUrl) {
       return product.image.fullUrl.startsWith('http') 
         ? product.image.fullUrl 
-        : `http://apierp.dentin.cloud${product.image.fullUrl}`;
+        : `https://testapi.injazyemen.cloud${product.image.fullUrl}`;
     }
     if (product.imageUrl) {
       return product.imageUrl.startsWith('http') 
         ? product.imageUrl 
-        : `http://apierp.dentin.cloud${product.imageUrl}`;
+        : `https://testapi.injazyemen.cloud${product.imageUrl}`;
     }
     if (product.image_url) {
       return product.image_url.startsWith('http') 
         ? product.image_url 
-        : `http://apierp.dentin.cloud${product.image_url}`;
+        : `https://testapi.injazyemen.cloud${product.image_url}`;
     }
     if (product.image?.previewUrl) {
       return product.image.previewUrl.startsWith('http') 
         ? product.image.previewUrl 
-        : `http://apierp.dentin.cloud${product.image.previewUrl}`;
+        : `https://testapi.injazyemen.cloud${product.image.previewUrl}`;
     }
     return null;
   };

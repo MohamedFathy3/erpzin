@@ -7,7 +7,7 @@ const API_BASE_URL = (() => {
   }
   
   // استخدام القيمة الافتراضية
-  return 'http://apierp.dentin.cloud/api';
+  return 'https://testapi.injazyemen.cloud/api';
 })();
 
 class ApiService {

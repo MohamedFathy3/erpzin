@@ -100,6 +100,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Sales'],
   },
   {
+    id: 'calendar',
+    path: '/calendar',
+    label: 'Calendar',
+    labelAr: 'التقويم',
+    icon: 'CalendarDays',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
     id: 'tasks',
     path: '/tasks',
     label: 'Tasks & Reminders',

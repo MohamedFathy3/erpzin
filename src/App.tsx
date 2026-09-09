@@ -32,6 +32,7 @@ import NotFound from "./pages/NotFound";
 import SuperAdmin from "./pages/SuperAdmin";
 import WhatsApp from "./pages/WhatsApp";
 import GoogleIntegrations from "./pages/GoogleIntegrations";
+import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
 
 const queryClient = new QueryClient();
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
                 <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
                 <Route path="/google-integrations" element={<ProtectedRoute><GoogleIntegrations /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
