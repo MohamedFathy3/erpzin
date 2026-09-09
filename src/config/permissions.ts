@@ -84,6 +84,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Sales'],
   },
   {
+    id: 'whatsapp',
+    path: '/whatsapp',
+    label: 'WhatsApp',
+    labelAr: 'واتساب Business',
+    icon: 'MessageCircle',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
     id: 'reports',
     path: '/reports',
     label: 'Reports',

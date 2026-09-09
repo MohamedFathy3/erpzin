@@ -30,6 +30,7 @@ import Projects from "./pages/Projects";
 import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
 import SuperAdmin from "./pages/SuperAdmin";
+import WhatsApp from "./pages/WhatsApp";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,7 @@ const App = () => (
                 <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
                 <Route path="/hr" element={<ProtectedRoute><HR /></ProtectedRoute>} />
                 <Route path="/crm" element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+                <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />
