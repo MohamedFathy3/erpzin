@@ -20,6 +20,7 @@ type Message = {
   provider_message_id?: string; created_at: string; customer?: { name: string };
 };
 type Customer = { id: number; name?: string; name_ar?: string; phone?: string | null };
+type WhatsAppTemplate = { name: string; language: string; status: string; category?: string; components?: Array<{ type: string; text?: string }> };
 
 const statuses = {
   pending: { label: 'قيد المعالجة', icon: Clock3, className: 'bg-amber-100 text-amber-800' },
@@ -51,6 +52,22 @@ export default function WhatsApp() {
   });
   const customers = customersQuery.data?.data ?? [];
   const selectedCustomer = customers.find(customer => String(customer.id) === customerId);
+
+  const templatesQuery = useQuery<{ data: WhatsAppTemplate[] }>({
+    queryKey: ['whatsapp-templates'],
+    queryFn: async () => (await api.get('/crm/whatsapp/templates')).data,
+  });
+  const templates = templatesQuery.data?.data ?? [];
+
+  const selectTemplate = (value: string) => {
+    const template = templates.find(item => `${item.name}|${item.language}` === value);
+    if (!template) return;
+    setTemplateName(template.name);
+    setLanguageCode(template.language);
+    const body = template.components?.find(component => component.type.toLowerCase() === 'body');
+    const count = (body?.text?.match(/{{[^}]+}}/g) ?? []).length;
+    setComponents(count ? JSON.stringify({ body: { parameters: Array.from({ length: count }, (_, index) => ({ type: 'text', text: `القيمة ${index + 1}` })) } }, null, 2) : '');
+  };
 
   const loadOrderConfirmationExample = () => {
     setTemplateName('order_confirmation');
@@ -109,7 +126,7 @@ export default function WhatsApp() {
       <TabsContent value="send"><Card><CardHeader><CardTitle>إرسال عبر WhatsApp Cloud API</CardTitle></CardHeader><CardContent className="max-w-2xl space-y-4">
         <div><Label>العميل</Label><Select value={customerId} onValueChange={setCustomerId}><SelectTrigger><SelectValue placeholder={customersQuery.isLoading ? 'جاري تحميل العملاء...' : 'اختر العميل'} /></SelectTrigger><SelectContent>{customers.map(customer => <SelectItem key={customer.id} value={String(customer.id)}>{customer.name_ar || customer.name || `#${customer.id}`} — {customer.phone || 'بدون رقم'}</SelectItem>)}</SelectContent></Select>{selectedCustomer && <p className={`mt-1 text-xs ${selectedCustomer.phone?.trim().startsWith('+') ? 'text-emerald-600' : 'text-destructive'}`} dir="ltr">{selectedCustomer.phone || 'لا يوجد رقم'}{!selectedCustomer.phone?.trim().startsWith('+') && ' — يجب حفظه بصيغة +رمز الدولة ثم الرقم'}</p>}</div>
         <div><Label>نوع الرسالة</Label><Select value={type} onValueChange={value => setType(value as 'text' | 'template')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="template">Template معتمدة</SelectItem><SelectItem value="text">نص حر داخل نافذة 24 ساعة</SelectItem></SelectContent></Select></div>
-        {type === 'text' ? <div><Label>النص</Label><Textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="اكتب الرسالة..." /></div> : <><div className="flex items-end gap-2"><div className="flex-1"><Label>اسم القالب المعتمد</Label><Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="welcome_message" dir="ltr" /></div><Button type="button" variant="outline" onClick={loadOrderConfirmationExample}>تحميل مثال</Button></div><div><Label>رمز اللغة</Label><Input value={languageCode} onChange={e => setLanguageCode(e.target.value)} placeholder="ar" dir="ltr" /></div><div><Label>مكونات القالب JSON — اختياري</Label><Textarea value={components} onChange={e => setComponents(e.target.value)} rows={7} dir="ltr" placeholder='[{"type":"body","parameters":[]}]' /><p className="mt-1 text-xs text-muted-foreground">مثال جاهز: order_confirmation — en_US — first_name و order_number.</p></div></>}
+        {type === 'text' ? <div><Label>النص</Label><Textarea value={body} onChange={e => setBody(e.target.value)} rows={5} placeholder="اكتب الرسالة..." /></div> : <><div><Label>القالب الموجود في Meta</Label><Select value={templateName && languageCode ? `${templateName}|${languageCode}` : ''} onValueChange={selectTemplate}><SelectTrigger><SelectValue placeholder={templatesQuery.isLoading ? 'جاري تحميل القوالب...' : 'اختر قالبًا معتمدًا'} /></SelectTrigger><SelectContent>{templates.filter(template => template.status === 'APPROVED').map(template => <SelectItem key={`${template.name}|${template.language}`} value={`${template.name}|${template.language}`}>{template.name} — {template.language}</SelectItem>)}</SelectContent></Select><p className="mt-1 text-xs text-muted-foreground">يتم تحميل القوالب المعتمدة مباشرة من حساب Meta.</p></div><div className="flex items-end gap-2"><div className="flex-1"><Label>اسم القالب</Label><Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="اختر القالب من القائمة" dir="ltr" /></div><Button type="button" variant="outline" onClick={loadOrderConfirmationExample}>مثال يدوي</Button></div><div><Label>رمز اللغة</Label><Input value={languageCode} onChange={e => setLanguageCode(e.target.value)} placeholder="en_US" dir="ltr" /></div><div><Label>مكونات القالب JSON — اختياري</Label><Textarea value={components} onChange={e => setComponents(e.target.value)} rows={7} dir="ltr" placeholder='{"body":{"parameters":[]}}' /><p className="mt-1 text-xs text-muted-foreground">عدّل قيم parameters فقط إذا كان القالب يحتاج متغيرات.</p></div></>}
         <Button disabled={!customerId || !selectedCustomer?.phone?.trim().match(/^\+[1-9]\d{7,14}$/) || (type === 'text' ? !body : !templateName || !languageCode) || sendMutation.isPending} onClick={() => sendMutation.mutate()}><Send className="me-2 h-4 w-4" />{sendMutation.isPending ? 'جاري الإرسال...' : 'إرسال إلى Meta'}</Button>
       </CardContent></Card></TabsContent>
       <TabsContent value="messages"><Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>حالات الرسائل</CardTitle><Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem>{Object.entries(statuses).map(([key, item]) => <SelectItem key={key} value={key}>{item.label}</SelectItem>)}</SelectContent></Select></CardHeader><CardContent><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>العميل</TableHead><TableHead>الرقم</TableHead><TableHead>النوع</TableHead><TableHead>الحالة</TableHead><TableHead>التاريخ</TableHead><TableHead>التفاصيل</TableHead></TableRow></TableHeader><TableBody>{messagesQuery.isLoading ? <TableRow><TableCell colSpan={6} className="text-center">جاري التحميل...</TableCell></TableRow> : messages.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">لا توجد رسائل</TableCell></TableRow> : messages.map(message => <TableRow key={message.id}><TableCell>{message.customer?.name || `#${message.customer_id}`}</TableCell><TableCell dir="ltr">{message.to_phone}</TableCell><TableCell>{message.type === 'template' ? `Template: ${message.template_name}` : 'نص حر'}</TableCell><TableCell><StatusBadge status={message.status} /></TableCell><TableCell dir="ltr">{new Date(message.created_at).toLocaleString('ar')}</TableCell><TableCell className="max-w-56 text-sm text-red-600">{message.error_message || message.provider_message_id || '—'}</TableCell></TableRow>)}</TableBody></Table></div></CardContent></Card></TabsContent>
