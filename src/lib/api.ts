@@ -82,6 +82,8 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
     console.log("✅ Authorization header added");
   }
+  const localTenantSlug = import.meta.env.VITE_TENANT_SLUG;
+  if (localTenantSlug) config.headers["X-Tenant-Slug"] = localTenantSlug;
 
   console.log("📋 Final Request Headers:", config.headers);
 

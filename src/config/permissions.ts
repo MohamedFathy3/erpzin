@@ -13,7 +13,7 @@ export interface PagePermission {
 export const PAGES: PagePermission[] = [
   {
     id: 'dashboard',
-    path: '/',
+    path: '/dashboard',
     label: 'Dashboard',
     labelAr: 'لوحة التحكم',
     icon: 'LayoutDashboard',

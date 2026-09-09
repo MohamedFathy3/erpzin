@@ -28,9 +28,13 @@ import RepresentativeDashboard from "./pages/RepresentativeDashboard";
 import Projects from "./pages/Projects";
 import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
+import SuperAdmin from "./pages/SuperAdmin";
+import { Home as MarketingHome, About, Services, Pricing, Contact, Signup } from "./pages/MarketingPages";
+import AccessControl from "./pages/AccessControl";
+import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
 const queryClient = new QueryClient();
-
+const isTenantHost = () => { const host=window.location.hostname.toLowerCase(); const root=(import.meta.env.VITE_TENANT_ROOT_DOMAIN || 'example.com').toLowerCase(); return host.endsWith(`.${root}`) && host !== `www.${root}` && host !== `admin.${root}`; };
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
@@ -43,7 +47,16 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/about" element={<About />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/cookies" element={<CookiesPolicy />} />
+                <Route path="/" element={isTenantHost() ? <ProtectedRoute><Dashboard /></ProtectedRoute> : <MarketingHome />} />
+                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
                 <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
                 <Route path="/purchasing" element={<ProtectedRoute><Purchasing /></ProtectedRoute>} />
@@ -60,6 +73,8 @@ const App = () => (
                 <Route path="/representative" element={<ProtectedRoute><RepresentativeDashboard /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
                 <Route path="/workflow" element={<ProtectedRoute><Workflow /></ProtectedRoute>} />
+                <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
+                <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
                 <Route path="/POSRetrun" element={<ProtectedRoute><POSRetrun /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
