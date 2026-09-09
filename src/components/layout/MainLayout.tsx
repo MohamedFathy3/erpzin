@@ -43,6 +43,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       crm: '/crm',
       whatsapp: '/whatsapp',
       'google-integrations': '/google-integrations',
+      tasks: '/tasks',
       reports: '/reports',
       industries: '/industries',
       manufacturing: '/manufacturing',
