@@ -25,7 +25,7 @@ export default function GoogleIntegrations() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('google') === 'connected') toast.success('تم ربط حساب Google بنجاح');
-    if (params.get('google') === 'error') toast.error('تعذر إكمال ربط حساب Google');
+    if (params.get('google') === 'error') toast.error(`تعذر إكمال ربط حساب Google${params.get('reason') ? `: ${params.get('reason')}` : ''}`, { duration: 10000 });
     if (params.has('google')) window.history.replaceState({}, document.title, window.location.pathname);
   }, []);
 
