@@ -92,6 +92,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Sales'],
   },
   {
+    id: 'google-integrations',
+    path: '/google-integrations',
+    label: 'Google Integrations',
+    labelAr: 'تكاملات Google',
+    icon: 'CalendarDays',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
     id: 'reports',
     path: '/reports',
     label: 'Reports',

@@ -56,6 +56,7 @@ const getIcon = (iconName: string) => {
     HardHat: Icons.HardHat,
     Activity: Icons.Activity,
     MessageCircle: Icons.MessageCircle,
+    CalendarDays: Icons.CalendarDays,
   };
   
   const Icon = icons[iconName] || Icons.LayoutDashboard;
