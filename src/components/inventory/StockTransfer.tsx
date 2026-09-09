@@ -284,7 +284,7 @@ const WarehouseTransfer = () => {
           ...(item.product_unit_id !== 0 && { product_unit_id: item.product_unit_id }),
           ...(item.color_id !== 0 && { color_id: item.color_id }),
           ...(productNotes[`${item.product_id}-${item.product_unit_id}-${item.color_id}`]
-            ? { note: productNotes[`...`] }
+            ? { note: productNotes[`${item.product_id}-${item.product_unit_id}-${item.color_id}`] }
             : {})
 
         }))
