@@ -61,7 +61,7 @@ export default function WhatsApp() {
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const payload: Record<string, unknown> = { type };
+      const payload: Record<string, unknown> = { type, phone: selectedCustomer?.phone };
       if (type === 'text') payload.body = body;
       else {
         payload.template_name = templateName;
