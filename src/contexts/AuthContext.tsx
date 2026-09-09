@@ -172,6 +172,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const loadSession = async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const googleToken = params.get('google_token');
+        if (googleToken) {
+          Cookies.set('token', googleToken, { expires: 7, secure: window.location.protocol === 'https:', sameSite: 'lax' });
+          Cookies.remove('auth_type');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
         const token = Cookies.get('token');
         console.log('Loading session, token:', token);
 
@@ -230,22 +237,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Sign in attempt:', identifier);
 
-      // تحديد إذا كان Identifier هو email أم username
-      const isEmail = identifier.includes('@');
-      let payload;
-
-      if (isEmail) {
-        payload = {
-          email: identifier,
-          password
-        };
-      } else {
-        // إذا كان username
-        payload = {
-          username: identifier,
-          password
-        };
-      }
+      // The Laravel admin endpoint authenticates by email. Keep the UI label
+      // backwards compatible, but always send the entered identifier in the
+      // field the API actually reads.
+      const payload = { email: identifier, password };
 
       const response = await api.post<LoginResponse>('/admin/login', payload);
       console.log('Login response:', response.data);

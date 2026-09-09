@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import api from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,19 @@ const Auth = () => {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/auth/google/url');
+      const url = response.data?.data?.url;
+      if (!url) throw new Error('Google login is not configured');
+      window.location.assign(url);
+    } catch (error: any) {
+      setLoading(false);
+      toast({ title: language === 'ar' ? 'تعذر بدء تسجيل Google' : 'Google sign-in unavailable', description: error.response?.data?.message || error.message });
+    }
+  };
 
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
 
@@ -280,6 +294,9 @@ const Auth = () => {
                   <div className="space-y-2"><Label htmlFor="login-password" className="text-sm font-semibold text-slate-700">{t.password}</Label><div className="relative"><Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><Input id="login-password" type="password" placeholder={t.passwordPlaceholder} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required dir="ltr" className="h-12 rounded-xl border-slate-200 ps-10 focus-visible:ring-cyan-500" /></div></div>
                   <Button type="submit" className="h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-base font-bold shadow-lg shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-blue-700" disabled={loading}>{loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ArrowRight size={17} className="me-2" />}{t.login}</Button>
                 </form>
+                <Button type="button" variant="outline" className="mt-3 h-11 w-full rounded-xl border-slate-300" onClick={handleGoogleLogin} disabled={loading}>
+                  <span className="me-2 text-base font-bold">G</span>{language === 'ar' ? 'المتابعة باستخدام Google' : 'Continue with Google'}
+                </Button>
                 <Button type="button" variant="outline" className="mt-4 h-11 w-full rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => navigate('/representative/login')}>
                   {language === 'ar' ? 'دخول المندوب' : 'Representative login'}
                 </Button>

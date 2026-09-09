@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { 
   ArrowUpDown, 
@@ -78,17 +78,17 @@ const InventoryMovements = () => {
     }
   }[language];
 
-  // Fetch movements with product data
   const { data: movements = [], refetch, isLoading } = useQuery({
-    queryKey: ['inventory-movements'],
+    queryKey: ['inventory-movements', searchQuery, typeFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inventory_movements')
-        .select('*, products(name, name_ar, sku)')
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data;
+      const response = await api.post('/reports/inventory-movements', {
+        filters: {
+          ...(searchQuery ? { search: searchQuery } : {}),
+          ...(typeFilter !== 'all' ? { movement_type: typeFilter } : {}),
+        },
+        perPage: 500,
+      });
+      return response.data?.data ?? [];
     }
   });
 
@@ -122,9 +122,9 @@ const InventoryMovements = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(m =>
-        m.products?.name?.toLowerCase().includes(query) ||
-        m.products?.name_ar?.includes(query) ||
-        m.products?.sku?.toLowerCase().includes(query)
+        m.product?.name?.toLowerCase().includes(query) ||
+        m.product?.name_ar?.includes(query) ||
+        m.product?.sku?.toLowerCase().includes(query)
       );
     }
     
@@ -231,12 +231,12 @@ const InventoryMovements = () => {
                         </TableCell>
                         <TableCell className="font-medium">
                           {language === 'ar' 
-                            ? movement.products?.name_ar || movement.products?.name
-                            : movement.products?.name
+                            ? movement.product?.name_ar || movement.product?.name
+                            : movement.product?.name
                           }
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {movement.products?.sku}
+                          {movement.product?.sku}
                         </TableCell>
                         <TableCell>{getTypeBadge(movement.movement_type)}</TableCell>
                         <TableCell className={`font-semibold ${
@@ -246,15 +246,11 @@ const InventoryMovements = () => {
                               ? 'text-red-500'
                               : ''
                         }`}>
-                          {['in', 'transfer_in', 'opening_balance'].includes(movement.movement_type) 
-                            ? `+${movement.quantity}`
-                            : ['out', 'transfer_out'].includes(movement.movement_type)
-                              ? `-${movement.quantity}`
-                              : movement.quantity
+                          {movement.quantity_delta > 0 ? `+${movement.quantity_delta}` : movement.quantity_delta
                           }
                         </TableCell>
-                        <TableCell>{movement.previous_stock}</TableCell>
-                        <TableCell className="font-semibold">{movement.new_stock}</TableCell>
+                        <TableCell>{movement.previous_stock ?? '—'}</TableCell>
+                        <TableCell className="font-semibold">{movement.new_stock ?? movement.variant_stock?.stock ?? '—'}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {movement.reference_type ? `${movement.reference_type}` : '-'}
                         </TableCell>
