@@ -77,14 +77,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
 
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
-    return allowedPages
+    const items = allowedPages
       .filter(page => page.id !== 'settings')
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
       }));
-  }, [allowedPages, language]);
+    if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });
+    return items;
+  }, [allowedPages, language, user?.super_admin]);
 
   // عناصر القائمة السفلية
   const bottomItems = React.useMemo(() => {
