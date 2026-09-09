@@ -27,6 +27,8 @@ interface User {
   updated_at: string;
   website?: string | null;
   role: string;
+  super_admin?: boolean;
+  tenant_id?: number | null;
   sales_representative_id?: number;
   commission_rate?: number;
   name_ar?: string | null; // ✅ اسم الشركة بالعربي
