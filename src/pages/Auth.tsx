@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { getAllowedPages, UserRole } from '@/config/permissions'; // استيراد دالة الصلاحيات
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 const loginSchema = z.object({
   identifier: z.string().trim().min(3, { message: 'اسم المستخدم أو البريد الإلكتروني مطلوب' }),
@@ -61,7 +62,7 @@ const getDefaultRoute = (role: UserRole): string => {
 };
 
 const Auth = () => {
-  const { user, signIn, signUp } = useAuth();
+  const { user, signIn, signInWithGoogle, signUp } = useAuth();
   const { language, direction, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -196,6 +197,15 @@ const Auth = () => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      setLoading(false);
+      toast({ title: t.error, description: error.message, variant: 'destructive' });
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -247,6 +257,7 @@ const Auth = () => {
       <div className="pointer-events-none absolute -bottom-32 -end-20 h-96 w-96 rounded-full bg-violet-500/20 blur-3xl" />
 
       <div className="absolute end-5 top-5 z-10 sm:end-8 sm:top-8">
+        <div className="mb-3"><ThemeToggle /></div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="border-white/20 bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white">
@@ -280,6 +291,8 @@ const Auth = () => {
                   <div className="space-y-2"><Label htmlFor="login-password" className="text-sm font-semibold text-slate-700">{t.password}</Label><div className="relative"><Lock className="absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} /><Input id="login-password" type="password" placeholder={t.passwordPlaceholder} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required dir="ltr" className="h-12 rounded-xl border-slate-200 ps-10 focus-visible:ring-cyan-500" /></div></div>
                   <Button type="submit" className="h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-base font-bold shadow-lg shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-blue-700" disabled={loading}>{loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ArrowRight size={17} className="me-2" />}{t.login}</Button>
                 </form>
+                <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /><span>{language === 'ar' ? 'أو' : 'OR'}</span><span className="h-px flex-1 bg-slate-200" /></div>
+                <Button type="button" variant="outline" onClick={handleGoogleLogin} disabled={loading} className="h-12 w-full rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"><span className="me-3 grid h-6 w-6 place-items-center rounded-full bg-white text-sm font-black text-blue-600 shadow-sm">G</span>{language === 'ar' ? 'تسجيل الدخول باستخدام Google' : 'Continue with Google'}</Button>
               </TabsContent>
             </Tabs>
             <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck size={15} className="text-emerald-500" /> {language === 'ar' ? 'بياناتك محمية ومشفرة' : 'Your data is protected and encrypted'}</div>

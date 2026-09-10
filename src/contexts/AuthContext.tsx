@@ -61,6 +61,7 @@ interface AuthContextType {
     user?: User;
     token?: string;
   }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signInRepresentative: (identifier: string, password: string) => Promise<{
     error: Error | null;
     user?: User;
@@ -295,6 +296,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const response = await api.get('/auth/google/url');
+      const url = response.data?.data?.url;
+      if (!url) throw new Error('Google login is not configured');
+      window.location.assign(url);
+      return { error: null };
+    } catch (error: any) {
+      return { error: new Error(error.response?.data?.message || error.message || 'Google login failed') };
+    }
+  };
+
   const signInRepresentative = async (identifier: string, password: string) => {
     try {
       const response = await api.post<LoginResponse>('/sales-representative/login', { identifier, password });
@@ -492,6 +505,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     loading,
     signIn,
+    signInWithGoogle,
     signInRepresentative,
     signUp,
     signOut,
