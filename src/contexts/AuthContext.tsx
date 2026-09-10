@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import api from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 
 // تعريف الأنواع بناءً على الـ response
 interface User {
@@ -89,6 +90,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -433,6 +435,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Cookies.remove('token');
       Cookies.remove('auth_type');
       localStorage.removeItem('user');
+      // Query keys are not tenant-aware in every legacy screen. Clear them
+      // before the next account can render cached rows from this workspace.
+      queryClient.clear();
       setUser(null);
       setSession(null);
       console.log('Signed out successfully');

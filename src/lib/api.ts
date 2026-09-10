@@ -4,6 +4,19 @@ import Cookies from "js-cookie";
 
 const API_BASE_URL = "/api";
 
+const getTenantSlug = (): string | null => {
+  const configured = import.meta.env.VITE_TENANT_SLUG?.trim();
+  if (configured) return configured.toLowerCase();
+
+  const host = window.location.hostname.toLowerCase();
+  const labels = host.split('.');
+  // Do not treat localhost, IPs, or known central hosts as workspaces.
+  if (labels.length < 3 || host === 'www.example.com' || labels[0] === 'www' || labels[0] === 'admin') {
+    return null;
+  }
+  return labels[0];
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 
@@ -82,7 +95,7 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
     console.log("✅ Authorization header added");
   }
-  const localTenantSlug = import.meta.env.VITE_TENANT_SLUG;
+  const localTenantSlug = getTenantSlug();
   if (localTenantSlug) config.headers["X-Tenant-Slug"] = localTenantSlug;
 
   console.log("📋 Final Request Headers:", config.headers);
