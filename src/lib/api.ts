@@ -2,8 +2,7 @@
 import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
 
-const API_ORIGIN = (import.meta.env.VITE_API_URL || "https://testapi.injazyemen.cloud").replace(/\/$/, "");
-const API_BASE_URL = `${API_ORIGIN}/api`;
+const API_BASE_URL = "/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -27,8 +26,9 @@ export const getCsrfToken = async (force: boolean = false): Promise<void> => {
 
   console.log("🛡️ Getting CSRF Token...");
   try {
-    const response = await axios.get(`${API_ORIGIN}/sanctum/csrf-cookie`, {
+    const response = await axios.get("/sanctum/csrf-cookie", {
       withCredentials: true,
+      baseURL: "", // استخدام نفس الـ origin
     });
     
     console.log("🛡️ CSRF Token Response:", {
