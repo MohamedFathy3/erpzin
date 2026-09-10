@@ -34,6 +34,8 @@ import WhatsApp from "./pages/WhatsApp";
 import GoogleIntegrations from "./pages/GoogleIntegrations";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
+import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
+import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
 const queryClient = new QueryClient();
 
@@ -48,7 +50,22 @@ const App = () => (
               <Sonner />
             <BrowserRouter>
               <Routes>
+                {/* Public marketing and trial onboarding */}
+                <Route path="/marketing" element={<MarketingHome />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/cookies" element={<CookiesPolicy />} />
+
+                {/* Shared email login: tenant users and super admin are routed by role */}
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                <Route path="/tenant/login" element={<Auth />} />
+                <Route path="/super-admin/login" element={<Auth />} />
                 <Route path="/representative/login" element={<RepresentativeLogin />} />
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
