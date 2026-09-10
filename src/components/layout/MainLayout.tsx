@@ -41,6 +41,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       finance: '/finance',
       hr: '/hr',
       crm: '/crm',
+      whatsapp: '/whatsapp',
+      'google-integrations': '/google-integrations',
+      calendar: '/calendar',
+      productLedger: '/product-ledger',
+      tasks: '/tasks',
       reports: '/reports',
       industries: '/industries',
       manufacturing: '/manufacturing',
@@ -48,6 +53,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       projects: '/projects',
       workflow: '/workflow',
       settings: '/settings',
+      'super-admin': '/super-admin',
       posreturn: '/POSRetrun',
     };
     navigate(routes[item] || '/');

@@ -34,6 +34,8 @@ import {
   FileText
 } from 'lucide-react';
 import api from '@/lib/api';
+import CrmPipeline from '@/components/CRM/CrmPipeline';
+import EmailComposer from '@/components/CRM/EmailComposer';
 import { Switch } from '@/components/ui/switch';
 import CrmPipeline from '@/components/crm/CrmPipeline';
 
@@ -789,6 +791,14 @@ const handleToggleStatus = (customer: Customer) => {
               <Users size={16} />
               {t.customers}
             </TabsTrigger>
+            <TabsTrigger value="email" className="flex items-center gap-2">
+              <FileText size={16} />
+              {language === 'ar' ? 'إرسال بريد' : 'Send Email'}
+            </TabsTrigger>
+            <TabsTrigger value="pipeline" className="flex items-center gap-2">
+              <TrendingUp size={16} />
+              {language === 'ar' ? 'Pipeline والصفقات' : 'Pipeline & Deals'}
+            </TabsTrigger>
             <TabsTrigger value="loyalty" className="flex items-center gap-2">
               <Crown size={16} />
               {t.loyaltyProgram}
@@ -970,6 +980,14 @@ const handleToggleStatus = (customer: Customer) => {
           </TabsContent>
 
           {/* ========== Loyalty Program Tab ========== */}
+          <TabsContent value="email" className="mt-4">
+            <EmailComposer />
+          </TabsContent>
+
+          <TabsContent value="pipeline" className="mt-4">
+            <CrmPipeline />
+          </TabsContent>
+
           <TabsContent value="loyalty" className="mt-4">
             <div className="grid md:grid-cols-2 gap-6">
               {/* Loyalty Tiers */}

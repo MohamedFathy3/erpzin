@@ -21,6 +21,8 @@ interface SalesmanForm {
   name_ar: string;
   phone: string;
   email: string;
+  password: string;
+  password_confirmation: string;
   commission_rate: number;
   branch_id: string;
   employee_id: string;
@@ -37,6 +39,8 @@ const SalesmenManager = () => {
     name_ar: "",
     phone: "",
     email: "",
+    password: "",
+    password_confirmation: "",
     commission_rate: 0,
     branch_id: "",
     employee_id: "",
@@ -119,10 +123,11 @@ const SalesmenManager = () => {
           name_ar: data.name_ar || null,
           phone: data.phone || null,
           email: data.email || null,
+          ...(data.password ? { password: data.password, password_confirmation: data.password_confirmation } : {}),
           commission_rate: data.commission_rate,
           branch_id: data.branch_id || null,
           employee_id: data.employee_id || null,
-          is_active: data.is_active
+          active: data.is_active
         });
         return response.data;
       } else {
@@ -131,10 +136,11 @@ const SalesmenManager = () => {
           name_ar: data.name_ar || null,
           phone: data.phone || null,
           email: data.email || null,
+          ...(data.password ? { password: data.password, password_confirmation: data.password_confirmation } : {}),
           commission_rate: data.commission_rate,
           branch_id: data.branch_id || null,
           employee_id: data.employee_id || null,
-          is_active: data.is_active
+          active: data.is_active
         });
         return response.data;
       }
@@ -177,6 +183,8 @@ const deleteMutation = useMutation({
         name_ar: salesman.name_ar || "",
         phone: salesman.phone || "",
         email: salesman.email || "",
+        password: "",
+        password_confirmation: "",
         commission_rate: salesman.commission_rate || 0,
         branch_id: salesman.branch_id || "",
         employee_id: salesman.employee_id || "",
@@ -189,6 +197,8 @@ const deleteMutation = useMutation({
         name_ar: "",
         phone: "",
         email: "",
+        password: "",
+        password_confirmation: "",
         commission_rate: 0,
         branch_id: "",
         employee_id: "",
@@ -206,6 +216,14 @@ const deleteMutation = useMutation({
   const handleSubmit = () => {
     if (!formData.name.trim()) {
       toast.error(language === 'ar' ? 'الاسم مطلوب' : 'Name is required');
+      return;
+    }
+    if (!formData.id && (!formData.email || !formData.password)) {
+      toast.error(language === 'ar' ? 'البريد وكلمة المرور مطلوبان للحساب الجديد' : 'Email and password are required for a new account');
+      return;
+    }
+    if (formData.password && formData.password !== formData.password_confirmation) {
+      toast.error(language === 'ar' ? 'تأكيد كلمة المرور غير مطابق' : 'Passwords do not match');
       return;
     }
     saveMutation.mutate(formData);
@@ -340,6 +358,17 @@ const deleteMutation = useMutation({
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>{language === 'ar' ? 'كلمة المرور' : 'Password'}{!editingSalesman ? ' *' : ''}</Label>
+                <Input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder={editingSalesman ? (language === 'ar' ? 'اتركها فارغة بدون تغيير' : 'Leave blank to keep current') : ''} />
+              </div>
+              <div>
+                <Label>{language === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm password'}{!editingSalesman ? ' *' : ''}</Label>
+                <Input type="password" value={formData.password_confirmation} onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })} />
               </div>
             </div>
 
