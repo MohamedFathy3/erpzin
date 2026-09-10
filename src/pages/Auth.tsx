@@ -90,7 +90,7 @@ const Auth = () => {
         navigate(from, { replace: true });
       } else {
         // مندوب المبيعات يبدأ من مساحته الخاصة، وباقي الأدوار من صفحتها الافتراضية
-        const defaultRoute = user.role === 'Sales' ? '/representative' : getDefaultRoute(user.role as UserRole);
+        const defaultRoute = user.super_admin ? '/super-admin' : user.role === 'Sales' ? '/representative' : getDefaultRoute(user.role as UserRole);
         navigate(defaultRoute, { replace: true });
       }
     }
