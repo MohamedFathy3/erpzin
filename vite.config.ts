@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: "::",
       port: 7000,
-      allowedHosts: ["injazyemen.cloud", "localhost", "127.0.0.1", "::1", ".injazyemen.cloud"],
+      allowedHosts: ["professionalacademyedu.com", "localhost", "127.0.0.1", "::1", ".professionalacademyedu.com", "injazyemen.cloud", ".injazyemen.cloud"],
     },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
