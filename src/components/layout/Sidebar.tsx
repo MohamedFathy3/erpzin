@@ -58,6 +58,7 @@ const getIcon = (iconName: string) => {
     MessageCircle: Icons.MessageCircle,
     CalendarDays: Icons.CalendarDays,
     CheckSquare: Icons.CheckSquare,
+    BrainCircuit: Icons.BrainCircuit,
   };
   
   const Icon = icons[iconName] || Icons.LayoutDashboard;
@@ -87,6 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
       }));
+    items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
     if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });
     return items;
   }, [allowedPages, language, user?.super_admin]);

@@ -29,6 +29,7 @@ import RepresentativeLogin from "./pages/RepresentativeLogin";
 import Projects from "./pages/Projects";
 import Workflow from "./pages/Workflow";
 import NotFound from "./pages/NotFound";
+import AIAssistant from "./pages/AIAssistant";
 import SuperAdmin from "./pages/SuperAdmin";
 import WhatsApp from "./pages/WhatsApp";
 import GoogleIntegrations from "./pages/GoogleIntegrations";
@@ -83,6 +84,7 @@ const App = () => (
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
                 <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />
                 <Route path="/manufacturing" element={<ProtectedRoute><Manufacturing /></ProtectedRoute>} />

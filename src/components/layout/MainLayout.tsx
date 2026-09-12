@@ -47,6 +47,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       productLedger: '/product-ledger',
       tasks: '/tasks',
       reports: '/reports',
+      aiAssistant: '/ai-assistant',
       industries: '/industries',
       manufacturing: '/manufacturing',
       manufacturingSetup: '/manufacturing/setup',
