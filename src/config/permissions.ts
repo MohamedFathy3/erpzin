@@ -12,6 +12,14 @@ export interface PagePermission {
 
 export const PAGES: PagePermission[] = [
   {
+    id: 'access-control',
+    path: '/access-control',
+    label: 'Access Control',
+    labelAr: 'الأدوار والصلاحيات',
+    icon: 'ShieldCheck',
+    allowedRoles: ['admin'],
+  },
+  {
     id: 'dashboard',
     path: '/dashboard',
     label: 'Dashboard',

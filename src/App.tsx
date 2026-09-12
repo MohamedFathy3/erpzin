@@ -34,6 +34,7 @@ import WhatsApp from "./pages/WhatsApp";
 import GoogleIntegrations from "./pages/GoogleIntegrations";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
+import AccessControl from "./pages/AccessControl";
 import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
 import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="/google-integrations" element={<ProtectedRoute><GoogleIntegrations /></ProtectedRoute>} />
                 <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+                <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />
