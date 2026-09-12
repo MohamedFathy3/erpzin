@@ -58,6 +58,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  enabledModules: string[];
+  modulesLoading: boolean;
   signIn: (identifier: string, password: string) => Promise<{
     error: Error | null;
     user?: User;
@@ -95,6 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [enabledModules, setEnabledModules] = useState<string[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
 
 
 
@@ -236,6 +240,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     loadSession();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadModules = async () => {
+      if (!user) {
+        setEnabledModules([]);
+        return;
+      }
+      if (user.super_admin) {
+        setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow']);
+        return;
+      }
+      setModulesLoading(true);
+      try {
+        const response = await api.get('/me/enabled-modules');
+        if (!cancelled) setEnabledModules(response.data?.data ?? []);
+      } catch {
+        if (!cancelled) setEnabledModules([]);
+      } finally {
+        if (!cancelled) setModulesLoading(false);
+      }
+    };
+    loadModules();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const signIn = async (identifier: string, password: string) => {
     try {
@@ -509,9 +538,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const value: AuthContextType = {
-    user,
-    session,
-    loading,
+      user,
+      session,
+      loading,
+      enabledModules,
+      modulesLoading,
     signIn,
     signInWithGoogle,
     signInRepresentative,

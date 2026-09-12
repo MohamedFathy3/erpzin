@@ -73,16 +73,40 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
   const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
-  const { user, signOut } = useAuth(); // ✅ استخدم signOut من useAuth
+  const { user, signOut, enabledModules, modulesLoading } = useAuth(); // ✅ استخدم signOut من useAuth
 
   // جلب الصفحات المسموحة للمستخدم
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allowedPages = getAllowedPages(user?.role as any);
 
+  const pageModules: Record<string, string> = {
+    inventory: 'inventory',
+    sales: 'sales',
+    purchasing: 'purchasing',
+    finance: 'finance',
+    hr: 'hr',
+    crm: 'crm',
+    whatsapp: 'whatsapp',
+    'google-integrations': 'google_calendar',
+    calendar: 'google_calendar',
+    tasks: 'tasks',
+    reports: 'reports',
+    manufacturing: 'manufacturing',
+    manufacturingSetup: 'manufacturing',
+    projects: 'projects',
+    workflow: 'workflow',
+  };
+
+  const moduleEnabled = (pageId: string) => {
+    if (user?.super_admin || modulesLoading) return true;
+    const module = pageModules[pageId];
+    return !module || enabledModules.includes(module);
+  };
+
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     const items = allowedPages
-      .filter(page => page.id !== 'settings')
+      .filter(page => page.id !== 'settings' && moduleEnabled(page.id))
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
@@ -91,13 +115,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
     if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });
     return items;
-  }, [allowedPages, language, user?.super_admin]);
+  }, [allowedPages, enabledModules, language, modulesLoading, user?.super_admin]);
 
   // عناصر القائمة السفلية
   const bottomItems = React.useMemo(() => {
     const items = [];
     
-    const settingsPage = allowedPages.find(page => page.id === 'settings');
+    const settingsPage = allowedPages.find(page => page.id === 'settings' && moduleEnabled(page.id));
     if (settingsPage) {
       items.push({
         id: 'settings',
@@ -113,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     });
 
     return items;
-  }, [allowedPages, language]);
+  }, [allowedPages, enabledModules, language, modulesLoading, user?.super_admin]);
 
   // ✅ دالة معالجة تسجيل الخروج
   const handleLogout = async () => {

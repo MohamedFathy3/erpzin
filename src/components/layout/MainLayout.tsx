@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -14,7 +14,7 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { user, signOut, enabledModules, modulesLoading } = useAuth();
 
   const getActiveFromPath = () => {
     const path = location.pathname;
@@ -24,6 +24,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   };
 
   const currentActive = activeItem || getActiveFromPath();
+
+  useEffect(() => {
+    if (!user || user.super_admin || modulesLoading) return;
+    const moduleByPath: Record<string, string> = {
+      '/inventory': 'inventory',
+      '/sales': 'sales',
+      '/purchasing': 'purchasing',
+      '/finance': 'finance',
+      '/hr': 'hr',
+      '/crm': 'crm',
+      '/whatsapp': 'whatsapp',
+      '/google-integrations': 'google_calendar',
+      '/calendar': 'google_calendar',
+      '/tasks': 'tasks',
+      '/reports': 'reports',
+      '/manufacturing': 'manufacturing',
+      '/manufacturing/setup': 'manufacturing',
+      '/projects': 'projects',
+      '/workflow': 'workflow',
+    };
+    const module = moduleByPath[location.pathname];
+    if (module && !enabledModules.includes(module)) navigate('/');
+  }, [enabledModules, location.pathname, modulesLoading, navigate, user]);
 
   const handleNavigate = async (item: string) => {
     if (item === 'logout') {
