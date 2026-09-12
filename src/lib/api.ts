@@ -96,11 +96,12 @@ api.interceptors.request.use(async (config) => {
     console.log("✅ Authorization header added");
   }
   const configuredTenantSlug = import.meta.env.VITE_TENANT_SLUG?.trim();
+  const storedTenantSlug = localStorage.getItem('tenant_slug')?.trim() || '';
   const hostParts = window.location.hostname.split('.');
   const hostTenantSlug = hostParts.length >= 3 && !['www', 'admin', 'api'].includes(hostParts[0])
     ? hostParts[0]
     : '';
-  const tenantSlug = configuredTenantSlug || hostTenantSlug;
+  const tenantSlug = configuredTenantSlug || storedTenantSlug || hostTenantSlug;
   if (tenantSlug) config.headers["X-Tenant-Slug"] = tenantSlug;
 
   console.log("📋 Final Request Headers:", config.headers);

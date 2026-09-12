@@ -30,6 +30,7 @@ interface User {
   role: string;
   super_admin?: boolean;
   tenant_id?: number | null;
+  tenant_slug?: string | null;
   sales_representative_id?: number;
   commission_rate?: number;
   name_ar?: string | null; // ✅ اسم الشركة بالعربي
@@ -261,6 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Setting user:', userData);
 
         setUser(userData);
+        if (userData.tenant_slug) localStorage.setItem('tenant_slug', userData.tenant_slug);
         setSession({
           token,
           user: userData
@@ -435,6 +437,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       Cookies.remove('token');
       Cookies.remove('auth_type');
       localStorage.removeItem('user');
+      localStorage.removeItem('tenant_slug');
       // Query keys are not tenant-aware in every legacy screen. Clear them
       // before the next account can render cached rows from this workspace.
       queryClient.clear();
