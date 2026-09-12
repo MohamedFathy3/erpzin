@@ -383,7 +383,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         if (searchQuery && searchQuery.trim()) {
           const query = searchQuery.trim();
           if (/^\d+$/.test(query)) filters.barcode = query;
-          else if (query.includes('-') || /^[A-Z0-9\-]+$/i.test(query)) filters.sku = query;
+          else if (/^(?:PROD|PRD)-[A-Z0-9-]+$/i.test(query)) filters.sku = query;
           else filters.name = query;
         }
         const response = await api.post('/product/index', {
@@ -395,7 +395,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         });
         if (response.data.result === 'Success') {
           let productsData = response.data.data || [];
-          if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !searchQuery.trim().includes('-')) {
+          if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !/^(?:PROD|PRD)-[A-Z0-9-]+$/i.test(searchQuery.trim())) {
             const query = searchQuery.trim().toLowerCase();
             productsData = productsData.filter((p: any) =>
               p.name?.toLowerCase().includes(query) || p.name_ar?.toLowerCase().includes(query)
