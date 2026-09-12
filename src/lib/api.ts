@@ -150,6 +150,14 @@ api.interceptors.response.use(
       Cookies.remove("token");
     }
 
+    if (error.response?.status === 403 && error.response?.data?.code === 'tenant_suspended') {
+      Cookies.remove("token");
+      Cookies.remove("auth_type");
+      localStorage.removeItem('user');
+      localStorage.removeItem('tenant_slug');
+      if (window.location.pathname !== '/auth') window.location.href = '/auth';
+    }
+
     console.error("🚨 API Error:", {
       message: error.message,
       status: error.response?.status,
