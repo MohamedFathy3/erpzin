@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef } from 'react';
+import Cookies from 'js-cookie';
 import { useReactToPrint } from 'react-to-print';
 import InvoiceTemplate from './InvoiceTemplate';
 import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
@@ -292,6 +293,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Authorization': `Bearer ${Cookies.get('token') || ''}`,
         },
         body: JSON.stringify(invoiceData)
       });

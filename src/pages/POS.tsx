@@ -2,6 +2,7 @@
 // POS.tsx - النسخة الكاملة المعدلة مع الخصومات
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Cookies from 'js-cookie';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
@@ -306,6 +307,7 @@ const POS: React.FC = () => {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'Authorization': `Bearer ${Cookies.get('token') || ''}`,
             },
             body: JSON.stringify({
               customer_id: parseInt(order.customer_id || '1'),
