@@ -200,18 +200,20 @@ export const PAGES: PagePermission[] = [
 // ✅ دالة للتحقق من صلاحية الوصول للصفحة
 export const canAccessPage = (role: UserRole | undefined, path: string): boolean => {
   if (!role) return false;
-  if (role === 'admin') return true; // الأدمن كل حاجة
+  const normalizedRole = role.toLowerCase() as UserRole;
+  if (normalizedRole === 'admin') return true; // الأدمن كل حاجة
   
   const page = PAGES.find(p => p.path === path);
   if (!page) return false;
   
-  return page.allowedRoles.includes(role);
+  return page.allowedRoles.includes(normalizedRole);
 };
 
 // ✅ دالة لجلب الصفحات المسموحة للمستخدم
 export const getAllowedPages = (role: UserRole | undefined): PagePermission[] => {
   if (!role) return [];
-  if (role === 'admin') return PAGES; // الأدمن كل حاجة
+  const normalizedRole = role.toLowerCase() as UserRole;
+  if (normalizedRole === 'admin') return PAGES; // الأدمن كل حاجة
   
-  return PAGES.filter(page => page.allowedRoles.includes(role));
+  return PAGES.filter(page => page.allowedRoles.includes(normalizedRole));
 };

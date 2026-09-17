@@ -31,7 +31,7 @@ const getDefaultRoute = (role: string): string => {
   }
   
   // في حالة عدم وجود أي صفحة مسموحة (نادراً ما يحدث)
-  return '/';
+  return '/dashboard';
 };
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
@@ -56,7 +56,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   // التحقق من صلاحية الوصول للصفحة الحالية
-  const hasAccess = canAccessPage(user.role as any, location.pathname);
+  const normalizedRole = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
+  const hasAccess = Boolean(user.super_admin) || canAccessPage(normalizedRole as any, location.pathname);
 
   // إذا لم يكن لديه صلاحية
   if (!hasAccess) {
