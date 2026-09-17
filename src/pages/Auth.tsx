@@ -63,7 +63,11 @@ const getDefaultRoute = (role: UserRole): string => {
 
 const getTenantWorkspaceUrl = (slug?: string | null): string | null => {
   if (!slug || typeof window === 'undefined') return null;
-  const rootDomain = (import.meta.env.VITE_TENANT_ROOT_DOMAIN || 'professionalacademyedu.com').trim().toLowerCase();
+  const configuredRootDomain = import.meta.env.VITE_TENANT_ROOT_DOMAIN?.trim().toLowerCase();
+  // injazyemen.cloud is the central-login/API domain, never a tenant workspace domain.
+  const rootDomain = configuredRootDomain && configuredRootDomain !== 'injazyemen.cloud'
+    ? configuredRootDomain
+    : 'professionalacademyedu.com';
   const workspaceHost = `${slug.trim().toLowerCase()}.${rootDomain}`;
   if (window.location.hostname.toLowerCase() === workspaceHost) return null;
   return `${window.location.protocol}//${workspaceHost}/auth`;
