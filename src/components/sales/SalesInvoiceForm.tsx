@@ -391,10 +391,13 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 1000,
-          paginate: true
+          paginate: false
         });
         if (response.data.result === 'Success') {
-          let productsData = response.data.data || [];
+          // بعض إصدارات الـ API تعيد data كمصفوفة، وأخرى تعيد paginator داخل data.
+          let productsData = Array.isArray(response.data.data)
+            ? response.data.data
+            : response.data.data?.data || [];
           if (searchQuery && searchQuery.trim() && !/^\d+$/.test(searchQuery.trim()) && !/^(?:PROD|PRD)-[A-Z0-9-]+$/i.test(searchQuery.trim())) {
             const query = searchQuery.trim().toLowerCase();
             productsData = productsData.filter((p: any) =>

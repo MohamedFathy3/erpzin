@@ -45,7 +45,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       '/workflow': 'workflow',
     };
     const module = moduleByPath[location.pathname];
-    if (module && !enabledModules.includes(module)) navigate('/');
+    if (module && !enabledModules.includes(module)) navigate('/dashboard');
   }, [enabledModules, location.pathname, modulesLoading, navigate, user]);
 
   const handleNavigate = async (item: string) => {
@@ -56,7 +56,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
     }
     
     const routes: Record<string, string> = {
-      dashboard: '/',
+      dashboard: '/dashboard',
       pos: '/pos',
       inventory: '/inventory',
       sales: '/sales',
@@ -77,6 +77,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       projects: '/projects',
       workflow: '/workflow',
       settings: '/settings',
+      'access-control': '/access-control',
       'super-admin': '/super-admin',
       posreturn: '/POSRetrun',
     };

@@ -61,6 +61,14 @@ const getDefaultRoute = (role: UserRole): string => {
   return '/';
 };
 
+const getTenantWorkspaceUrl = (slug?: string | null): string | null => {
+  if (!slug || typeof window === 'undefined') return null;
+  const rootDomain = (import.meta.env.VITE_TENANT_ROOT_DOMAIN || 'injazyemen.cloud').trim().toLowerCase();
+  const workspaceHost = `${slug.trim().toLowerCase()}.${rootDomain}`;
+  if (window.location.hostname.toLowerCase() === workspaceHost) return null;
+  return `${window.location.protocol}//${workspaceHost}/auth`;
+};
+
 const Auth = () => {
   const { user, signIn, signInWithGoogle, signUp } = useAuth();
   const { language, direction, setLanguage } = useLanguage();
@@ -86,6 +94,11 @@ const Auth = () => {
   // توجيه المستخدم بعد تسجيل الدخول بناءً على دوره
   useEffect(() => {
     if (user) {
+      const workspaceUrl = getTenantWorkspaceUrl(user.tenant_slug);
+      if (workspaceUrl) {
+        window.location.assign(workspaceUrl);
+        return;
+      }
       // إذا كان هناك صفحة محاولة الدخول إليها، استخدمها
       if (from !== '/auth' && from !== '/') {
         navigate(from, { replace: true });
