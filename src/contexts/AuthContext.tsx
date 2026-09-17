@@ -249,7 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       if (user.super_admin) {
-        setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow']);
+        setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow', 'access_control', 'ai_assistant']);
         return;
       }
       setModulesLoading(true);

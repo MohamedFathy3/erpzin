@@ -95,6 +95,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     manufacturingSetup: 'manufacturing',
     projects: 'projects',
     workflow: 'workflow',
+    'access-control': 'access_control',
+    aiAssistant: 'ai_assistant',
   };
 
   const moduleEnabled = (pageId: string) => {
@@ -112,7 +114,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
       }));
-    items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
+    if (moduleEnabled('aiAssistant')) {
+      items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
+    }
     if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });
     return items;
   }, [allowedPages, enabledModules, language, modulesLoading, user?.super_admin]);

@@ -43,6 +43,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       '/manufacturing/setup': 'manufacturing',
       '/projects': 'projects',
       '/workflow': 'workflow',
+      '/access-control': 'access_control',
+      '/ai-assistant': 'ai_assistant',
     };
     const module = moduleByPath[location.pathname];
     if (module && !enabledModules.includes(module)) navigate('/dashboard');
