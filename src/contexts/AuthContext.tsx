@@ -60,6 +60,8 @@ interface AuthContextType {
   loading: boolean;
   enabledModules: string[];
   modulesLoading: boolean;
+  permissions: string[];
+  permissionsLoading: boolean;
   signIn: (identifier: string, password: string) => Promise<{
     error: Error | null;
     user?: User;
@@ -99,6 +101,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
   const [modulesLoading, setModulesLoading] = useState(false);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
 
 
 
@@ -263,6 +267,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
     loadModules();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPermissions = async () => {
+      if (!user) {
+        setPermissions([]);
+        return;
+      }
+      if (user.super_admin) {
+        setPermissions(['*']);
+        return;
+      }
+      setPermissionsLoading(true);
+      try {
+        const response = await api.get('/me/permissions');
+        const values = response.data?.data?.permissions ?? [];
+        if (!cancelled) setPermissions(Array.isArray(values) ? values : []);
+      } catch {
+        if (!cancelled) setPermissions([]);
+      } finally {
+        if (!cancelled) setPermissionsLoading(false);
+      }
+    };
+    loadPermissions();
     return () => { cancelled = true; };
   }, [user]);
 
@@ -543,6 +573,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       enabledModules,
       modulesLoading,
+      permissions,
+      permissionsLoading,
     signIn,
     signInWithGoogle,
     signInRepresentative,

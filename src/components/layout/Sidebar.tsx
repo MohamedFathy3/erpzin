@@ -73,7 +73,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
   const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
-  const { user, signOut, enabledModules, modulesLoading } = useAuth(); // ✅ استخدم signOut من useAuth
+  const { user, signOut, enabledModules, modulesLoading, permissions, permissionsLoading } = useAuth(); // ✅ استخدم signOut من useAuth
 
   // جلب الصفحات المسموحة للمستخدم
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,16 +105,29 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     return !module || enabledModules.includes(module);
   };
 
+  const permissionForPage: Record<string, string> = {
+    dashboard: 'dashboard.view', inventory: 'inventory.view', sales: 'sales.view', pos: 'sales.view',
+    purchasing: 'purchasing.view', finance: 'finance.view', hr: 'hr.view', crm: 'crm.view',
+    reports: 'reports.view', projects: 'projects.view', manufacturing: 'manufacturing.view',
+    'access-control': 'access_control.view', aiAssistant: 'ai_assistant.view',
+  };
+  const permissionEnabled = (pageId: string) => {
+    if (user?.super_admin || permissionsLoading || permissions.length === 0) return true;
+    const permission = permissionForPage[pageId];
+    return !permission || permissions.includes('*') || permissions.includes(permission) ||
+      (pageId === 'access-control' && permissions.includes('roles.manage'));
+  };
+
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     const items = allowedPages
-      .filter(page => page.id !== 'settings' && moduleEnabled(page.id))
+      .filter(page => page.id !== 'settings' && moduleEnabled(page.id) && permissionEnabled(page.id))
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
       }));
-    if (moduleEnabled('aiAssistant')) {
+    if (moduleEnabled('aiAssistant') && permissionEnabled('aiAssistant')) {
       items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
     }
     if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });

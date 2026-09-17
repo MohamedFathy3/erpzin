@@ -35,7 +35,7 @@ const getDefaultRoute = (role: string): string => {
 };
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, permissions, permissionsLoading } = useAuth();
   const location = useLocation();
 
   // أثناء تحميل بيانات المستخدم
@@ -57,7 +57,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // التحقق من صلاحية الوصول للصفحة الحالية
   const normalizedRole = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
-  const hasAccess = Boolean(user.super_admin) || canAccessPage(normalizedRole as any, location.pathname);
+  const pagePermission: Record<string, string> = {
+    '/dashboard': 'dashboard.view', '/inventory': 'inventory.view', '/sales': 'sales.view',
+    '/pos': 'sales.view', '/purchasing': 'purchasing.view', '/finance': 'finance.view',
+    '/hr': 'hr.view', '/crm': 'crm.view', '/reports': 'reports.view',
+    '/projects': 'projects.view', '/manufacturing': 'manufacturing.view',
+    '/access-control': 'access_control.view', '/ai-assistant': 'ai_assistant.view',
+  };
+  const permissionKey = pagePermission[location.pathname];
+  const permissionAccess = !permissionKey || permissions.length === 0 || permissions.includes('*') ||
+    permissions.includes(permissionKey) || (permissionKey === 'access_control.view' && permissions.includes('roles.manage'));
+  const hasAccess = Boolean(user.super_admin) || (canAccessPage(normalizedRole as any, location.pathname) && (permissionsLoading || permissionAccess));
 
   // إذا لم يكن لديه صلاحية
   if (!hasAccess) {
