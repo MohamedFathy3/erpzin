@@ -13,6 +13,20 @@ interface ProtectedRouteProps {
 // دالة لتحديد الصفحة الافتراضية بناءً على دور المستخدم
 const getDefaultRoute = (role: string): string => {
   const allowedPages = getAllowedPages(role as any);
+  const roleRoutes: Record<string, string> = {
+    cashier: '/pos',
+    sales: '/sales',
+    purchasing: '/purchasing',
+    warehouse: '/inventory',
+    accountant: '/finance',
+    hr: '/hr',
+    manager: '/dashboard',
+    admin: '/dashboard',
+  };
+  const preferredRoute = roleRoutes[role.toLowerCase()];
+  if (preferredRoute && allowedPages.some(page => page.path === preferredRoute)) {
+    return preferredRoute;
+  }
   
   // ترتيب الأولويات للصفحات (حسب أهمية كل دور)
   const priorityPages = ['dashboard', 'pos', 'sales', 'inventory', 'purchasing', 'finance', 'hr', 'crm', 'reports'];

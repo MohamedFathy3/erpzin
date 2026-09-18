@@ -256,8 +256,6 @@ const [editCustomer, setEditCustomer] = useState({
           paginate: false
         });
 
-        console.log('📦 Loyalty settings response:', response.data);
-
         if (response.data.result === 'Success') {
           const data = response.data.data;
           if (data && data.length > 0) {

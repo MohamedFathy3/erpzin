@@ -122,6 +122,12 @@ export interface RecentTransaction {
   payment_method?: string;
 }
 
+const normalizeTransactionDate = (value: unknown): string => {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : value;
+};
+
 // ==================== Custom Hook ====================
 export const useDashboardData = () => {
   const { currentBranch } = useApp();
@@ -247,7 +253,7 @@ export const useDashboardData = () => {
       type: 'sale' as const,
       reference: inv.invoice_number,
       amount: Number(inv.total_amount) || 0,
-      date: inv.created_at || new Date().toISOString(),
+      date: normalizeTransactionDate(inv.created_at),
       customer: inv.customer?.name || 'Unknown',
       branch: inv.branch || 'Main',
       payment_method: inv.payment_method
@@ -259,14 +265,18 @@ export const useDashboardData = () => {
       type: 'purchase' as const,
       reference: inv.invoice_number,
       amount: Number(inv.total_amount) || 0,
-      date: inv.invoice_date || new Date().toISOString(),
+      date: normalizeTransactionDate(inv.invoice_date),
       supplier: inv.supplier?.name || 'Unknown',
       branch: inv.branch || 'Main'
     }));
 
     // دمج وترتيب
     return [...sales, ...purchases]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => {
+        const bTime = b.date ? new Date(b.date).getTime() : 0;
+        const aTime = a.date ? new Date(a.date).getTime() : 0;
+        return bTime - aTime;
+      })
       .slice(0, 8);
   }, [recentSales, recentPurchases]);
 

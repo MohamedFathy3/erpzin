@@ -206,7 +206,7 @@ export const canAccessPage = (role: UserRole | undefined, path: string): boolean
   const page = PAGES.find(p => p.path === path);
   if (!page) return false;
   
-  return page.allowedRoles.includes(normalizedRole);
+  return page.allowedRoles.some(allowedRole => allowedRole.toLowerCase() === normalizedRole);
 };
 
 // ✅ دالة لجلب الصفحات المسموحة للمستخدم
@@ -215,5 +215,5 @@ export const getAllowedPages = (role: UserRole | undefined): PagePermission[] =>
   const normalizedRole = role.toLowerCase() as UserRole;
   if (normalizedRole === 'admin') return PAGES; // الأدمن كل حاجة
   
-  return PAGES.filter(page => page.allowedRoles.includes(normalizedRole));
+  return PAGES.filter(page => page.allowedRoles.some(allowedRole => allowedRole.toLowerCase() === normalizedRole));
 };

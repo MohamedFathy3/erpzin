@@ -360,6 +360,12 @@ interface ExpenseCategory {
   percentage: number;
 }
 
+const safeReportDate = (value: unknown, pattern: string): string => {
+  if (typeof value !== 'string' || !value.trim()) return '-';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '-' : format(parsed, pattern);
+};
+
 const Reports = () => {
   const { language, direction } = useLanguage();
   const { formatCurrency: formatRegionalCurrency } = useRegionalSettings();
@@ -1030,7 +1036,7 @@ const Reports = () => {
         ...allSalesInvoices.map((inv: any) => {
           const isRegular = 'total_amount' in inv;
           return [
-            format(new Date(isRegular ? inv.created_at : inv.created_at), 'yyyy-MM-dd HH:mm'),
+            safeReportDate(inv.created_at, 'yyyy-MM-dd HH:mm'),
             inv.invoice_number,
             inv.customer.name,
             isRegular ? inv.total_amount : inv.amounts?.total,
@@ -1165,7 +1171,7 @@ const Reports = () => {
             ...allSalesInvoices.slice(0, 500).map((inv: any) => {
               const isRegular = 'total_amount' in inv;
               return [
-                format(new Date(isRegular ? inv.created_at : inv.created_at), 'yyyy-MM-dd'),
+                safeReportDate(inv.created_at, 'yyyy-MM-dd'),
                 inv.invoice_number,
                 inv.customer.name,
                 isRegular ? inv.total_amount : inv.amounts?.total,
@@ -1207,7 +1213,7 @@ const Reports = () => {
     try {
       const allSales = [
         ...salesInvoices.map(inv => ({
-          'التاريخ': inv.created_at.split(' ')[0],
+          'التاريخ': safeReportDate(inv.created_at, 'yyyy-MM-dd'),
           'رقم الفاتورة': inv.invoice_number,
           'العميل': inv.customer.name,
           'المبلغ': inv.total_amount,
@@ -1908,7 +1914,7 @@ const Reports = () => {
                         const isRegular = 'total_amount' in inv;
                         return (
                           <TableRow key={`${isRegular ? 'reg' : 'pos'}-${inv.id}`}>
-                            <TableCell>{format(new Date(isRegular ? inv.created_at : inv.created_at), 'dd/MM/yyyy')}</TableCell>
+                            <TableCell>{safeReportDate(inv.created_at, 'dd/MM/yyyy')}</TableCell>
                             <TableCell className="font-mono text-sm">{inv.invoice_number}</TableCell>
                             <TableCell>{inv.customer.name}</TableCell>
                             <TableCell className="font-semibold">{formatCurrency(isRegular ? Number(inv.total_amount) : Number(inv.amounts?.total || 0))}</TableCell>

@@ -51,6 +51,9 @@ const UnifiedRecentTransactions: React.FC<UnifiedRecentTransactionsProps> = ({
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
+    if (!dateStr || Number.isNaN(date.getTime())) {
+      return language === 'ar' ? 'غير متاح' : 'Unavailable';
+    }
     return date.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
       hour: '2-digit',
       minute: '2-digit',

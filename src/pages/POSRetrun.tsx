@@ -742,7 +742,7 @@ const POS: React.FC = () => {
     onShowCustomer: () => setShowCustomerSelector(true),
     onShowDelivery: () => setShowDeliverySelector(true),
     onShowShift: () => setShowShiftPanel(true),
-    onGoHome: () => navigate('/'),
+    onGoHome: () => navigate('/dashboard'),
     onEscape: handleCloseAllModals,
     onIncreaseQuantity: handleIncreaseQuantity,
     onDecreaseQuantity: handleDecreaseQuantity,
@@ -1108,7 +1108,7 @@ const POS: React.FC = () => {
           onShowDelivery={() => setShowDeliverySelector(true)}
           onShowShift={() => setShowShiftPanel(true)}
           onFocusSearch={handleFocusSearch}
-          onGoHome={() => navigate('/')}
+          onGoHome={() => navigate('/dashboard')}
           cartItemsCount={cartItems.length}
           heldOrdersCount={heldOrders.length}
           hasShift={!!currentShift}

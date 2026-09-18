@@ -83,7 +83,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       'super-admin': '/super-admin',
       posreturn: '/POSRetrun',
     };
-    navigate(routes[item] || '/');
+    navigate(routes[item] || '/dashboard');
   };
 
   return (
