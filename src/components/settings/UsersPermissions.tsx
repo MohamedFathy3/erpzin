@@ -882,6 +882,7 @@ const Employees = () => {
 
               <div className="col-span-2 space-y-2">
                 <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+                <p className="text-xs text-muted-foreground">{language === 'ar' ? 'صلاحيات الـ Role تطبق أولاً، ويمكنك إضافة صلاحيات مباشرة لهذا المستخدم أو إزالتها بدون تغيير الدور.' : 'Role permissions apply first; add or remove direct permissions for this user without changing the role.'}</p>
                 <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
                   {availablePermissions.map((permission) => {
                     const checked = formData.permissions.includes(permission.id);
@@ -1102,6 +1103,7 @@ const Employees = () => {
             </div>
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+              <p className="text-xs text-muted-foreground">{language === 'ar' ? 'هذه صلاحيات مباشرة لهذا الموظف فقط، ولا تؤثر على باقي الموظفين في نفس الـ Role.' : 'These are direct permissions for this employee only; they do not affect other employees with the same role.'}</p>
               <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
                 {availablePermissions.map((permission) => {
                   const checked = formData.permissions.includes(permission.id);
