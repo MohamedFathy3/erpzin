@@ -52,6 +52,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'purchasing', 'warehouse'],
   },
   {
+    id: 'inventory-transfer-requests',
+    path: '/inventory-transfer-requests',
+    label: 'Inventory Transfer Requests',
+    labelAr: 'طلبات نقل المخزون',
+    icon: 'ArrowRightLeft',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'warehouse'],
+  },
+  {
     id: 'sales',
     path: '/sales',
     label: 'Sales',

@@ -30,6 +30,7 @@ import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
 import POSReturns from '@/components/pos/POSReturns';
 import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
+import BranchTransferDialog from '@/components/pos/BranchTransferDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -145,6 +146,7 @@ const POS: React.FC = () => {
   const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
+  const [showBranchTransfers, setShowBranchTransfers] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -164,7 +166,7 @@ const POS: React.FC = () => {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { signOut,user } = useAuth();
+  const { signOut,user, enabledModules } = useAuth();
   
   const [branchDetails, setBranchDetails] = useState<{
     phone?: string | null;
@@ -1101,6 +1103,12 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                     {language === 'ar' ? 'إضافة' : 'Add'}
                   </Button>
                 )}
+                {enabledModules.includes('inventory') && (
+                  <Button type="button" variant="outline" className="h-12 px-3" onClick={() => setShowBranchTransfers(true)}>
+                    <Building2 size={18} className="me-1" />
+                    {language === 'ar' ? 'منتجات الفروع' : 'Branch products'}
+                  </Button>
+                )}
               </div>
               
               {isBarcodeScanning && (
@@ -1228,7 +1236,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           onShowReturns={() => setShowReturns(true)}
           onShowShift={() => setShowShiftPanel(true)}
           onFocusSearch={handleFocusSearch}
-          onGoHome={() => navigate('/')}
+          onGoHome={() => navigate('/dashboard')}
           cartItemsCount={cartItems.length}
           heldOrdersCount={heldOrders.length}
           hasShift={!!currentShift}
@@ -1355,6 +1363,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
             });
           }}
         />
+        {enabledModules.includes('inventory') && (
+          <BranchTransferDialog
+            open={showBranchTransfers}
+            onOpenChange={setShowBranchTransfers}
+            currentBranchId={userBranch?.id || currentBranch?.id}
+            language={language}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

@@ -74,7 +74,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const pagePermission: Record<string, string> = {
     '/dashboard': 'dashboard.view', '/inventory': 'inventory.view', '/sales': 'sales.view',
     '/pos': 'sales.view', '/purchasing': 'purchasing.view', '/finance': 'finance.view',
-    '/hr': 'hr.view', '/crm': 'crm.view', '/reports': 'reports.view',
+    '/hr': 'hr.view', '/crm': 'crm.view', '/reports': 'reports.view', '/inventory-transfer-requests': 'inventory.transfer_requests.view',
     '/projects': 'projects.view', '/manufacturing': 'manufacturing.view',
     '/access-control': 'access_control.view', '/ai-assistant': 'ai_assistant.view',
   };

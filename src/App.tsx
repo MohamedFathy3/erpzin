@@ -15,6 +15,7 @@ import Purchasing from "./pages/Purchasing";
 import Sales from "./pages/Sales";
 import POS from "./pages/POS";
 import POSRetrun from "./pages/POSRetrun";
+import InventoryTransferRequests from "./pages/InventoryTransferRequests";
 import Finance from "./pages/Finance";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="/workflow" element={<ProtectedRoute><Workflow /></ProtectedRoute>} />
                 <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
                 <Route path="/POSRetrun" element={<ProtectedRoute><POSRetrun /></ProtectedRoute>} />
+                <Route path="/inventory-transfer-requests" element={<ProtectedRoute><InventoryTransferRequests /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
