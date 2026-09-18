@@ -96,16 +96,25 @@ const RecentTransactions: React.FC<RecentTransactionsProps> = ({
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const parseDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const normalized = dateStr.includes(' ') && !dateStr.includes('T') ? dateStr.replace(' ', 'T') : dateStr;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatTime = (dateStr?: string) => {
+    const date = parseDate(dateStr);
+    if (!date) return '—';
     return date.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
       hour: '2-digit',
       minute: '2-digit',
     });
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const formatDate = (dateStr?: string) => {
+    const date = parseDate(dateStr);
+    if (!date) return '—';
     return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
       day: 'numeric',
       month: 'short',

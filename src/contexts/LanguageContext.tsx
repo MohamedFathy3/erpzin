@@ -64,6 +64,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.thisYear': 'This Year',
     'common.currency': 'YER',
     'common.branches': 'Branches',
+    'common.noData': 'No data available',
     
     // Branches
     'branch.abra': 'Abra',
@@ -131,6 +132,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.thisYear': 'هذا العام',
     'common.currency': 'ريال',
     'common.branches': 'الفروع',
+    'common.noData': 'لا توجد بيانات للعرض',
     
     // Branches
     'branch.abra': 'أبرا',
