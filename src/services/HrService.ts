@@ -108,6 +108,7 @@ export class HrService extends BaseService<AddEmployee> {
             treasury_id: employee.treasury_id || null,
             branch_id: employee.branch_id || null,
             role_id: typeof employee.role_id === 'string' ? parseInt(employee.role_id) : employee.role_id || undefined,
+            permissions: employee.permissions || [],
             password: employee.password || undefined,
         };
     }
@@ -177,4 +178,3 @@ export class HrService extends BaseService<AddEmployee> {
 
 // Singleton instance - import/use this
 export const HrServices = new HrService();
-
