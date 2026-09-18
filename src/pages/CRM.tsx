@@ -31,7 +31,8 @@ import {
   XCircle,
   Edit,
   Trash2,
-  FileText
+  FileText,
+  Wallet
 } from 'lucide-react';
 import api from '@/lib/api';
 import CrmPipeline from '@/components/CRM/CrmPipeline';
@@ -59,6 +60,7 @@ interface Customer {
   point: number;
   last_paid_amount: number | null;
   total_purchases?: number;
+  loyalty_points?: number;
   created_at?: string;
   updated_at?: string;
     active?: boolean
@@ -73,6 +75,7 @@ interface CustomerStatementTransaction {
   paid: number;
   due: number;
   status: string;
+  payments?: Array<{ method: string; amount: number; treasury_id?: number | null; bank_id?: number | null; date?: string | null }>;
 }
 
 const CRM = () => {
@@ -91,6 +94,10 @@ const [showEditCustomer, setShowEditCustomer] = useState<Customer | null>(null);
 const [showDeleteDialog, setShowDeleteDialog] = useState<Customer | null>(null);
 const [isDeleting, setIsDeleting] = useState(false);
 const [statementCustomerId, setStatementCustomerId] = useState<string | null>(null);
+const [collectionTransaction, setCollectionTransaction] = useState<CustomerStatementTransaction | null>(null);
+const [collectionAmount, setCollectionAmount] = useState('');
+const [collectionTreasuryId, setCollectionTreasuryId] = useState('');
+const [collecting, setCollecting] = useState(false);
 const [editCustomer, setEditCustomer] = useState({
   name: '',
   name_ar: '',
@@ -346,6 +353,38 @@ const [editCustomer, setEditCustomer] = useState({
     enabled: !!statementCustomerId,
     queryFn: async () => (await api.post(`/customer/${statementCustomerId}/statement`, {})).data.data,
   });
+
+  const { data: treasuries = [] } = useQuery({
+    queryKey: ['customer-collection-treasuries'],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index', {
+        filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 100, paginate: false
+      });
+      return response.data?.data || [];
+    }
+  });
+
+  const submitCollection = async () => {
+    if (!collectionTransaction || Number(collectionAmount) <= 0 || !collectionTreasuryId) return;
+    setCollecting(true);
+    try {
+      await api.post(`/sales-invoices/${collectionTransaction.id}/pay`, {
+        amount: Number(collectionAmount),
+        payment_method: 'cash',
+        treasury_id: Number(collectionTreasuryId)
+      });
+      toast.success(language === 'ar' ? 'تم التحصيل وإضافة المبلغ للخزينة' : 'Payment collected into treasury');
+      setCollectionTransaction(null);
+      setCollectionAmount('');
+      setCollectionTreasuryId('');
+      await queryClient.invalidateQueries({ queryKey: ['customer-statement', statementCustomerId] });
+      await queryClient.invalidateQueries({ queryKey: ['customers'] });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || (language === 'ar' ? 'فشل التحصيل' : 'Collection failed'));
+    } finally {
+      setCollecting(false);
+    }
+  };
 
   // ========== Mutations ==========
 
@@ -704,8 +743,8 @@ const handleToggleStatus = (customer: Customer) => {
 
   // ========== Stats ==========
   const totalPoints = customers.reduce((sum: number, c: Customer) => sum + (c.point || 0), 0);
-  const totalPurchases = customers.reduce((sum: number, c: Customer) => sum + Number(c.last_paid_amount || 0), 0);
-  const activeCustomers = customers.filter((c: Customer) => Number(c.last_paid_amount || 0) > 0).length;
+  const totalPurchases = customers.reduce((sum: number, c: Customer) => sum + Number(c.total_purchases || 0), 0);
+  const activeCustomers = customers.filter((c: Customer) => Number(c.total_purchases || 0) > 0).length;
 
   const stats = [
     {
@@ -911,7 +950,7 @@ const handleToggleStatus = (customer: Customer) => {
             </div>
           </TableCell>
           <TableCell>
-            {Number(customer.last_paid_amount || 0).toLocaleString()} YER
+            {Number(customer.total_purchases || 0).toLocaleString()} YER
           </TableCell>
           <TableCell className="text-end">
             <div className="flex items-center justify-end gap-2">
@@ -941,7 +980,7 @@ const handleToggleStatus = (customer: Customer) => {
 
               <Button variant="outline" size="sm" onClick={() => setStatementCustomerId(customer.id)} className="gap-1">
                 <FileText size={14} />
-                {language === 'ar' ? 'كشف الحساب' : 'Statement'}
+                {language === 'ar' ? 'الكشف والتحصيل' : 'Statement & Collect'}
               </Button>
 
               {/* Redeem Points Button */}
@@ -1328,10 +1367,22 @@ const handleToggleStatus = (customer: Customer) => {
   <DialogContent className="max-w-4xl" dir={direction}>
     <DialogHeader><DialogTitle>{language === 'ar' ? 'كشف حساب العميل 360°' : 'Customer 360 Statement'}</DialogTitle></DialogHeader>
     {statementLoading ? <div className="py-10 text-center text-muted-foreground">{language === 'ar' ? 'جاري تحميل كل المعاملات...' : 'Loading transactions...'}</div> : customerStatement && <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {[['المعاملات', customerStatement.summary.transactions_count], ['إجمالي المشتريات', `${Number(customerStatement.summary.total_purchases).toLocaleString()} YER`], ['المدفوع', `${Number(customerStatement.summary.total_paid).toLocaleString()} YER`], ['المتبقي', `${Number(customerStatement.summary.outstanding_balance).toLocaleString()} YER`], ['المتاح الائتماني', `${Number(customerStatement.summary.available_credit).toLocaleString()} YER`]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-bold">{value}</p></div>)}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+        {[['المعاملات', customerStatement.summary.transactions_count], ['إجمالي المشتريات', `${Number(customerStatement.summary.total_purchases).toLocaleString()} YER`], ['المدفوع', `${Number(customerStatement.summary.total_paid).toLocaleString()} YER`], ['المتبقي', `${Number(customerStatement.summary.outstanding_balance).toLocaleString()} YER`], ['المتاح الائتماني', `${Number(customerStatement.summary.available_credit).toLocaleString()} YER`], ['نقاط الولاء', Number(customerStatement.customer?.loyalty_points ?? customerStatement.customer?.point ?? 0).toLocaleString()]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-bold">{value}</p></div>)}
       </div>
-      <div className="max-h-80 overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>المصدر</TableHead><TableHead>الإجمالي</TableHead><TableHead>المدفوع</TableHead><TableHead>المتبقي</TableHead><TableHead>الحالة</TableHead></TableRow></TableHeader><TableBody>{customerStatement.transactions.map((transaction: CustomerStatementTransaction) => <TableRow key={`${transaction.source}-${transaction.id}`}><TableCell>{transaction.date || '-'}</TableCell><TableCell>{transaction.number || '-'}</TableCell><TableCell>{transaction.source === 'pos' ? 'POS' : 'Sales'}</TableCell><TableCell>{Number(transaction.total).toLocaleString()}</TableCell><TableCell>{Number(transaction.paid).toLocaleString()}</TableCell><TableCell>{Number(transaction.due).toLocaleString()}</TableCell><TableCell><Badge variant={transaction.status === 'paid' ? 'default' : 'secondary'}>{transaction.status}</Badge></TableCell></TableRow>)}</TableBody></Table></div>
+      <div className="max-h-80 overflow-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>المصدر</TableHead><TableHead>الإجمالي</TableHead><TableHead>المدفوع</TableHead><TableHead>المتبقي</TableHead><TableHead>الحالة</TableHead><TableHead>إجراء</TableHead></TableRow></TableHeader><TableBody>{customerStatement.transactions.map((transaction: CustomerStatementTransaction) => <TableRow key={`${transaction.source}-${transaction.id}`}><TableCell>{transaction.date || '-'}</TableCell><TableCell>{transaction.number || '-'}</TableCell><TableCell>{transaction.source === 'pos' ? 'POS' : 'Sales'}</TableCell><TableCell>{Number(transaction.total).toLocaleString()}</TableCell><TableCell>{Number(transaction.paid).toLocaleString()}</TableCell><TableCell>{Number(transaction.due).toLocaleString()}</TableCell><TableCell><Badge variant={transaction.status === 'paid' ? 'default' : 'secondary'}>{transaction.status}</Badge></TableCell><TableCell>{transaction.source === 'sales' && Number(transaction.due) > 0 && <Button size="sm" className="gap-1" onClick={() => { setCollectionTransaction(transaction); setCollectionAmount(String(transaction.due)); const mainTreasury = treasuries.find((treasury: any) => treasury.is_main); setCollectionTreasuryId(String(mainTreasury?.id || '')); }}><Wallet size={14} />تحصيل</Button>}</TableCell></TableRow>)}</TableBody></Table></div>
+    </div>}
+  </DialogContent>
+</Dialog>
+
+<Dialog open={!!collectionTransaction} onOpenChange={() => setCollectionTransaction(null)}>
+  <DialogContent className="max-w-md" dir={direction}>
+    <DialogHeader><DialogTitle className="flex items-center gap-2"><Wallet size={18} />{language === 'ar' ? 'تحصيل الدفعة إلى الخزينة' : 'Collect payment into treasury'}</DialogTitle></DialogHeader>
+    {collectionTransaction && <div className="space-y-4">
+      <div className="rounded-lg bg-muted p-3 text-sm">{collectionTransaction.number} — المتبقي: <strong>{Number(collectionTransaction.due).toLocaleString()} YER</strong></div>
+      <div className="space-y-2"><Label>مبلغ التحصيل</Label><Input type="number" min="0.01" max={collectionTransaction.due} value={collectionAmount} onChange={(event) => setCollectionAmount(event.target.value)} /></div>
+      <div className="space-y-2"><Label>الخزينة</Label><select className="w-full h-10 rounded-md border bg-background px-3" value={collectionTreasuryId} onChange={(event) => setCollectionTreasuryId(event.target.value)}><option value="">اختر الخزينة</option>{treasuries.map((treasury: any) => <option key={treasury.id} value={treasury.id}>{treasury.name}</option>)}</select></div>
+      <Button className="w-full gap-2" onClick={submitCollection} disabled={collecting || !collectionTreasuryId || Number(collectionAmount) <= 0 || Number(collectionAmount) > Number(collectionTransaction.due)}><Wallet size={16} />{collecting ? 'جاري التحصيل...' : 'تأكيد التحصيل'}</Button>
     </div>}
   </DialogContent>
 </Dialog>
