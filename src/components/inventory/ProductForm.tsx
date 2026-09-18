@@ -81,8 +81,8 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     } else if (typeof apiProduct.image === 'number') {
       imageId = apiProduct.image;
     }
-  } else if (apiProduct.image_url) {
-    imageUrl = apiProduct.image_url;
+  } else if (apiProduct.image_url || apiProduct.imageUrl) {
+    imageUrl = apiProduct.image_url || apiProduct.imageUrl;
   }
 
   // تحويل active (boolean) إلى status (string)
