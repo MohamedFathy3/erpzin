@@ -51,6 +51,15 @@ interface Role {
   name: string;
 }
 
+interface Permission {
+  id: number;
+  name?: string;
+  name_ar?: string;
+  key?: string;
+  slug?: string;
+  module?: string;
+}
+
 interface Branch {
   id: number;
   name: string;
@@ -79,6 +88,7 @@ interface Employee {
   salary: string | number;
   is_active?: boolean;
   created_at: string;
+  permission_ids?: number[];
 }
 
 interface DeliveryPerson {
@@ -125,6 +135,7 @@ const HR = () => {
     role_id: undefined,
     treasury_id: undefined,
     branch_id: undefined,
+    permissions: [],
     password: ''
   });
 
@@ -143,6 +154,11 @@ const HR = () => {
   const { data: roles = [], isLoading: rolesLoading } = useQuery({
     queryKey: ['roles'],
     queryFn: () => HrServices.getRoles()
+  });
+
+  const { data: availablePermissions = [] } = useQuery<Permission[]>({
+    queryKey: ['hr-available-permissions'],
+    queryFn: async () => (await api.get('/access-control/permissions')).data?.data || [],
   });
 
   // ========== جلب الخزائن ==========
@@ -430,6 +446,7 @@ const addDeliveryMutation = useMutation({
     role_id: undefined,
     treasury_id: undefined,
     branch_id: undefined,
+    permissions: [],
     password: ''
   });
 
@@ -507,6 +524,7 @@ const handleEditEmployee = async (employee: Employee) => {
       role_id: roleId,
       treasury_id: treasuryId,
       branch_id: branchId,
+      permissions: employeeData.permission_ids || [],
       password: ''
     });
 
@@ -1057,6 +1075,20 @@ const handleEditEmployee = async (employee: Employee) => {
                         onChange={(e) => setNewEmployee(prev => ({ ...prev, salary: e.target.value }))}
                         placeholder="0"
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                    <Label className="flex items-center gap-2"><Shield size={14} />{language === 'ar' ? 'الصلاحيات الإضافية للموظف' : 'Direct employee permissions'}</Label>
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? 'هذه الصلاحيات تخص الموظف وحده وتضاف فوق صلاحيات الدور.' : 'These permissions apply only to this employee and are added to the selected role.'}</p>
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                      {availablePermissions.map((permission) => {
+                        const checked = (newEmployee.permissions || []).includes(permission.id);
+                        return <label key={permission.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input type="checkbox" checked={checked} onChange={(event) => setNewEmployee(prev => ({ ...prev, permissions: event.target.checked ? [...(prev.permissions || []), permission.id] : (prev.permissions || []).filter(id => id !== permission.id) }))} />
+                          <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                        </label>;
+                      })}
                     </div>
                   </div>
 

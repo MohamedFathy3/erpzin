@@ -15,6 +15,7 @@ export interface AddEmployee {
     treasury_id?: number | null;
     branch_id?: number | null;
     role_id?: number;
+    permissions?: number[];
     password?: string;
 }
 
@@ -38,5 +39,4 @@ export interface AddDeliveryPerson {
     vehicle_number?: string;
     is_active: boolean;
 }
-
 
