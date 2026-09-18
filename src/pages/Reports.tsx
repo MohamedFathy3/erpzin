@@ -643,8 +643,8 @@ const Reports = () => {
     const grossProfit = totalSales - totalPurchases;
     const grossProfitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
-    const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + (t.balance || 0), 0);
-    const totalBankBalance = banks.reduce((sum, b) => sum + (b.balance || 0), 0);
+    const totalTreasuryBalance = treasuries.reduce((sum, t) => sum + Number(t.balance || 0), 0);
+    const totalBankBalance = banks.reduce((sum, b) => sum + Number(b.balance || 0), 0);
     const totalLiquidity = totalTreasuryBalance + totalBankBalance;
 
     const totalProducts = products.length;
@@ -663,6 +663,8 @@ const Reports = () => {
       totalSales,
       totalRegularSales,
       totalPOSSales,
+      totalRegularOrders,
+      totalPOSOrders,
       totalOrders,
       avgOrderValue,
       totalPurchases,
