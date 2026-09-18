@@ -113,10 +113,12 @@ interface SalesInvoiceResponse {
 interface PurchaseInvoice {
   id: number;
   invoice_number: string;
-  supplier: {
+  supplier?: {
     id: number | null;
     name: string | null;
   };
+  supplier_id?: number | null;
+  supplier_name?: string | null;
   branch: string;
   warehouse: string;
   currency: string | null;
@@ -129,6 +131,8 @@ interface PurchaseInvoice {
   discount_total: string;
   tax_total: string;
   total_amount: string;
+  paid_amount?: string | number;
+  remaining_amount?: string | number;
   items: any[];
   created_at: string;
 }
@@ -298,7 +302,8 @@ const CustomerSupplierMovement: React.FC = () => {
   const enrichedCustomers = useMemo<EnrichedCustomer[]>(() => {
     // Group sales by customer
     const salesByCustomer = salesInvoices.reduce((acc, invoice) => {
-      const customerId = invoice.customer.id;
+      const customerId = invoice.customer?.id;
+      if (!customerId) return acc;
       if (!acc[customerId]) {
         acc[customerId] = {
           totalAmount: 0,
@@ -312,8 +317,7 @@ const CustomerSupplierMovement: React.FC = () => {
       acc[customerId].totalAmount += amount;
       acc[customerId].orderCount += 1;
       
-      // Assuming paid amount is total for now (API doesn't have paid_amount)
-      acc[customerId].totalPaid += amount;
+      acc[customerId].totalPaid += Number((invoice as SalesInvoice & { paid_amount?: string | number }).paid_amount || 0);
       
       const invoiceDate = new Date(invoice.created_at);
       if (!acc[customerId].lastDate || invoiceDate > new Date(acc[customerId].lastDate)) {
@@ -353,8 +357,7 @@ const CustomerSupplierMovement: React.FC = () => {
   const enrichedSuppliers = useMemo<EnrichedSupplier[]>(() => {
     // Group purchases by supplier
  const purchasesBySupplier = purchaseInvoices.reduce((acc, invoice) => {
-  // Add optional chaining operator ?. to safely access supplier.id
-  const supplierId = invoice.supplier?.id;
+  const supplierId = invoice.supplier_id ?? invoice.supplier?.id;
   if (!supplierId) return acc;
   
   if (!acc[supplierId]) {
@@ -371,9 +374,8 @@ const CustomerSupplierMovement: React.FC = () => {
   acc[supplierId].totalAmount += amount;
   acc[supplierId].invoiceCount += 1;
   
-  // Since API doesn't have paid/remaining, we'll use total for now
-  acc[supplierId].paidAmount += amount;
-  acc[supplierId].remainingAmount += 0;
+  acc[supplierId].paidAmount += Number(invoice.paid_amount || 0);
+  acc[supplierId].remainingAmount += Number(invoice.remaining_amount ?? (amount - Number(invoice.paid_amount || 0)));
   
   const invoiceDate = new Date(invoice.invoice_date);
   if (!acc[supplierId].lastDate || invoiceDate > new Date(acc[supplierId].lastDate!)) {
