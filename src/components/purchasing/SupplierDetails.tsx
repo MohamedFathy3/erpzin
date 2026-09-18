@@ -34,6 +34,7 @@ import {
 import { supplierService } from '@/services/supplierservice';
 import { purchaseInvoiceService } from '@/services/PurchaseInvoiceService';
 import { purchaseOrderService } from '@/services/PurchaseOrderService';
+import { treasuryService } from '@/services/TreasuryService';
 // ==================== Types ====================
 
 export interface Supplier {
@@ -171,6 +172,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentData, setPaymentData] = useState<PaymentPayload>({
     amount: 0,
+    treasury_id: undefined,
     payment_method: 'cash',
     reference_number: '',
     notes: '',
@@ -259,6 +261,13 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
     enabled: isOpen && !!supplier?.id,
   });
 
+  const { data: treasuriesResponse, isLoading: treasuriesLoading } = useQuery({
+    queryKey: ['purchase-payment-treasuries'],
+    queryFn: () => treasuryService.getTreasuries({ active: 1 }),
+    enabled: isOpen,
+  });
+  const paymentTreasuries = (treasuriesResponse?.data ?? []).filter((treasury: any) => treasury.active !== 0);
+
   // ==================== Payment Mutation ====================
   // ==================== Payment Mutation ====================
   // const payInvoiceMutation = useMutation({
@@ -319,6 +328,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
         setSelectedInvoiceForPayment(null);
         setPaymentData({
           amount: 0,
+          treasury_id: undefined,
           payment_method: 'cash',
           reference_number: '',
           notes: '',
@@ -365,6 +375,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
     setSelectedInvoiceForPayment(invoice);
     setPaymentData({
       amount: remaining,
+      treasury_id: invoice.treasury_id ? Number(invoice.treasury_id) : undefined,
       payment_method: 'cash',
       reference_number: '',
       notes: '',
@@ -375,6 +386,14 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
 
   const handlePaySubmit = () => {
     if (!selectedInvoiceForPayment) return;
+
+    if (!paymentData.treasury_id) {
+      toast({
+        title: language === 'ar' ? 'اختر الخزينة أولاً' : 'Select a treasury first',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (paymentData.amount <= 0) {
       toast({
@@ -624,7 +643,34 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                 min="0.01"
                 step="0.01"
               />
-            </div>  </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'الخزينة التي سيتم الخصم منها' : 'Treasury to debit'}</Label>
+              <select
+                className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                value={paymentData.treasury_id ?? ''}
+                onChange={(event) => setPaymentData({ ...paymentData, treasury_id: event.target.value ? Number(event.target.value) : undefined })}
+                disabled={treasuriesLoading}
+              >
+                <option value="">
+                  {treasuriesLoading
+                    ? (language === 'ar' ? 'جاري تحميل الخزائن...' : 'Loading treasuries...')
+                    : (language === 'ar' ? '-- اختر الخزينة --' : '-- Select treasury --')}
+                </option>
+                {paymentTreasuries.map((treasury: any) => (
+                  <option key={treasury.id} value={treasury.id}>
+                    {language === 'ar' ? (treasury.name_ar || treasury.name) : treasury.name}
+                    {treasury.balance != null ? ` — الرصيد: ${Number(treasury.balance).toLocaleString()}` : ''}
+                  </option>
+                ))}
+              </select>
+              {!treasuriesLoading && paymentTreasuries.length === 0 && (
+                <p className="text-xs text-destructive">
+                  {language === 'ar' ? 'لا توجد خزائن متاحة للدفع.' : 'No treasuries are available for payment.'}
+                </p>
+              )}
+            </div>
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPaymentModal(false)}>

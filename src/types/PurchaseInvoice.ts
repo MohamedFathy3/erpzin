@@ -119,6 +119,7 @@ export interface PurchaseInvoicesResponse {
 
 export interface PaymentPayload {
     amount: number;
+    treasury_id?: number;
     payment_method?: string;
     reference_number?: string;
     notes?: string;
