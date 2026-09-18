@@ -121,7 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     const items = allowedPages
-      .filter(page => page.id !== 'settings' && moduleEnabled(page.id) && permissionEnabled(page.id))
+      .filter(page => page.id !== 'settings' && (page.id !== 'access-control' || user?.super_admin || user?.role?.toLowerCase() === 'admin') && moduleEnabled(page.id) && permissionEnabled(page.id))
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
