@@ -19,6 +19,7 @@ export interface Employee {
     is_active: boolean | null;
     created_at: string;
     role: string | null;
+    permission_ids?: number[];
 }
 
 
@@ -57,4 +58,14 @@ export interface EmployeeFormData {
     is_active: boolean;
     branch_id: number | null;
     treasury_id: number | null;
+    permissions: number[];
+}
+
+export interface ApiPermission {
+    id: number;
+    key?: string;
+    slug?: string;
+    name?: string;
+    name_ar?: string;
+    module?: string;
 }

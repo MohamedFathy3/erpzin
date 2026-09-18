@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useDebounce } from '@/hooks/use-debounce';
-import type { EmployeeFormData, ApiRole, ApiResponse, Employee } from '@/types/employee';
+import type { EmployeeFormData, ApiRole, ApiPermission, ApiResponse, Employee } from '@/types/employee';
 import { employeeService } from '@/services/EmployeeService';
 
 // ========== واجهات البيانات ==========
@@ -86,6 +86,7 @@ const Employees = () => {
     is_active: true,
     branch_id: null,
     treasury_id: null,
+    permissions: [],
   });
 
   // ========== جلب بيانات الموظفين ==========
@@ -162,6 +163,11 @@ const Employees = () => {
       }
     }
   });
+  const { data: permissionsResponse } = useQuery<{ data: ApiPermission[] }>({
+    queryKey: ['access-control-permissions'],
+    queryFn: async () => (await api.get('/access-control/permissions')).data,
+  });
+  const availablePermissions = permissionsResponse?.data || [];
   const { data: branchesResponse } = useQuery({
     queryKey: ['branches'],
     queryFn: () => branchService.getAllBranches(),
@@ -326,6 +332,7 @@ const Employees = () => {
       is_active: true,
       branch_id: null,
       treasury_id: null,
+      permissions: [],
     });
     setShowPassword(false);
   };
@@ -348,6 +355,7 @@ const Employees = () => {
       branch_id: employee.branch?.id ?? null,
       treasury_id: employee.treasury?.id ?? null,
       is_active: employee.is_active ?? true,
+      permissions: employee.permission_ids ?? [],
     });
 
     setIsEditDialogOpen(true);
@@ -872,6 +880,19 @@ const Employees = () => {
                 />
               </div>
 
+              <div className="col-span-2 space-y-2">
+                <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+                <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
+                  {availablePermissions.map((permission) => {
+                    const checked = formData.permissions.includes(permission.id);
+                    return <label key={permission.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
+                      <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                    </label>;
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label>{t.role}</Label>
                 <Select
@@ -1077,6 +1098,18 @@ const Employees = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+              <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
+                {availablePermissions.map((permission) => {
+                  const checked = formData.permissions.includes(permission.id);
+                  return <label key={permission.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
+                    <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                  </label>;
+                })}
               </div>
             </div>
 

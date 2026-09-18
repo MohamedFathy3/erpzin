@@ -111,22 +111,13 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => {
-    console.log("✅ Success Response:", {
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data,
-    });
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config;
     
-    console.log("📡 Response Status:", error.response?.status, error.response?.statusText);
-
     // 🔄 معالجة خطأ 419 (CSRF Token Mismatch)
     if (error.response?.status === 419) {
-      console.log("🔄 419 CSRF Token Mismatch - Retrying with new token...");
-      
       // إعادة تعيين حالة CSRF
       csrfTokenRetrieved = false;
       
@@ -136,17 +127,14 @@ api.interceptors.response.use(
         
         // إعادة الطلب الأصلي
         if (originalRequest) {
-          console.log("🔄 Retrying original request with new CSRF token");
           return api(originalRequest);
         }
       } catch (retryError) {
-        console.error("❌ Failed to retry request after 419:", retryError);
       }
     }
 
     // 🚨 معالجة خطأ 401 (Unauthorized)
     if (error.response?.status === 401) {
-      console.log("🔐 401 Unauthorized - Removing token and redirecting to login");
       Cookies.remove("token");
     }
 
@@ -158,12 +146,16 @@ api.interceptors.response.use(
       if (window.location.pathname !== '/auth') window.location.href = '/auth';
     }
 
-    console.error("🚨 API Error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      headers: error.response?.headers,
-    });
+    const responseData = error.response?.data as {
+      message?: string;
+      error?: string;
+      errors?: Record<string, string[] | string>;
+    } | undefined;
+    const validationMessage = responseData?.errors
+      ? Object.values(responseData.errors).flat().join('، ')
+      : undefined;
+    const serverMessage = validationMessage || responseData?.message || responseData?.error;
+    if (serverMessage) error.message = serverMessage;
 
     return Promise.reject(error);
   }

@@ -65,9 +65,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     '/access-control': 'access_control.view', '/ai-assistant': 'ai_assistant.view',
   };
   const permissionKey = pagePermission[location.pathname];
-  const permissionAccess = !permissionKey || permissions.length === 0 || permissions.includes('*') ||
+  const isAdmin = Boolean(user.super_admin) || normalizedRole === 'admin';
+  const permissionAccess = !permissionKey || permissions.includes('*') ||
     permissions.includes(permissionKey) || (permissionKey === 'access_control.view' && permissions.includes('roles.manage'));
-  const hasAccess = Boolean(user.super_admin) || (canAccessPage(normalizedRole as any, location.pathname) && (permissionsLoading || permissionAccess));
+  const hasAccess = isAdmin || (canAccessPage(normalizedRole as any, location.pathname) &&
+    (permissionsLoading || (permissions.length > 0 && permissionAccess)));
 
   // إذا لم يكن لديه صلاحية
   if (!hasAccess) {
