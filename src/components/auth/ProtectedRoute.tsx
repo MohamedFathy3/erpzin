@@ -49,7 +49,7 @@ const getDefaultRoute = (role: string): string => {
 };
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user, loading, permissions, permissionsLoading } = useAuth();
+  const { user, loading, permissions, permissionsLoading, enabledModules, modulesLoading } = useAuth();
   const location = useLocation();
 
   // أثناء تحميل بيانات المستخدم
@@ -79,6 +79,25 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     '/access-control': 'access_control.view', '/ai-assistant': 'ai_assistant.view',
   };
   const permissionKey = pagePermission[location.pathname];
+  const moduleForPath: Record<string, string> = {
+    '/hr': 'hr',
+    '/inventory': 'inventory',
+    '/sales': 'sales',
+    '/purchasing': 'purchasing',
+    '/finance': 'finance',
+    '/crm': 'crm',
+    '/reports': 'reports',
+    '/manufacturing': 'manufacturing',
+    '/projects': 'projects',
+    '/workflow': 'workflow',
+    '/access-control': 'access_control',
+    '/ai-assistant': 'ai_assistant',
+  };
+  const requiredModule = moduleForPath[location.pathname];
+  const moduleAccess = Boolean(user.super_admin) || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
+  if (!moduleAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
   const isAdmin = Boolean(user.super_admin) || normalizedRole === 'admin';
   const isAccessManager = location.pathname === '/access-control' && normalizedRole === 'admin';
   const permissionAccess = !permissionKey || permissions.includes('*') ||
