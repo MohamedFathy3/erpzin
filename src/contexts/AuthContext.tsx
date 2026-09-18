@@ -247,12 +247,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let cancelled = false;
+    const fullAccess = Boolean(user?.super_admin || user?.role?.toLowerCase() === 'admin');
     const loadModules = async () => {
       if (!user) {
         setEnabledModules([]);
         return;
       }
-      if (user.super_admin) {
+      if (fullAccess) {
         setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow', 'access_control', 'ai_assistant']);
         return;
       }
@@ -272,12 +273,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let cancelled = false;
+    const fullAccess = Boolean(user?.super_admin || user?.role?.toLowerCase() === 'admin');
     const loadPermissions = async () => {
       if (!user) {
         setPermissions([]);
         return;
       }
-      if (user.super_admin) {
+      if (fullAccess) {
         setPermissions(['*']);
         return;
       }

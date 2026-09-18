@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   };
 
   const moduleEnabled = (pageId: string) => {
-    if (user?.super_admin || modulesLoading) return true;
+    if (user?.super_admin || user?.role?.toLowerCase() === 'admin' || modulesLoading) return true;
     const module = pageModules[pageId];
     return !module || enabledModules.includes(module);
   };
@@ -112,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     'access-control': 'access_control.view', aiAssistant: 'ai_assistant.view',
   };
   const permissionEnabled = (pageId: string) => {
-    if (user?.super_admin || permissionsLoading || permissions.length === 0) return true;
+    if (user?.super_admin || user?.role?.toLowerCase() === 'admin' || permissionsLoading || permissions.length === 0) return true;
     const permission = permissionForPage[pageId];
     return !permission || permissions.includes('*') || permissions.includes(permission) ||
       (pageId === 'access-control' && permissions.includes('roles.manage'));
