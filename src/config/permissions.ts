@@ -17,7 +17,7 @@ export const PAGES: PagePermission[] = [
     label: 'Access Control',
     labelAr: 'الأدوار والصلاحيات',
     icon: 'ShieldCheck',
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'Manager'],
   },
   {
     id: 'dashboard',
