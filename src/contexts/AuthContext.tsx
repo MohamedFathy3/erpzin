@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
-  const [modulesLoading, setModulesLoading] = useState(false);
+  const [modulesLoading, setModulesLoading] = useState(true);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
 
@@ -250,10 +250,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadModules = async () => {
       if (!user) {
         setEnabledModules([]);
+        setModulesLoading(false);
         return;
       }
       if (user.super_admin) {
         setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow', 'access_control', 'ai_assistant']);
+        setModulesLoading(false);
         return;
       }
       setModulesLoading(true);
