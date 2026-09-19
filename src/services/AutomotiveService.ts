@@ -37,6 +37,9 @@ export interface AutomotiveServiceOrder {
   items?: Array<{ id: number; description: string; quantity: number; unit_price: number }>;
 }
 
+export interface AutomotiveCustomer { id: number; name: string; phone?: string | null; email?: string | null }
+export interface AutomotiveTechnician { id: number; name: string; email?: string | null; phone?: string | null }
+
 export const AutomotiveService = {
   async vehicles(search = ''): Promise<AutomotiveVehicle[]> {
     const response = await api.get('/automotive/vehicles', { params: { search, per_page: 100 } });
@@ -49,6 +52,18 @@ export const AutomotiveService = {
   async orders(): Promise<AutomotiveServiceOrder[]> {
     const response = await api.get('/automotive/service-orders', { params: { per_page: 100 } });
     return response.data?.data?.data ?? response.data?.data ?? [];
+  },
+  async customers(): Promise<AutomotiveCustomer[]> {
+    const response = await api.get('/customer', { params: { per_page: 100 } });
+    return response.data?.data?.data ?? response.data?.data ?? [];
+  },
+  async technicians(): Promise<AutomotiveTechnician[]> {
+    const response = await api.get('/employee', { params: { per_page: 100 } });
+    return response.data?.data?.data ?? response.data?.data ?? [];
+  },
+  async createVehicle(payload: Partial<AutomotiveVehicle>) {
+    const response = await api.post('/automotive/vehicles', payload);
+    return response.data?.data;
   },
   async createService(payload: Partial<AutomotiveServiceItem>) {
     const response = await api.post('/automotive/services', payload);
