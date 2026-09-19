@@ -62,7 +62,11 @@ export const AutomotiveService = {
     return response.data?.data?.data ?? response.data?.data ?? [];
   },
   async createCustomerAccount(payload: { customer_id: number; email: string; password: string }) {
-    const response = await api.post('/automotive/portal/customer-accounts', payload);
+    const response = await api.post('/automotive/customer-accounts', payload);
+    return response.data?.data;
+  },
+  async createCustomer(payload: { name: string; phone?: string; email?: string; address?: string }) {
+    const response = await api.post('/customer', payload);
     return response.data?.data;
   },
   async createVehicle(payload: Partial<AutomotiveVehicle>) {
@@ -75,6 +79,10 @@ export const AutomotiveService = {
   },
   async updateOrderStatus(id: number, status: string) {
     const response = await api.patch(`/automotive/service-orders/${id}/status`, { status });
+    return response.data?.data;
+  },
+  async createOrder(payload: any) {
+    const response = await api.post('/automotive/service-orders', payload);
     return response.data?.data;
   },
   async profitabilityReport() {
