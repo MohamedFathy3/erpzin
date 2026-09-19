@@ -72,8 +72,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   // التحقق من صلاحية الوصول للصفحة الحالية
   const normalizedRole = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
   const pagePermission: Record<string, string[]> = {
-    '/dashboard': ['dashboard.view'], '/automotive': ['automotive.dashboard.view'], '/inventory': ['inventory.view'], '/sales': ['sales.view'],
-    '/pos': ['sales.view'], '/purchasing': ['purchasing.view'], '/finance': ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'],
+    '/dashboard': ['dashboard.view'], '/automotive': ['automotive.view'], '/inventory': ['inventory.view'], '/sales': ['sales.view'],
+    '/pos': ['sales.view'], '/POSRetrun': ['sales.pos_return.view'], '/purchasing': ['purchasing.view'], '/finance': ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'],
     '/hr': ['hr.view'], '/crm': ['crm.view'], '/reports': ['reports.view'], '/inventory-transfer-requests': ['inventory.transfer_requests.view'],
     '/projects': ['projects.view'], '/manufacturing': ['manufacturing.view'],
     '/access-control': ['access_control.view'], '/ai-assistant': ['ai_assistant.view'],

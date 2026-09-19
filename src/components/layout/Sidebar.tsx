@@ -107,7 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   };
 
   const permissionForPage: Record<string, string[]> = {
-    dashboard: ['dashboard.view'], automotive: ['automotive.dashboard.view'], inventory: ['inventory.view'], sales: ['sales.view'], pos: ['sales.view'],
+    dashboard: ['dashboard.view'], automotive: ['automotive.view'], inventory: ['inventory.view'], sales: ['sales.view'], pos: ['sales.view'], posreturn: ['sales.pos_return.view'],
     purchasing: ['purchasing.view'], finance: ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'], hr: ['hr.view'], crm: ['crm.view'],
     reports: ['reports.view'], projects: ['projects.view'], manufacturing: ['manufacturing.view'],
     'access-control': ['access_control.view'], aiAssistant: ['ai_assistant.view'],
