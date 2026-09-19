@@ -501,6 +501,9 @@ const updateCustomerMutation = useMutation({
       email: data.email || null,
       address: data.address || null
     };
+    if (data.portal_email && data.portal_password) {
+      await api.post('/automotive/customer-accounts', { customer_id: Number(id), email: data.portal_email, password: data.portal_password });
+    }
 
     console.log('📤 Updating customer:', id, payload);
 
@@ -515,7 +518,7 @@ const updateCustomerMutation = useMutation({
     );
     queryClient.invalidateQueries({ queryKey: ['customers'] });
     setShowEditCustomer(null);
-    setEditCustomer({ name: '', name_ar: '', phone: '', email: '', address: '' });
+    setEditCustomer({ name: '', name_ar: '', phone: '', email: '', address: '', portal_email: '', portal_password: '' });
   },
   onError: (error: any) => {
     console.error('❌ Error updating customer:', error);
@@ -1433,6 +1436,12 @@ const handleToggleStatus = (customer: Customer) => {
             value={editCustomer.address}
             onChange={(e) => setEditCustomer({ ...editCustomer, address: e.target.value })}
           />
+        </div>
+        <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+          <p className="text-sm font-medium">بيانات دخول بوابة العميل</p>
+          <Input placeholder="البريد المستخدم للدخول" type="email" value={editCustomer.portal_email} onChange={(e) => setEditCustomer({ ...editCustomer, portal_email: e.target.value })} dir="ltr" />
+          <Input placeholder="كلمة مرور جديدة (8 أحرف على الأقل)" type="password" value={editCustomer.portal_password} onChange={(e) => setEditCustomer({ ...editCustomer, portal_password: e.target.value })} dir="ltr" />
+          <p className="text-xs text-muted-foreground">اترك كلمة المرور فارغة إذا كنت لا تريد تغيير بيانات الدخول.</p>
         </div>
         
         <div className="flex gap-2">

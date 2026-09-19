@@ -67,7 +67,12 @@ export const getCsrfToken = async (force: boolean = false): Promise<void> => {
 
 // 🟢 Interceptor محسن للطلبات
 api.interceptors.request.use(async (config) => {
-  const token = Cookies.get("token");
+  const portalToken = window.location.pathname.startsWith('/customer-portal')
+    ? localStorage.getItem('customer_token')
+    : window.location.pathname.startsWith('/technician-portal')
+      ? localStorage.getItem('technician_token')
+      : null;
+  const token = portalToken || Cookies.get("token");
   const method = config.method?.toUpperCase();
 
   console.log("🔍 API Request Details:", {
