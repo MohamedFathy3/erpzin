@@ -72,7 +72,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   // التحقق من صلاحية الوصول للصفحة الحالية
   const normalizedRole = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
   const pagePermission: Record<string, string[]> = {
-    '/dashboard': ['dashboard.view'], '/inventory': ['inventory.view'], '/sales': ['sales.view'],
+    '/dashboard': ['dashboard.view'], '/automotive': ['automotive.dashboard.view'], '/inventory': ['inventory.view'], '/sales': ['sales.view'],
     '/pos': ['sales.view'], '/purchasing': ['purchasing.view'], '/finance': ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'],
     '/hr': ['hr.view'], '/crm': ['crm.view'], '/reports': ['reports.view'], '/inventory-transfer-requests': ['inventory.transfer_requests.view'],
     '/projects': ['projects.view'], '/manufacturing': ['manufacturing.view'],
@@ -80,7 +80,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   };
   const permissionKeys = pagePermission[location.pathname] || [];
   const moduleForPath: Record<string, string> = {
-    '/hr': 'hr',
+    '/hr': 'hr', '/automotive': 'automotive_service',
     '/inventory': 'inventory',
     '/sales': 'sales',
     '/purchasing': 'purchasing',

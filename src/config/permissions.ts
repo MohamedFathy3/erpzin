@@ -28,6 +28,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin',  'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
   },
   {
+    id: 'automotive',
+    path: '/automotive',
+    label: 'Automotive Service',
+    labelAr: 'خدمة السيارات',
+    icon: 'CarFront',
+    allowedRoles: ['admin', 'Manager', 'HR', 'viewer'],
+  },
+  {
     id: 'pos',
     path: '/pos',
     label: 'POS',

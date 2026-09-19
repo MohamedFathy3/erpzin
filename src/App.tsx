@@ -37,6 +37,7 @@ import GoogleIntegrations from "./pages/GoogleIntegrations";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
 import AccessControl from "./pages/AccessControl";
+import AutomotiveService from "./pages/AutomotiveService";
 import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
 import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
@@ -97,6 +98,7 @@ const App = () => (
                 <Route path="/super-admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
                 <Route path="/POSRetrun" element={<ProtectedRoute><POSRetrun /></ProtectedRoute>} />
                 <Route path="/inventory-transfer-requests" element={<ProtectedRoute><InventoryTransferRequests /></ProtectedRoute>} />
+                <Route path="/automotive" element={<ProtectedRoute><AutomotiveService /></ProtectedRoute>} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
