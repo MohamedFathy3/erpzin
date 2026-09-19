@@ -61,6 +61,10 @@ export const AutomotiveService = {
     const response = await api.get('/employee', { params: { per_page: 100 } });
     return response.data?.data?.data ?? response.data?.data ?? [];
   },
+  async createCustomerAccount(payload: { customer_id: number; email: string; password: string }) {
+    const response = await api.post('/automotive/portal/customer-accounts', payload);
+    return response.data?.data;
+  },
   async createVehicle(payload: Partial<AutomotiveVehicle>) {
     const response = await api.post('/automotive/vehicles', payload);
     return response.data?.data;
