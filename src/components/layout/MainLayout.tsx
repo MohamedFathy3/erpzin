@@ -26,7 +26,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const currentActive = activeItem || getActiveFromPath();
 
   useEffect(() => {
-    if (!user || user.super_admin || modulesLoading) return;
+    if (!user || user.super_admin || user.role?.toLowerCase() === 'admin' || modulesLoading) return;
     const moduleByPath: Record<string, string> = {
       '/inventory': 'inventory',
       '/sales': 'sales',
@@ -46,6 +46,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       '/workflow': 'workflow',
       '/access-control': 'access_control',
       '/ai-assistant': 'ai_assistant',
+      '/automotive': 'automotive_service',
     };
     const module = moduleByPath[location.pathname];
     if (module && !enabledModules.includes(module)) navigate('/dashboard');
@@ -80,6 +81,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       manufacturingSetup: '/manufacturing/setup',
       projects: '/projects',
       workflow: '/workflow',
+      automotive: '/automotive',
       settings: '/settings',
       'access-control': '/access-control',
       'super-admin': '/super-admin',

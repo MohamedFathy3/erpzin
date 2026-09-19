@@ -106,7 +106,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       </div>
     );
   }
-  const moduleAccess = Boolean(user.super_admin) || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
+  const moduleAccess = Boolean(user.super_admin) || normalizedRole === 'admin' || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
   if (!moduleAccess) {
     return <Navigate to="/dashboard" replace />;
   }
