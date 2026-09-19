@@ -58,4 +58,8 @@ export const AutomotiveService = {
     const response = await api.patch(`/automotive/service-orders/${id}/status`, { status });
     return response.data?.data;
   },
+  async profitabilityReport() {
+    const response = await api.get('/automotive/reports/profitability');
+    return response.data?.data;
+  },
 };

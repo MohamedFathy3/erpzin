@@ -17,6 +17,7 @@ const AutomotiveServicePage = () => {
   const [vehicles, setVehicles] = useState<AutomotiveVehicle[]>([]);
   const [services, setServices] = useState<AutomotiveServiceItem[]>([]);
   const [orders, setOrders] = useState<AutomotiveServiceOrder[]>([]);
+  const [report, setReport] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showServiceForm, setShowServiceForm] = useState(false);
@@ -25,10 +26,11 @@ const AutomotiveServicePage = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [vehicleData, serviceData, orderData] = await Promise.all([
-        automotiveApi.vehicles(search), automotiveApi.services(), automotiveApi.orders(),
+      const [vehicleData, serviceData, orderData, reportData] = await Promise.all([
+        automotiveApi.vehicles(search), automotiveApi.services(), automotiveApi.orders(), automotiveApi.profitabilityReport(),
       ]);
       setVehicles(vehicleData); setServices(serviceData); setOrders(orderData);
+      setReport(reportData);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'تعذر تحميل بيانات خدمة السيارات');
     } finally { setLoading(false); }
@@ -67,6 +69,7 @@ const AutomotiveServicePage = () => {
         <Card><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">جاهزة للتسليم</p><p className="text-3xl font-bold">{totals.ready}</p></div><Clock3 className="h-8 w-8 text-amber-500" /></CardContent></Card>
         <Card><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">إجمالي الأوامر</p><p className="text-3xl font-bold">{totals.revenue.toLocaleString()}</p></div><DollarSign className="h-8 w-8 text-emerald-500" /></CardContent></Card>
       </div>
+      {report && <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle>ربحية الخدمات</CardTitle></CardHeader><CardContent className="space-y-2">{report.services?.slice(0, 8).map((row: any) => <div key={`${row.service_id}-${row.service}`} className="flex items-center justify-between rounded border p-3"><span>{row.service} <small className="text-muted-foreground">({row.orders} أمر)</small></span><span className="font-semibold text-emerald-600">{Number(row.profit).toLocaleString()} ربح</span></div>)}</CardContent></Card><Card><CardHeader><CardTitle>ربحية الفنيين</CardTitle></CardHeader><CardContent className="space-y-2">{report.technicians?.slice(0, 8).map((row: any) => <div key={row.technician_id} className="flex items-center justify-between rounded border p-3"><span>{row.technician} <small className="text-muted-foreground">({row.orders} أمر)</small></span><span className="font-semibold text-emerald-600">{Number(row.profit).toLocaleString()} ربح</span></div>)}</CardContent></Card></div>}
       <Tabs defaultValue="orders" className="space-y-4">
         <TabsList><TabsTrigger value="orders">أوامر الخدمة</TabsTrigger><TabsTrigger value="vehicles">السيارات</TabsTrigger><TabsTrigger value="services">الخدمات</TabsTrigger></TabsList>
         <TabsContent value="orders"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" /> أوامر الخدمة</CardTitle></CardHeader><CardContent><div className="overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b text-right"><th className="p-3">الأمر</th><th className="p-3">العميل</th><th className="p-3">السيارة</th><th className="p-3">الفني</th><th className="p-3">الحالة</th><th className="p-3">الإجمالي</th><th className="p-3">إجراء</th></tr></thead><tbody>{orders.map((order) => <tr key={order.id} className="border-b"><td className="p-3 font-medium">{order.order_number}</td><td className="p-3">{order.customer?.name || '—'}</td><td className="p-3">{order.vehicle ? `${order.vehicle.make} ${order.vehicle.model}` : '—'}</td><td className="p-3">{order.technicians?.map((technician) => technician.name).join('، ') || 'غير معين'}</td><td className="p-3"><span className="rounded-full bg-primary/10 px-2 py-1">{statusLabels[order.status] || order.status}</span></td><td className="p-3">{Number(order.total_amount || 0).toLocaleString()}</td><td className="p-3">{order.status === 'in_progress' && <Button size="sm" variant="outline" onClick={() => void moveOrder(order, 'quality_check')}>فحص الجودة</Button>}{order.status === 'quality_check' && <Button size="sm" onClick={() => void moveOrder(order, 'ready_for_delivery')}>جاهز للتسليم</Button>}</td></tr>)}</tbody></table>{!loading && orders.length === 0 && <div className="py-12 text-center text-muted-foreground">لا توجد أوامر خدمة حتى الآن</div>}</div></CardContent></Card></TabsContent>
