@@ -89,4 +89,8 @@ export const AutomotiveService = {
     const response = await api.get('/automotive/reports/profitability');
     return response.data?.data;
   },
+  async technicianPerformanceReport() {
+    const response = await api.get('/automotive/reports/technician-performance');
+    return response.data?.data;
+  },
 };
