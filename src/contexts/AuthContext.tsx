@@ -278,10 +278,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadPermissions = async () => {
       if (!user) {
         setPermissions([]);
+        setPermissionsLoading(false);
         return;
       }
       if (fullAccess) {
         setPermissions(['*']);
+        setPermissionsLoading(false);
         return;
       }
       setPermissionsLoading(true);
@@ -296,7 +298,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
     loadPermissions();
-    return () => { cancelled = true; };
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') void loadPermissions();
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, [user]);
 
   const signIn = async (identifier: string, password: string) => {
