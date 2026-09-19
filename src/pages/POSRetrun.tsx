@@ -913,6 +913,8 @@ const POS: React.FC = () => {
               </Tooltip>
             )}
 
+            <div className="flex items-center gap-1 border-s border-white/20 ps-2"><Button variant="ghost" size="sm" onClick={() => navigate('/automotive')} className="text-cyan-300 hover:bg-cyan-500/20">Automotive</Button><Button variant="ghost" size="sm" onClick={() => navigate('/pos')} className="text-emerald-300 hover:bg-emerald-500/20">POS</Button></div>
+
             {/* Home */}
             <Tooltip>
               <TooltipTrigger asChild>

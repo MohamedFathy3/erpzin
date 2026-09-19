@@ -1034,6 +1034,8 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Tooltip>
             )}
 
+            <div className="flex items-center gap-1 border-s border-white/20 ps-2"><Button variant="ghost" size="sm" onClick={() => navigate('/automotive')} className="text-cyan-300 hover:bg-cyan-500/20">Automotive</Button><Button variant="ghost" size="sm" onClick={() => navigate('/POSRetrun')} className="text-rose-300 hover:bg-rose-500/20">مرتجعات POS</Button></div>
+
             {/* Home */}
             <Tooltip>
               <TooltipTrigger asChild>
