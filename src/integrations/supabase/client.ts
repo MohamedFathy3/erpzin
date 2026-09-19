@@ -2,8 +2,11 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Supabase is optional in the Laravel/API deployment. The previous code passed
+// undefined values to createClient, which crashes the entire SPA before React
+// can render when production does not provide VITE_SUPABASE_* variables.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://disabled-supabase.invalid';
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'disabled-supabase-key';
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
