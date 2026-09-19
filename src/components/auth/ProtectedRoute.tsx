@@ -71,14 +71,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   // التحقق من صلاحية الوصول للصفحة الحالية
   const normalizedRole = typeof user.role === 'string' ? user.role.toLowerCase() : user.role;
-  const pagePermission: Record<string, string> = {
-    '/dashboard': 'dashboard.view', '/inventory': 'inventory.view', '/sales': 'sales.view',
-    '/pos': 'sales.view', '/purchasing': 'purchasing.view', '/finance': 'finance.view',
-    '/hr': 'hr.view', '/crm': 'crm.view', '/reports': 'reports.view', '/inventory-transfer-requests': 'inventory.transfer_requests.view',
-    '/projects': 'projects.view', '/manufacturing': 'manufacturing.view',
-    '/access-control': 'access_control.view', '/ai-assistant': 'ai_assistant.view',
+  const pagePermission: Record<string, string[]> = {
+    '/dashboard': ['dashboard.view'], '/inventory': ['inventory.view'], '/sales': ['sales.view'],
+    '/pos': ['sales.view'], '/purchasing': ['purchasing.view'], '/finance': ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'],
+    '/hr': ['hr.view'], '/crm': ['crm.view'], '/reports': ['reports.view'], '/inventory-transfer-requests': ['inventory.transfer_requests.view'],
+    '/projects': ['projects.view'], '/manufacturing': ['manufacturing.view'],
+    '/access-control': ['access_control.view'], '/ai-assistant': ['ai_assistant.view'],
   };
-  const permissionKey = pagePermission[location.pathname];
+  const permissionKeys = pagePermission[location.pathname] || [];
   const moduleForPath: Record<string, string> = {
     '/hr': 'hr',
     '/inventory': 'inventory',
@@ -94,16 +94,34 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     '/ai-assistant': 'ai_assistant',
   };
   const requiredModule = moduleForPath[location.pathname];
+  // Do not render a protected page while server-backed authorization state is
+  // unknown; otherwise a direct URL can briefly expose the page during refresh.
+  if (permissionsLoading || (requiredModule && modulesLoading)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">جاري التحقق من الصلاحيات...</p>
+        </div>
+      </div>
+    );
+  }
   const moduleAccess = Boolean(user.super_admin) || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
   if (!moduleAccess) {
     return <Navigate to="/dashboard" replace />;
   }
   const isAdmin = Boolean(user.super_admin) || normalizedRole === 'admin';
   const isAccessManager = location.pathname === '/access-control' && normalizedRole === 'admin';
-  const permissionAccess = !permissionKey || permissions.includes('*') ||
-    permissions.includes(permissionKey) || (permissionKey === 'access_control.view' && permissions.includes('roles.manage'));
-  const hasAccess = isAdmin || isAccessManager || (canAccessPage(normalizedRole as any, location.pathname) &&
-    (permissionsLoading || (permissions.length > 0 && permissionAccess)));
+  const permissionAccess = permissionKeys.length === 0 || permissions.includes('*') ||
+    permissionKeys.some((permission) => permissions.includes(permission)) ||
+    (permissionKeys.includes('access_control.view') && permissions.includes('roles.manage'));
+  // An explicitly assigned permission overrides the role's default page list.
+  // This is what lets one employee receive an extra module without changing
+  // the role shared by other employees.
+  const roleOrPermissionAccess = permissionKeys.length > 0
+    ? permissionAccess
+    : canAccessPage(normalizedRole as any, location.pathname);
+  const hasAccess = isAdmin || isAccessManager || (permissions.length > 0 && roleOrPermissionAccess);
 
   // إذا لم يكن لديه صلاحية
   if (!hasAccess) {

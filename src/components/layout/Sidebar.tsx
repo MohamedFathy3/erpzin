@@ -3,7 +3,7 @@ import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
 import { useAuth } from '@/contexts/AuthContext'; // ✅ تأكد من استيراد useAuth فقط
-import { getAllowedPages } from '@/config/permissions';
+import { getAllowedPages, PAGES } from '@/config/permissions';
 import { cn } from '@/lib/utils';
 import * as Icons from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
 
   // جلب الصفحات المسموحة للمستخدم
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allowedPages = getAllowedPages(user?.role as any);
+  const roleAllowedPages = getAllowedPages(user?.role as any);
 
   const pageModules: Record<string, string> = {
     inventory: 'inventory',
@@ -105,18 +105,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     return !module || enabledModules.includes(module);
   };
 
-  const permissionForPage: Record<string, string> = {
-    dashboard: 'dashboard.view', inventory: 'inventory.view', sales: 'sales.view', pos: 'sales.view',
-    purchasing: 'purchasing.view', finance: 'finance.view', hr: 'hr.view', crm: 'crm.view',
-    reports: 'reports.view', projects: 'projects.view', manufacturing: 'manufacturing.view',
-    'access-control': 'access_control.view', aiAssistant: 'ai_assistant.view',
+  const permissionForPage: Record<string, string[]> = {
+    dashboard: ['dashboard.view'], inventory: ['inventory.view'], sales: ['sales.view'], pos: ['sales.view'],
+    purchasing: ['purchasing.view'], finance: ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'], hr: ['hr.view'], crm: ['crm.view'],
+    reports: ['reports.view'], projects: ['projects.view'], manufacturing: ['manufacturing.view'],
+    'access-control': ['access_control.view'], aiAssistant: ['ai_assistant.view'],
   };
   const permissionEnabled = (pageId: string) => {
     if (user?.super_admin || user?.role?.toLowerCase() === 'admin' || permissionsLoading || permissions.length === 0) return true;
-    const permission = permissionForPage[pageId];
-    return !permission || permissions.includes('*') || permissions.includes(permission) ||
+    const permissionKeys = permissionForPage[pageId] || [];
+    return permissionKeys.length === 0 || permissions.includes('*') || permissionKeys.some((permission) => permissions.includes(permission)) ||
       (pageId === 'access-control' && permissions.includes('roles.manage'));
   };
+
+  const permissionPages = PAGES.filter((page) => permissionEnabled(page.id));
+  const allowedPages = Array.from(new Map([...roleAllowedPages, ...permissionPages].map((page) => [page.id, page])).values());
 
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
