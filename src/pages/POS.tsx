@@ -796,7 +796,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
     onShowDelivery: () => setShowDeliverySelector(true),
     onShowReturns: () => setShowReturns(true),
     onShowShift: () => setShowShiftPanel(true),
-    onGoHome: () => navigate('/'),
+    onGoHome: () => navigate('/dashboard'),
     onEscape: handleCloseAllModals,
     onIncreaseQuantity: handleIncreaseQuantity,
     onDecreaseQuantity: handleDecreaseQuantity,
@@ -1037,7 +1037,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
             {/* Home */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link to="/">
+                <Link to="/dashboard">
                   <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
                     <Home size={20} />
                   </Button>

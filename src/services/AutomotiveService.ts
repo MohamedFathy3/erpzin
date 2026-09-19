@@ -38,7 +38,7 @@ export interface AutomotiveServiceOrder {
 }
 
 export interface AutomotiveCustomer { id: number; name: string; phone?: string | null; email?: string | null }
-export interface AutomotiveTechnician { id: number; name: string; email?: string | null; phone?: string | null }
+export interface AutomotiveTechnician { id: number; name: string; email?: string | null; phone?: string | null; role?: { name?: string } | string | null }
 
 export const AutomotiveService = {
   async vehicles(search = ''): Promise<AutomotiveVehicle[]> {

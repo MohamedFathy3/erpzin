@@ -916,7 +916,7 @@ const POS: React.FC = () => {
             {/* Home */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link to="/">
+                <Link to="/dashboard">
                   <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/15">
                     <Home size={20} />
                   </Button>
