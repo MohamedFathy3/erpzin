@@ -48,6 +48,7 @@ import api from '@/lib/api';
 import { useDebounce } from '@/hooks/use-debounce';
 import type { EmployeeFormData, ApiRole, ApiPermission, ApiResponse, Employee } from '@/types/employee';
 import { employeeService } from '@/services/EmployeeService';
+import { permissionLabel, roleLabel } from '@/utils/accessControlLabels';
 
 // ========== واجهات البيانات ==========
 
@@ -659,8 +660,8 @@ const Employees = () => {
                   <SelectContent>
                     <SelectItem value="">{language === 'ar' ? 'كل الأدوار' : 'All Roles'}</SelectItem>
                     {roles.map((role) => role.name && (
-                      <SelectItem key={role.id} value={role.name}>
-                        {role.name}
+                      <SelectItem key={role.id} value={roleLabel(role.name)}>
+                        {roleLabel(role.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -737,7 +738,7 @@ const Employees = () => {
                       <div className="flex items-center gap-2 mt-2">
                         <Badge variant="outline" style={{ backgroundColor: `${iconColor}15`, color: iconColor, borderColor: `${iconColor}40` }} className="text-xs">
                           <IconComponent size={12} className="me-1" />
-                          {employee.role}
+                          {roleLabel(employee.role)}
                         </Badge>
                         <Badge variant="secondary" className="text-xs">
                           {employee.employee_code}
@@ -796,7 +797,7 @@ const Employees = () => {
                       <TableCell>{employee.position}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {employee.role}
+                          {roleLabel(employee.role)}
                         </Badge>
                       </TableCell>
                       <TableCell dir="ltr">{employee.phone}</TableCell>
@@ -888,7 +889,7 @@ const Employees = () => {
                     const checked = formData.permissions.includes(permission.id);
                     return <label key={permission.id} className="flex items-center gap-2 text-sm">
                       <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
-                      <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                      <span>{language === 'ar' ? permissionLabel(permission) : (permission.name || permission.key || permission.slug)}</span>
                     </label>;
                   })}
                 </div>
@@ -906,7 +907,7 @@ const Employees = () => {
                   <SelectContent>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.name}
+                        {roleLabel(role.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1094,7 +1095,7 @@ const Employees = () => {
                   <SelectContent>
                     {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.name}
+                        {roleLabel(role.name)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1109,7 +1110,7 @@ const Employees = () => {
                   const checked = formData.permissions.includes(permission.id);
                   return <label key={permission.id} className="flex items-center gap-2 text-sm">
                     <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
-                    <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                    <span>{language === 'ar' ? permissionLabel(permission) : (permission.name || permission.key || permission.slug)}</span>
                   </label>;
                 })}
               </div>
