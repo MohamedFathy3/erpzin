@@ -170,6 +170,10 @@ interface SalesTransaction {
   payment_method: string;
   branch: string;
   currency: string | null;
+  paid?: number;
+  due?: number;
+  products?: Array<{ name?: string; quantity?: number; total?: number }>;
+  payments?: Array<{ method?: string; amount?: number; date?: string }>;
 }
 
 interface PurchaseTransaction {
@@ -413,21 +417,30 @@ const CustomerSupplierMovement: React.FC = () => {
   }, [suppliers, purchaseInvoices, sortField, sortDirection]);
 
   // ==================== Fetch Customer Transactions ====================
-  const { data: customerTransactions = [] } = useQuery<SalesInvoice[]>({
-    queryKey: ['customer-transactions', selectedEntity?.id],
+  const { data: customerTransactions = [] } = useQuery<SalesTransaction[]>({
+    queryKey: ['customer-transactions', selectedEntity?.id, dateRangeObj.start, dateRangeObj.end],
     queryFn: async () => {
       if (!selectedEntity || activeTab !== 'customers') return [];
-      
       try {
-        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
-          customer_id: selectedEntity.id,
-          date_from: `${dateRangeObj.start} 00:00:00`,
-          date_to: `${dateRangeObj.end} 23:59:59`,
-          paginate: false
+        const response = await api.get(`/customer/${selectedEntity.id}/statement`, {
+          params: { from: dateRangeObj.start, to: dateRangeObj.end }
         });
-        return response.data.data || [];
+        const transactions = response.data?.data?.transactions || [];
+        return transactions.map((tx: any) => ({
+          id: tx.id,
+          invoice_number: tx.number || tx.id,
+          total_amount: String(tx.total || 0),
+          created_at: tx.date || new Date().toISOString(),
+          payment_method: tx.payments?.[0]?.method || '-',
+          branch: tx.branch?.name || tx.branch?.name_ar || '-',
+          currency: null,
+          paid: Number(tx.paid || 0),
+          due: Number(tx.due || 0),
+          products: tx.products || [],
+          payments: tx.payments || []
+        }));
       } catch (error) {
-        console.error('Error fetching customer transactions:', error);
+        console.error('Error fetching customer statement:', error);
         return [];
       }
     },
@@ -951,7 +964,11 @@ const CustomerSupplierMovement: React.FC = () => {
                                               </Badge>
                                             </TableCell>
                                             <TableCell className="text-end font-mono">
-                                              {formatCurrency(Number(tx.total_amount))}
+                                              <div>{formatCurrency(Number(tx.total_amount))}</div>
+                                              <div className="text-[11px] text-muted-foreground">
+                                                {language === 'ar' ? 'مدفوع' : 'Paid'}: {formatCurrency(Number(tx.paid || 0))} · {language === 'ar' ? 'متبقي' : 'Due'}: {formatCurrency(Number(tx.due || 0))}
+                                              </div>
+                                              {tx.products?.length ? <div className="text-[11px] text-muted-foreground max-w-[220px] truncate">{tx.products.map((product) => `${product.name || '-'} × ${product.quantity || 0}`).join('، ')}</div> : null}
                                               {tx.currency && (
                                                 <span className="text-xs text-muted-foreground ms-1">
                                                   {tx.currency}
