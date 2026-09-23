@@ -75,7 +75,9 @@ interface CustomerStatementTransaction {
   paid: number;
   due: number;
   status: string;
-  payments?: Array<{ method: string; amount: number; treasury_id?: number | null; bank_id?: number | null; date?: string | null }>;
+  branch?: { id?: number; name?: string; name_ar?: string };
+  products?: Array<{ id?: number; name?: string; quantity?: number; total?: number }>;
+  payments?: Array<{ id?: number; method: string; amount: number; treasury_id?: number | null; bank_id?: number | null; date?: string | null; employee?: { id?: number; name?: string } | null }>;
 }
 
 const CRM = () => {
@@ -1371,8 +1373,44 @@ const handleToggleStatus = (customer: Customer) => {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         {[['المعاملات', customerStatement.summary.transactions_count], ['إجمالي المشتريات', `${Number(customerStatement.summary.total_purchases).toLocaleString()} YER`], ['المدفوع', `${Number(customerStatement.summary.total_paid).toLocaleString()} YER`], ['المتبقي', `${Number(customerStatement.summary.outstanding_balance).toLocaleString()} YER`], ['المتاح الائتماني', `${Number(customerStatement.summary.available_credit).toLocaleString()} YER`], ['نقاط الولاء', Number(customerStatement.customer?.loyalty_points ?? customerStatement.customer?.point ?? 0).toLocaleString()]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-bold">{value}</p></div>)}
       </div>
-      <div className="max-h-96 overflow-auto rounded-lg border"><Table className="min-w-[760px]"><TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>المصدر</TableHead><TableHead>الإجمالي</TableHead><TableHead>المدفوع</TableHead><TableHead>المتبقي</TableHead><TableHead>الحالة</TableHead><TableHead className="sticky end-0 bg-background">إجراء</TableHead></TableRow></TableHeader><TableBody>{customerStatement.transactions.map((transaction: CustomerStatementTransaction) => { const isDue = Number(transaction.due) > 0.005; const displayStatus = isDue ? 'آجلة' : 'مدفوعة'; return <TableRow key={`${transaction.source}-${transaction.id}`}><TableCell>{transaction.date || '-'}</TableCell><TableCell className="font-medium">{transaction.number || '-'}</TableCell><TableCell>{transaction.source === 'pos' ? 'POS' : 'Sales'}</TableCell><TableCell>{Number(transaction.total).toLocaleString()} YER</TableCell><TableCell className="text-green-600">{Number(transaction.paid).toLocaleString()} YER</TableCell><TableCell className={isDue ? 'font-semibold text-red-600' : 'text-muted-foreground'}>{Number(transaction.due).toLocaleString()} YER</TableCell><TableCell><Badge variant={isDue ? 'secondary' : 'default'}>{displayStatus}</Badge></TableCell><TableCell className="sticky end-0 bg-background">{transaction.source === 'sales' && isDue && <Button size="sm" className="gap-1" onClick={() => { setCollectionTransaction(transaction); setCollectionAmount(String(transaction.due)); const mainTreasury = treasuries.find((treasury: any) => treasury.is_main); setCollectionTreasuryId(String(mainTreasury?.id || '')); }}><Wallet size={14} />تحصيل</Button>}</TableCell></TableRow>; })}</TableBody></Table></div>
+      <div className="max-h-[55vh] overflow-auto rounded-lg border">
+        <Table className="min-w-[1100px]">
+          <TableHeader><TableRow>
+            <TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>المصدر</TableHead><TableHead>الفرع</TableHead>
+            <TableHead>المنتجات</TableHead><TableHead>الإجمالي</TableHead><TableHead>المدفوع</TableHead><TableHead>المتبقي</TableHead>
+            <TableHead>سجل التحصيل</TableHead><TableHead>الحالة</TableHead><TableHead className="sticky end-0 bg-background">إجراء</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {customerStatement.transactions.map((transaction: CustomerStatementTransaction) => {
+              const isDue = Number(transaction.due) > 0.005;
+              const displayStatus = transaction.source === 'sales_return' ? 'مرتجع' : isDue ? 'آجلة' : 'مدفوعة';
+              const branchName = transaction.branch?.name_ar || transaction.branch?.name || '-';
+              return <TableRow key={`${transaction.source}-${transaction.id}`}>
+                <TableCell>{transaction.date || '-'}</TableCell>
+                <TableCell className="font-medium">{transaction.number || '-'}</TableCell>
+                <TableCell>{transaction.source === 'pos' ? 'POS' : transaction.source === 'sales_return' ? 'مرتجع' : 'Sales'}</TableCell>
+                <TableCell>{branchName}</TableCell>
+                <TableCell className="max-w-[220px] whitespace-normal text-xs">
+                  {transaction.products?.length ? transaction.products.map((product, index) => <div key={`${product.id || product.name}-${index}`}>{product.name || '-'} × {product.quantity || 0}</div>) : '-'}
+                </TableCell>
+                <TableCell>{Number(transaction.total).toLocaleString()} YER</TableCell>
+                <TableCell className="text-green-600">{Number(transaction.paid).toLocaleString()} YER</TableCell>
+                <TableCell className={isDue ? 'font-semibold text-red-600' : 'text-muted-foreground'}>{Number(transaction.due).toLocaleString()} YER</TableCell>
+                <TableCell className="whitespace-normal text-xs">
+                  {transaction.payments?.length ? transaction.payments.map((payment, index) => <div key={`${payment.id || payment.date}-${index}`} className="mb-1 rounded bg-muted/50 px-2 py-1">
+                    <div className="font-semibold text-green-700">{Number(payment.amount).toLocaleString()} YER — {payment.date || '-'}</div>
+                    <div>{payment.method || '-'}{payment.employee?.name ? ` — ${payment.employee.name}` : ''}</div>
+                  </div>) : <span className="text-muted-foreground">لا يوجد تحصيل</span>}
+                </TableCell>
+                <TableCell><Badge variant={transaction.source === 'sales_return' ? 'destructive' : isDue ? 'secondary' : 'default'}>{displayStatus}</Badge></TableCell>
+                <TableCell className="sticky end-0 bg-background">{transaction.source === 'sales' && isDue && <Button size="sm" className="gap-1" onClick={() => { setCollectionTransaction(transaction); setCollectionAmount(String(transaction.due)); const mainTreasury = treasuries.find((treasury: any) => treasury.is_main); setCollectionTreasuryId(String(mainTreasury?.id || '')); }}><Wallet size={14} />تحصيل</Button>}</TableCell>
+              </TableRow>;
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>}
+
   </DialogContent>
 </Dialog>
 
