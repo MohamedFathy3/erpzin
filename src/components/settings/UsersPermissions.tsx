@@ -49,6 +49,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import type { EmployeeFormData, ApiRole, ApiPermission, ApiResponse, Employee } from '@/types/employee';
 import { employeeService } from '@/services/EmployeeService';
 import { permissionLabel, roleLabel } from '@/utils/accessControlLabels';
+import EmployeeFinancialReportDialog from './EmployeeFinancialReportDialog';
 
 // ========== واجهات البيانات ==========
 
@@ -60,6 +61,7 @@ const Employees = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [reportEmployee, setReportEmployee] = useState<Employee | null>(null);
 
   // حالات الدايلوجات
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -811,6 +813,15 @@ const Employees = () => {
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
+                            onClick={() => setReportEmployee(employee)}
+                            title={language === 'ar' ? 'كشف الحساب والتعاملات' : 'Financial report'}
+                          >
+                            <DollarSign size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
                             onClick={() => handleEdit(employee)}
                           >
                             <Edit size={14} />
@@ -837,6 +848,13 @@ const Employees = () => {
           </CardContent>
         </Card>
       )}
+
+      <EmployeeFinancialReportDialog
+        employee={reportEmployee}
+        open={!!reportEmployee}
+        onOpenChange={(open) => !open && setReportEmployee(null)}
+        language={language}
+      />
 
       {/* Add Employee Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
