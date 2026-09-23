@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, generateId } from '@/lib/utils';
 import { useReactToPrint } from 'react-to-print';
 import { Loader2, Package, DollarSign, ArrowLeftRight, BadgeCheck, XCircle, Save, Copy, Printer, Edit2, Landmark, Trash2 } from 'lucide-react';
 
@@ -168,7 +168,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
     // ✅ استخدام crypto.randomUUID() لتوليد Key فريد 100%
     const loadedItems: InvoiceItem[] = (invoiceData.items || []).map((item: any, index: number) => ({
-      id: crypto.randomUUID(),
+      id: generateId(),
       product_id: item.product_id,
       // product_variant_id: item.product_variant_id,
       product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,

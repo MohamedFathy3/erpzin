@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { Trash2, Save, Loader2, RotateCcw, ArrowLeftRight, X, Building2 } from "lucide-react";
 import api from "@/lib/api";
+import { generateId } from "@/lib/utils";
 
 interface ReturnItem {
   id: string;
@@ -84,7 +85,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
 
       if (invoiceData.items?.length > 0) {
         const returnItems = invoiceData.items.map((item: any) => ({
-          id: crypto.randomUUID(),
+          id: generateId(),
           product_id: item.product_id,
           product_name: item.product_name,
           sku: item.sku || '',

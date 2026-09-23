@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { generateId } from '@/lib/utils';
 
 export interface DirectReturnItem {
   id: string;
@@ -182,7 +183,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       ));
     } else {
       setItems(prev => [...prev, {
-        id: crypto.randomUUID(),
+        id: generateId(),
         product_id: product.id,
         product_name: product.name_ar || product.name,
         sku: product.sku || 'N/A',

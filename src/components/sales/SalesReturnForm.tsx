@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { Trash2, Save, Search, Loader2, RotateCcw, ArrowLeftRight, FileText } from "lucide-react";
 import api from "@/lib/api";
-import { debounce } from "@/lib/utils";
+import { debounce, generateId } from "@/lib/utils";
 
 interface ReturnItem {
   id: string;
@@ -116,7 +116,7 @@ const InvoiceReturnForm = ({ isOpen, onClose }: InvoiceReturnFormProps) => {
           // تحويل items الفاتورة إلى items مرتجع
           if (invoice.items?.length > 0) {
             const returnItems = invoice.items.map((item: any) => ({
-              id: crypto.randomUUID(),
+              id: generateId(),
               product_id: item.product_id,
               product_unit_id: item.product_unit_id ?? item.unit_id ?? null,
               color_id: item.color_id ?? null,

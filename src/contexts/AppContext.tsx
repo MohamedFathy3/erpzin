@@ -22,6 +22,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { generateId } from '@/lib/utils';
 
 // Types
 interface Branch {
@@ -373,7 +374,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Cart functions
   const addToCart = useCallback((item: Omit<CartItem, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = generateId();
     setCart(prev => {
       // Check if item already exists
       const existingIndex = prev.findIndex(
@@ -423,7 +424,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setHeldOrders(prev => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: generateId(),
         items: [...cart],
         customer,
         createdAt: new Date(),

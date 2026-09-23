@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { Plus, Trash2, Save, Printer, Crown, Star, Package, Search, X, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { generateId } from "@/lib/utils";
 
 // ========== Types ==========
 
@@ -569,7 +570,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       const grossTotal = unitPrice;
       const itemDiscountAmount = 0; // خصم المنتج الابتدائي صفر
       const newItem: InvoiceItem = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         product_id: product.id,
         product_name: language === 'ar' ? (product.name_ar || product.name) : product.name,
         sku: product.sku,

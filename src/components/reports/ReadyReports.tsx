@@ -713,7 +713,7 @@ checkOut: 'تسجيل الخروج',
           rows: purchaseInvoices.map((inv) => [
             inv.invoice_date,
             inv.invoice_number,
-            inv.supplier.name || '-',
+            inv.supplier?.name || '-',
             formatCurrency(Number(inv.total_amount)),
             inv.currency || '-',
             inv.warehouse
@@ -724,7 +724,7 @@ checkOut: 'تسجيل الخروج',
 
       case 'purchaseBySupplier': {
         const bySupplier = purchaseInvoices.reduce((acc: ReportAccumulator, inv) => {
-          const name = inv.supplier.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
+          const name = inv.supplier?.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
           if (!acc[name]) acc[name] = { name, invoices: 0, total: 0 };
           acc[name].invoices = (acc[name].invoices || 0) + 1;
           acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
@@ -758,7 +758,7 @@ checkOut: 'تسجيل الخروج',
 
       case 'supplierBalances': {
         const balances = purchaseInvoices.reduce((acc: Record<string, number>, inv) => {
-          const name = inv.supplier.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
+          const name = inv.supplier?.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
           acc[name] = (acc[name] || 0) + Number(inv.total_amount);
           return acc;
         }, {});
