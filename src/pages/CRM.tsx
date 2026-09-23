@@ -38,7 +38,6 @@ import api from '@/lib/api';
 import CrmPipeline from '@/components/CRM/CrmPipeline';
 import EmailComposer from '@/components/CRM/EmailComposer';
 import { Switch } from '@/components/ui/switch';
-import CrmPipeline from '@/components/crm/CrmPipeline';
 
 
 interface LoyaltySettings {
