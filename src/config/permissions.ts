@@ -148,6 +148,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
+    id: 'employee-financial-reports',
+    path: '/employee-financial-reports',
+    label: 'Employee Financial Reports',
+    labelAr: 'التقارير المالية للموظفين',
+    icon: 'FileBarChart',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'HR'],
+  },
+  {
     id: 'warehouse-reports',
     path: '/warehouse-reports',
     label: 'Warehouse Reports',
