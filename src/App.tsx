@@ -25,6 +25,7 @@ import Industries from "./pages/Industries";
 import Manufacturing from "./pages/Manufacturing";
 import ManufacturingSetup from "./pages/ManufacturingSetup";
 import ProductLedger from "./pages/ProductLedger";
+import WarehouseReports from "./pages/WarehouseReports";
 import RepresentativeDashboard from "./pages/RepresentativeDashboard";
 import RepresentativeLogin from "./pages/RepresentativeLogin";
 import Projects from "./pages/Projects";
@@ -87,6 +88,7 @@ const App = () => (
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
                 <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                <Route path="/warehouse-reports" element={<ProtectedRoute><WarehouseReports /></ProtectedRoute>} />
                 <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />

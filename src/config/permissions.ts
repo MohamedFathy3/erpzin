@@ -148,6 +148,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
+    id: 'warehouse-reports',
+    path: '/warehouse-reports',
+    label: 'Warehouse Reports',
+    labelAr: 'تقارير المخازن',
+    icon: 'Warehouse',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
     id: 'industries',
     path: '/industries',
     label: 'Industries',
