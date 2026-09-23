@@ -19,6 +19,7 @@ import ChartOfAccounts from '@/components/finance/ChartOfAccounts';
 import TreasuryBankManager from '@/components/finance/TreasuryBankManager';
 import JournalEntryManager from '@/components/finance/JournalEntryManager';
 import AccountingReports from '@/components/finance/AccountingReports';
+import AccountingDocuments from '@/components/finance/AccountingDocuments';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
 
 const Finance = () => {
@@ -34,6 +35,7 @@ const Finance = () => {
     { id: 'treasury', label: language === 'ar' ? 'الخزائن والبنوك' : 'Treasury & Banks', icon: Wallet },
     { id: 'accounts', label: language === 'ar' ? 'شجرة الحسابات' : 'Chart of Accounts', icon: FolderTree },
     { id: 'reports', label: language === 'ar' ? 'التقارير المحاسبية' : 'Accounting reports', icon: Building2 },
+    { id: 'documents', label: language === 'ar' ? 'السندات' : 'Documents', icon: Receipt },
   ];
 
   // Finance filter fields based on active tab
@@ -104,7 +106,7 @@ const Finance = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 lg:w-auto lg:inline-grid">
             {tabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
                 <tab.icon size={16} />
@@ -151,6 +153,10 @@ const Finance = () => {
 
           <TabsContent value="reports" className="mt-6">
             <AccountingReports language={language} />
+          </TabsContent>
+
+          <TabsContent value="documents" className="mt-6">
+            <AccountingDocuments language={language} />
           </TabsContent>
 
         </Tabs>
