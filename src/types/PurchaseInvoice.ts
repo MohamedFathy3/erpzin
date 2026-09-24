@@ -42,10 +42,23 @@
 // }
 
 export interface PaymentResponse {
-    result: string;
-    data: any;
     message: string;
-    status: number;
+    invoice: PurchaseInvoice;
+    remaining: number;
+}
+
+export interface PurchaseInvoicePayment {
+  id: number;
+  purchase_invoice_id: number;
+  treasury_id: number | null;
+  bank_id: number | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  created_by: number | null;
+  created_by_type: string | null;
+  journal_entry_id: number | null;
+  notes: string | null;
 }
 export interface PurchaseInvoiceItem {
   product_id: number;
@@ -90,6 +103,9 @@ export interface PurchaseInvoice {
   total_amount: number;
   paid_amount: number;
   remaining_amount: number;
+  posting_journal_entry_id?: number | null;
+  workflow_status?: string | null;
+  payments?: PurchaseInvoicePayment[];
   items: PurchaseInvoiceItem[];
   created_at: string;
   updated_at: string;
