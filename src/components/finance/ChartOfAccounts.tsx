@@ -94,7 +94,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
     code: '',
     name: '',
     parent_code: '',
-    level: 0
+    level: 0,
+    account_type: 'asset'
   });
 
   // Fetch accounts tree
@@ -156,10 +157,11 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const response = await api.post('/chart-of-accounts', {
+      const response = await api.post('/accounts', {
         code: data.code,
         name: data.name,
-        parent_code: data.parent_code || null
+        parent_code: data.parent_code && data.parent_code !== 'none' ? data.parent_code : null,
+        account_type: data.account_type
       });
       return response.data;
     },
@@ -176,10 +178,11 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
-      const response = await api.put(`/chart-of-accounts/${id}`, {
+      const response = await api.patch(`/accounts/${id}`, {
         code: data.code,
         name: data.name,
-        parent_code: data.parent_code || null
+        parent_code: data.parent_code && data.parent_code !== 'none' ? data.parent_code : null,
+        account_type: data.account_type
       });
       return response.data;
     },
@@ -196,7 +199,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await api.delete(`/chart-of-accounts/delete/${id}`);
+      const response = await api.post(`/accounts/${id}/deactivate`);
       return response.data;
     },
     onSuccess: () => {
@@ -215,7 +218,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
       code: '',
       name: '',
       parent_code: '',
-      level: 0
+      level: 0,
+      account_type: 'asset'
     });
   };
 
@@ -225,7 +229,8 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
       code: account.code,
       name: account.name,
       parent_code: account.parent_code || '',
-      level: account.level
+      level: account.level,
+      account_type: getAccountTypeFromCode(account.code).value === 'other' ? 'asset' : getAccountTypeFromCode(account.code).value
     });
     setShowForm(true);
   };
@@ -726,6 +731,20 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                     <SelectItem key={acc.id} value={acc.code}>
                       {acc.full_path || `${acc.code} - ${acc.name}`}
                     </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'نوع الحساب' : 'Account Type'} *</Label>
+              <Select value={formData.account_type} onValueChange={(v) => setFormData(prev => ({ ...prev, account_type: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر نوع الحساب' : 'Select account type'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {accountTypes.filter(type => type.value !== 'other').map(type => (
+                    <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
