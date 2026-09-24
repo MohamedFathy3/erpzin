@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Building2, Phone, Mail, MapPin, FileText,
-  TrendingUp, Wallet, Calendar, Edit2, CreditCard
+  TrendingUp, Wallet, Calendar, Edit2, CreditCard, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -170,6 +170,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
   const queryClient = useQueryClient();
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<PurchaseInvoice | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [expandedPaymentsInvoiceId, setExpandedPaymentsInvoiceId] = useState<number | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentPayload>({
     amount: 0,
     treasury_id: undefined,
@@ -320,6 +321,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
           title: language === 'ar' ? 'تم تسجيل الدفعة بنجاح' : 'Payment recorded successfully',
           variant: 'default',
         });
+        if (data.invoice?.id) setExpandedPaymentsInvoiceId(Number(data.invoice.id));
 
         refetchInvoices();
         queryClient.invalidateQueries({ queryKey: ['supplier-details', supplier?.id] });
@@ -398,6 +400,14 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
     if (paymentData.amount <= 0) {
       toast({
         title: language === 'ar' ? 'المبلغ يجب أن يكون أكبر من صفر' : 'Amount must be greater than zero',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!paymentData.payment_date) {
+      toast({
+        title: language === 'ar' ? 'اختر تاريخ السداد' : 'Select a payment date',
         variant: 'destructive',
       });
       return;
@@ -544,6 +554,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                             <TableRow>
                               <TableHead>{language === 'ar' ? 'رقم الفاتورة' : 'Invoice #'}</TableHead>
                               <TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
+                              <TableHead>{language === 'ar' ? 'موعد الاستحقاق' : 'Due date'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
@@ -554,7 +565,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                           <TableBody>
                             {invoices.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                                   {language === 'ar' ? 'لا توجد فواتير' : 'No invoices'}
                                 </TableCell>
                               </TableRow>
@@ -567,9 +578,11 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                   (remaining <= 0 ? 'paid' : remaining < total ? 'partial' : 'unpaid');
 
                                 return (
-                                  <TableRow key={inv.id}>
+                                  <React.Fragment key={inv.id}>
+                                  <TableRow>
                                     <TableCell className="font-mono">{inv.invoice_number}</TableCell>
                                     <TableCell>{formatDate(inv.invoice_date)}</TableCell>
+                                    <TableCell>{formatDate(inv.due_date)}</TableCell>
                                     <TableCell className="text-end font-medium">{formatCurrency(total)}</TableCell>
                                     <TableCell className="text-end">{formatCurrency(paid)}</TableCell>
                                     <TableCell className="text-end font-medium text-destructive">{formatCurrency(remaining)}</TableCell>
@@ -587,7 +600,18 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                       </Badge>
                                     </TableCell>
                                     <TableCell>
-                                      {remaining > 0 && (
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setExpandedPaymentsInvoiceId(expandedPaymentsInvoiceId === inv.id ? null : inv.id)}
+                                          className="h-8 px-2"
+                                          title={language === 'ar' ? 'عرض سجل الدفعات' : 'Show payment history'}
+                                        >
+                                          {expandedPaymentsInvoiceId === inv.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                          <span className="ms-1 text-xs">{language === 'ar' ? `الدفعات (${inv.payments?.length || 0})` : `Payments (${inv.payments?.length || 0})`}</span>
+                                        </Button>
+                                        {remaining > 0 && (
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -598,8 +622,48 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                           <CreditCard className="h-4 w-4" />
                                         </Button>
                                       )}
+                                      </div>
                                     </TableCell>
                                   </TableRow>
+                                  {expandedPaymentsInvoiceId === inv.id && (
+                                    <TableRow>
+                                      <TableCell colSpan={8} className="bg-muted/30 p-3">
+                                        {!inv.payments?.length ? (
+                                          <p className="py-3 text-center text-sm text-muted-foreground">
+                                            {language === 'ar' ? 'لا توجد دفعات مسجلة على هذه الفاتورة.' : 'No payments recorded for this invoice.'}
+                                          </p>
+                                        ) : (
+                                          <Table>
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead>{language === 'ar' ? 'تاريخ السداد' : 'Payment date'}</TableHead>
+                                                <TableHead className="text-end">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
+                                                <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Method'}</TableHead>
+                                                <TableHead>{language === 'ar' ? 'الخزينة' : 'Treasury'}</TableHead>
+                                                <TableHead>{language === 'ar' ? 'رقم المرجع' : 'Reference'}</TableHead>
+                                                <TableHead>{language === 'ar' ? 'القيد' : 'Journal'}</TableHead>
+                                                <TableHead>{language === 'ar' ? 'ملاحظات' : 'Notes'}</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {inv.payments.map((payment) => (
+                                                <TableRow key={payment.id}>
+                                                  <TableCell>{formatDate(payment.payment_date)}</TableCell>
+                                                  <TableCell className="text-end font-medium">{formatCurrency(Number(payment.amount))}</TableCell>
+                                                  <TableCell>{payment.payment_method || '-'}</TableCell>
+                                                  <TableCell>{payment.treasury_name || (payment.treasury_id ? `#${payment.treasury_id}` : '-')}</TableCell>
+                                                  <TableCell>{payment.reference_number || '-'}</TableCell>
+                                                  <TableCell>{payment.journal_entry_id ? `#${payment.journal_entry_id}` : '-'}</TableCell>
+                                                  <TableCell>{payment.notes || '-'}</TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                          </Table>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                  </React.Fragment>
                                 );
                               })
                             )}
@@ -645,6 +709,15 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
               />
             </div>
             <div className="space-y-2">
+              <Label>{language === 'ar' ? 'تاريخ السداد' : 'Payment date'}</Label>
+              <Input
+                type="date"
+                value={paymentData.payment_date}
+                onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
               <Label>{language === 'ar' ? 'الخزينة التي سيتم الخصم منها' : 'Treasury to debit'}</Label>
               <select
                 className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -669,6 +742,22 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                   {language === 'ar' ? 'لا توجد خزائن متاحة للدفع.' : 'No treasuries are available for payment.'}
                 </p>
               )}
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'رقم المرجع (اختياري)' : 'Reference number (optional)'}</Label>
+              <Input
+                value={paymentData.reference_number || ''}
+                onChange={(e) => setPaymentData({ ...paymentData, reference_number: e.target.value })}
+                placeholder={language === 'ar' ? 'رقم إيصال أو تحويل' : 'Receipt or transfer reference'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'ملاحظات (اختياري)' : 'Notes (optional)'}</Label>
+              <Input
+                value={paymentData.notes || ''}
+                onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
+                placeholder={language === 'ar' ? 'ملاحظات على الدفعة' : 'Payment notes'}
+              />
             </div>
           </div>
 

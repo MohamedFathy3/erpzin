@@ -45,6 +45,7 @@ export interface PaymentResponse {
     message: string;
     invoice: PurchaseInvoice;
     remaining: number;
+    payment?: PurchaseInvoicePayment;
 }
 
 export interface PurchaseInvoicePayment {
@@ -55,6 +56,8 @@ export interface PurchaseInvoicePayment {
   amount: number;
   payment_date: string;
   payment_method: string;
+  reference_number?: string | null;
+  treasury_name?: string | null;
   created_by: number | null;
   created_by_type: string | null;
   journal_entry_id: number | null;
@@ -94,7 +97,7 @@ export interface PurchaseInvoice {
   tax_id: number | null;
   tax_rate: string | null;
   invoice_date: string;
-  due_date: string;
+  due_date: string | null;
   payment_method: string;
   note: string | null;
   subtotal: number;
@@ -139,5 +142,5 @@ export interface PaymentPayload {
     payment_method?: string;
     reference_number?: string;
     notes?: string;
-    payment_date?: string;
+    payment_date: string;
 }
