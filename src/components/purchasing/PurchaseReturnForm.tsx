@@ -45,10 +45,14 @@ interface PurchaseInvoice {
     unit_name?: string;
     color_id?: number;
     color_name?: string;
+    size_id?: number;
+    product_variant_id?: number;
+    remaining_quantity?: number;
   }>;
 }
 
 interface ReturnItem {
+  line_key: string;
   product_id: number;
   product_name: string;
   max_quantity: number;
@@ -58,6 +62,8 @@ interface ReturnItem {
   unit_name?: string;
   color_id?: number;
   color_name?: string;
+  size_id?: number;
+  product_variant_id?: number;
 }
 
 const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
@@ -131,15 +137,18 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
   useEffect(() => {
     if (invoice?.items) {
       setItems(invoice.items.map(item => ({
+        line_key: `${item.product_id}-${item.product_unit_id || 0}-${item.color_id || 0}-${item.size_id || 0}-${item.product_variant_id || 0}`,
         product_id: item.product_id,
         product_name: language === 'ar' ? (item.product_name_ar || item.product_name) : item.product_name,
-        max_quantity: item.quantity,
+        max_quantity: item.remaining_quantity ?? item.quantity,
         quantity: 0,
         unit_price: parseFloat(item.price),
         product_unit_id: item.product_unit_id,
         unit_name: item.unit_name,
         color_id: item.color_id,
         color_name: item.color_name,
+        size_id: item.size_id,
+        product_variant_id: item.product_variant_id,
       })));
     }
     setReason('');
@@ -152,9 +161,9 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
     }
   }, [invoice, language]);
 
-  const updateItemQuantity = (productId: number, quantity: number) => {
+  const updateItemQuantity = (lineKey: string, quantity: number) => {
     setItems(prev => prev.map(item =>
-      item.product_id === productId
+      item.line_key === lineKey
         ? { ...item, quantity: Math.min(quantity, item.max_quantity) }
         : item
     ));
@@ -176,6 +185,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
         purchase_invoices_id: invoiceId,
         reason: reason || null,
         payment_method: paymentMethod,
+        return_date: new Date().toISOString().slice(0, 10),
         treasury_id: Number(treasuryId),
         currency_id: Number(currencyId),
         warehouse_id: Number(warehouseId),
@@ -183,6 +193,8 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
           product_id: item.product_id,
           product_unit_id: item.product_unit_id,
           color_id: item.color_id,
+          size_id: item.size_id,
+          product_variant_id: item.product_variant_id,
           quantity: item.quantity,
           unit_price: item.unit_price,
         }))
@@ -420,7 +432,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                       </TableHeader>
                       <TableBody>
                         {items.map((item) => (
-                          <TableRow key={item.product_id}>
+                          <TableRow key={item.line_key}>
                             <TableCell className="font-medium">{item.product_name}</TableCell>
                             <TableCell className="text-center">{item.unit_name || '-'}</TableCell>
                             <TableCell className="text-center">{item.color_name || '-'}</TableCell>
@@ -431,7 +443,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                                 min="0"
                                 max={item.max_quantity}
                                 value={item.quantity}
-                                onChange={(e) => updateItemQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                                onChange={(e) => updateItemQuantity(item.line_key, parseInt(e.target.value) || 0)}
                                 className="w-20 text-center mx-auto h-8"
                               />
                             </TableCell>

@@ -236,12 +236,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
 
   const { 
     data: currentExpenses = [], 
-    isLoading: loadingCurrentExpenses 
+    isLoading: loadingCurrentExpenses,
+    refetch: refetchCurrentExpenses
   } = useQuery<Expense[]>({
-    queryKey: ['finance-expenses-current', currentMonthStart, currentMonthEnd],
+    queryKey: ['finance-expenses-current', currentRange.start, currentRange.end],
     queryFn: async () => {
       try {
-        const response = await api.post<ExpenseResponse>('/revenue/index', {
+        const response = await api.post<ExpenseResponse>('/finance/index', {
+          filters: { date_from: currentRange.start, date_to: currentRange.end },
+          orderBy: 'date',
+          orderByDirection: 'desc',
+          paginate: false
         });
         return response.data.data || [];
       } catch (error) {
@@ -253,14 +258,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
 
   const { 
     data: lastMonthExpenses = [], 
-    isLoading: loadingLastMonthExpenses 
+    isLoading: loadingLastMonthExpenses,
+    refetch: refetchLastMonthExpenses
   } = useQuery<Expense[]>({
     queryKey: ['finance-expenses-last', lastMonthStartStr, lastMonthEndStr],
     queryFn: async () => {
       try {
         const response = await api.post<ExpenseResponse>('/finance/index', {
-          date_from: lastMonthStartStr,
-          date_to: lastMonthEndStr
+          filters: { date_from: lastMonthStartStr, date_to: lastMonthEndStr },
+          orderBy: 'date',
+          orderByDirection: 'desc',
+          paginate: false
         });
         return response.data.data || [];
       } catch (error) {
@@ -300,7 +308,8 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     setIsRefreshing(true);
     await Promise.all([
       refetchCurrentSales(),
-      // refetch other queries if needed
+      refetchCurrentExpenses(),
+      refetchLastMonthExpenses(),
     ]);
     setIsRefreshing(false);
     toast.success(language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed');
@@ -314,7 +323,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
       // Summary Sheet
       const summaryData = [
         ['التقرير المالي', 'Financial Report'],
-        ['الفترة', `${currentMonthStart} إلى ${currentMonthEnd}`],
+        ['الفترة', `${currentRange.start} إلى ${currentRange.end}`],
         [''],
         ['المؤشر', 'القيمة'],
         ['إجمالي المبيعات', metrics.totalSalesAmount],

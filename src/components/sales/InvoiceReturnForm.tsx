@@ -22,6 +22,14 @@ interface ReturnItem {
   product_id: number;
   product_name: string;
   sku: string;
+  product_unit_id?: number | null;
+  color_id?: number | null;
+  size_id?: number | null;
+  product_variant_id?: number | null;
+  unit_name?: string | null;
+  color_name?: string | null;
+  size_name?: string | null;
+  max_quantity: number;
   quantity: number;
   price: number;
   reason: string;
@@ -89,8 +97,15 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
           product_id: item.product_id,
           product_name: item.product_name,
           sku: item.sku || '',
-          // quantity: 1,
-          quantity: Math.min(1, item.quantity || 1),
+          product_unit_id: item.product_unit_id ?? null,
+          color_id: item.color_id ?? null,
+          size_id: item.size_id ?? null,
+          product_variant_id: item.product_variant_id ?? null,
+          unit_name: item.unit_name ?? null,
+          color_name: item.color_name ?? null,
+          size_name: item.size_name ?? null,
+          max_quantity: Number(item.remaining_quantity ?? item.quantity ?? 0),
+          quantity: 0,
           price: Number(item.price) || 0,
           reason: ""
         }));
@@ -137,7 +152,10 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
   const updateItem = (id: string, field: string, value: number | string) => {
     const updated = items.map(item => {
       if (item.id === id) {
-        return { ...item, [field]: value };
+        const nextValue = field === 'quantity'
+          ? Math.max(0, Math.min(Number(value), item.max_quantity))
+          : value;
+        return { ...item, [field]: nextValue };
       }
       return item;
     });
@@ -174,7 +192,11 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         throw new Error(language === 'ar' ? 'يجب إضافة أصناف' : 'Items are required');
       }
 
-      const invalidItems = items.filter(item => !item.reason || item.reason.trim() === '');
+      const selectedItems = items.filter(item => item.quantity > 0);
+      if (selectedItems.length === 0) {
+        throw new Error(language === 'ar' ? 'لا توجد كمية متبقية للإرجاع أو لم يتم اختيار كمية' : 'No remaining quantity selected for return');
+      }
+      const invalidItems = selectedItems.filter(item => !item.reason || item.reason.trim() === '');
       if (invalidItems.length > 0) {
         throw new Error(language === 'ar' ? 'يجب كتابة سبب الإرجاع لجميع الأصناف' : 'Reason is required for all items');
       }
@@ -184,8 +206,12 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
         return_method: formData.return_method,
         note: formData.note || null,
         treasury_id: Number(formData.treasury_id),
-        items: items.map(item => ({
+        items: selectedItems.map(item => ({
           product_id: Number(item.product_id),
+          product_unit_id: item.product_unit_id,
+          color_id: item.color_id,
+          size_id: item.size_id,
+          product_variant_id: item.product_variant_id,
           quantity: Number(item.quantity),
           price: Number(item.price),
           reason: item.reason
@@ -429,17 +455,21 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                       ) : (
                         items.map((item) => (
                           <TableRow key={item.id} className="hover:bg-muted/30">
-                            <TableCell>
-                              <div className="font-medium">{item.product_name}</div>
-                              <div className="text-xs text-muted-foreground font-mono">
-                                {item.sku}
-                              </div>
-                            </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{item.product_name}</div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              {item.sku}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {[item.unit_name, item.color_name, item.size_name].filter(Boolean).join(' · ')}
+                            </div>
+                          </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
-                                min="1"
-                                max={selectedInvoice?.items?.find((i: any) => i.product_id === item.product_id)?.quantity || 99}
+                                min="0"
+                                max={item.max_quantity}
+                                disabled={item.max_quantity <= 0}
                                 value={item.quantity}
                                 onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
                                 className="w-16 text-center mx-auto"
@@ -452,6 +482,7 @@ const InvoiceReturnForm = ({ isOpen, onClose, invoiceData }: InvoiceReturnFormPr
                                 step="0.01"
                                 value={item.price}
                                 onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                                readOnly
                                 className="w-24 text-right"
                               />
                             </TableCell>
