@@ -69,7 +69,10 @@ const getTenantWorkspaceUrl = (slug?: string | null): string | null => {
     ? configuredRootDomain
     : 'professionalacademyedu.com';
   const workspaceHost = `${slug.trim().toLowerCase()}.${rootDomain}`;
-  if (window.location.hostname.toLowerCase() === workspaceHost) return null;
+  const currentHost = window.location.hostname.toLowerCase();
+  // A tenant alias such as acsa.professionalacademyedu.com is already a
+  // workspace host. Stay on it so the host-only auth cookie remains available.
+  if (currentHost === workspaceHost || currentHost.endsWith(`.${rootDomain}`)) return null;
   return `${window.location.protocol}//${workspaceHost}/auth`;
 };
 

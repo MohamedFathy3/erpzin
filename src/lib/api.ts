@@ -1,12 +1,20 @@
 // src/lib/api.ts
 import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
+import { removeAuthCookie } from "@/lib/authCookies";
 
 const API_BASE_URL = "/api";
 
 const getTenantSlug = (): string | null => {
   const configured = import.meta.env.VITE_TENANT_SLUG?.trim();
   if (configured) return configured.toLowerCase();
+
+  // A user may sign in through a tenant alias that differs from the canonical
+  // tenant slug. Prefer the slug returned by the API for subsequent requests.
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('tenant_slug')?.trim();
+    if (stored) return stored.toLowerCase();
+  }
 
   const host = window.location.hostname.toLowerCase();
   const labels = host.split('.');
@@ -134,12 +142,12 @@ api.interceptors.response.use(
 
     // 🚨 معالجة خطأ 401 (Unauthorized)
     if (error.response?.status === 401) {
-      Cookies.remove("token");
+      removeAuthCookie("token");
     }
 
     if (error.response?.status === 403 && error.response?.data?.code === 'tenant_suspended') {
-      Cookies.remove("token");
-      Cookies.remove("auth_type");
+      removeAuthCookie("token");
+      removeAuthCookie("auth_type");
       localStorage.removeItem('user');
       localStorage.removeItem('tenant_slug');
       if (window.location.pathname !== '/auth') window.location.href = '/auth';

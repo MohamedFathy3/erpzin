@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import Cookies from 'js-cookie';
 import api from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { removeAuthCookie, setAuthCookie } from '@/lib/authCookies';
 
 // تعريف الأنواع بناءً على الـ response
 interface User {
@@ -187,8 +188,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const params = new URLSearchParams(window.location.search);
         const googleToken = params.get('google_token');
         if (googleToken) {
-          Cookies.set('token', googleToken, { expires: 7, secure: window.location.protocol === 'https:', sameSite: 'lax' });
-          Cookies.remove('auth_type');
+          setAuthCookie('token', googleToken, { expires: 7, secure: window.location.protocol === 'https:' });
+          removeAuthCookie('auth_type');
           window.history.replaceState({}, document.title, window.location.pathname);
         }
         const token = Cookies.get('token');
@@ -204,8 +205,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setLoading(false);
               return;
             }
-            Cookies.remove('token');
-            Cookies.remove('auth_type');
+            removeAuthCookie('token');
+            removeAuthCookie('auth_type');
           }
           // حاول أولاً باستخدام get-admin
           let userData = await fetchCurrentUser(token);
@@ -225,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           } else {
             console.log('No user data found');
-            Cookies.remove('token');
+            removeAuthCookie('token');
             setUser(null);
             setSession(null);
           }
@@ -234,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Error loading session:', error);
-        Cookies.remove('token');
+        removeAuthCookie('token');
         setUser(null);
         setSession(null);
       } finally {
@@ -326,10 +327,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { token, data: userData } = response.data;
 
         // حفظ التوكن في الـ cookies
-        Cookies.set('token', token, {
+        setAuthCookie('token', token, {
           expires: 7, // 7 أيام
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict'
+          secure: window.location.protocol === 'https:',
         });
 
         console.log('Setting user:', userData);
@@ -390,8 +390,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.post<LoginResponse>('/sales-representative/login', { identifier, password });
       if (!response.data?.token || !response.data?.data) throw new Error('Invalid representative login response');
       const representative = { ...response.data.data, role: 'Sales', sales_representative_id: response.data.data.id } as User;
-      Cookies.set('token', response.data.token, { expires: 7, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
-      Cookies.set('auth_type', 'representative', { expires: 7, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+      setAuthCookie('token', response.data.token, { expires: 7, secure: window.location.protocol === 'https:' });
+      setAuthCookie('auth_type', 'representative', { expires: 7, secure: window.location.protocol === 'https:' });
       setUser(representative);
       setSession({ token: response.data.token, user: representative });
       return { error: null, user: representative, token: response.data.token };
@@ -439,10 +439,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { token } = loginResponse.data;
 
           // حفظ التوكن في الـ cookies
-          Cookies.set('token', token, {
+          setAuthCookie('token', token, {
             expires: 7,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict'
+            secure: window.location.protocol === 'https:',
           });
 
           console.log('Setting user after auto login:', loginResponse.data.data);
@@ -507,8 +506,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout error:', error);
     } finally {
       // إزالة التوكن والبيانات المحلية
-      Cookies.remove('token');
-      Cookies.remove('auth_type');
+      removeAuthCookie('token');
+      removeAuthCookie('auth_type');
       localStorage.removeItem('user');
       localStorage.removeItem('tenant_slug');
       // Query keys are not tenant-aware in every legacy screen. Clear them
