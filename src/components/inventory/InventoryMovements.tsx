@@ -43,6 +43,8 @@ const InventoryMovements = () => {
       adjustment: 'Adjustment',
       transfer_in: 'Transfer In',
       transfer_out: 'Transfer Out',
+      branch_transfer_in: 'Branch Transfer In',
+      branch_transfer_out: 'Branch Transfer Out',
       opening_balance: 'Opening Balance',
       inventory_count: 'Inventory Count',
       allTypes: 'All Types',
@@ -68,6 +70,8 @@ const InventoryMovements = () => {
       adjustment: 'تعديل',
       transfer_in: 'استلام نقل',
       transfer_out: 'إرسال نقل',
+      branch_transfer_in: 'استلام نقل من فرع',
+      branch_transfer_out: 'إرسال نقل إلى فرع',
       opening_balance: 'رصيد افتتاحي',
       inventory_count: 'جرد',
       allTypes: 'جميع الأنواع',
@@ -179,6 +183,8 @@ const InventoryMovements = () => {
             <SelectItem value="adjustment">{t.adjustment}</SelectItem>
             <SelectItem value="transfer_in">{t.transfer_in}</SelectItem>
             <SelectItem value="transfer_out">{t.transfer_out}</SelectItem>
+            <SelectItem value="branch_transfer_in">{t.branch_transfer_in}</SelectItem>
+            <SelectItem value="branch_transfer_out">{t.branch_transfer_out}</SelectItem>
             <SelectItem value="opening_balance">{t.opening_balance}</SelectItem>
             <SelectItem value="inventory_count">{t.inventory_count}</SelectItem>
           </SelectContent>
