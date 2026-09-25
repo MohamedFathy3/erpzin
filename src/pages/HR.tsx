@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import AdvancedFilter, { FilterValues } from '@/components/ui/advanced-filter';
 import AttendanceManager from '@/components/hr/AttendanceManager';
+import BiometricManager from '@/components/hr/BiometricManager';
 import { AddDeliveryPerson, AddEmployee } from '@/types/Hr';
 import {
   Plus,
@@ -39,7 +40,8 @@ import {
   Key,
   Shield,
   Landmark,
-  MapPin
+  MapPin,
+  Fingerprint
 } from 'lucide-react';
 import SalesmenManager from "@/components/sales/SalesmenManager";
 import api from '@/lib/api';
@@ -1216,7 +1218,7 @@ const handleEditEmployee = async (employee: Employee) => {
 
         {/* ========== Tabs ========== */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="employees">{t.employees}</TabsTrigger>
             <TabsTrigger value="salesreps" className="flex items-center gap-2">
               <Briefcase size={16} />
@@ -1224,6 +1226,10 @@ const handleEditEmployee = async (employee: Employee) => {
             </TabsTrigger>
             <TabsTrigger value="delivery">{t.deliveryPersons}</TabsTrigger>
             <TabsTrigger value="attendance">{t.attendance}</TabsTrigger>
+            <TabsTrigger value="biometric" className="flex items-center gap-2">
+              <Fingerprint size={16} />
+              {language === 'ar' ? 'البصمة والرواتب' : 'Biometric & Payroll'}
+            </TabsTrigger>
           </TabsList>
 
           {/* ========== Employees Tab ========== */}
@@ -1558,6 +1564,10 @@ const handleEditEmployee = async (employee: Employee) => {
               employees={employees}
               attendance={mergedAttendance}
             />
+          </TabsContent>
+
+          <TabsContent value="biometric" className="mt-4">
+            <BiometricManager employees={employees} />
           </TabsContent>
         </Tabs>
       </div>
