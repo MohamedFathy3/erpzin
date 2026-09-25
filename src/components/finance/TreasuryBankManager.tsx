@@ -75,6 +75,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
     branch_id: '',
     currency: '',
     balance: 0,
+    alert_below_balance: 0,
     is_main: false,
     notes: ''
   });
@@ -465,6 +466,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       branch_id: '',
       currency: '',
       balance: 0,
+      alert_below_balance: 0,
       is_main: false,
       notes: ''
     });
@@ -522,6 +524,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       branch_id: treasury.branch_id?.toString() || '',
       currency: treasury.currency || '',
       balance: treasury.balance || 0,
+      alert_below_balance: treasury.alert_below_balance || 0,
       is_main: treasury.is_main || false,
       notes: treasury.notes || ''
     });
@@ -1319,6 +1322,20 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                   step="0.01"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'إشعار إذا وصل الرصيد إلى' : 'Alert when balance reaches'}</Label>
+              <Input
+                type="number"
+                value={treasuryForm.alert_below_balance}
+                onChange={(e) => setTreasuryForm(prev => ({ ...prev, alert_below_balance: parseFloat(e.target.value) || 0 }))}
+                min="0"
+                step="0.01"
+              />
+              <p className="text-xs text-muted-foreground">
+                {language === 'ar' ? 'اتركه صفرًا لاستخدام حد تلقائي يساوي 10% من الرصيد المرجعي، أو أدخل حدًا مخصصًا.' : 'Leave at zero for an automatic 10% reference-balance threshold, or enter a custom limit.'}
+              </p>
             </div>
 
 

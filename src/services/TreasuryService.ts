@@ -27,6 +27,7 @@ export class TreasuryService extends BaseService<Treasury> {
             notes: data.notes || null,
             currency: data.currency,        // ✅ "EGP" مثلاً
             balance: Number(data.balance),  // ✅ رقم
+            alert_below_balance: Number(data.alert_below_balance || 0),
             is_main: data.is_main,
         };
     }
@@ -96,4 +97,3 @@ export class TreasuryService extends BaseService<Treasury> {
 
 // Singleton instance - Usage: treasuryService.addTreasury(formData)
 export const treasuryService = new TreasuryService();
-

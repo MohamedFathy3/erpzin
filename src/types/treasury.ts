@@ -15,6 +15,7 @@ export interface TreasuryFormData {
     branch_id: string;
     currency: string;
     balance: number;
+    alert_below_balance: number;
     is_main: boolean;
     notes: string;
 }
@@ -30,6 +31,7 @@ export interface Treasury {
     };
     currency: string;
     balance: number;
+    alert_below_balance: number;
     is_main: boolean;
     notes: string | null;
     created_at: string;
