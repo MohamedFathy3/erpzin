@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, Users, FileText } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, FileText, Wallet } from "lucide-react";
 import api from "@/lib/api";
 
 interface SalesmanForm {
@@ -37,6 +37,9 @@ const SalesmenManager = () => {
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [payingSalesman, setPayingSalesman] = useState<any | null>(null);
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentTreasuryId, setPaymentTreasuryId] = useState("");
   const [formData, setFormData] = useState<SalesmanForm>({
     name: "",
     name_ar: "",
@@ -118,6 +121,19 @@ const SalesmenManager = () => {
     },
   });
 
+  const { data: treasuries = [] } = useQuery({
+    queryKey: ['salesmen-bonus-treasuries'],
+    queryFn: async () => (await api.post('/treasury/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 100, paginate: false })).data.data || [],
+  });
+  const payBonusMutation = useMutation({
+    mutationFn: async () => api.post(`/sales-representative/${payingSalesman.id}/bonus/collect`, { bonus_date: paymentDate, treasury_id: Number(paymentTreasuryId) }),
+    onSuccess: (response) => {
+      toast.success(response.data?.message || (language === 'ar' ? 'تم دفع البونص بنجاح' : 'Bonus paid successfully'));
+      setPayingSalesman(null); setPaymentTreasuryId('');
+      queryClient.invalidateQueries({ queryKey: ['salesmen'] });
+    },
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message),
+  });
   // Create/Update salesman
   const saveMutation = useMutation({
     mutationFn: async (data: SalesmanForm) => {
@@ -262,6 +278,7 @@ const deleteMutation = useMutation({
                   <TableHead>{language === 'ar' ? 'المبيعات' : 'Sales'}</TableHead>
                   <TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead>
                   <TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'البونص' : 'Bonus'}</TableHead>
                   <TableHead>{language === 'ar' ? 'تقرير' : 'Report'}</TableHead>
                   {/* <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead> */}
                   <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
@@ -270,13 +287,13 @@ const deleteMutation = useMutation({
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                     </TableCell>
                   </TableRow>
                 ) : salesmen?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       {language === 'ar' ? 'لا يوجد مندوبين' : 'No salesmen found'}
                     </TableCell>
                   </TableRow>
@@ -298,6 +315,7 @@ const deleteMutation = useMutation({
                       <TableCell>{Number(salesman.report?.sales_total || 0).toFixed(2)}</TableCell>
                       <TableCell>{Number(salesman.report?.cost_total || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-emerald-600">{Number(salesman.report?.profit_total || 0).toFixed(2)}</TableCell>
+                      <TableCell><div className="text-sm">{Number(salesman.bonus?.paid_total || 0).toFixed(2)} / {Number(salesman.bonus?.due_total || 0).toFixed(2)}</div><Button variant="outline" size="sm" disabled={!salesman.employee_id || Number(salesman.report?.commission_total || 0) <= 0 || Number(salesman.bonus?.paid_total || 0) > 0} onClick={() => { setPayingSalesman(salesman); setPaymentDate(reportTo || reportFrom || new Date().toISOString().slice(0, 10)); }}>{language === 'ar' ? 'دفع' : 'Pay'}</Button></TableCell>
                       <TableCell><Button variant="ghost" size="icon" onClick={() => setSelectedReport(salesman)}><FileText className="h-4 w-4" /></Button></TableCell>
                       {/* <TableCell>
                         <Badge variant={salesman.is_active ? 'default' : 'secondary'}>
@@ -338,7 +356,18 @@ const deleteMutation = useMutation({
       </Card>
 
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
-        <DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>{language === 'ar' ? `فواتير ${selectedReport?.name || ''}` : `${selectedReport?.name || ''} invoices`}</DialogTitle></DialogHeader><div className="overflow-auto"><div className="mb-3 grid gap-2 sm:grid-cols-5"><div>{language === 'ar' ? 'النسبة' : 'Rate'}: {selectedReport?.report?.commission_rate || selectedReport?.commission_rate || 0}%</div><div>{language === 'ar' ? 'المبيعات' : 'Sales'}: {Number(selectedReport?.report?.sales_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'الربح' : 'Profit'}: {Number(selectedReport?.report?.profit_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'العمولة' : 'Commission'}: {Number(selectedReport?.report?.commission_total || 0).toFixed(2)}</div></div><Table><TableHeader><TableRow><TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead><TableHead>{language === 'ar' ? 'الفاتورة' : 'Invoice'}</TableHead><TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead><TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead><TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead><TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead><TableHead>{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead><TableHead>{language === 'ar' ? 'القيود' : 'Journal entries'}</TableHead></TableRow></TableHeader><TableBody>{(selectedReport?.report?.invoices || []).map((invoice: any) => <TableRow key={invoice.id}><TableCell>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '-'}</TableCell><TableCell>{invoice.invoice_number || invoice.id}</TableCell><TableCell><div>{invoice.customer?.name || '-'}</div><div className="text-xs text-muted-foreground">{(invoice.items || []).map((item: any, index: number) => <span key={index} className="me-2">{item.product_name || '-'} × {item.quantity}</span>)}</div></TableCell><TableCell>{Number(invoice.total || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.cost || 0).toFixed(2)}</TableCell><TableCell className="text-emerald-600">{Number(invoice.profit || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.commission || 0).toFixed(2)}</TableCell><TableCell className="text-xs">{invoice.journal_entry_id || '-'} / {invoice.cogs_journal_entry_id || '-'} / {invoice.commission_journal_entry_id || '-'}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent>
+        <DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>{language === 'ar' ? `فواتير ${selectedReport?.name || ''}` : `${selectedReport?.name || ''} invoices`}</DialogTitle></DialogHeader><div className="overflow-auto"><div className="mb-3 grid gap-2 sm:grid-cols-5"><div>{language === 'ar' ? 'النسبة' : 'Rate'}: {selectedReport?.report?.commission_rate || selectedReport?.commission_rate || 0}%</div><div>{language === 'ar' ? 'المبيعات' : 'Sales'}: {Number(selectedReport?.report?.sales_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'الربح' : 'Profit'}: {Number(selectedReport?.report?.profit_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'العمولة' : 'Commission'}: {Number(selectedReport?.report?.commission_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'المدفوع' : 'Paid'}: {Number(selectedReport?.bonus?.paid_total || 0).toFixed(2)}</div></div><div className="mb-4 rounded border p-3"><div className="mb-2 font-semibold">{language === 'ar' ? 'سجل دفع البونص' : 'Bonus payment history'}</div>{(selectedReport?.bonus?.payments || []).length ? selectedReport.bonus.payments.map((payment: any) => <div key={payment.id} className="flex flex-wrap gap-3 text-sm"><span>{payment.date}</span><span>{Number(payment.amount).toFixed(2)}</span><span>{payment.status === 'paid' ? (language === 'ar' ? 'مدفوع' : 'Paid') : (language === 'ar' ? 'مستحق' : 'Due')}</span><span>{language === 'ar' ? 'دفعه:' : 'Paid by:'} {payment.paid_by || '-'}</span><span>{payment.paid_at || ''}</span></div>) : <span className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد دفعات' : 'No payments yet'}</span>}</div><Table><TableHeader><TableRow><TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead><TableHead>{language === 'ar' ? 'الفاتورة' : 'Invoice'}</TableHead><TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead><TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead><TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead><TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead><TableHead>{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead><TableHead>{language === 'ar' ? 'القيود' : 'Journal entries'}</TableHead></TableRow></TableHeader><TableBody>{(selectedReport?.report?.invoices || []).map((invoice: any) => <TableRow key={invoice.id}><TableCell>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '-'}</TableCell><TableCell>{invoice.invoice_number || invoice.id}</TableCell><TableCell><div>{invoice.customer?.name || '-'}</div><div className="text-xs text-muted-foreground">{(invoice.items || []).map((item: any, index: number) => <span key={index} className="me-2">{item.product_name || '-'} × {item.quantity}</span>)}</div></TableCell><TableCell>{Number(invoice.total || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.cost || 0).toFixed(2)}</TableCell><TableCell className="text-emerald-600">{Number(invoice.profit || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.commission || 0).toFixed(2)}</TableCell><TableCell className="text-xs">{invoice.journal_entry_id || '-'} / {invoice.cogs_journal_entry_id || '-'} / {invoice.commission_journal_entry_id || '-'}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent>
+      </Dialog>
+      <Dialog open={!!payingSalesman} onOpenChange={(open) => !open && setPayingSalesman(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{language === 'ar' ? `دفع بونص ${payingSalesman?.name || ''}` : `Pay bonus for ${payingSalesman?.name || ''}`}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>{language === 'ar' ? 'يوم العمولة' : 'Commission date'}</Label><Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></div>
+            <div><Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label><Select value={paymentTreasuryId} onValueChange={setPaymentTreasuryId}><SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger><SelectContent>{treasuries.map((treasury: any) => <SelectItem key={treasury.id} value={String(treasury.id)}>{treasury.name} — {Number(treasury.balance || 0).toFixed(2)}</SelectItem>)}</SelectContent></Select></div>
+            <div className="rounded bg-muted p-3">{language === 'ar' ? 'سيتم حساب العمولة من فواتير اليوم عند التأكيد:' : 'Commission will be calculated from the selected day:'} <strong>{Number(payingSalesman?.report?.commission_total || 0).toFixed(2)}</strong></div>
+          </div>
+          <DialogFooter><Button disabled={!paymentTreasuryId || payBonusMutation.isPending} onClick={() => payBonusMutation.mutate()}><Wallet className="me-2 h-4 w-4" />{language === 'ar' ? 'تأكيد الدفع' : 'Confirm payment'}</Button></DialogFooter>
+        </DialogContent>
       </Dialog>
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={handleCloseForm}>
