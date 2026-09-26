@@ -151,6 +151,11 @@ const POS: React.FC = () => {
   const [transferInvoices, setTransferInvoices] = useState<any[]>([]);
   const [transferRequests, setTransferRequests] = useState<any[]>([]);
   const [transferLoading, setTransferLoading] = useState(false);
+  const [transferEmail, setTransferEmail] = useState('');
+  const [transferPassword, setTransferPassword] = useState('');
+  const [transferEmployee, setTransferEmployee] = useState<any>(null);
+  const [transferTargetId, setTransferTargetId] = useState('');
+  const [transferEmployees, setTransferEmployees] = useState<any[]>([]);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -789,28 +794,47 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
   const openInvoiceTransfers = async () => {
     setShowInvoiceTransfers(true);
-    setTransferLoading(true);
+    setTransferLoading(false);
+    setTransferInvoices([]);
+    setTransferEmployee(null);
+    setTransferEmail('');
+    setTransferPassword('');
+    setTransferTargetId('');
     try {
-      const [invoicesResponse, requestsResponse] = await Promise.all([
-        api.post('/invoices/index', { orderBy: 'id', orderByDirection: 'desc', perPage: 100, paginate: false }),
-        api.get('/invoice-transfer-requests', { params: { per_page: 100 } }),
-      ]);
-      setTransferInvoices(invoicesResponse.data?.data || []);
+      const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
       setTransferRequests(requestsResponse.data?.data?.data || []);
     } catch (error) {
-      console.error('Invoice transfer loading failed', error);
-      toast({ title: language === 'ar' ? 'تعذر تحميل الفواتير والطلبات' : 'Could not load invoices and requests', variant: 'destructive' });
+      console.error('Invoice transfer requests loading failed', error);
+    }
+  };
+  const loginSalesRepForTransfer = async () => {
+    if (!transferEmail || !transferPassword) return;
+    setTransferLoading(true);
+    try {
+      const response = await api.post('/invoices/sales-rep-access', { email: transferEmail, password: transferPassword });
+      setTransferEmployee(response.data?.data?.employee || null);
+      setTransferInvoices(response.data?.data?.invoices || []);
+      const employeesResponse = await api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false });
+      const employees = employeesResponse.data?.data;
+      setTransferEmployees(Array.isArray(employees) ? employees : (employees?.data || []));
+      setTransferPassword('');
+    } catch (error: any) {
+      toast({ title: error?.response?.data?.message || (language === 'ar' ? 'بيانات المندوب غير صحيحة' : 'Invalid sales representative credentials'), variant: 'destructive' });
     } finally {
       setTransferLoading(false);
     }
   };
   const requestInvoiceTransferFromPos = async (invoice: any) => {
-    const employeeId = Number(window.prompt(language === 'ar' ? 'اكتب رقم الموظف المستلم' : 'Enter receiving employee ID'));
-    if (!employeeId || employeeId < 1) return;
+    const employeeId = Number(transferTargetId);
+    if (!transferEmployee || !employeeId || employeeId < 1) {
+      toast({ title: language === 'ar' ? 'اختر الموظف المستلم أولاً' : 'Choose the receiving employee first', variant: 'destructive' });
+      return;
+    }
     try {
-      await api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoice.id, to_employee_id: employeeId });
+      await api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoice.id, from_employee_id: transferEmployee.id, to_employee_id: employeeId });
       toast({ title: language === 'ar' ? 'تم إرسال الطلب للمدير' : 'Request sent to admin' });
-      openInvoiceTransfers();
+      const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
+      setTransferRequests(requestsResponse.data?.data?.data || []);
     } catch (error: any) {
       toast({ title: error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال الطلب' : 'Could not send request'), variant: 'destructive' });
     }
@@ -1288,14 +1312,10 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
         <Dialog open={showInvoiceTransfers} onOpenChange={setShowInvoiceTransfers}>
           <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>{language === 'ar' ? 'طلبات تحويل فواتير POS' : 'POS invoice transfer requests'}</DialogTitle></DialogHeader>
-            {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : <div className="space-y-3 max-h-[60vh] overflow-auto">
-              <div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'اختر فاتورة لإرسال طلب تحويل' : 'Choose an invoice to request transfer'}</p>{transferInvoices.slice(0, 30).map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><span>{invoice.cashier?.name || '-'}</span><Button size="sm" variant="outline" onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div>
-              <div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'الطلبات الحالية' : 'Current requests'}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="border-t py-2 text-sm"><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</div>)}</div>
-            </div>}
+            <DialogHeader><DialogTitle>{language === 'ar' ? 'تحويل فواتير مندوب المبيعات' : 'Sales representative invoice transfer'}</DialogTitle></DialogHeader>
+            {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : !transferEmployee ? <div className="space-y-3"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'أدخل إيميل وباسورد مندوب المبيعات لعرض فواتيره اليوم فقط.' : 'Enter the sales representative email and password to show only today invoices.'}</p><Input type="email" value={transferEmail} onChange={(event) => setTransferEmail(event.target.value)} placeholder={language === 'ar' ? 'إيميل المندوب' : 'Representative email'} /><Input type="password" value={transferPassword} onChange={(event) => setTransferPassword(event.target.value)} placeholder={language === 'ar' ? 'الباسورد' : 'Password'} /><Button onClick={loginSalesRepForTransfer} disabled={!transferEmail || !transferPassword}>{language === 'ar' ? 'دخول وعرض فواتير اليوم' : 'Login and show today invoices'}</Button></div> : <div className="space-y-3 max-h-[60vh] overflow-auto"><div className="rounded-lg border p-3"><p className="font-semibold">{transferEmployee.name} · {language === 'ar' ? 'فواتير اليوم' : "Today's invoices"}</p><select className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={transferTargetId} onChange={(event) => setTransferTargetId(event.target.value)}><option value="">{language === 'ar' ? 'اختر الموظف المستلم' : 'Choose receiving employee'}</option>{transferEmployees.filter((employee) => employee.id !== transferEmployee.id).map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select>{transferInvoices.length === 0 ? <p className="py-5 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد فواتير لهذا المندوب اليوم' : 'No invoices for this representative today'}</p> : transferInvoices.map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><Button size="sm" variant="outline" disabled={!transferTargetId} onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div><div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات اليوم' : "Today's requests"}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="border-t py-2 text-sm"><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</div>)}</div></div>}
           </DialogContent>
         </Dialog>
-
         {/* Modals */}
         <POSPaymentModal
           isOpen={showPayment}
