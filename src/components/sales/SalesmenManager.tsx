@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, Users } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, FileText } from "lucide-react";
 import api from "@/lib/api";
 
 interface SalesmanForm {
@@ -34,6 +34,9 @@ const SalesmenManager = () => {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingSalesman, setEditingSalesman] = useState<SalesmanForm | null>(null);
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [formData, setFormData] = useState<SalesmanForm>({
     name: "",
     name_ar: "",
@@ -49,7 +52,7 @@ const SalesmenManager = () => {
 
   // Fetch salesmen
   const { data: salesmen, isLoading } = useQuery({
-    queryKey: ['salesmen'],
+    queryKey: ['salesmen', reportFrom, reportTo],
      queryFn: async () => {
       try {
         const response = await api.post('/sales-representative/index', {
@@ -57,7 +60,9 @@ const SalesmenManager = () => {
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 100,
-          paginate: false
+          paginate: false,
+          from: reportFrom || undefined,
+          to: reportTo || undefined
         });
         
         return response.data.data || [];
@@ -243,6 +248,8 @@ const deleteMutation = useMutation({
           </Button>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 grid gap-3 rounded-lg border bg-muted/20 p-3 md:grid-cols-[180px_180px_auto]
+          "><div><Label>{language === 'ar' ? 'من تاريخ' : 'From'}</Label><Input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} /></div><div><Label>{language === 'ar' ? 'إلى تاريخ' : 'To'}</Label><Input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} /></div><div className="flex items-end"><Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['salesmen'] })}>{language === 'ar' ? 'تحديث التقرير' : 'Refresh report'}</Button></div></div>
           <div className="border rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
@@ -251,6 +258,11 @@ const deleteMutation = useMutation({
                   <TableHead>{language === 'ar' ? 'الهاتف' : 'Phone'}</TableHead>
                   <TableHead>{language === 'ar' ? 'نسبة العمولة' : 'Commission %'}</TableHead>
                   <TableHead>{language === 'ar' ? 'الفرع' : 'Branch'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'الفواتير' : 'Invoices'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'المبيعات' : 'Sales'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead>
+                  <TableHead>{language === 'ar' ? 'تقرير' : 'Report'}</TableHead>
                   {/* <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead> */}
                   <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                 </TableRow>
@@ -320,6 +332,9 @@ const deleteMutation = useMutation({
         </CardContent>
       </Card>
 
+      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+        <DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>{language === 'ar' ? `فواتير ${selectedReport?.name || ''}` : `${selectedReport?.name || ''} invoices`}</DialogTitle></DialogHeader><div className="overflow-auto"><div className="mb-3 grid gap-2 sm:grid-cols-4"><div>{language === 'ar' ? 'النسبة' : 'Rate'}: {selectedReport?.report?.commission_rate || selectedReport?.commission_rate || 0}%</div><div>{language === 'ar' ? 'المبيعات' : 'Sales'}: {Number(selectedReport?.report?.sales_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'الربح' : 'Profit'}: {Number(selectedReport?.report?.profit_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'العمولة' : 'Commission'}: {Number(selectedReport?.report?.commission_total || 0).toFixed(2)}</div></div><Table><TableHeader><TableRow><TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead><TableHead>{language === 'ar' ? 'الفاتورة' : 'Invoice'}</TableHead><TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead><TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead><TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead><TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead></TableRow></TableHeader><TableBody>{(selectedReport?.report?.invoices || []).map((invoice: any) => <TableRow key={invoice.id}><TableCell>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '-'}</TableCell><TableCell>{invoice.invoice_number || invoice.id}</TableCell><TableCell>{invoice.customer?.name || '-'}</TableCell><TableCell>{Number(invoice.total || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.cost || 0).toFixed(2)}</TableCell><TableCell className="text-emerald-600">{Number(invoice.profit || 0).toFixed(2)}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent>
+      </Dialog>
       {/* Form Dialog */}
       <Dialog open={showForm} onOpenChange={handleCloseForm}>
         <DialogContent>
