@@ -26,6 +26,7 @@ interface InvoiceTemplateProps {
     customer?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
     branchName?: string;
+    branchNameAr?: string;
     branchPhone?: string;
         invoice_number?: string;
     branchAddress?: string;
@@ -102,6 +103,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       customer: invoiceData.customer || null,
       cashierName: invoiceData.cashierName || '---',
       branchName: invoiceData.branchName,
+      branchNameAr: invoiceData.branchNameAr,
       branchPhone: invoiceData.branchPhone,
       branchAddress: invoiceData.branchAddress,
       items: invoiceData.items || [],
@@ -188,7 +190,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
             <div className="text-[9px] text-gray-700 mt-1">
-              {safeInvoiceData.branchName && <p>{texts.branch}: {safeInvoiceData.branchName}</p>}
+              {safeInvoiceData.branchName && <p>{texts.branch}: {isRTL ? (invoiceData as any).branchNameAr || safeInvoiceData.branchName : safeInvoiceData.branchName}</p>}
               {safeInvoiceData.branchAddress && <p>{safeInvoiceData.branchAddress}</p>}
               {safeInvoiceData.branchPhone && <p>{texts.phone}: {safeInvoiceData.branchPhone}</p>}
             </div>

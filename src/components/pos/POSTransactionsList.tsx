@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import PrintableInvoice from '@/components/ui/PrintableInvoice';
@@ -38,7 +38,8 @@ import {
   Wallet,
   Banknote,
   PieChart,
-  Tag
+  Tag,
+  Share2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -173,6 +174,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [printType, setPrintType] = useState<'sale' | 'return'>('sale');
   const [printData, setPrintData] = useState<any>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const transferInvoiceMutation = useMutation({
+    mutationFn: ({ invoiceId, employeeId }: { invoiceId: number; employeeId: number }) => api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoiceId, to_employee_id: employeeId }),
+    onSuccess: () => window.alert(language === 'ar' ? 'تم إرسال طلب التحويل للمدير' : 'Transfer request sent to admin'),
+    onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال الطلب' : 'Unable to send request')),
+  });
+  const requestInvoiceTransfer = (sale: Sale) => {
+    const employeeId = Number(window.prompt(language === 'ar' ? 'اكتب رقم الموظف البائع المستلم' : 'Enter receiving seller employee ID'));
+    if (employeeId > 0) transferInvoiceMutation.mutate({ invoiceId: sale.id, employeeId });
+  };
 
   // ========== Print Handler ==========
   const handlePrint = useReactToPrint({
@@ -906,6 +916,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                   }}
                                 >
                                   <Printer size={16} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title={language === 'ar' ? 'طلب تحويل للبائع' : 'Request seller transfer'}
+                                  onClick={(e) => { e.stopPropagation(); requestInvoiceTransfer(sale); }}
+                                >
+                                  <Share2 size={16} />
                                 </Button>
                               </div>
                             </TableCell>

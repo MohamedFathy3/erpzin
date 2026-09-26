@@ -462,11 +462,20 @@ const SalesInvoiceList = () => {
     },
     onError: (error: any) => toast.error(error?.response?.data?.message || (language === 'ar' ? 'تعذر إلغاء الفاتورة' : 'Unable to cancel invoice')),
   });
+  const transferInvoiceMutation = useMutation({
+    mutationFn: ({ invoiceId, employeeId }: { invoiceId: number; employeeId: number }) => api.post('/invoice-transfer-requests', { invoice_type: 'sales', invoice_id: invoiceId, to_employee_id: employeeId }),
+    onSuccess: () => toast.success(language === 'ar' ? 'تم إرسال طلب تحويل الفاتورة للمدير' : 'Transfer request sent to admin'),
+    onError: (error: any) => toast.error(error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال طلب التحويل' : 'Unable to send transfer request')),
+  });
 
   const handleCancelInvoice = (invoice: SalesInvoice) => {
     if (invoice.workflow_status === 'cancelled') return;
     const confirmed = window.confirm(language === 'ar' ? `هل تريد إلغاء الفاتورة ${invoice.invoice_number}؟ سيتم عكس المخزون والقيد والخزينة.` : `Cancel invoice ${invoice.invoice_number}? Inventory, journal and treasury effects will be reversed.`);
     if (confirmed) cancelInvoiceMutation.mutate(invoice.id);
+  };
+  const handleTransferInvoice = (invoice: SalesInvoice) => {
+    const employeeId = Number(window.prompt(language === 'ar' ? 'اكتب رقم الموظف البائع المستلم' : 'Enter receiving seller employee ID'));
+    if (employeeId > 0) transferInvoiceMutation.mutate({ invoiceId: invoice.id, employeeId });
   };
 
   // Company Info للطباعة
@@ -1263,6 +1272,15 @@ const SalesInvoiceList = () => {
                               title={language === 'ar' ? 'مرتجع' : 'Return'}
                             >
                               <RotateCcw size={16} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-purple-500/10"
+                              onClick={(e) => { e.stopPropagation(); handleTransferInvoice(invoice); }}
+                              title={language === 'ar' ? 'طلب تحويل للبائع' : 'Request seller transfer'}
+                            >
+                              <Share2 size={16} />
                             </Button>
                             {invoice.workflow_status !== 'cancelled' && (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-500/10" onClick={(e) => { e.stopPropagation(); handleCancelInvoice(invoice); }} disabled={cancelInvoiceMutation.isPending} title={language === 'ar' ? 'إلغاء وعكس الأثر' : 'Cancel and reverse effects'}>

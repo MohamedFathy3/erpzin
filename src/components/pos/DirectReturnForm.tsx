@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, X, Plus, Minus, Trash2, Package, AlertCircle, Palette, Ruler, RotateCcw } from 'lucide-react';
+import { Search, X, Plus, Minus, Trash2, Package, AlertCircle, RotateCcw } from 'lucide-react';
 import { useDirectReturn, DirectReturnItem } from '@/hooks/useDirectReturn';
 
 interface DirectReturnFormProps {
@@ -49,12 +48,9 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
     addItem,
     updateQuantity,
     removeItem,
-    updateItemColor,
-    updateItemSize,
     closeResults,
     resetSearch,
     switchToInvoiceMode,
-    switchToProductMode,
     processReturn,
     isProcessing,
   } = useDirectReturn({ onComplete, currentShiftId });
@@ -86,8 +82,6 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
     emptyItems: language === 'ar' ? 'لم يتم إضافة أي أصناف' : 'No items added',
     searchResults: language === 'ar' ? 'نتائج البحث' : 'Search Results',
     close: language === 'ar' ? 'إغلاق' : 'Close',
-    color: language === 'ar' ? 'اللون' : 'Color',
-    size: language === 'ar' ? 'المقاس' : 'Size',
     soldQuantity: language === 'ar' ? 'الكمية المباعة' : 'Sold Quantity',
   };
 
@@ -193,7 +187,7 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
               ) : filteredProducts.length > 0 ? (
                 filteredProducts.map((product) => (
                   <div
-                    key={`${product.id}-${product.color || ''}-${product.size || ''}`}
+                    key={`${product.id}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       addItem(product);
@@ -207,23 +201,6 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
                         </div>
                         <div className="text-sm text-muted-foreground">{product.sku}</div>
                         
-                        {(product.color || product.size) && (
-                          <div className="flex items-center gap-2 mt-1 text-xs">
-                            {product.color && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Palette className="h-3 w-3 inline me-1" />
-                                {product.color}
-                              </Badge>
-                            )}
-                            {product.size && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Ruler className="h-3 w-3 inline me-1" />
-                                {product.size}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-
                         {searchMode === 'invoice' && product.quantity_sold && (
                           <div className="text-xs text-primary mt-2">
                             {t.soldQuantity}: {product.quantity_sold}
@@ -271,29 +248,6 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-lg">{item.product_name}</div>
                     <div className="text-sm text-muted-foreground">{item.sku}</div>
-
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex items-center gap-1">
-                        <Palette className="h-3 w-3 text-muted-foreground" />
-                        <Input
-                          placeholder={t.color}
-                          value={item.color || ''}
-                          onChange={(e) => updateItemColor(item.id, e.target.value)}
-                          className="h-8 w-24 text-sm"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Ruler className="h-3 w-3 text-muted-foreground" />
-                        <Input
-                          placeholder={t.size}
-                          value={item.size || ''}
-                          onChange={(e) => updateItemSize(item.id, e.target.value)}
-                          className="h-8 w-24 text-sm"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    </div>
 
                     <div className="text-primary font-semibold mt-2">
                       {formatCurrency(item.unit_price)} × {item.quantity} = {formatCurrency(item.unit_price * item.quantity)}
