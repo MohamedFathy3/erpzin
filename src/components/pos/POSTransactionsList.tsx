@@ -39,7 +39,10 @@ import {
   Banknote,
   PieChart,
   Tag,
-  Share2
+  Share2,
+  KeyRound,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -168,6 +171,10 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
   const [showFilters, setShowFilters] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [cashierSales, setCashierSales] = useState<Sale[] | null>(null);
+  const [cashierId, setCashierId] = useState('');
+  const [cashierPassword, setCashierPassword] = useState('');
+  const [activeSection, setActiveSection] = useState<'sales' | 'returns' | 'transfers'>('sales');
   
   // ========== Print State ==========
   const [showPrintDialog, setShowPrintDialog] = useState(false);
@@ -275,6 +282,28 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   };
 
   // ========== Queries ==========
+  const employeesQuery = useQuery({
+    queryKey: ['pos-cashier-employees'],
+    queryFn: async () => {
+      const response = await api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false });
+      const data = response.data?.data;
+      return Array.isArray(data) ? data : (data?.data || []);
+    },
+  });
+  const transferRequestsQuery = useQuery({
+    queryKey: ['invoice-transfer-requests'],
+    queryFn: async () => (await api.get('/invoice-transfer-requests', { params: { per_page: 100 } })).data?.data?.data || [],
+  });
+  const cashierAccessMutation = useMutation({
+    mutationFn: async () => (await api.post('/invoices/cashier-access', { employee_id: Number(cashierId), password: cashierPassword })).data?.data || [],
+    onSuccess: (data) => { setCashierSales(data); setCashierPassword(''); },
+    onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'كلمة مرور الكاشير غير صحيحة' : 'Invalid cashier password')),
+  });
+  const transferActionMutation = useMutation({
+    mutationFn: ({ id, action }: { id: number; action: 'approve' | 'reject' }) => api.post(`/invoice-transfer-requests/${id}/${action}`),
+    onSuccess: () => transferRequestsQuery.refetch(),
+    onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'هذا الإجراء متاح للمدير فقط' : 'This action is available to admins only')),
+  });
 
   // ✅ جلب الفواتير
   const { data: sales = [], isLoading: salesLoading, refetch: refetchSales } = useQuery({
@@ -456,8 +485,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   };
 
   const filteredSales = useMemo(() => {
-    return sales.filter(filterSales);
-  }, [sales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus]);
+    return (cashierSales ?? sales).filter(filterSales);
+  }, [sales, cashierSales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus]);
 
   const filteredReturns = useMemo(() => {
     return returns.filter(filterReturns);
@@ -588,6 +617,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     setSelectedBranch('all');
     setSelectedPaymentMethod('all');
     setSelectedStatus('all');
+    setCashierSales(null);
+    setCashierId('');
+    setCashierPassword('');
   };
 
   const refreshData = async () => {
@@ -735,6 +767,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               )}
             </div>
 
+            <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 md:grid-cols-[1fr_1fr_auto_auto]">
+              <div className="space-y-1"><Label>{language === 'ar' ? 'عرض فواتير كاشير' : 'View cashier invoices'}</Label><Select value={cashierId} onValueChange={(value) => { setCashierId(value); setCashierSales(null); }}><SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر محمد / الكاشير' : 'Choose cashier'} /></SelectTrigger><SelectContent>{(employeesQuery.data || []).map((employee: any) => <SelectItem key={employee.id} value={String(employee.id)}>{employee.name || employee.full_name || employee.email}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1"><Label>{language === 'ar' ? 'كلمة المرور' : 'Password'}</Label><Input type="password" value={cashierPassword} onChange={(event) => setCashierPassword(event.target.value)} placeholder={language === 'ar' ? 'اكتب كلمة المرور' : 'Enter password'} /></div>
+              <Button className="self-end" disabled={!cashierId || !cashierPassword || cashierAccessMutation.isPending} onClick={() => cashierAccessMutation.mutate()}><KeyRound className="me-2 h-4 w-4" />{language === 'ar' ? 'عرض الفواتير' : 'Show invoices'}</Button>
+              {cashierSales && <Button variant="outline" className="self-end" onClick={() => setCashierSales(null)}>{language === 'ar' ? 'إظهار الكل' : 'Show all'}</Button>}
+            </div>
             {/* Date Filters */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -795,8 +833,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       )}
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'sales' | 'returns')}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+      <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as 'sales' | 'returns' | 'transfers')}>
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="sales" className="gap-2">
             <Receipt size={16} />
             {t.sales}
@@ -939,6 +977,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           </Card>
         </TabsContent>
 
+        <TabsContent value="transfers" className="mt-4"><Card><CardHeader><CardTitle>{language === 'ar' ? 'طلبات تحويل الفواتير' : 'Invoice transfer requests'}</CardTitle></CardHeader><CardContent className="space-y-3">{transferRequestsQuery.isLoading ? <Loader2 className="animate-spin" /> : !(transferRequestsQuery.data || []).length ? <p className="py-6 text-center text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات تحويل' : 'No transfer requests'}</p> : (transferRequestsQuery.data || []).map((request: any) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><div className="font-medium">{request.invoice_type === 'pos' ? 'POS' : 'Sales'} · #{request.invoice_id}</div><div className="text-sm text-muted-foreground">{request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</div></div>{request.status === 'pending' && <div className="flex gap-2"><Button size="sm" onClick={() => transferActionMutation.mutate({ id: request.id, action: 'approve' })}><CheckCircle className="me-1 h-4 w-4" />{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => transferActionMutation.mutate({ id: request.id, action: 'reject' })}><XCircle className="me-1 h-4 w-4" />{language === 'ar' ? 'رفض' : 'Reject'}</Button></div>}</div>)}</CardContent></Card></TabsContent>
         {/* Returns Tab */}
         <TabsContent value="returns" className="mt-4">
           <Card>
