@@ -218,9 +218,9 @@ const Purchasing = () => {
         tax_number: '',
       },
       cashierName: user?.name || 'المدير',
-      branchName: data.branch_name || '-',
-      branchPhone: '',
-      branchAddress: '',
+      branchName: data.branch_name || (currentBranch ? (language === 'ar' ? currentBranch.name_ar || currentBranch.name : currentBranch.name) : '-'),
+      branchPhone: data.branch_phone || '',
+      branchAddress: data.branch_address || '',
       taxRate: data.tax_rate ? parseFloat(data.tax_rate) : 0,
       items: (data.items || []).map((item: any) => ({
         name: item.product_name,

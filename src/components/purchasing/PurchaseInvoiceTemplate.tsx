@@ -54,7 +54,7 @@ const PurchaseInvoiceA4Template = forwardRef<HTMLDivElement, PurchaseInvoiceA4Te
     const companyInfo = {
       name: user?.name || '',
       nameAr: user?.name_ar || '',
-      logo: user?.logoUrl || user?.logo?.fullUrl,
+      logo: user?.logoUrl || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
       address: user?.address,
       addressAr: user?.address_ar,
       phone: user?.phone,
@@ -143,9 +143,9 @@ const PurchaseInvoiceA4Template = forwardRef<HTMLDivElement, PurchaseInvoiceA4Te
               <h1 className="text-2xl font-bold text-gray-800">
                 {isRTL ? companyInfo.nameAr : companyInfo.name}
               </h1>
-              {companyInfo.address && (
+              {(companyInfo.address || invoiceData.branchAddress) && (
                 <p className="text-sm text-gray-600 mt-1">
-                  {isRTL ? companyInfo.addressAr || companyInfo.address : companyInfo.address}
+                  {isRTL ? companyInfo.addressAr || invoiceData.branchAddress || companyInfo.address : invoiceData.branchAddress || companyInfo.address}
                 </p>
               )}
               <div className="flex gap-4 mt-1 text-sm text-gray-600">

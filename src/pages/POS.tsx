@@ -1280,7 +1280,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           companyInfo={{
             name: user?.name || 'متجرك',
             nameAr: user?.name_ar || user?.name,
-            logo: user?.logoUrl || user?.logo?.fullUrl || user?.logo_url,
+            logo: user?.logoUrl || user?.logo_url || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
             address: user?.address,
             addressAr: user?.address,
             phone: user?.phone,

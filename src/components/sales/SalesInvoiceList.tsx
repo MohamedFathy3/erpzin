@@ -21,6 +21,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -444,7 +445,9 @@ interface InvoiceFilters {
 // ========== المكون الرئيسي ==========
 const SalesInvoiceList = () => {
   const { language } = useLanguage();
-  const { user } = useApp();
+  const { user: appUser } = useApp();
+  const { user: authUser } = useAuth();
+  const user = authUser || appUser as any;
   const [showForm, setShowForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
@@ -480,14 +483,14 @@ const SalesInvoiceList = () => {
 
   // Company Info للطباعة
   const companyInfo = {
-    name: user?.company_name || 'Company Name',
-    nameAr: user?.company_name_ar || 'اسم الشركة',
-    logo: user?.company_logo,
-    address: user?.company_address,
-    addressAr: user?.company_address_ar,
-    phone: user?.company_phone,
-    email: user?.company_email,
-    tax_id: user?.company_tax_id,
+    name: user?.name || 'Company Name',
+    nameAr: user?.name_ar || user?.name || 'اسم الشركة',
+    logo: user?.logoUrl || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
+    address: user?.address,
+    addressAr: user?.address_ar,
+    phone: user?.phone,
+    email: user?.email,
+    tax_id: user?.tax_id,
   };
 
   // ========== Filter State ==========

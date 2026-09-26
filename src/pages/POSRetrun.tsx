@@ -1152,7 +1152,7 @@ const POS: React.FC = () => {
           companyInfo={{
             name: user?.name || 'متجرك',
             nameAr: user?.name,
-            logo: user?.logoUrl,
+            logo: user?.logoUrl || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
             address: user?.address,
             addressAr: user?.address,
             phone: user?.phone,

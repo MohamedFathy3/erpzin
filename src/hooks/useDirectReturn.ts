@@ -14,8 +14,6 @@ export interface DirectReturnItem {
   quantity: number;
   unit_price: number;
   reason: string;
-  color?: string | null;
-  size?: string | null;
   quantity_sold?: number;
   product: {
     id: number;
@@ -36,8 +34,6 @@ export interface InvoiceProduct {
   price: string;
   quantity_sold: number;
   invoice_price: string;
-  color?: string | null;
-  size?: string | null;
   image_url?: string | null;
   stock?: number;
 }
@@ -145,8 +141,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       price: unitPrice, // السعر المعدل 8100
       quantity_sold: item.quantity,
       invoice_price: unitPrice, // السعر المعدل
-      color: item.color || null,
-      size: item.size || null,
       image_url: null,
       stock: item.stock,
     };
@@ -164,11 +158,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
 
     const quantitySold = searchMode === 'invoice' ? product.quantity_sold : undefined;
 
-    const existing = items.find(i =>
-      i.product_id === product.id &&
-      i.color === product.color &&
-      i.size === product.size
-    );
+    const existing = items.find(i => i.product_id === product.id);
 
     if (existing) {
       if (quantitySold && existing.quantity + 1 > quantitySold) {
@@ -177,7 +167,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       }
 
       setItems(prev => prev.map(i =>
-        i.product_id === product.id && i.color === product.color && i.size === product.size
+        i.product_id === product.id
           ? { ...i, quantity: i.quantity + 1 }
           : i
       ));
@@ -190,8 +180,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
         quantity: 1,
         unit_price: unitPrice, // ده هيكون 8100
         reason: '',
-        color: product.color || null,
-        size: product.size || null,
         quantity_sold: quantitySold,
         product: {
           id: product.id,
@@ -209,8 +197,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     setShowResults(false);
     
     const productName = product.name_ar || product.name;
-    const variant = product.color || product.size ? ` (${product.color || ''} ${product.size || ''})`.trim() : '';
-    toast.success(`تم إضافة ${productName}${variant} بسعر ${unitPrice}`);
+    toast.success(`تم إضافة ${productName} بسعر ${unitPrice}`);
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -232,14 +219,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
 
   const removeItem = (id: string) => {
     setItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const updateItemColor = (id: string, color: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, color } : item));
-  };
-
-  const updateItemSize = (id: string, size: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, size } : item));
   };
 
   const updateItemReason = (id: string, reason: string) => {
@@ -269,8 +248,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
         reason: returnReason || 'مرتجع بدون سبب',
         items: items.map(item => ({
           product_id: item.product_id,
-          color: item.color || null,
-          size: item.size || null,
           quantity: item.quantity,
           price: item.unit_price  // السعر اللي هيتسجل 8100
         })),
@@ -368,8 +345,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     addItem,
     updateQuantity,
     removeItem,
-    updateItemColor,
-    updateItemSize,
     updateItemReason,
     clearItems,
     closeResults,
