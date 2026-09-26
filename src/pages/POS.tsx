@@ -12,11 +12,11 @@ import {
   Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, 
   Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
   ShoppingBag, AlertCircle, CheckCircle2,
-  UserCheck
+  UserCheck, Share2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useCategories, useProducts, useProductByBarcode, Product } from '@/hooks/usePOSData';
 import { useNavigate } from 'react-router-dom';
@@ -147,6 +147,10 @@ const POS: React.FC = () => {
   const [currentShift, setCurrentShift] = useState<any>(null);
   const [showReturns, setShowReturns] = useState(false);
   const [showBranchTransfers, setShowBranchTransfers] = useState(false);
+  const [showInvoiceTransfers, setShowInvoiceTransfers] = useState(false);
+  const [transferInvoices, setTransferInvoices] = useState<any[]>([]);
+  const [transferRequests, setTransferRequests] = useState<any[]>([]);
+  const [transferLoading, setTransferLoading] = useState(false);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -783,6 +787,34 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
     }
   }, [cartItems, selectedCartItemIndex]);
 
+  const openInvoiceTransfers = async () => {
+    setShowInvoiceTransfers(true);
+    setTransferLoading(true);
+    try {
+      const [invoicesResponse, requestsResponse] = await Promise.all([
+        api.post('/invoices/index', { orderBy: 'id', orderByDirection: 'desc', perPage: 100, paginate: false }),
+        api.get('/invoice-transfer-requests', { params: { per_page: 100 } }),
+      ]);
+      setTransferInvoices(invoicesResponse.data?.data || []);
+      setTransferRequests(requestsResponse.data?.data?.data || []);
+    } catch (error) {
+      console.error('Invoice transfer loading failed', error);
+      toast({ title: language === 'ar' ? 'تعذر تحميل الفواتير والطلبات' : 'Could not load invoices and requests', variant: 'destructive' });
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+  const requestInvoiceTransferFromPos = async (invoice: any) => {
+    const employeeId = Number(window.prompt(language === 'ar' ? 'اكتب رقم الموظف المستلم' : 'Enter receiving employee ID'));
+    if (!employeeId || employeeId < 1) return;
+    try {
+      await api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoice.id, to_employee_id: employeeId });
+      toast({ title: language === 'ar' ? 'تم إرسال الطلب للمدير' : 'Request sent to admin' });
+      openInvoiceTransfers();
+    } catch (error: any) {
+      toast({ title: error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال الطلب' : 'Could not send request'), variant: 'destructive' });
+    }
+  };
   // ==================== Keyboard Shortcuts ====================
   const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showVariantSelector;
 
@@ -881,6 +913,16 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                 </Button>
               )}
 
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openInvoiceTransfers}
+                className="text-fuchsia-400 hover:text-fuchsia-300 hover:bg-fuchsia-500/20 relative gap-1.5 px-2"
+              >
+                <Share2 size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'طلبات تحويل' : 'Transfer requests'}</span>
+                {transferRequests.filter((request) => request.status === 'pending').length > 0 && <span className="absolute -top-1 -end-1 w-4 h-4 bg-fuchsia-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{transferRequests.filter((request) => request.status === 'pending').length}</span>}
+              </Button>
               {/* Held Orders */}
               <Button 
                 variant="ghost" 
@@ -1243,6 +1285,16 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           heldOrdersCount={heldOrders.length}
           hasShift={!!currentShift}
         />
+
+        <Dialog open={showInvoiceTransfers} onOpenChange={setShowInvoiceTransfers}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>{language === 'ar' ? 'طلبات تحويل فواتير POS' : 'POS invoice transfer requests'}</DialogTitle></DialogHeader>
+            {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : <div className="space-y-3 max-h-[60vh] overflow-auto">
+              <div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'اختر فاتورة لإرسال طلب تحويل' : 'Choose an invoice to request transfer'}</p>{transferInvoices.slice(0, 30).map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><span>{invoice.cashier?.name || '-'}</span><Button size="sm" variant="outline" onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div>
+              <div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'الطلبات الحالية' : 'Current requests'}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="border-t py-2 text-sm"><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</div>)}</div>
+            </div>}
+          </DialogContent>
+        </Dialog>
 
         {/* Modals */}
         <POSPaymentModal

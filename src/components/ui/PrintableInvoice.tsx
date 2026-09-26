@@ -5,6 +5,9 @@ import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useApp } from '@/contexts/AppContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PrintableInvoiceProps {
   data: any;
@@ -26,7 +29,16 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
     const isRtl = language === 'ar';
     const dir = isRtl ? 'rtl' : 'ltr';
     const { user } = useAuth();
+    const { currentBranch, userBranch } = useApp();
     const { formatCurrency } = useRegionalSettings();
+    const { data: companySettings } = useQuery({
+      queryKey: ['print-company-settings'],
+      queryFn: async () => {
+        const { data } = await supabase.from('company_settings').select('*').maybeSingle();
+        return data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
 
     const t = {
       en: {
@@ -116,17 +128,17 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
       }
     };
 
+    const branch = data.branch || userBranch || currentBranch;
     const company = {
-      name: user?.name || propCompanyInfo?.name || 'Yemen Company',
-      name_ar: user?.name || propCompanyInfo?.name_ar || 'شركة اليمن',
-      phone: user?.phone || propCompanyInfo?.phone || '01-234567',
-      address: user?.address || propCompanyInfo?.address || 'اليمن - صنعاء',
-      taxNumber: user?.tax_id || propCompanyInfo?.taxNumber || '',
-      logo: user?.logo_icon || user?.logoUrl || propCompanyInfo?.logo,
+      name: companySettings?.name || user?.name || propCompanyInfo?.name || 'Yemen Company',
+      name_ar: companySettings?.name_ar || user?.name_ar || propCompanyInfo?.name_ar || 'شركة اليمن',
+      phone: branch?.phone || companySettings?.phone || user?.phone || propCompanyInfo?.phone || '01-234567',
+      address: branch?.address || (isRtl ? branch?.address_ar : undefined) || companySettings?.address || user?.address || propCompanyInfo?.address || 'اليمن - صنعاء',
+      taxNumber: companySettings?.tax_number || user?.tax_id || propCompanyInfo?.taxNumber || '',
+      logo: companySettings?.logo_url || companySettings?.logo_icon_url || user?.logoUrl || user?.logo_url || user?.logo_icon || propCompanyInfo?.logo,
+      branchName: isRtl ? branch?.name_ar || branch?.name : branch?.name,
     };
-
     const displayName = isRtl ? company.name_ar : company.name;
-
     // حساب الخصم إذا كان موجود
     const hasDiscount = data.discount_percentage > 0 || data.discount_amount > 0;
     const discountPercent = data.discount_percentage || 0;
@@ -135,16 +147,16 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
 const getProductName = (item: any): string => {
   // الحالة 1: product_name موجود مباشر
   if (item.product_name) return item.product_name;
-  
+
   // الحالة 2: product.name داخل كائن product
   if (item.product?.name) return item.product.name;
-  
+
   // الحالة 3: name مباشر
   if (item.name) return item.name;
-  
+
   // الحالة 4: اسم المنتج من invoice_items
   if (item.product?.product_name) return item.product.product_name;
-  
+
   return '-';
 };
 
@@ -232,7 +244,9 @@ const getSize = (item: any): string | null => {
         <div ref={ref} dir={dir} style={printStyles.container}>
           {/* Header */}
           <div style={printStyles.header}>
+            {company.logo && <img src={company.logo} alt={displayName} style={{ maxWidth: '56mm', maxHeight: '18mm', objectFit: 'contain', margin: '0 auto 4px' }} />}
             <div style={printStyles.companyName}>{displayName}</div>
+            {company.branchName && <div style={{ fontSize: '10px', fontWeight: 'bold' }}>{isRtl ? 'الفرع' : 'Branch'}: {company.branchName}</div>}
             <div style={{ fontSize: '10px' }}>{company.address}</div>
             <div style={{ fontSize: '10px' }}>📞 {company.phone}</div>
             {company.taxNumber && (
@@ -294,7 +308,7 @@ const getSize = (item: any): string | null => {
     const productName = item.product_name || item.product?.name || item.name || '-';
     const color = item.color;
     const size = item.size;
-    
+
     return (
       <tr key={index}>
         <td style={printStyles.td}>
@@ -327,7 +341,7 @@ const getSize = (item: any): string | null => {
               <span>{texts.subtotal}:</span>
               <span>{formatNumber(data.amounts?.total || data.total_amount || 0)}</span>
             </div>
-            
+
             {/* Discount Section */}
             {hasDiscount && (
               <>
@@ -346,7 +360,7 @@ const getSize = (item: any): string | null => {
                 </div>
               </>
             )}
-            
+
             <div style={printStyles.row}>
               <span>{texts.paid}:</span>
               <span>{formatNumber(data.amounts?.paid || data.total_amount || 0)}</span>
@@ -412,7 +426,7 @@ const getSize = (item: any): string | null => {
           <div style={printStyles.row}>
             <span>{texts.customer}:</span>
             <span>
-              {isRtl 
+              {isRtl
                 ? (data.customer?.name_ar || data.invoice?.customer?.name_ar || data.customer?.name || data.invoice?.customer?.name)
                 : (data.customer?.name || data.invoice?.customer?.name)}
             </span>
@@ -458,7 +472,7 @@ const getSize = (item: any): string | null => {
             const productName = item.product_name || item.product?.name || item.name || '-';
             const color = item.color;
             const size = item.size;
-            
+
             return (
               <tr key={index}>
                 <td style={printStyles.td}>

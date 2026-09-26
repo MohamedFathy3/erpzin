@@ -1,6 +1,8 @@
 import React, { forwardRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CompanyInfo {
   name: string;
@@ -58,6 +60,20 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     const { language } = useLanguage();
     const isRTL = language === 'ar';
     const { formatCurrency } = useRegionalSettings();
+    const { data: companySettings } = useQuery({
+      queryKey: ['pos-print-company-settings'],
+      queryFn: async () => (await supabase.from('company_settings').select('*').maybeSingle()).data,
+      staleTime: 5 * 60 * 1000,
+    });
+    const effectiveCompanyInfo = {
+      ...companyInfo,
+      name: companySettings?.name || companyInfo.name,
+      nameAr: companySettings?.name_ar || companyInfo.nameAr,
+      logo: companySettings?.logo_url || companySettings?.logo_icon_url || companyInfo.logo,
+      address: companySettings?.address || companyInfo.address,
+      phone: companySettings?.phone || companyInfo.phone,
+      tax_id: companySettings?.tax_number || companyInfo.tax_id,
+    };
      console.log('🔍 invoiceData received:', invoiceData);
     console.log('🔍 invoice_number:', invoiceData?.invoice_number);
     console.log('🔍 invoiceNumber:', invoiceData?.invoiceNumber);
@@ -93,7 +109,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     };
 
     const fullInvoiceNumber = getInvoiceNumber();
-    
+
     // ✅ للـ console.log عشان تتأكد من الرقم
     console.log('🖨️ Full Invoice Number in Print:', fullInvoiceNumber);
 
@@ -153,14 +169,14 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
         default: return method;
       }
     };
-    
+
     const paymentMethodsText = safeInvoiceData.payments.map(p => getPaymentMethodText(p.method)).join(' - ');
 
     return (
       <div
         ref={ref}
         className="bg-white text-black font-sans"
-        style={{ 
+        style={{
           direction: isRTL ? 'rtl' : 'ltr',
           width: '80mm',
           maxWidth: '80mm',
@@ -174,20 +190,20 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       >
         {/* Header */}
         <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-          {companyInfo.logo && (
+          {effectiveCompanyInfo.logo && (
             <div className="flex justify-center mb-1">
-              <img 
-                src={companyInfo.logo} 
-                alt={companyInfo.name}
+              <img
+                src={effectiveCompanyInfo.logo}
+                alt={effectiveCompanyInfo.name}
                 className="h-10 w-auto object-contain"
               />
             </div>
           )}
-          
+
           <h1 className="text-sm font-bold text-black">
-            {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
+            {isRTL && effectiveCompanyInfo.nameAr ? effectiveCompanyInfo.nameAr : effectiveCompanyInfo.name}
           </h1>
-          
+
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
             <div className="text-[9px] text-gray-700 mt-1">
               {safeInvoiceData.branchName && <p>{texts.branch}: {isRTL ? (invoiceData as any).branchNameAr || safeInvoiceData.branchName : safeInvoiceData.branchName}</p>}
@@ -195,19 +211,19 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               {safeInvoiceData.branchPhone && <p>{texts.phone}: {safeInvoiceData.branchPhone}</p>}
             </div>
           )}
-          
-          {!safeInvoiceData.branchName && companyInfo.address && (
+
+          {!safeInvoiceData.branchName && effectiveCompanyInfo.address && (
             <p className="text-[9px] text-gray-700">
-              {isRTL ? companyInfo.addressAr || companyInfo.address : companyInfo.address}
+              {isRTL ? effectiveCompanyInfo.addressAr || effectiveCompanyInfo.address : effectiveCompanyInfo.address}
             </p>
           )}
-          
-          {!safeInvoiceData.branchPhone && companyInfo.phone && (
-            <p className="text-[9px] text-gray-700">{texts.phone}: {companyInfo.phone}</p>
+
+          {!safeInvoiceData.branchPhone && effectiveCompanyInfo.phone && (
+            <p className="text-[9px] text-gray-700">{texts.phone}: {effectiveCompanyInfo.phone}</p>
           )}
-          
-          {companyInfo.tax_id && (
-            <p className="text-[9px] text-gray-700">VAT: {companyInfo.tax_id}</p>
+
+          {effectiveCompanyInfo.tax_id && (
+            <p className="text-[9px] text-gray-700">VAT: {effectiveCompanyInfo.tax_id}</p>
           )}
         </div>
 
@@ -217,9 +233,9 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             {/* ✅ رقم الفاتورة كامل بدون تقطيع */}
             <div className="mb-1">
               <span className="font-bold">{texts.invoiceNo}:</span>
-              <span 
+              <span
                 className="font-mono font-semibold ml-1 break-all"
-                style={{ 
+                style={{
                   wordBreak: 'break-all',
                   display: 'inline-block',
                   maxWidth: '100%'
@@ -233,7 +249,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <span className="ml-1">{paymentMethodsText}</span>
             </div>
           </div>
-          
+
           <div className="text-right" style={{ maxWidth: '45%' }}>
             <div className="mb-1">
               <span className="font-bold">{texts.date}:</span>
@@ -319,19 +335,19 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <span>{texts.subtotal}:</span>
               <span>{formatCurrency(safeInvoiceData.subtotal)}</span>
             </div>
-            
+
             {safeInvoiceData.totalDiscountAmount > 0 && (
               <div className="flex justify-between py-0.5 text-green-600 font-semibold">
                 <span>{texts.totalDiscount} ({safeInvoiceData.totalDiscountPercentage}%):</span>
                 <span>-{formatCurrency(safeInvoiceData.totalDiscountAmount)}</span>
               </div>
             )}
-            
+
             <div className="flex justify-between py-0.5">
               <span>{texts.tax}:</span>
               <span>{formatCurrency(safeInvoiceData.tax)}</span>
             </div>
-            
+
             <div className="flex justify-between py-1 font-bold border-t border-gray-400 mt-1">
               <span>{texts.grandTotal}:</span>
               <span>{formatCurrency(safeInvoiceData.total)}</span>

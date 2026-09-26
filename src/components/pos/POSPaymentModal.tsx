@@ -325,8 +325,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         invoice_number: invoiceNumberFromServer,  // ✅ استخدام رقم الفاتورة من السيرفر
         date: new Date().toISOString(),
         cashierName: user?.name,
-        branchName: branchName || companyInfo?.name,
-        branchNameAr: branchNameAr || companyInfo?.nameAr,
+        branchName: branchName || undefined,
+        branchNameAr: branchNameAr || undefined,
         branchPhone: branchPhone || companyInfo?.phone,
         branchAddress: isRTL
           ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
