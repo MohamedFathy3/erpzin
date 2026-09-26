@@ -270,13 +270,13 @@ const deleteMutation = useMutation({
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
                     </TableCell>
                   </TableRow>
                 ) : salesmen?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       {language === 'ar' ? 'لا يوجد مندوبين' : 'No salesmen found'}
                     </TableCell>
                   </TableRow>
@@ -294,6 +294,11 @@ const deleteMutation = useMutation({
                       <TableCell>{salesman.phone || '-'}</TableCell>
                       <TableCell>{salesman.commission_rate}%</TableCell>
                      <TableCell>{salesman.branch_name || '-'}</TableCell>
+                      <TableCell>{salesman.report?.invoice_count || 0}</TableCell>
+                      <TableCell>{Number(salesman.report?.sales_total || 0).toFixed(2)}</TableCell>
+                      <TableCell>{Number(salesman.report?.cost_total || 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-emerald-600">{Number(salesman.report?.profit_total || 0).toFixed(2)}</TableCell>
+                      <TableCell><Button variant="ghost" size="icon" onClick={() => setSelectedReport(salesman)}><FileText className="h-4 w-4" /></Button></TableCell>
                       {/* <TableCell>
                         <Badge variant={salesman.is_active ? 'default' : 'secondary'}>
                           {salesman.is_active 
