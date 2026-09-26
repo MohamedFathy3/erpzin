@@ -1406,6 +1406,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           onClose={() => setShowCustomerSelector(false)}
           onSelectCustomer={setSelectedCustomer}
           selectedCustomer={selectedCustomer}
+          branchId={userBranch?.id || currentBranch?.id}
         />
 
         {showSalesRepSelector && (

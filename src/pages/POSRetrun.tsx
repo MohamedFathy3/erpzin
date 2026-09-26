@@ -1195,6 +1195,7 @@ const POS: React.FC = () => {
           onClose={() => setShowCustomerSelector(false)}
           onSelectCustomer={setSelectedCustomer}
           selectedCustomer={selectedCustomer}
+          branchId={userBranch?.id || currentBranch?.id}
         />
 
         {showSalesRepSelector && (

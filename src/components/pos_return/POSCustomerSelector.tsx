@@ -23,13 +23,15 @@ interface POSCustomerSelectorProps {
   onClose: () => void;
   onSelectCustomer: (customer: Customer | null) => void;
   selectedCustomer: Customer | null;
+  branchId?: number;
 }
 
 const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
   isOpen,
   onClose,
   onSelectCustomer,
-  selectedCustomer
+  selectedCustomer,
+  branchId
 }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
@@ -88,10 +90,11 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
 
   // ==================== Online Query for Customers ====================
   const { data: onlineCustomers, isLoading: onlineLoading } = useQuery({
-    queryKey: ['customers-pos', debouncedSearchQuery],
+    queryKey: ['customers-pos', debouncedSearchQuery, branchId],
     queryFn: async () => {
       try {
         const filters: any = {};
+        if (branchId) filters.branch_id = branchId;
         
         if (debouncedSearchQuery.trim()) {
           filters.search = debouncedSearchQuery;

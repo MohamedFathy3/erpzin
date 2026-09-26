@@ -132,6 +132,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     { value: 'rent', label: language === 'ar' ? 'إيجار' : 'Rent', color: 'bg-blue-500' },
     { value: 'utilities', label: language === 'ar' ? 'مرافق' : 'Utilities', color: 'bg-green-500' },
     { value: 'salaries', label: language === 'ar' ? 'رواتب' : 'Salaries', color: 'bg-yellow-500' },
+    { value: 'bonus', label: language === 'ar' ? 'بونص موظفين' : 'Employee bonuses', color: 'bg-emerald-500' },
     { value: 'supplies', label: language === 'ar' ? 'مستلزمات' : 'Supplies', color: 'bg-purple-500' },
     { value: 'marketing', label: language === 'ar' ? 'تسويق' : 'Marketing', color: 'bg-pink-500' },
     { value: 'maintenance', label: language === 'ar' ? 'صيانة' : 'Maintenance', color: 'bg-cyan-500' },
