@@ -849,6 +849,11 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               {filteredReturns.length}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger value="transfers" className="gap-2">
+            <Share2 size={16} />
+            {language === 'ar' ? 'طلبات التحويل' : 'Transfer requests'}
+            {(transferRequestsQuery.data || []).filter((request: any) => request.status === 'pending').length > 0 && <Badge variant="destructive" className="ms-1 text-xs">{(transferRequestsQuery.data || []).filter((request: any) => request.status === 'pending').length}</Badge>}
+          </TabsTrigger>
         </TabsList>
 
         {/* Sales Tab */}
