@@ -180,7 +180,7 @@ const POSCart: React.FC<POSCartProps> = ({
                         <p className="text-xs text-muted-foreground">{item.sku}</p>
 
                         {/* ✅ حقل خصم المنتج */}
-                        <div className="flex items-center gap-2 mt-2">
+                        {/* <div className="flex items-center gap-2 mt-2">
                           <div className="flex items-center gap-1 bg-primary/5 rounded-lg px-2 py-1">
                             <Percent size={12} className="text-primary" />
                             <span className="text-xs text-muted-foreground">
@@ -202,7 +202,7 @@ const POSCart: React.FC<POSCartProps> = ({
                               -{formatCurrency(itemDiscount)}
                             </span>
                           )}
-                        </div>
+                        </div> */}
                       </div>
 
                       {/* Quantity Controls */}
