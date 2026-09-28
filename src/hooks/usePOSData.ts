@@ -5,9 +5,9 @@ import api from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { useApp } from '@/contexts/AppContext';
 import { useEffect, useState } from 'react';
-import { 
-  saveProductsOffline, 
-  getProductsOffline, 
+import {
+  saveProductsOffline,
+  getProductsOffline,
   getProductByBarcodeOffline,
   searchProductsOffline,
   getNetworkStatus,
@@ -97,7 +97,7 @@ export interface Product {
 // ========== Categories Hook مع Offline Support ==========
 export const useCategories = () => {
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [offlineCategories, setOfflineCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -119,7 +119,7 @@ export const useCategories = () => {
     queryKey: ['categories'],
     queryFn: async () => {
       try {
-        const response = await api.get('/index-sub-account', {
+        const response = await api.post('/category/index', {
           params: {
             orderBy: 'id',
             orderByDirection: 'asc',
@@ -127,9 +127,8 @@ export const useCategories = () => {
             paginate: false
           }
         });
-        
+
         const categories = response.data?.data || response.data || [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const formatted = categories.map((cat: any) => ({
           id: cat.id?.toString() || '',
           name: cat.name || '',
@@ -139,7 +138,7 @@ export const useCategories = () => {
 
         // Save to offline DB
         await saveCategoriesOffline(formatted);
-          // await clearAllOfflineData();
+        // await clearAllOfflineData();
 
         return formatted;
       } catch (error) {
@@ -189,7 +188,7 @@ export const useCategories = () => {
 export const useProducts = (categoryId?: string | null) => {
   const { userBranch, currentBranch } = useApp();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [offlineProducts, setOfflineProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -222,7 +221,7 @@ export const useProducts = (categoryId?: string | null) => {
     queryKey: ['pos-products', categoryId, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
       try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {};
 
         const branchId = userBranch?.id || currentBranch?.id;
@@ -236,10 +235,10 @@ export const useProducts = (categoryId?: string | null) => {
 
         console.log('📦 Fetching products with payload:', payload);
         const response = await api.post('/products/by-branch', payload);
-        
+
         const products = response.data?.data || response.data || [];
-        
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const formatted = products.map((prod: any) => ({
           id: prod.id?.toString() || '',
           name: prod.name || '',
@@ -265,11 +264,11 @@ export const useProducts = (categoryId?: string | null) => {
 
         // Save to offline DB for future use
         await saveProductsOffline(formatted);
-        
+
         return formatted;
       } catch (error) {
         console.error('Error fetching products:', error);
-        
+
         // If online fetch fails and we're actually offline, switch to offline mode
         if (!navigator.onLine) {
           setIsOfflineMode(true);
@@ -277,7 +276,7 @@ export const useProducts = (categoryId?: string | null) => {
           setOfflineProducts(offline);
           return offline;
         }
-        
+
         toast({
           title: 'خطأ في جلب المنتجات',
           variant: 'destructive'
@@ -330,7 +329,7 @@ export const useProductByBarcode = (barcode: string) => {
     queryKey: ['product-barcode', barcode, userBranch?.id, currentBranch?.id],
     queryFn: async () => {
       console.log('🔍 useProductByBarcode queryFn executing for:', barcode);
-      
+
       if (!barcode || barcode.length < 2) {
         console.log('❌ Barcode too short, skipping');
         return null;
@@ -347,25 +346,25 @@ export const useProductByBarcode = (barcode: string) => {
       // Online mode
       try {
         const branchId = userBranch?.id || currentBranch?.id;
-        
+
         console.log('🔍 Searching by BARCODE:', barcode);
         const payload: any = {};
         if (branchId) payload.branch_id = branchId;
         payload.barcode = barcode;
-        
+
         const response = await api.post('/products/by-branch', payload);
         console.log('📦 API response:', response.data);
-        
+
         const products = response.data?.data || [];
-        
+
         // البحث عن المنتج بالباركود
         let product = products.find((p: any) => p.barcode === barcode);
-        
+
         if (!product) {
           console.log('🔍 Not found by barcode, trying SKU:', barcode);
           product = products.find((p: any) => p.sku === barcode);
         }
-        
+
         if (product) {
           console.log('✅ Product found:', product.name, product.sku, product.barcode);
           return {
@@ -389,7 +388,7 @@ export const useProductByBarcode = (barcode: string) => {
             category: product.category || null
           };
         }
-        
+
         console.log('❌ No product found for:', barcode);
         return null;
       } catch (error) {
@@ -410,47 +409,47 @@ export const useProductByBarcode = (barcode: string) => {
 // ========== Helper Functions (بدون تغيير) ==========
 export const getProductColors = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];
-  
+
   const colors = new Set<string>();
   product.units.forEach(unit => {
     unit.colors?.forEach(color => {
       if (color.color) colors.add(color.color);
     });
   });
-  
+
   return Array.from(colors);
 };
 
 export const getProductSizes = (product: Product): string[] => {
   if (!product.units || product.units.length === 0) return [];
-  
+
   const sizes = new Set<string>();
   product.units.forEach(unit => {
     if (unit.unit_name) sizes.add(unit.unit_name);
   });
-  
+
   return Array.from(sizes);
 };
 
-export const getAvailableVariants = (product: Product): Array<{ 
-  size: string; 
-  color: string; 
-  price: number; 
+export const getAvailableVariants = (product: Product): Array<{
+  size: string;
+  color: string;
+  price: number;
   stock: number;
   unitId: number;
   colorId: number;
 }> => {
-  const variants: Array<{ 
-    size: string; 
-    color: string; 
-    price: number; 
+  const variants: Array<{
+    size: string;
+    color: string;
+    price: number;
     stock: number;
     unitId: number;
     colorId: number;
   }> = [];
-  
+
   if (!product.units) return variants;
-  
+
   product.units.forEach(unit => {
     unit.colors?.forEach(color => {
       if (color.stock > 0) {
@@ -465,7 +464,7 @@ export const getAvailableVariants = (product: Product): Array<{
       }
     });
   });
-  
+
   return variants;
 };
 

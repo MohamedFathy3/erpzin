@@ -5,29 +5,53 @@ import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const apiTarget = env.VITE_API_URL || "https://testapi.injazyemen.cloud";
+
+  const apiTarget =
+    env.VITE_API_URL || "https://testapi.injazyemen.cloud";
 
   return {
     server: {
       host: "::",
       port: 7000,
+
+      allowedHosts: [
+        "asca.professionalacademyedu.com",
+      ],
+
       proxy: {
         "/api": {
           target: apiTarget,
           changeOrigin: true,
           secure: true,
-          rewrite: (path) => path.replace(/^\/api/, "/api"),
+
           configure: (proxy) => {
-            proxy.on("error", (err) => console.log("proxy error", err));
-            proxy.on("proxyReq", (proxyReq, req) => {
-              console.log("Sending Request to the Target:", req.method, req.url);
-              proxyReq.setHeader("X-Requested-With", "XMLHttpRequest");
+            proxy.on("error", (err) => {
+              console.log("proxy error:", err);
             });
+
+            proxy.on("proxyReq", (proxyReq, req) => {
+              console.log(
+                "Sending Request to Target:",
+                req.method,
+                req.url
+              );
+
+              proxyReq.setHeader(
+                "X-Requested-With",
+                "XMLHttpRequest"
+              );
+            });
+
             proxy.on("proxyRes", (proxyRes, req) => {
-              console.log("Received Response from the Target:", proxyRes.statusCode, req.url);
+              console.log(
+                "Received Response:",
+                proxyRes.statusCode,
+                req.url
+              );
             });
           },
         },
+
         "/sanctum": {
           target: apiTarget,
           changeOrigin: true,
@@ -35,12 +59,28 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+
     preview: {
       host: "::",
       port: 7000,
-      allowedHosts: ["professionalacademyedu.com", "test.injazyemen.cloud", "localhost", "127.0.0.1", "::1", ".professionalacademyedu.com", "injazyemen.cloud", ".injazyemen.cloud"],
+
+      allowedHosts: [
+        "professionalacademyedu.com",
+        "test.injazyemen.cloud",
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        ".professionalacademyedu.com",
+        "injazyemen.cloud",
+        ".injazyemen.cloud",
+      ],
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+
+    plugins: [
+      react(),
+      mode === "development" && componentTagger(),
+    ].filter(Boolean),
+
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
