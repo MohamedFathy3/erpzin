@@ -12,13 +12,23 @@ class ApiError(RuntimeError):
     pass
 
 
-def request_json(method: str, url: str, *, timeout: int = 20, token: str | None = None, body: dict | None = None) -> dict[str, Any]:
+def request_json(
+    method: str,
+    url: str,
+    *,
+    timeout: int = 20,
+    token: str | None = None,
+    body: dict | None = None,
+    tenant_slug: str | None = None,
+) -> dict[str, Any]:
     payload = None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8")
     headers = {"Accept": "application/json", "User-Agent": "erp-biometric-agent/0.1.0"}
     if payload is not None:
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if tenant_slug:
+        headers["X-Tenant-Slug"] = tenant_slug
     request = urllib.request.Request(url, data=payload, headers=headers, method=method.upper())
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:

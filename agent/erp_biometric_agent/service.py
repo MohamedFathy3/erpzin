@@ -35,6 +35,7 @@ class Connector:
             timeout=self.config.request_timeout,
             token=self.config.agent_token,
             body=body,
+            tenant_slug=self.config.tenant_slug,
         )
 
     def list_devices(self) -> list[dict[str, Any]]:

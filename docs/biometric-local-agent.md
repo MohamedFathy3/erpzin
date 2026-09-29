@@ -18,11 +18,13 @@ Requirements: Python 3.10+, outbound HTTPS to the ERP URL, and TCP/UDP access fr
 
    ```bash
    python -m pip install ./agent
-   erp-biometric-agent pair --api-url https://erp.example.com/api --code ONE_TIME_CODE
+   erp-biometric-agent pair --api-url https://acsa.professionalacademyedu.com/api --code ONE_TIME_CODE
    erp-biometric-agent check-config
    erp-biometric-agent sync-once
    erp-biometric-agent run
    ```
+
+   The agent infers `X-Tenant-Slug` from a tenant subdomain such as `acsa.professionalacademyedu.com` and sends it on pairing and sync requests. For a shared API host or custom domain, add `--tenant-slug acsa` to the `pair` command.
 
 4. In ERP → HR → Biometric Attendance → Devices, configure the terminal IP, port (normally `4370`), and TCP/UDP protocol. The paired agent discovers active devices through the tenant API.
 5. Map each terminal's **User ID** to an ERP employee. Check sync status and queued events in the Local Agent tab.
@@ -31,9 +33,9 @@ The agent stores its bearer credential at `~/.config/erp-biometric-agent/config.
 
 To run it unattended, use the operating system's service manager (for example, a dedicated Windows service wrapper or a Linux `systemd` unit) to run `erp-biometric-agent run` as a restricted service account. The agent itself does not install a service or elevate privileges.
 
-## API contract required on the ERP backend
+## ERP backend API integration
 
-All paths below are relative to `/api`. JSON follows the Laravel app's usual `{ "data": ... }` envelope. All routes must be tenant-scoped from the authenticated ERP user or the paired agent credential; never trust a tenant ID supplied in request JSON.
+All paths below are relative to `/api`. JSON follows the Laravel app's usual `{ "data": ... }` envelope. The local agent sends `X-Tenant-Slug` (inferred from the tenant subdomain or configured explicitly); the backend verifies the paired token belongs to that tenant. Never trust a tenant ID supplied in request JSON.
 
 | Method and path | Auth | Required behavior |
 |---|---|---|

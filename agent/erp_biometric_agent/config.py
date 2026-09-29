@@ -22,6 +22,7 @@ class AgentConfig:
     poll_interval: int = 30
     request_timeout: int = 20
     state_path: str = str(DEFAULT_STATE_PATH)
+    tenant_slug: str | None = None
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "AgentConfig":
@@ -40,6 +41,7 @@ class AgentConfig:
             poll_interval=max(10, int(values.get("poll_interval", 30))),
             request_timeout=max(3, int(values.get("request_timeout", 20))),
             state_path=str(values.get("state_path", DEFAULT_STATE_PATH)),
+            tenant_slug=str(values.get("tenant_slug") or tenant_slug_from_api_url(str(values["api_url"])) or "") or None,
         )
 
 
@@ -51,6 +53,15 @@ def normalize_api_url(value: str) -> str:
     if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise ValueError("ERP API URL must use HTTPS outside localhost")
     return url
+
+
+def tenant_slug_from_api_url(value: str) -> str | None:
+    """Infer a tenant slug from a tenant subdomain; shared API hosts need an explicit slug."""
+    host = (urlparse(normalize_api_url(value)).hostname or "").lower()
+    labels = host.split(".")
+    if len(labels) < 3 or labels[0] in {"www", "api", "app", "erp"}:
+        return None
+    return labels[0]
 
 
 def save_config(values: dict, path: Path = DEFAULT_CONFIG_PATH) -> None:
@@ -69,19 +80,24 @@ def save_config(values: dict, path: Path = DEFAULT_CONFIG_PATH) -> None:
             os.unlink(temporary)
 
 
-def pair_agent(api_url: str, code: str, timeout: int = 20) -> dict:
+def pair_agent(api_url: str, code: str, timeout: int = 20, tenant_slug: str | None = None) -> dict:
     """Redeem a short-lived, single-use code and store the returned agent token."""
     from .http_client import request_json
 
     normalized = normalize_api_url(api_url)
+    tenant_slug = tenant_slug or tenant_slug_from_api_url(normalized)
     response = request_json(
         "POST",
         f"{normalized}/biometric/agents/pair",
         timeout=timeout,
         body={"code": code.strip()},
+        tenant_slug=tenant_slug,
     )
     data = response.get("data", response)
     if not data.get("agent_id") or not data.get("agent_token"):
         raise RuntimeError("ERP pairing response must include agent_id and agent_token")
-    save_config({"api_url": normalized, "agent_id": str(data["agent_id"]), "agent_token": str(data["agent_token"])})
-    return {"agent_id": str(data["agent_id"]), "api_url": normalized}
+    config = {"api_url": normalized, "agent_id": str(data["agent_id"]), "agent_token": str(data["agent_token"])}
+    if tenant_slug:
+        config["tenant_slug"] = tenant_slug
+    save_config(config)
+    return {"agent_id": str(data["agent_id"]), "api_url": normalized, "tenant_slug": tenant_slug}
