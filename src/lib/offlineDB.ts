@@ -42,6 +42,10 @@ export interface OfflineOrder {
   delivery_id?: string | null;
   payment_method?: string;
   payments?: any[];
+  discount_percentage?: number;
+  is_complimentary?: boolean;
+  sales_representative_id?: number | null;
+  invoice_number?: string;
   created_at: number;
   synced: boolean;
 }

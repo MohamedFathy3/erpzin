@@ -94,6 +94,7 @@ interface Sale {
   cashier: string;
   discount_percentage?: number;
   discount_amount?: number;
+  is_complimentary?: boolean;
 }
 
 // ✅ تحديث واجهة ReturnItem
@@ -895,7 +896,10 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         filteredSales.map((sale: Sale) => (
                           <TableRow key={sale.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedSale(sale)}>
                             <TableCell className="font-mono text-sm font-medium whitespace-nowrap">
-                              {sale.invoice_number || 'N/A'}
+                              <div className="flex items-center gap-2">
+                                <span>{sale.invoice_number || 'N/A'}</span>
+                                {sale.is_complimentary && <Badge variant="outline" className="border-amber-500 text-amber-700">{language === 'ar' ? 'مجاملات' : 'Complimentary'}</Badge>}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2 whitespace-nowrap">
@@ -1095,6 +1099,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
             <DialogTitle className="flex items-center gap-2">
               <Receipt size={20} className="text-primary" />
               {t.invoiceDetails} - <span className="font-mono">{selectedSale?.invoice_number}</span>
+              {selectedSale?.is_complimentary && <Badge variant="outline" className="ms-2 border-amber-500 text-amber-700">{language === 'ar' ? 'فاتورة مجاملات' : 'Complimentary invoice'}</Badge>}
             </DialogTitle>
           </DialogHeader>
           {selectedSale && (

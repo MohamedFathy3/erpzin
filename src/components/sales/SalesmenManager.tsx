@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit2, Trash2, Users, FileText, Wallet } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, FileText, Wallet, Eye } from "lucide-react";
 import api from "@/lib/api";
 
 interface SalesmanForm {
@@ -34,8 +34,9 @@ const SalesmenManager = () => {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingSalesman, setEditingSalesman] = useState<SalesmanForm | null>(null);
-  const [reportFrom, setReportFrom] = useState("");
-  const [reportTo, setReportTo] = useState("");
+  const [reportSalesman, setReportSalesman] = useState<any | null>(null);
+  const [reportFrom, setReportFrom] = useState(() => `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`);
+  const [reportTo, setReportTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [payingSalesman, setPayingSalesman] = useState<any | null>(null);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -74,6 +75,17 @@ const SalesmenManager = () => {
         toast.error(language === 'ar' ? 'خطأ في جلب مندوبي المبيعات' : 'Error fetching salesmen');
         return [];
       }
+    },
+  });
+
+  const reportQuery = useQuery({
+    queryKey: ['salesman-report', reportSalesman?.id, reportFrom, reportTo],
+    enabled: Boolean(reportSalesman?.id),
+    queryFn: async () => {
+      const response = await api.get(`/sales-representative/${reportSalesman.id}/report`, {
+        params: { from: reportFrom || undefined, to: reportTo || undefined },
+      });
+      return response.data.data;
     },
   });
 
@@ -234,6 +246,10 @@ const deleteMutation = useMutation({
     setEditingSalesman(null);
   };
 
+  const getCommissionForDate = (salesman: any, date: string) => (salesman?.report?.invoices || [])
+    .filter((invoice: any) => String(invoice.invoice_date || '').slice(0, 10) === date)
+    .reduce((sum: number, invoice: any) => sum + Number(invoice.commission || 0), 0);
+
   const handleSubmit = () => {
     if (!formData.name.trim()) {
       toast.error(language === 'ar' ? 'الاسم مطلوب' : 'Name is required');
@@ -315,7 +331,7 @@ const deleteMutation = useMutation({
                       <TableCell>{Number(salesman.report?.sales_total || 0).toFixed(2)}</TableCell>
                       <TableCell>{Number(salesman.report?.cost_total || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-emerald-600">{Number(salesman.report?.profit_total || 0).toFixed(2)}</TableCell>
-                      <TableCell><div className="text-sm">{Number(salesman.bonus?.paid_total || 0).toFixed(2)} / {Number(salesman.bonus?.due_total || 0).toFixed(2)}</div><Button variant="outline" size="sm" disabled={!salesman.employee_id || Number(salesman.report?.commission_total || 0) <= 0 || Number(salesman.bonus?.paid_total || 0) > 0} onClick={() => { setPayingSalesman(salesman); setPaymentDate(reportTo || reportFrom || new Date().toISOString().slice(0, 10)); }}>{language === 'ar' ? 'دفع' : 'Pay'}</Button></TableCell>
+                      <TableCell><div className="text-sm">{Number(salesman.bonus?.paid_total || 0).toFixed(2)} / {Number(salesman.bonus?.due_total || 0).toFixed(2)}</div><Button variant="outline" size="sm" disabled={!salesman.employee_id || getCommissionForDate(salesman, reportTo || new Date().toISOString().slice(0, 10)) <= 0 || (salesman.bonus?.payments || []).some((payment: any) => payment.date === (reportTo || new Date().toISOString().slice(0, 10)) && payment.status === 'paid')} onClick={() => { setPayingSalesman(salesman); setPaymentDate(reportTo || new Date().toISOString().slice(0, 10)); }}>{language === 'ar' ? 'دفع' : 'Pay'}</Button></TableCell>
                       <TableCell><Button variant="ghost" size="icon" onClick={() => setSelectedReport(salesman)}><FileText className="h-4 w-4" /></Button></TableCell>
                       {/* <TableCell>
                         <Badge variant={salesman.is_active ? 'default' : 'secondary'}>
@@ -326,6 +342,14 @@ const deleteMutation = useMutation({
                       </TableCell> */}
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title={language === 'ar' ? 'عرض تقرير المندوب' : 'View representative report'}
+                            onClick={() => setReportSalesman(salesman)}
+                          >
+                            <Eye className="h-4 w-4 text-primary" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -356,7 +380,7 @@ const deleteMutation = useMutation({
       </Card>
 
       <Dialog open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
-        <DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>{language === 'ar' ? `فواتير ${selectedReport?.name || ''}` : `${selectedReport?.name || ''} invoices`}</DialogTitle></DialogHeader><div className="overflow-auto"><div className="mb-3 grid gap-2 sm:grid-cols-5"><div>{language === 'ar' ? 'النسبة' : 'Rate'}: {selectedReport?.report?.commission_rate || selectedReport?.commission_rate || 0}%</div><div>{language === 'ar' ? 'المبيعات' : 'Sales'}: {Number(selectedReport?.report?.sales_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'الربح' : 'Profit'}: {Number(selectedReport?.report?.profit_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'العمولة' : 'Commission'}: {Number(selectedReport?.report?.commission_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'المدفوع' : 'Paid'}: {Number(selectedReport?.bonus?.paid_total || 0).toFixed(2)}</div></div><div className="mb-4 rounded border p-3"><div className="mb-2 font-semibold">{language === 'ar' ? 'سجل دفع البونص' : 'Bonus payment history'}</div>{(selectedReport?.bonus?.payments || []).length ? selectedReport.bonus.payments.map((payment: any) => <div key={payment.id} className="flex flex-wrap gap-3 text-sm"><span>{payment.date}</span><span>{Number(payment.amount).toFixed(2)}</span><span>{payment.status === 'paid' ? (language === 'ar' ? 'مدفوع' : 'Paid') : (language === 'ar' ? 'مستحق' : 'Due')}</span><span>{language === 'ar' ? 'دفعه:' : 'Paid by:'} {payment.paid_by || '-'}</span><span>{payment.paid_at || ''}</span></div>) : <span className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد دفعات' : 'No payments yet'}</span>}</div><Table><TableHeader><TableRow><TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead><TableHead>{language === 'ar' ? 'الفاتورة' : 'Invoice'}</TableHead><TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead><TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead><TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead><TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead><TableHead>{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead><TableHead>{language === 'ar' ? 'القيود' : 'Journal entries'}</TableHead></TableRow></TableHeader><TableBody>{(selectedReport?.report?.invoices || []).map((invoice: any) => <TableRow key={invoice.id}><TableCell>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '-'}</TableCell><TableCell>{invoice.invoice_number || invoice.id}</TableCell><TableCell><div>{invoice.customer?.name || '-'}</div><div className="text-xs text-muted-foreground">{(invoice.items || []).map((item: any, index: number) => <span key={index} className="me-2">{item.product_name || '-'} × {item.quantity}</span>)}</div></TableCell><TableCell>{Number(invoice.total || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.cost || 0).toFixed(2)}</TableCell><TableCell className="text-emerald-600">{Number(invoice.profit || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.commission || 0).toFixed(2)}</TableCell><TableCell className="text-xs">{invoice.journal_entry_id || '-'} / {invoice.cogs_journal_entry_id || '-'} / {invoice.commission_journal_entry_id || '-'}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent>
+        <DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>{language === 'ar' ? `فواتير ${selectedReport?.name || ''}` : `${selectedReport?.name || ''} invoices`}</DialogTitle></DialogHeader><div className="overflow-auto"><div className="mb-3 grid gap-2 sm:grid-cols-5"><div>{language === 'ar' ? 'النسبة' : 'Rate'}: {selectedReport?.report?.commission_rate || selectedReport?.commission_rate || 0}%</div><div>{language === 'ar' ? 'المبيعات' : 'Sales'}: {Number(selectedReport?.report?.sales_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'الربح' : 'Profit'}: {Number(selectedReport?.report?.profit_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'العمولة' : 'Commission'}: {Number(selectedReport?.report?.commission_total || 0).toFixed(2)}</div><div>{language === 'ar' ? 'المدفوع' : 'Paid'}: {Number(selectedReport?.bonus?.paid_total || 0).toFixed(2)}</div></div><div className="mb-4 rounded border p-3"><div className="mb-2 font-semibold">{language === 'ar' ? 'سجل دفع البونص' : 'Bonus payment history'}</div>{(selectedReport?.bonus?.payments || []).length ? selectedReport.bonus.payments.map((payment: any) => <div key={payment.id} className="flex flex-wrap gap-3 text-sm"><span>{payment.date}</span><span>{Number(payment.amount).toFixed(2)}</span><span>{payment.status === 'paid' ? (language === 'ar' ? 'مدفوع' : 'Paid') : (language === 'ar' ? 'مستحق' : 'Due')}</span><span>{language === 'ar' ? 'دفعه:' : 'Paid by:'} {payment.paid_by || '-'}</span><span>{payment.paid_at || ''}</span></div>) : <span className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد دفعات' : 'No payments yet'}</span>}</div><Table><TableHeader><TableRow><TableHead>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead><TableHead>{language === 'ar' ? 'الفاتورة' : 'Invoice'}</TableHead><TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead><TableHead>{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead><TableHead>{language === 'ar' ? 'التكلفة' : 'Cost'}</TableHead><TableHead>{language === 'ar' ? 'الربح' : 'Profit'}</TableHead><TableHead>{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead><TableHead>{language === 'ar' ? 'القيود' : 'Journal entries'}</TableHead></TableRow></TableHeader><TableBody>{(selectedReport?.report?.invoices || []).map((invoice: any) => <TableRow key={`${invoice.source_type || 'invoice'}-${invoice.id}`}><TableCell>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '-'}</TableCell><TableCell><div>{invoice.invoice_number || invoice.id}{invoice.is_complimentary && <Badge variant="outline" className="ms-1 border-amber-500 text-amber-700">{language === 'ar' ? 'مجاملات' : 'Complimentary'}</Badge>}</div><div className="text-xs text-muted-foreground">{invoice.source_type === 'pos' ? 'POS' : (language === 'ar' ? 'مبيعات' : 'Sales')}</div></TableCell><TableCell><div>{invoice.customer?.name || '-'}</div><div className="text-xs text-muted-foreground">{(invoice.items || []).map((item: any, index: number) => <span key={index} className="me-2">{item.product_name || '-'} × {item.quantity}</span>)}</div></TableCell><TableCell>{Number(invoice.total || 0).toFixed(2)}</TableCell><TableCell>{Number(invoice.cost || 0).toFixed(2)}</TableCell><TableCell className="text-emerald-600">{Number(invoice.profit || 0).toFixed(2)}</TableCell><TableCell><div>{Number(invoice.commission || 0).toFixed(2)}</div><div className="text-xs text-muted-foreground">{Number(invoice.commission_rate || 0)}%</div></TableCell><TableCell className="text-xs">{invoice.journal_entry_id || '-'} / {invoice.cogs_journal_entry_id || '-'} / {invoice.commission_journal_entry_id || '-'}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent>
       </Dialog>
       <Dialog open={!!payingSalesman} onOpenChange={(open) => !open && setPayingSalesman(null)}>
         <DialogContent>
@@ -364,7 +388,7 @@ const deleteMutation = useMutation({
           <div className="space-y-4">
             <div><Label>{language === 'ar' ? 'يوم العمولة' : 'Commission date'}</Label><Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></div>
             <div><Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label><Select value={paymentTreasuryId} onValueChange={setPaymentTreasuryId}><SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} /></SelectTrigger><SelectContent>{treasuries.map((treasury: any) => <SelectItem key={treasury.id} value={String(treasury.id)}>{treasury.name} — {Number(treasury.balance || 0).toFixed(2)}</SelectItem>)}</SelectContent></Select></div>
-            <div className="rounded bg-muted p-3">{language === 'ar' ? 'سيتم حساب العمولة من فواتير اليوم عند التأكيد:' : 'Commission will be calculated from the selected day:'} <strong>{Number(payingSalesman?.report?.commission_total || 0).toFixed(2)}</strong></div>
+            <div className="rounded bg-muted p-3">{language === 'ar' ? 'سيتم حساب العمولة من فواتير اليوم عند التأكيد:' : 'Commission will be calculated from the selected day:'} <strong>{getCommissionForDate(payingSalesman, paymentDate).toFixed(2)}</strong></div>
           </div>
           <DialogFooter><Button disabled={!paymentTreasuryId || payBonusMutation.isPending} onClick={() => payBonusMutation.mutate()}><Wallet className="me-2 h-4 w-4" />{language === 'ar' ? 'تأكيد الدفع' : 'Confirm payment'}</Button></DialogFooter>
         </DialogContent>
@@ -491,6 +515,92 @@ const deleteMutation = useMutation({
                 : (language === 'ar' ? 'حفظ' : 'Save')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(reportSalesman)} onOpenChange={(open) => !open && setReportSalesman(null)}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {language === 'ar' ? 'تقرير المندوب:' : 'Representative report:'} {reportSalesman?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label>{language === 'ar' ? 'من تاريخ' : 'From'}</Label>
+                <Input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} />
+              </div>
+              <div>
+                <Label>{language === 'ar' ? 'إلى تاريخ' : 'To'}</Label>
+                <Input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} />
+              </div>
+            </div>
+
+            {reportQuery.isLoading ? (
+              <div className="py-10 text-center text-muted-foreground">{language === 'ar' ? 'جاري تحميل التقرير...' : 'Loading report...'}</div>
+            ) : reportQuery.isError ? (
+              <div className="py-6 text-center text-destructive">{language === 'ar' ? 'تعذر تحميل التقرير' : 'Could not load the report'}</div>
+            ) : reportQuery.data ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</div><div className="text-xl font-bold">{reportQuery.data.summary.invoice_count}</div></CardContent></Card>
+                  <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'إجمالي المبيعات' : 'Sales total'}</div><div className="text-xl font-bold">{Number(reportQuery.data.summary.sales_total).toLocaleString()}</div></CardContent></Card>
+                  <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'نسبة العمولة' : 'Commission rate'}</div><div className="text-xl font-bold">{reportQuery.data.summary.commission_rate}%</div></CardContent></Card>
+                  <Card><CardContent className="p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'إجمالي العمولة' : 'Commission total'}</div><div className="text-xl font-bold text-primary">{Number(reportQuery.data.summary.commission_total).toLocaleString()}</div></CardContent></Card>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-semibold">{language === 'ar' ? 'ملخص كل يوم' : 'Daily summary'}</h3>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader><TableRow>
+                        <TableHead>{language === 'ar' ? 'اليوم' : 'Day'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'المبيعات' : 'Sales'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {(reportQuery.data.daily || []).map((day: any) => <TableRow key={day.period}><TableCell>{day.period}</TableCell><TableCell>{day.invoice_count}</TableCell><TableCell>{Number(day.sales_total).toLocaleString()}</TableCell><TableCell>{Number(day.commission).toLocaleString()}</TableCell></TableRow>)}
+                        {reportQuery.data.daily?.length === 0 && <TableRow><TableCell colSpan={4} className="py-5 text-center text-muted-foreground">{language === 'ar' ? 'لا توجد بيانات يومية' : 'No daily data'}</TableCell></TableRow>}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-semibold">{language === 'ar' ? 'الفواتير والأصناف' : 'Invoices and items'}</h3>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader><TableRow>
+                        <TableHead>{language === 'ar' ? 'التاريخ / الفاتورة' : 'Date / Invoice'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'العميل' : 'Customer'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'المنتجات والكميات' : 'Products and quantities'}</TableHead>
+                        <TableHead className="text-right">{language === 'ar' ? 'قيمة الفاتورة' : 'Invoice total'}</TableHead>
+                        <TableHead className="text-right">{language === 'ar' ? 'العمولة' : 'Commission'}</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {(reportQuery.data.invoices || []).map((invoice: any) => (
+                          <TableRow key={`${invoice.source_type}-${invoice.id}`}>
+                            <TableCell className="whitespace-nowrap"><div className="font-mono">{invoice.invoice_number}</div><div className="text-xs text-muted-foreground">{String(invoice.date || '').slice(0, 10)}</div>{invoice.is_complimentary && <Badge variant="outline" className="mt-1 border-amber-500 text-amber-700">{language === 'ar' ? 'مجاملات' : 'Complimentary'}</Badge>}</TableCell>
+                            <TableCell>{invoice.customer?.name || (language === 'ar' ? 'عميل عابر' : 'Walk-in')}</TableCell>
+                            <TableCell className="min-w-[240px]">
+                              <ul className="space-y-1 text-xs">
+                                {(invoice.items || []).map((item: any, index: number) => <li key={`${invoice.id}-${index}`} className="flex justify-between gap-3"><span>{item.product_name || `#${item.product_id}`}</span><span className="whitespace-nowrap">× {item.quantity}</span></li>)}
+                              </ul>
+                            </TableCell>
+                            <TableCell className="text-right">{Number(invoice.total_amount).toLocaleString()}</TableCell>
+                            <TableCell className="text-right"><div>{Number(invoice.commission_amount).toLocaleString()}</div><div className="text-xs text-muted-foreground">{invoice.commission_rate}%</div></TableCell>
+                          </TableRow>
+                        ))}
+                        {reportQuery.data.invoices?.length === 0 && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">{language === 'ar' ? 'لا توجد فواتير في الفترة المحددة' : 'No invoices for this period'}</TableCell></TableRow>}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </>

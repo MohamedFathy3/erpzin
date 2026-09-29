@@ -5,9 +5,6 @@ import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useApp } from '@/contexts/AppContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 interface PrintableInvoiceProps {
   data: any;
@@ -29,16 +26,7 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
     const isRtl = language === 'ar';
     const dir = isRtl ? 'rtl' : 'ltr';
     const { user } = useAuth();
-    const { currentBranch, userBranch } = useApp();
     const { formatCurrency } = useRegionalSettings();
-    const { data: companySettings } = useQuery({
-      queryKey: ['print-company-settings'],
-      queryFn: async () => {
-        const { data } = await supabase.from('company_settings').select('*').maybeSingle();
-        return data;
-      },
-      staleTime: 5 * 60 * 1000,
-    });
 
     const t = {
       en: {
@@ -128,17 +116,17 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
       }
     };
 
-    const branch = data.branch || userBranch || currentBranch;
     const company = {
-      name: companySettings?.name || user?.name || propCompanyInfo?.name || 'Yemen Company',
-      name_ar: companySettings?.name_ar || user?.name_ar || propCompanyInfo?.name_ar || 'شركة اليمن',
-      phone: branch?.phone || companySettings?.phone || user?.phone || propCompanyInfo?.phone || '01-234567',
-      address: branch?.address || (isRtl ? branch?.address_ar : undefined) || companySettings?.address || user?.address || propCompanyInfo?.address || 'اليمن - صنعاء',
-      taxNumber: companySettings?.tax_number || user?.tax_id || propCompanyInfo?.taxNumber || '',
-      logo: companySettings?.logo_url || companySettings?.logo_icon_url || user?.logoUrl || user?.logo_url || user?.logo_icon || propCompanyInfo?.logo,
-      branchName: isRtl ? branch?.name_ar || branch?.name : branch?.name,
+      name: user?.name || propCompanyInfo?.name || 'Yemen Company',
+      name_ar: user?.name || propCompanyInfo?.name_ar || 'شركة اليمن',
+      phone: user?.phone || propCompanyInfo?.phone || '01-234567',
+      address: user?.address || propCompanyInfo?.address || 'اليمن - صنعاء',
+      taxNumber: user?.tax_id || propCompanyInfo?.taxNumber || '',
+      logo: user?.logo_icon || user?.logoUrl || propCompanyInfo?.logo,
     };
+
     const displayName = isRtl ? company.name_ar : company.name;
+
     // حساب الخصم إذا كان موجود
     const hasDiscount = data.discount_percentage > 0 || data.discount_amount > 0;
     const discountPercent = data.discount_percentage || 0;
@@ -244,9 +232,7 @@ const getSize = (item: any): string | null => {
         <div ref={ref} dir={dir} style={printStyles.container}>
           {/* Header */}
           <div style={printStyles.header}>
-            {company.logo && <img src={company.logo} alt={displayName} style={{ maxWidth: '56mm', maxHeight: '18mm', objectFit: 'contain', margin: '0 auto 4px' }} />}
             <div style={printStyles.companyName}>{displayName}</div>
-            {company.branchName && <div style={{ fontSize: '10px', fontWeight: 'bold' }}>{isRtl ? 'الفرع' : 'Branch'}: {company.branchName}</div>}
             <div style={{ fontSize: '10px' }}>{company.address}</div>
             <div style={{ fontSize: '10px' }}>📞 {company.phone}</div>
             {company.taxNumber && (
@@ -255,6 +241,11 @@ const getSize = (item: any): string | null => {
             <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px' }}>
               {texts.invoice}
             </div>
+            {data.is_complimentary && (
+              <div style={{ border: '1px solid #d97706', color: '#b45309', fontWeight: 'bold', padding: '3px', marginTop: '4px' }}>
+                {isRtl ? 'فاتورة مجاملات' : 'COMPLIMENTARY INVOICE'}
+              </div>
+            )}
           </div>
 
           {/* Invoice Info */}

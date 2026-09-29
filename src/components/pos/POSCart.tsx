@@ -38,6 +38,7 @@ interface POSCartProps {
   invoiceDiscountAmount?: number;
   onInvoiceDiscountChange?: (percentage: number, amount: number) => void;
   onItemDiscountChange?: (itemId: string, percentage: number, variantId?: string) => void;
+  canManageDiscounts?: boolean;
 }
 
 const POSCart: React.FC<POSCartProps> = ({
@@ -51,7 +52,8 @@ const POSCart: React.FC<POSCartProps> = ({
   invoiceDiscountPercentage = 0,
   invoiceDiscountAmount = 0,
   onInvoiceDiscountChange,
-  onItemDiscountChange
+  onItemDiscountChange,
+  canManageDiscounts = false
 }) => {
   const { language } = useLanguage();
   const { taxRates } = useCurrencyTax();
@@ -179,8 +181,7 @@ const POSCart: React.FC<POSCartProps> = ({
                         )}
                         <p className="text-xs text-muted-foreground">{item.sku}</p>
 
-                        {/* ✅ حقل خصم المنتج */}
-                        {/* <div className="flex items-center gap-2 mt-2">
+                        {canManageDiscounts && <div className="flex items-center gap-2 mt-2">
                           <div className="flex items-center gap-1 bg-primary/5 rounded-lg px-2 py-1">
                             <Percent size={12} className="text-primary" />
                             <span className="text-xs text-muted-foreground">
@@ -197,12 +198,12 @@ const POSCart: React.FC<POSCartProps> = ({
                             />
                             <span className="text-xs">%</span>
                           </div>
-                          {item.discount_percentage > 0 && (
+                          {canManageDiscounts && item.discount_percentage > 0 && (
                             <span className="text-xs text-green-600 font-medium">
                               -{formatCurrency(itemDiscount)}
                             </span>
                           )}
-                        </div> */}
+                        </div>}
                       </div>
 
                       {/* Quantity Controls */}
@@ -248,9 +249,7 @@ const POSCart: React.FC<POSCartProps> = ({
                     {/* Price Display */}
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/50">
                       <div>
-                        <p className="text-xs text-muted-foreground line-through">
-                          {formatCurrency(item.price)}
-                        </p>
+                          {canManageDiscounts && item.discount_percentage > 0 && <p className="text-xs text-muted-foreground line-through">{formatCurrency(item.price)}</p>}
                         <p className="text-sm font-bold text-primary">
                           {formatCurrency(item.price * (1 - (item.discount_percentage || 0) / 100))}
                         </p>
@@ -275,7 +274,7 @@ const POSCart: React.FC<POSCartProps> = ({
             </div>
             
             {/* ✅ خصم الفاتورة */}
-            {invoiceDiscountPercentage > 0 && (
+            {canManageDiscounts && invoiceDiscountPercentage > 0 && (
               <div className="flex justify-between text-green-600">
                 <span className="flex items-center gap-1">
                   <Percent size={12} />
@@ -285,8 +284,7 @@ const POSCart: React.FC<POSCartProps> = ({
               </div>
             )}
 
-            {/* ✅ حقل إدخال خصم الفاتورة */}
-            <div className="flex items-center justify-between gap-2 pt-1">
+            {canManageDiscounts && <div className="flex items-center justify-between gap-2 pt-1">
               <div className="flex items-center gap-1 bg-primary/5 rounded-lg px-2 py-1">
                 <Percent size={14} className="text-primary" />
                 <span className="text-xs text-muted-foreground">
@@ -308,7 +306,7 @@ const POSCart: React.FC<POSCartProps> = ({
                   -{formatCurrency(invoiceDiscountApplied)}
                 </span>
               )}
-            </div>
+            </div>}
 
             <div className="flex justify-between">
               <span>{language === 'ar' ? `الضريبة (${taxRate}%)` : `VAT (${taxRate}%)`}</span>

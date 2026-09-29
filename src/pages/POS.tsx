@@ -176,6 +176,16 @@ const POS: React.FC = () => {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { signOut,user, enabledModules } = useAuth();
+  const canManagePosDiscounts = Boolean(user?.super_admin)
+    || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase());
+
+  useEffect(() => {
+    if (!canManagePosDiscounts) {
+      setInvoiceDiscountPercentage(0);
+      setInvoiceDiscountAmount(0);
+      setCartItems(items => items.map(item => ({ ...item, discount_percentage: 0 })));
+    }
+  }, [canManagePosDiscounts]);
   
   const [branchDetails, setBranchDetails] = useState<{
     phone?: string | null;
@@ -326,9 +336,13 @@ const POS: React.FC = () => {
                 product_id: parseInt(item.id),
                 quantity: item.quantity,
                 price: item.price,
+                discount_percentage: item.discount_percentage || 0,
                 color: item.colorName || null,
                 size: item.sizeName || null
               })),
+              discount_percentage: order.discount_percentage || 0,
+              is_complimentary: order.is_complimentary || false,
+              sales_representative_id: order.sales_representative_id || null,
               payments: order.payments || [],
               subtotal: order.subtotal,
               tax: order.tax,
@@ -1299,6 +1313,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               invoiceDiscountAmount={invoiceDiscountAmount}
               onInvoiceDiscountChange={handleInvoiceDiscountChange}
               onItemDiscountChange={handleItemDiscountChange}
+              canManageDiscounts={canManagePosDiscounts}
             />
           </div>
         </div>

@@ -51,6 +51,7 @@ interface InvoiceTemplateProps {
     totalDiscountPercentage?: number;
     totalDiscountAmount?: number;
     invoiceDiscountPercentage?: number;
+    isComplimentary?: boolean;
   };
   companyInfo: CompanyInfo;
 }
@@ -132,6 +133,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       totalDiscountPercentage: invoiceData.totalDiscountPercentage || 0,
       totalDiscountAmount: invoiceData.totalDiscountAmount || 0,
       invoiceDiscountPercentage: invoiceData.invoiceDiscountPercentage || 0,
+      isComplimentary: Boolean(invoiceData.isComplimentary),
     };
 
     const texts = {
@@ -244,6 +246,11 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 {safeInvoiceData.invoice_number}
               </span>
             </div>
+            {safeInvoiceData.isComplimentary && (
+              <div className="mb-1 rounded border border-amber-500 px-2 py-1 text-center font-bold text-amber-700">
+                {isRTL ? 'فاتورة مجاملات' : 'COMPLIMENTARY INVOICE'}
+              </div>
+            )}
             <div>
               <span className="font-bold">{texts.paymentMethod}:</span>
               <span className="ml-1">{paymentMethodsText}</span>

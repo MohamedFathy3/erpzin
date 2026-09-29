@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Cookies from 'js-cookie';
 import { useReactToPrint } from 'react-to-print';
 import InvoiceTemplate from './InvoiceTemplate';
-import { Banknote, Check, CreditCard, Crown, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
+import { Banknote, Check, CreditCard, Crown, Gift, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { saveOrderOffline } from '@/lib/offlineDB';
 import { toast } from '@/hooks/use-toast';
@@ -108,6 +108,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   const { user } = useAuth();
   const isRTL = language === 'ar';
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('cash');
+  const [isComplimentary, setIsComplimentary] = useState(false);
   const [cashAmount, setCashAmount] = useState<string>(total.toString());
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({
     cash: '',
@@ -155,6 +156,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     setCashAmount(total.toString());
     setSplitAmounts({ cash: '', card: '', wallet: '' });
   }, [total, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) setIsComplimentary(false);
+  }, [isOpen]);
 
   const handleQuickAmount = (amount: number) => {
     if (paymentMethod === 'split') {
@@ -243,9 +248,11 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         price: item.price,
         color: item.colorName || null,
         size: item.sizeName || null,
-        discount_amount: totalDiscountAmount
+        discount_percentage: item.discount_percentage || 0,
+        discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2))
       })),
-      discount_percentage: totalDiscountPercentage,
+      discount_percentage: invoiceDiscountPercentage,
+      is_complimentary: isComplimentary,
       payments: payments,
       subtotal: subtotal,
       tax: tax,
@@ -271,7 +278,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         delivery_id: deliveryPerson?.id,
         payment_method: paymentMethod,
         payments,
-        invoice_number: offlineInvoiceNumber
+        invoice_number: offlineInvoiceNumber,
+        discount_percentage: invoiceDiscountPercentage,
+        is_complimentary: isComplimentary,
+        sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
       });
 
       if (offlineId) {
@@ -365,6 +375,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         totalDiscountPercentage: totalDiscountPercentage,
         totalDiscountAmount: totalDiscountAmount,
         invoiceDiscountPercentage: invoiceDiscountPercentage,
+        isComplimentary,
       };
 
       console.log('📄 Print data with invoice number:', printData.invoice_number);
@@ -623,6 +634,24 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
               {total.toLocaleString()} <span className="text-lg"></span>
             </p>
           </div>
+
+          <label className="mb-5 flex cursor-pointer items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <input
+              type="checkbox"
+              checked={isComplimentary}
+              onChange={(event) => setIsComplimentary(event.target.checked)}
+              className="mt-1 h-4 w-4 accent-amber-600"
+            />
+            <span className="flex-1">
+              <span className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-400">
+                <Gift size={16} />
+                {language === 'ar' ? 'فاتورة مجاملات' : 'Complimentary invoice'}
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {language === 'ar' ? 'تبقى فاتورة بيع عادية بالقيمة كاملة، ويصل إشعار للإدارة.' : 'Recorded as a regular full-value sale; management will be notified.'}
+              </span>
+            </span>
+          </label>
 
           <div className="flex gap-2 mb-6 justify-center">
             {paymentMethods.map((method) => (
