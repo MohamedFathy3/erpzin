@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "erp-biometric-agent"
+version = "0.1.0"
+description = "Local ZKTeco attendance connector for ERP SaaS tenants"
+requires-python = ">=3.10"
+dependencies = ["pyzk>=0.9,<1"]
+
+[project.scripts]
+erp-biometric-agent = "erp_biometric_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["erp_biometric_agent*"]
