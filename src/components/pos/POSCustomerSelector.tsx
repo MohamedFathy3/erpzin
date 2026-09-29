@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,8 @@ interface Customer {
   phone: string | null;
   address: string | null;
   loyalty_points: number | null;
+  branch_id?: number | string | null;
+  branch?: { id: number | string } | null;
 }
 
 interface POSCustomerSelectorProps {
@@ -23,7 +26,7 @@ interface POSCustomerSelectorProps {
   onClose: () => void;
   onSelectCustomer: (customer: Customer | null) => void;
   selectedCustomer: Customer | null;
-  branchId?: number;
+  branchId?: number | string;
 }
 
 const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
@@ -66,7 +69,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
   useEffect(() => {
     if (isOfflineMode && isOpen) {
       setIsOfflineLoading(true);
-      getCustomersOffline()
+      getCustomersOffline(branchId)
         .then(customers => {
           setOfflineCustomers(customers as Customer[]);
         })
@@ -77,7 +80,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
           setIsOfflineLoading(false);
         });
     }
-  }, [isOfflineMode, isOpen]);
+  }, [branchId, isOfflineMode, isOpen]);
 
   // ==================== Debounced Search ====================
   useEffect(() => {
@@ -95,12 +98,15 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
       try {
         const filters: any = {};
         if (branchId) filters.branch_id = branchId;
+        if (!branchId) return [];
         
         if (debouncedSearchQuery.trim()) {
           filters.search = debouncedSearchQuery;
         }
 
         const response = await api.post('/customer/index', {
+          branch_id: branchId,
+          pos_context: true,
           filters: filters,
           orderBy: 'id',
           orderByDirection: 'asc',
@@ -112,7 +118,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
         const customers = response.data.data || [];
         
         // Save to offline DB for future use
-        await saveCustomersOffline(customers);
+        await saveCustomersOffline(customers, branchId);
         
         return customers;
       } catch (error) {
@@ -121,7 +127,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
         // If offline, try to get from offline DB
         if (!navigator.onLine) {
           setIsOfflineMode(true);
-          const offline = await getCustomersOffline();
+          const offline = await getCustomersOffline(branchId);
           setOfflineCustomers(offline as Customer[]);
           return offline;
         }
@@ -133,12 +139,14 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
         return [];
       }
     },
-    enabled: isOpen && !isOfflineMode,
+    enabled: isOpen && !isOfflineMode && Boolean(branchId),
   });
 
   // ==================== Filter customers (online or offline) ====================
   const filteredCustomers = useMemo(() => {
-    const source = isOfflineMode ? offlineCustomers : (onlineCustomers || []);
+    const source = (isOfflineMode ? offlineCustomers : (onlineCustomers || [])).filter((customer: Customer) =>
+      Boolean(branchId) && String(customer.branch_id ?? customer.branch?.id ?? '') === String(branchId)
+    );
     
     if (!source.length) return [];
     
@@ -152,12 +160,12 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
         (customer.phone && customer.phone.includes(query))
       );
     });
-  }, [isOfflineMode, onlineCustomers, offlineCustomers, searchQuery]);
+  }, [branchId, isOfflineMode, onlineCustomers, offlineCustomers, searchQuery]);
 
   // ==================== Add Customer Mutation ====================
   const addCustomerMutation = useMutation({
     mutationFn: async (customer: typeof newCustomer) => {
-      const response = await api.post('/customer', customer);
+      const response = await api.post('/customer', { ...customer, branch_id: branchId, pos_context: true });
       return response.data;
     },
     onSuccess: (data) => {
@@ -180,7 +188,8 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
           name_ar: newCustomer.name_ar || newCustomer.name,
           phone: newCustomer.phone || null,
           address: newCustomer.address || null,
-          loyalty_points: 0
+          loyalty_points: 0,
+          branch_id: branchId ?? null
         };
         
         // Add to offline DB
@@ -441,7 +450,9 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                     <div className="text-center py-8">
                       <User className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
                       <p className="text-muted-foreground">
-                        {searchQuery
+                        {!branchId
+                          ? (language === 'ar' ? 'حدد الفرع الحالي أولاً لعرض عملائه' : 'Select a branch to view its customers')
+                          : searchQuery
                           ? (language === 'ar' ? 'لم يتم العثور على عملاء' : 'No customers found')
                           : (language === 'ar' ? 'لا توجد عملاء مسجلين' : 'No customers registered')
                         }
@@ -457,6 +468,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                           size="sm"
                           onClick={() => setShowAddForm(true)}
                           className="mt-4"
+                          disabled={!branchId}
                         >
                           <UserPlus size={16} className="me-2" />
                           {language === 'ar' ? 'إضافة عميل محلي' : 'Add Local Customer'}
@@ -528,6 +540,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
                 onClick={() => setShowAddForm(true)}
                 variant="outline"
                 className="w-full"
+                disabled={!branchId}
               >
                 <UserPlus size={18} className="me-2" />
                 {language === 'ar' ? 'إضافة عميل جديد' : 'Add New Customer'}

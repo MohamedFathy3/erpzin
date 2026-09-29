@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/offlineDB.ts
 import Dexie, { Table } from 'dexie';
 
@@ -28,6 +29,7 @@ export interface OfflineCustomer {
   phone?: string | null;
   address?: string | null;
   loyalty_points?: number | null;
+  branch_id?: number | string | null;
   lastUpdated: number;
   synced: boolean;
 }
@@ -78,6 +80,13 @@ class OfflineDatabase extends Dexie {
     this.version(1).stores({
       products: 'id, barcode, sku, category_id, lastUpdated',
       customers: 'id, phone, name, lastUpdated',
+      orders: 'id, created_at',
+      categories: 'id, lastUpdated',
+      settings: 'key'
+    });
+    this.version(2).stores({
+      products: 'id, barcode, sku, category_id, lastUpdated',
+      customers: 'id, phone, name, branch_id, lastUpdated',
       orders: 'id, created_at',
       categories: 'id, lastUpdated',
       settings: 'key'
@@ -260,7 +269,7 @@ export const clearCategoriesOffline = async () => {
 /**
  * حفظ العملاء في قاعدة البيانات المحلية
  */
-export const saveCustomersOffline = async (customers: any[]) => {
+export const saveCustomersOffline = async (customers: any[], branchId?: number | string) => {
   try {
     const offlineCustomers = customers.map(c => ({
       id: c.id?.toString() || c.id,
@@ -269,6 +278,7 @@ export const saveCustomersOffline = async (customers: any[]) => {
       phone: c.phone || null,
       address: c.address || null,
       loyalty_points: c.loyalty_points || 0,
+      branch_id: c.branch_id ?? c.branch?.id ?? branchId ?? null,
       lastUpdated: Date.now(),
       synced: true
     }));
@@ -285,10 +295,13 @@ export const saveCustomersOffline = async (customers: any[]) => {
 /**
  * جلب العملاء من قاعدة البيانات المحلية
  */
-export const getCustomersOffline = async () => {
+export const getCustomersOffline = async (branchId?: number | string) => {
   try {
     const customers = await offlineDB.customers.toArray();
-    return customers.sort((a, b) => a.name.localeCompare(b.name));
+    if (branchId === undefined || branchId === null || branchId === '') return [];
+    return customers
+      .filter((customer) => String(customer.branch_id ?? '') === String(branchId))
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error('❌ Error getting customers offline:', error);
     return [];
@@ -328,6 +341,7 @@ export const addCustomerOffline = async (customer: any) => {
       phone: customer.phone || null,
       address: customer.address || null,
       loyalty_points: customer.loyalty_points || 0,
+      branch_id: customer.branch_id ?? null,
       lastUpdated: Date.now(),
       synced: false
     });

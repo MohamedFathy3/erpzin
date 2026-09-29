@@ -175,9 +175,11 @@ const POS: React.FC = () => {
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { signOut,user, enabledModules } = useAuth();
+  const { signOut, user, enabledModules, permissions } = useAuth();
   const canManagePosDiscounts = Boolean(user?.super_admin)
-    || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase());
+    || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase())
+    || permissions.includes('*')
+    || permissions.includes('sales.pos_discount.apply');
 
   useEffect(() => {
     if (!canManagePosDiscounts) {
