@@ -4,7 +4,7 @@ This connector runs **inside the customer's private network**, reads ZKTeco atte
 
 ## Repository boundary
 
-This Git repository contains the ERP web frontend and the Python connector. It does **not** contain the Laravel/API backend source. The UI and connector below rely on the API contract in this document; the backend routes, persistence, tenant authorization, and migrations must be implemented in the separate ERP backend before pairing or live sync can work. Do not mistake a successful frontend build or connector pairing for a production-ready server implementation.
+This Git repository contains the ERP web frontend and the Python connector. The Laravel/API backend is maintained separately in [MohamedFathy3/erpbackend](https://github.com/MohamedFathy3/erpbackend); the pairing, tenant-scoped agent routes, storage, and token revocation implementation now live there. The backend still needs to be deployed and migrated before this frontend can pair agents in production.
 
 The other supplied repository, `bakora28/student-system`, is the Quizaty exams application and is unrelated; it is not modified by this change.
 
@@ -59,12 +59,12 @@ Expected event shape:
 }
 ```
 
-A production backend implementation should store agents, one-time pairing-code hashes, token hashes/scopes, and punch events; apply a unique constraint on `(tenant_id, event_key)` (or equivalent); authorize event/device/employee mappings within the same tenant; rate-limit pairing and ingestion; redact credentials; and expose no public unauthenticated device routes. The existing attendance table is a daily summary, so preserve raw punch events or use an equivalent idempotent event store before aggregating first-in/last-out. Do not overwrite a full day based on the order events arrive.
+The backend implementation stores expiring single-use pairing-code hashes and random agent-token hashes, applies idempotent event keys plus the existing device/user/timestamp uniqueness constraint, tenant-scopes device and employee lookups, rate-limits pairing and ingestion, and allows token revocation. Raw punches remain in `biometric_logs`; daily attendance is recalculated from the stored day log set rather than only the latest request batch.
 
 ## Reliability and support notes
 
 - Polling defaults to 30 seconds (minimum 10 seconds). After an API/device failure, the agent backs off up to five minutes.
 - Punches are written to a local SQLite spool before upload; acknowledged records are removed only when the API explicitly returns their `accepted_event_keys`.
-- A tenant should provision one agent on a stable always-on computer, preferably on wired LAN. Multiple agents may be used for separate isolated networks after backend support is implemented.
+- A tenant should provision one agent on a stable always-on computer, preferably on wired LAN. Multiple agents may be used for separate isolated networks.
 - Current device adapter is for ZKTeco terminals supported by `pyzk`. Other brands need a distinct driver/adapter.
 - Test first with a non-production device and confirm timezone, duplicate handling, user mappings, and attendance aggregation in the ERP backend.
