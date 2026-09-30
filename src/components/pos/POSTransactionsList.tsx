@@ -40,7 +40,6 @@ import {
   PieChart,
   Tag,
   Share2,
-  KeyRound,
   CheckCircle,
   XCircle
 } from 'lucide-react';
@@ -166,15 +165,13 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [selectedSalesRepresentative, setSelectedSalesRepresentative] = useState('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
   const [showFilters, setShowFilters] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [cashierSales, setCashierSales] = useState<Sale[] | null>(null);
-  const [cashierId, setCashierId] = useState('');
-  const [cashierPassword, setCashierPassword] = useState('');
   const [activeSection, setActiveSection] = useState<'sales' | 'returns' | 'transfers'>('sales');
   
   // ========== Print State ==========
@@ -283,10 +280,16 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   };
 
   // ========== Queries ==========
-  const employeesQuery = useQuery({
-    queryKey: ['pos-cashier-employees'],
+  const salesRepresentativesQuery = useQuery({
+    queryKey: ['pos-sales-representatives'],
     queryFn: async () => {
-      const response = await api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false });
+      const response = await api.post('/sales-representative/index', {
+        filters: {},
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 500,
+        paginate: false,
+      });
       const data = response.data?.data;
       return Array.isArray(data) ? data : (data?.data || []);
     },
@@ -294,11 +297,6 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const transferRequestsQuery = useQuery({
     queryKey: ['invoice-transfer-requests'],
     queryFn: async () => (await api.get('/invoice-transfer-requests', { params: { per_page: 100 } })).data?.data?.data || [],
-  });
-  const cashierAccessMutation = useMutation({
-    mutationFn: async () => (await api.post('/invoices/cashier-access', { employee_id: Number(cashierId), password: cashierPassword })).data?.data || [],
-    onSuccess: (data) => { setCashierSales(data); setCashierPassword(''); },
-    onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'كلمة مرور الكاشير غير صحيحة' : 'Invalid cashier password')),
   });
   const transferActionMutation = useMutation({
     mutationFn: ({ id, action }: { id: number; action: 'approve' | 'reject' }) => api.post(`/invoice-transfer-requests/${id}/${action}`),
@@ -441,6 +439,10 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       if (saleStatus !== selectedStatus) return false;
     }
 
+    if (selectedSalesRepresentative !== 'all' && String(sale.salesRepresentative?.id) !== selectedSalesRepresentative) {
+      return false;
+    }
+
     return true;
   };
 
@@ -486,8 +488,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   };
 
   const filteredSales = useMemo(() => {
-    return (cashierSales ?? sales).filter(filterSales);
-  }, [sales, cashierSales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus]);
+    return sales.filter(filterSales);
+  }, [sales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus, selectedSalesRepresentative]);
 
   const filteredReturns = useMemo(() => {
     return returns.filter(filterReturns);
@@ -616,11 +618,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     setDateFrom('');
     setDateTo('');
     setSelectedBranch('all');
+    setSelectedSalesRepresentative('all');
     setSelectedPaymentMethod('all');
     setSelectedStatus('all');
-    setCashierSales(null);
-    setCashierId('');
-    setCashierPassword('');
   };
 
   const refreshData = async () => {
@@ -634,7 +634,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     }
   };
 
-  const hasActiveFilters = searchTerm || dateFrom || dateTo || selectedPaymentMethod !== 'all' || selectedStatus !== 'all';
+  const hasActiveFilters = searchTerm || dateFrom || dateTo || selectedSalesRepresentative !== 'all' || selectedPaymentMethod !== 'all' || selectedStatus !== 'all';
   const isLoading = salesLoading || returnsLoading;
 
   // ========== Render ==========
@@ -768,11 +768,23 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               )}
             </div>
 
-            <div className="grid gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 md:grid-cols-[1fr_1fr_auto_auto]">
-              <div className="space-y-1"><Label>{language === 'ar' ? 'عرض فواتير كاشير' : 'View cashier invoices'}</Label><Select value={cashierId} onValueChange={(value) => { setCashierId(value); setCashierSales(null); }}><SelectTrigger><SelectValue placeholder={language === 'ar' ? 'اختر محمد / الكاشير' : 'Choose cashier'} /></SelectTrigger><SelectContent>{(employeesQuery.data || []).map((employee: any) => <SelectItem key={employee.id} value={String(employee.id)}>{employee.name || employee.full_name || employee.email}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1"><Label>{language === 'ar' ? 'كلمة المرور' : 'Password'}</Label><Input type="password" value={cashierPassword} onChange={(event) => setCashierPassword(event.target.value)} placeholder={language === 'ar' ? 'اكتب كلمة المرور' : 'Enter password'} /></div>
-              <Button className="self-end" disabled={!cashierId || !cashierPassword || cashierAccessMutation.isPending} onClick={() => cashierAccessMutation.mutate()}><KeyRound className="me-2 h-4 w-4" />{language === 'ar' ? 'عرض الفواتير' : 'Show invoices'}</Button>
-              {cashierSales && <Button variant="outline" className="self-end" onClick={() => setCashierSales(null)}>{language === 'ar' ? 'إظهار الكل' : 'Show all'}</Button>}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">{t.salesRepresentative}</Label>
+                <Select value={selectedSalesRepresentative} onValueChange={setSelectedSalesRepresentative}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.salesRepresentative} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{language === 'ar' ? 'جميع المندوبين' : 'All representatives'}</SelectItem>
+                    {(salesRepresentativesQuery.data || []).map((representative: any) => (
+                      <SelectItem key={representative.id} value={String(representative.id)}>
+                        {language === 'ar' ? representative.name_ar || representative.name : representative.name || representative.name_ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {/* Date Filters */}
             <div className="grid grid-cols-2 gap-3">
