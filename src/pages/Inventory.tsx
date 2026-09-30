@@ -205,9 +205,9 @@ const Inventory: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // ========== جلب المنتجات مع فلترة حسب الفئة ==========
+  // ========== جلب المنتجات (الفلترة بتتم في الباك إند) ==========
   const { data: dbProducts = [], refetch, isLoading: productsLoading } = useQuery({
-    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter],
+    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -215,28 +215,27 @@ const Inventory: React.FC = () => {
           orderByDirection: 'asc',
           perPage: 100,
           paginate: false,
-          delete: false
+          delete: false,
+          filters: {}
         };
 
         // ✅ الأولوية: selectedCategory من CategoryManager (القائمة الجانبية)
         if (selectedCategory && selectedCategory !== 'all') {
-          payload.filters = {
-            category_id: parseInt(selectedCategory)
-          };
-          console.log('📦 Filtering by CategoryManager category:', selectedCategory);
+          payload.filters.category_id = parseInt(selectedCategory);
         }
         // ✅ الثاني: categoryFilter من Select الفئات
         else if (categoryFilter && categoryFilter !== 'all') {
-          payload.filters = {
-            category_id: parseInt(categoryFilter)
-          };
-          console.log('📦 Filtering by FilterSelect category:', categoryFilter);
+          payload.filters.category_id = parseInt(categoryFilter);
         }
 
         // ✅ فلترة حسب الحالة (active/inactive)
         if (statusFilter !== 'all') {
-          if (!payload.filters) payload.filters = {};
           payload.filters.active = statusFilter === 'active';
+        }
+
+        // ✅ فلترة حسب المخزن
+        if (warehouseFilter !== 'all') {
+          payload.filters.warehouse_id = parseInt(warehouseFilter);
         }
 
         console.log('📦 Fetching products with payload:', payload);
@@ -328,7 +327,7 @@ const Inventory: React.FC = () => {
     return transformed;
   });
 
-  // ========== فلترة المنتجات في الواجهة ==========
+  // ========== فلترة المنتجات في الواجهة (بحث + مخزون + ترتيب فقط) ==========
   const filteredProducts = useMemo(() => {
     let filtered = products.filter(product => {
       // ✅ البحث (الاسم - SKU - الباركود)
@@ -344,8 +343,7 @@ const Inventory: React.FC = () => {
       else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
 
-      const matchesWarehouse = warehouseFilter === 'all' || product.warehouseIds?.includes(warehouseFilter);
-      return matchesSearch && matchesStock && matchesWarehouse;
+      return matchesSearch && matchesStock;
     });
 
     // ✅ ترتيب المنتجات
@@ -378,7 +376,7 @@ const Inventory: React.FC = () => {
     });
 
     return filtered;
-  }, [products, searchQuery, stockFilter, warehouseFilter, sortBy, language]);
+  }, [products, searchQuery, stockFilter, sortBy, language]);
 
   // ========== Pagination ==========
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
@@ -390,7 +388,7 @@ const Inventory: React.FC = () => {
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, stockFilter, categoryFilter, sortBy, selectedCategory]);
+  }, [searchQuery, statusFilter, stockFilter, categoryFilter, warehouseFilter, sortBy, selectedCategory]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -400,12 +398,20 @@ const Inventory: React.FC = () => {
     setStatusFilter('all');
     setStockFilter('all');
     setCategoryFilter('all');
+    setWarehouseFilter('all');
     setSelectedCategory(null);
     setSearchQuery('');
     setSortBy('created_desc');
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || stockFilter !== 'all' || categoryFilter !== 'all' || selectedCategory !== null || searchQuery !== '' || sortBy !== 'created_desc';
+  const hasActiveFilters =
+    statusFilter !== 'all' ||
+    stockFilter !== 'all' ||
+    categoryFilter !== 'all' ||
+    warehouseFilter !== 'all' ||
+    selectedCategory !== null ||
+    searchQuery !== '' ||
+    sortBy !== 'created_desc';
 
   const handleAddProduct = () => {
     setEditProduct(null);
@@ -632,7 +638,6 @@ const Inventory: React.FC = () => {
         }
       }
 
-
       console.log('📦 Final product data units:', JSON.stringify(productData.units, null, 2));
 
       let productId = formData.id;
@@ -850,9 +855,6 @@ const Inventory: React.FC = () => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
-
-                  {/* Stock Filter */}
-
                 </div>
 
                 {/* Warehouse Filter */}
@@ -863,7 +865,7 @@ const Inventory: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">
-                        {language === 'ar' ? 'جميع المحازن ' : 'All Warehouses'}
+                        {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
                       </SelectItem>
                       {warehouses.map((warehouse: any) => (
                         <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
