@@ -131,6 +131,9 @@ const PrintableInvoice = React.forwardRef<HTMLDivElement, PrintableInvoiceProps>
     const hasDiscount = data.discount_percentage > 0 || data.discount_amount > 0;
     const discountPercent = data.discount_percentage || 0;
     const discountAmount = data.discount_amount || 0;
+    const displayedSubtotal = data.subtotal ?? data.amounts?.subtotal ?? data.total_amount ?? 0;
+    const displayedTotal = data.total ?? data.amounts?.total ?? data.total_amount ?? 0;
+    const displayedPaid = data.amounts?.paid ?? data.paid_amount ?? displayedTotal;
 // ========== دالة مساعدة لاستخراج اسم المنتج ==========
 const getProductName = (item: any): string => {
   // الحالة 1: product_name موجود مباشر
@@ -315,8 +318,8 @@ const getSize = (item: any): string | null => {
         <td style={{ ...printStyles.td, textAlign: 'right' }}>
           {formatNumber(item.unit_price || item.price || 0)}
         </td>
-        <td style={{ ...printStyles.td, textAlign: 'right', color: '#e53e3e' }}>
-          -{formatNumber(item.total_price || item.total || 0)}
+        <td style={{ ...printStyles.td, textAlign: 'right', color: data.is_complimentary ? '#111' : '#e53e3e' }}>
+          {!data.is_complimentary && '-'}{formatNumber(item.total_price ?? item.total ?? ((item.price || item.unit_price || 0) * (item.quantity || 0)))}
         </td>
       </tr>
     );
@@ -330,7 +333,7 @@ const getSize = (item: any): string | null => {
           <div style={{ marginBottom: '8px' }}>
             <div style={printStyles.row}>
               <span>{texts.subtotal}:</span>
-              <span>{formatNumber(data.amounts?.total || data.total_amount || 0)}</span>
+              <span>{formatNumber(displayedSubtotal)}</span>
             </div>
 
             {/* Discount Section */}
@@ -346,7 +349,7 @@ const getSize = (item: any): string | null => {
                 <div style={printStyles.row}>
                   <span>{texts.total}:</span>
                   <span style={{ fontWeight: 'bold' }}>
-                    {formatNumber(data.amounts?.total || data.total_amount || 0)}
+                    {formatNumber(displayedTotal)}
                   </span>
                 </div>
               </>
@@ -354,7 +357,7 @@ const getSize = (item: any): string | null => {
 
             <div style={printStyles.row}>
               <span>{texts.paid}:</span>
-              <span>{formatNumber(data.amounts?.paid || data.total_amount || 0)}</span>
+              <span>{formatNumber(displayedPaid)}</span>
             </div>
           </div>
 

@@ -676,7 +676,7 @@ const POS: React.FC = () => {
   const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
 
   // ==================== Payment Handlers ====================
-const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string) => {
+const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string, isComplimentary = false) => {
  const finalInvoiceNumber = invoiceNum || invoiceNumber || `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
   
   if (invoiceNum) {
@@ -692,11 +692,11 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
     invoice_number: finalInvoiceNumber,
     subtotal: calculateSubtotal(),
     item_discounts_total: calculateItemDiscountsTotal(),
-    invoice_discount_percentage: invoiceDiscountPercentage,
-    invoice_discount_amount: invoiceDiscountAmount,
-    subtotal_after_discounts: calculateSubtotalAfterAllDiscounts(),
-    tax: calculateTax(),
-    total: calculateTotal(),
+    invoice_discount_percentage: isComplimentary ? 100 : invoiceDiscountPercentage,
+    invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
+    subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
+    tax: isComplimentary ? 0 : calculateTax(),
+    total: isComplimentary ? 0 : calculateTotal(),
     customer_id: selectedCustomer?.id,
     delivery_id: selectedDelivery?.id,
     sales_rep_id: selectedSalesRep?.id,
@@ -708,27 +708,33 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
     if (!navigator.onLine || isOffline) {
       try {
-        const orderId = await saveOrderOffline({
-          ...orderData,
-          subtotal: calculateSubtotal(),
-          tax: calculateTax(),
-          total: calculateTotal(),
-          customer_id: selectedCustomer?.id,
-          delivery_id: selectedDelivery?.id,
-          payment_method: payments[0]?.method,
-          payments
-        });
-        
-        if (orderId) {
+        if (invoiceNum) {
+          // POSPaymentModal already persisted this invoice locally before invoking this callback.
           await checkUnsyncedOrders();
           await loadOfflineStats();
-          
           toast({
             title: language === 'ar' ? 'تم حفظ الطلب محلياً' : 'Order saved locally',
-            description: language === 'ar' 
-              ? `رقم الطلب: ${orderId.slice(-8)}` 
-              : `Order #: ${orderId.slice(-8)}`,
+            description: language === 'ar' ? `رقم الفاتورة: ${invoiceNum}` : `Invoice #: ${invoiceNum}`,
           });
+        } else {
+          const orderId = await saveOrderOffline({
+            ...orderData,
+            subtotal: calculateSubtotal(),
+            tax: calculateTax(),
+            total: calculateTotal(),
+            customer_id: selectedCustomer?.id,
+            delivery_id: selectedDelivery?.id,
+            payment_method: payments[0]?.method,
+            payments
+          });
+          if (orderId) {
+            await checkUnsyncedOrders();
+            await loadOfflineStats();
+            toast({
+              title: language === 'ar' ? 'تم حفظ الطلب محلياً' : 'Order saved locally',
+              description: language === 'ar' ? `رقم الطلب: ${orderId.slice(-8)}` : `Order #: ${orderId.slice(-8)}`,
+            });
+          }
         }
       } catch (error) {
         toast({
@@ -741,8 +747,8 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
       toast({
         title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
         description: language === 'ar'
-          ? `المبلغ: ${formatCurrency(calculateTotal())}`
-          : `Amount: ${formatCurrency(calculateTotal())}`
+          ? `المبلغ: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
+          : `Amount: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
       });
     }
 
@@ -1355,13 +1361,16 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           subtotal={calculateSubtotalAfterAllDiscounts()}
           tax={calculateTax()}
           cartItems={cartItems}
-        onComplete={(payments, invoiceNum) => {
-    console.log('📄 Invoice Number from modal:', invoiceNum);
-    handlePaymentComplete(payments, invoiceNum);
-  }}
+          canManageDiscounts={canManagePosDiscounts}
+          onRequestCustomer={() => setShowCustomerSelector(true)}
+          onComplete={(payments, invoiceNum, complimentary) => {
+            console.log('📄 Invoice Number from modal:', invoiceNum);
+            handlePaymentComplete(payments, invoiceNum, complimentary);
+          }}
           customer={selectedCustomer ? { 
             id: selectedCustomer.id, 
             name: selectedCustomer.name, 
+            name_ar: selectedCustomer.name_ar || undefined,
             loyalty_points: selectedCustomer.loyalty_points 
           } : null}
           deliveryPerson={selectedDelivery ? { 
