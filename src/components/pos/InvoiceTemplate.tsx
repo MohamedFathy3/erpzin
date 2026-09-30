@@ -1,8 +1,6 @@
 import React, { forwardRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 interface CompanyInfo {
   name: string;
@@ -36,6 +34,7 @@ interface InvoiceTemplateProps {
     items: Array<{
       name: string;
       nameAr: string;
+      itemType?: 'product' | 'service';
       quantity: number;
       price: number;
       sizeName?: string;
@@ -61,25 +60,6 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     const { language } = useLanguage();
     const isRTL = language === 'ar';
     const { formatCurrency } = useRegionalSettings();
-    const { data: companySettings } = useQuery({
-      queryKey: ['pos-print-company-settings'],
-      queryFn: async () => (await supabase.from('company_settings').select('*').maybeSingle()).data,
-      staleTime: 5 * 60 * 1000,
-    });
-    const effectiveCompanyInfo = {
-      ...companyInfo,
-      name: companySettings?.name || companyInfo.name,
-      nameAr: companySettings?.name_ar || companyInfo.nameAr,
-      logo: companySettings?.logo_url || companySettings?.logo_icon_url || companyInfo.logo,
-      address: companySettings?.address || companyInfo.address,
-      phone: companySettings?.phone || companyInfo.phone,
-      tax_id: companySettings?.tax_number || companyInfo.tax_id,
-    };
-     console.log('🔍 invoiceData received:', invoiceData);
-    console.log('🔍 invoice_number:', invoiceData?.invoice_number);
-    console.log('🔍 invoiceNumber:', invoiceData?.invoiceNumber);
-    console.log('🔍 id:', invoiceData?.id);
-      // debugger;
     const getInvoiceNumber = () => {
       // ✅ backend payload key is invoice_number (snake_case)
       const anyData = invoiceData as Record<string, unknown>;
@@ -173,6 +153,27 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     };
 
     const paymentMethodsText = safeInvoiceData.payments.map(p => getPaymentMethodText(p.method)).join(' - ');
+    const productItems = safeInvoiceData.items.filter(item => item.itemType !== 'service');
+    const serviceItems = safeInvoiceData.items.filter(item => item.itemType === 'service');
+    const renderItemsTable = (items: typeof safeInvoiceData.items) => (
+      <table className="w-full text-[9px] mb-2 border-collapse">
+        <thead><tr className="border-y border-gray-400">
+          <th className="py-1 text-center w-6">#</th><th className="py-1 text-right">{texts.product}</th>
+          <th className="py-1 text-center w-8">{texts.quantity}</th><th className="py-1 text-right w-14">{texts.price}</th>
+          <th className="py-1 text-right w-14">{texts.total}</th>
+        </tr></thead>
+        <tbody>{items.map((item, index) => (
+          <tr key={`${item.name}-${index}`} className="border-b border-gray-200">
+            <td className="py-1 text-center">{index + 1}</td>
+            <td className="py-1 text-right"><div className="break-words" style={{ maxWidth: '100px' }}>{isRTL ? item.nameAr : item.name}</div>
+              {(item.sizeName || item.colorName) && <div className="text-gray-500 text-[8px]">{isRTL ? `${item.sizeNameAr || ''}${item.colorNameAr ? ` - ${item.colorNameAr}` : ''}` : `${item.sizeName || ''}${item.colorName ? ` - ${item.colorName}` : ''}`}</div>}
+            </td>
+            <td className="py-1 text-center">{item.quantity}</td><td className="py-1 text-right">{formatCurrency(item.price)}</td>
+            <td className="py-1 text-right">{formatCurrency(item.price * item.quantity)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    );
 
     return (
       <div
@@ -192,18 +193,19 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       >
         {/* Header */}
         <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-          {effectiveCompanyInfo.logo && (
+          {companyInfo.logo && (
             <div className="flex justify-center mb-1">
               <img
-                src={effectiveCompanyInfo.logo}
-                alt={effectiveCompanyInfo.name}
+                src={companyInfo.logo}
+                alt={companyInfo.name}
                 className="h-10 w-auto object-contain"
+                crossOrigin="anonymous"
               />
             </div>
           )}
 
           <h1 className="text-sm font-bold text-black">
-            {isRTL && effectiveCompanyInfo.nameAr ? effectiveCompanyInfo.nameAr : effectiveCompanyInfo.name}
+            {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
           </h1>
 
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
@@ -214,18 +216,18 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          {!safeInvoiceData.branchName && effectiveCompanyInfo.address && (
+          {!safeInvoiceData.branchName && companyInfo.address && (
             <p className="text-[9px] text-gray-700">
-              {isRTL ? effectiveCompanyInfo.addressAr || effectiveCompanyInfo.address : effectiveCompanyInfo.address}
+              {isRTL ? companyInfo.addressAr || companyInfo.address : companyInfo.address}
             </p>
           )}
 
-          {!safeInvoiceData.branchPhone && effectiveCompanyInfo.phone && (
-            <p className="text-[9px] text-gray-700">{texts.phone}: {effectiveCompanyInfo.phone}</p>
+          {!safeInvoiceData.branchPhone && companyInfo.phone && (
+            <p className="text-[9px] text-gray-700">{texts.phone}: {companyInfo.phone}</p>
           )}
 
-          {effectiveCompanyInfo.tax_id && (
-            <p className="text-[9px] text-gray-700">VAT: {effectiveCompanyInfo.tax_id}</p>
+          {companyInfo.tax_id && (
+            <p className="text-[9px] text-gray-700">VAT: {companyInfo.tax_id}</p>
           )}
         </div>
 
@@ -294,46 +296,14 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           </div>
         )}
 
-        {/* Items Table */}
-        <table className="w-full text-[9px] mb-2 border-collapse">
-          <thead>
-            <tr className="border-y border-gray-400">
-              <th className="py-1 text-center w-6">#</th>
-              <th className="py-1 text-right">{texts.product}</th>
-              <th className="py-1 text-center w-8">{texts.quantity}</th>
-              <th className="py-1 text-right w-14">{texts.price}</th>
-              <th className="py-1 text-right w-14">{texts.total}</th>
-             </tr>
-          </thead>
-          <tbody>
-            {safeInvoiceData.items.map((item, index) => (
-              <tr key={index} className="border-b border-gray-200">
-                <td className="py-1 text-center">{index + 1}</td>
-                <td className="py-1 text-right">
-                  <div className="break-words" style={{ maxWidth: '100px' }}>{isRTL ? item.nameAr : item.name}</div>
-                  {(item.sizeName || item.colorName) && (
-                    <div className="text-gray-500 text-[8px]">
-                      {isRTL ? (
-                        <>
-                          {item.sizeNameAr && `${item.sizeNameAr} `}
-                          {item.colorNameAr && ` - ${item.colorNameAr}`}
-                        </>
-                      ) : (
-                        <>
-                          {item.sizeName && `${item.sizeName} `}
-                          {item.colorName && ` - ${item.colorName}`}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </td>
-                <td className="py-1 text-center">{item.quantity}</td>
-                <td className="py-1 text-right">{formatCurrency(item.price)}</td>
-                <td className="py-1 text-right">{formatCurrency(item.price * item.quantity)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {productItems.length > 0 && <section>
+          <h2 className="border-y border-gray-400 py-1 mb-1 text-right font-bold">{isRTL ? 'المنتجات' : 'Products'}</h2>
+          {renderItemsTable(productItems)}
+        </section>}
+        {serviceItems.length > 0 && <section>
+          <h2 className="border-y border-gray-400 py-1 mb-1 text-right font-bold">{isRTL ? 'الخدمات' : 'Services'}</h2>
+          {renderItemsTable(serviceItems)}
+        </section>}
 
         {/* Totals Section with Discount */}
         <div className="flex flex-col items-end mb-2 border-t border-gray-300 pt-2">

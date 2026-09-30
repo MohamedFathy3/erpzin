@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Cookies from 'js-cookie';
 import { useReactToPrint } from 'react-to-print';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import InvoiceTemplate from './InvoiceTemplate';
 import { Banknote, Check, CreditCard, Crown, Gift, Split, Star, Wallet, WifiOff, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -45,6 +47,8 @@ interface CartItem {
   sizeName?: string;
   colorName?: string;
   discount_percentage?: number;
+  itemType?: 'product' | 'service';
+  automotive_service_id?: number;
 }
 
 interface PaymentModalProps {
@@ -128,6 +132,20 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const { activeTaxRates } = useCurrencyTax();
+  const { data: companySettings, isLoading: companySettingsLoading } = useQuery({
+    queryKey: ['pos-print-company-settings'],
+    queryFn: async () => (await supabase.from('company_settings').select('*').maybeSingle()).data,
+    staleTime: 5 * 60 * 1000,
+  });
+  const effectiveCompanyInfo = {
+    ...companyInfo,
+    name: companySettings?.name || companyInfo.name,
+    nameAr: companySettings?.name_ar || companyInfo.nameAr,
+    logo: companySettings?.logo_url || companySettings?.logo_icon_url || companyInfo.logo,
+    address: companySettings?.address || companyInfo.address,
+    phone: companySettings?.phone || companyInfo.phone,
+    tax_id: companySettings?.tax_number || companyInfo.tax_id,
+  };
   const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
   const amountDue = isComplimentary ? 0 : total;
 
@@ -140,6 +158,12 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       onComplete(completedInvoice?.payments || [], completedInvoice?.printData?.invoice_number || '', !!completedInvoice?.printData?.isComplimentary);
     },
   });
+
+  useEffect(() => {
+    if (!showPrintOptions || !completedInvoice || companySettingsLoading) return;
+    const timer = window.setTimeout(() => handlePrint(), 80);
+    return () => window.clearTimeout(timer);
+  }, [showPrintOptions, completedInvoice, companySettingsLoading, handlePrint]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -384,6 +408,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         items: cartItems.map(item => ({
           name: item.name,
           nameAr: item.nameAr || item.name,
+          itemType: item.itemType || (item.automotive_service_id ? 'service' : 'product'),
           quantity: item.quantity,
           price: item.price,
           total_price: Number((item.price * item.quantity * (1 - (item.discount_percentage || 0) / 100)).toFixed(2)),
@@ -419,12 +444,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       if (type === 'save') {
         onComplete(payments, invoiceNumberFromServer, isComplimentary);  // إرسال رقم الفاتورة وعلامة المجاملة
       } else if (type === 'print') {
-        handlePrint();
+        setShowPrintOptions(true);
       } else if (type === 'both') {
         setShowPrintOptions(true);
-        setTimeout(() => {
-          handlePrint();
-        }, 100);
       }
     }
   } catch (error) {
@@ -791,17 +813,17 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             ref={invoiceRef}
             invoiceData={completedInvoice.printData}
             companyInfo={{
-              name: companyInfo?.name || 'متجرك',
-              nameAr: companyInfo?.nameAr,
-              logo: companyInfo?.logo,
-              address: companyInfo?.address,
-              addressAr: companyInfo?.addressAr,
-              phone: companyInfo?.phone,
-              email: companyInfo?.email,
-              tax_id: companyInfo?.tax_id,
-              commercial_register: companyInfo?.commercial_register,
-              website: companyInfo?.website,
-              currency: companyInfo?.currency || 'YER'
+              name: effectiveCompanyInfo?.name || 'متجرك',
+              nameAr: effectiveCompanyInfo?.nameAr,
+              logo: effectiveCompanyInfo?.logo,
+              address: effectiveCompanyInfo?.address,
+              addressAr: effectiveCompanyInfo?.addressAr,
+              phone: effectiveCompanyInfo?.phone,
+              email: effectiveCompanyInfo?.email,
+              tax_id: effectiveCompanyInfo?.tax_id,
+              commercial_register: effectiveCompanyInfo?.commercial_register,
+              website: effectiveCompanyInfo?.website,
+              currency: effectiveCompanyInfo?.currency || 'YER'
             }}
           />
         </div>

@@ -74,6 +74,7 @@ interface CartItem {
   stock?: number;
   discount_percentage?: number;  // ✅ خصم المنتج %
   automotive_service_id?: number;
+  itemType?: 'product' | 'service';
   vehicle_size?: 'small' | 'large';
   meter_quantity?: number;
 }
@@ -135,6 +136,7 @@ const POS: React.FC = () => {
   // ==================== States ====================
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [servicesOnly, setServicesOnly] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
   const [showPayment, setShowPayment] = useState(false);
@@ -522,6 +524,7 @@ const POS: React.FC = () => {
         sku: product.sku,
         stock: product.stock,
         discount_percentage: 0, // ✅ initialize discount
+        itemType: 'product',
       }];
     });
   };
@@ -543,6 +546,7 @@ const POS: React.FC = () => {
       stock: Math.floor(Number(config.stock_quantity ?? selectedAutomotiveProduct.stock ?? 999999) / metersPerCar),
       sizeName: `${isLarge ? 'سيارة كبيرة' : 'سيارة صغيرة'} · ${metersPerCar} متر`,
       automotive_service_id: config.id,
+      itemType: config.item_type === 'service' ? 'service' : 'product',
       vehicle_size: automotiveVehicleSize,
       meter_quantity: metersPerCar,
       discount_percentage: 0,
@@ -595,6 +599,7 @@ const POS: React.FC = () => {
         colorId: variant.colorId,
         stock: variant.stock,
         discount_percentage: 0, // ✅ initialize discount
+        itemType: 'product',
       }];
     });
 
@@ -1275,6 +1280,15 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
               />
+              <Button
+                type="button"
+                size="sm"
+                variant={servicesOnly ? 'default' : 'outline'}
+                onClick={() => setServicesOnly(value => !value)}
+                className="mt-2 h-9"
+              >
+                {servicesOnly ? (language === 'ar' ? 'عرض كل الأصناف' : 'Show all items') : (language === 'ar' ? 'الخدمات فقط' : 'Services only')}
+              </Button>
             </div>
 
             {/* Offline Stats Panel */}
@@ -1346,6 +1360,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                     onAddToCart={addToCart}
                     searchQuery={searchQuery}
                     selectedCategory={selectedCategory}
+                    servicesOnly={servicesOnly}
                   />
                 </>
               )}

@@ -34,13 +34,15 @@ interface POSProductGridProps {
   onAddToCart: (product: Product) => void;
   searchQuery: string;
   selectedCategory: string;
+  servicesOnly?: boolean;
 }
 
 const POSProductGrid: React.FC<POSProductGridProps> = ({
   products,
   onAddToCart,
   searchQuery,
-  selectedCategory
+  selectedCategory,
+  servicesOnly = false
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
@@ -83,6 +85,9 @@ const filteredProducts = useMemo(() => {
   // فلترة حسب البحث
   let filtered = products;
 
+  if (servicesOnly) {
+    filtered = filtered.filter(product => product.automotive_service?.item_type === 'service');
+  }
   // فلترة حسب البحث
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
@@ -104,7 +109,7 @@ const filteredProducts = useMemo(() => {
   }
 
   return filtered;
-}, [products, searchQuery, selectedCategory]);
+}, [products, searchQuery, selectedCategory, servicesOnly]);
 
   return (
     <div className="w-full h-full">
@@ -113,6 +118,11 @@ const filteredProducts = useMemo(() => {
         <span className="bg-primary/10 px-2 py-1 rounded">
           {filteredProducts.length} {language === 'ar' ? 'منتج' : 'products'}
         </span>
+        {servicesOnly && (
+          <span className="bg-emerald-500/10 text-emerald-600 px-2 py-1 rounded">
+            {language === 'ar' ? 'الخدمات فقط' : 'Services only'}
+          </span>
+        )}
         {selectedCategory !== 'all' && (
           <span className="bg-blue-500/10 text-blue-600 px-2 py-1 rounded">
             {language === 'ar' ? 'مصفى حسب الفئة' : 'Filtered by category'}

@@ -263,6 +263,7 @@ export const useProducts = (categoryId?: string | null) => {
           units: prod.units || [],
           image: prod.image || null,
           category: prod.category || null,
+          automotive_service: prod.automotive_service || null,
           created_at: prod.created_at || null,
           updated_at: prod.updated_at || null
         }));
