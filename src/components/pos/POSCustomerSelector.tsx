@@ -144,9 +144,12 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
 
   // ==================== Filter customers (online or offline) ====================
   const filteredCustomers = useMemo(() => {
-    const source = (isOfflineMode ? offlineCustomers : (onlineCustomers || [])).filter((customer: Customer) =>
-      Boolean(branchId) && String(customer.branch_id ?? customer.branch?.id ?? '') === String(branchId)
-    );
+    const source = (isOfflineMode ? offlineCustomers : (onlineCustomers || [])).filter((customer: Customer) => {
+      if (!branchId) return false;
+      const customerBranchId = customer.branch_id ?? customer.branch?.id;
+      // null branch means a legacy tenant-wide customer; keep it visible in the active branch.
+      return customerBranchId == null || String(customerBranchId) === String(branchId);
+    });
     
     if (!source.length) return [];
     
@@ -166,11 +169,16 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
   const addCustomerMutation = useMutation({
     mutationFn: async (customer: typeof newCustomer) => {
       const response = await api.post('/customer', { ...customer, branch_id: branchId, pos_context: true });
-      return response.data;
+      const payload = response.data?.data ?? response.data;
+      return {
+        ...payload,
+        id: String(payload.id),
+        branch_id: payload.branch_id ?? payload.branch?.id ?? branchId,
+      } as Customer;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers-pos'] });
-      onSelectCustomer(data as Customer);
+      onSelectCustomer(data);
       setShowAddForm(false);
       setNewCustomer({ name: '', name_ar: '', phone: '', address: '' });
       toast({
@@ -217,7 +225,7 @@ const POSCustomerSelector: React.FC<POSCustomerSelectorProps> = ({
       } else {
         toast({
           title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
-          description: error?.response?.data?.message || (language === 'ar' ? 'تعذر إضافة العميل' : 'Failed to add customer'),
+          description: error?.response?.data?.message || error?.response?.data?.data?.message || (language === 'ar' ? 'تعذر إضافة العميل' : 'Failed to add customer'),
           variant: 'destructive'
         });
       }

@@ -42,6 +42,7 @@ interface User {
   branch_phone?: string | null;
   branch_address?: string | null;
   branch_address_ar?: string | null;
+  branch?: { id: number | string; name?: string | null; name_ar?: string | null } | null;
 }
 
 interface LoginResponse {

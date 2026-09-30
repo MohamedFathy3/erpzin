@@ -23,6 +23,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { generateId } from '@/lib/utils';
+import api from '@/lib/api';
 
 // Types
 interface Branch {
@@ -31,6 +32,20 @@ interface Branch {
   name_ar: string | null;
   code: string | null;
   is_main: boolean | null;
+  main_branch?: boolean | null;
+  active?: boolean | null;
+}
+
+interface BranchApiPayload {
+  id: number | string;
+  name?: string | null;
+  name_ar?: string | null;
+  code?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  active?: boolean | null;
+  main_branch?: boolean | null;
+  is_main?: boolean | null;
 }
 
 interface Warehouse {
@@ -175,63 +190,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Load branches and user profile
   useEffect(() => {
+    let cancelled = false;
     const loadBranchesAndProfile = async () => {
       try {
-        const { data: branchesData, error } = await supabase
-          .from('branches')
-          .select('*')
-          .eq('is_active', true)
-          .order('is_main', { ascending: false });
-        
-        if (error) throw error;
-        
-        setBranches(branchesData || []);
-        
-        // Load user profile with branch and warehouse
-        // Laravel users have numeric IDs; do not query the legacy Supabase
-        // profile tables for them. Those tables expect UUIDs and return 400.
-        if (user && !/^\d+$/.test(String(user.id))) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('id, full_name, full_name_ar, email, branch_id, warehouse_id')
-            .eq('id', user.id)
-            .maybeSingle();
-          
-          if (profileData) {
-            setUserProfile(profileData);
-            
-            // Set user's assigned branch
-            if (profileData.branch_id) {
-              const assignedBranch = branchesData?.find(b => b.id === profileData.branch_id);
-              if (assignedBranch) {
-                setUserBranch(assignedBranch);
-                setCurrentBranch(assignedBranch);
-              }
-            }
-            
-            // Load user's assigned warehouse
-            if (profileData.warehouse_id) {
-              const { data: warehouseData } = await supabase
-                .from('warehouses')
-                .select('*')
-                .eq('id', profileData.warehouse_id)
-                .maybeSingle();
-              
-              if (warehouseData) {
-                setUserWarehouse(warehouseData);
-                setCurrentWarehouse(warehouseData);
-              }
-            }
-          }
+        const response = await api.post('/branch/index', {
+          filters: { active: true },
+          orderBy: 'name',
+          orderByDirection: 'asc',
+          perPage: 500,
+          paginate: false,
+        });
+        const responseBranches = response.data?.data;
+        const rawBranches = Array.isArray(responseBranches)
+          ? responseBranches
+          : Array.isArray(responseBranches?.data) ? responseBranches.data : [];
+        const branchesData: Branch[] = rawBranches.map((branch: BranchApiPayload) => ({
+          ...branch,
+          id: String(branch.id),
+          name: branch.name ?? '',
+          is_main: Boolean(branch.main_branch ?? branch.is_main),
+          main_branch: Boolean(branch.main_branch ?? branch.is_main),
+          active: branch.active ?? true,
+          name_ar: branch.name_ar ?? null,
+        })).filter((branch: Branch) => branch.active !== false);
+
+        if (cancelled) return;
+        setBranches(branchesData);
+
+        const assignedBranchId = user?.branch_id ?? user?.branch?.id;
+        const assignedBranch = assignedBranchId
+          ? branchesData.find(branch => String(branch.id) === String(assignedBranchId))
+          : null;
+        if (assignedBranch) {
+          setUserBranch(assignedBranch);
+          setCurrentBranch(assignedBranch);
+        } else {
+          setUserBranch(null);
         }
       } catch (error) {
         console.error('Error loading branches and profile:', error);
       } finally {
-        setLoadingBranches(false);
+        if (!cancelled) setLoadingBranches(false);
       }
     };
     
     loadBranchesAndProfile();
+    return () => { cancelled = true; };
   }, [user]);
 
   // Load warehouses when branch changes

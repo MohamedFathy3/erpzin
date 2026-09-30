@@ -124,7 +124,7 @@ interface OfflineStats {
 // ==================== Main Component ====================
 const POS: React.FC = () => {
   const { language } = useLanguage();
-  const { userBranch, currentBranch,  } = useApp();
+  const { userBranch, currentBranch, branches, loadingBranches, setCurrentBranch } = useApp();
   const { formatCurrency } = useRegionalSettings();
   const { taxRates } = useCurrencyTax();
   const navigate = useNavigate();
@@ -163,6 +163,12 @@ const POS: React.FC = () => {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
   const [showOfflineStats, setShowOfflineStats] = useState(false);
+
+  useEffect(() => {
+    if (userBranch || currentBranch || loadingBranches || branches.length === 0) return;
+    const defaultBranch = branches.find(branch => branch.is_main || branch.main_branch) || branches[0];
+    if (defaultBranch) setCurrentBranch(defaultBranch);
+  }, [userBranch, currentBranch, branches, loadingBranches, setCurrentBranch]);
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
   // ✅ خصومات المنتجات والفاتورة
