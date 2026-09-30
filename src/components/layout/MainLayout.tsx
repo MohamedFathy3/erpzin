@@ -26,7 +26,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const currentActive = activeItem || getActiveFromPath();
 
   useEffect(() => {
-    if (!user || user.super_admin || user.role?.toLowerCase() === 'admin' || modulesLoading) return;
+    // Route protection follows the same hierarchy as the Sidebar: a disabled
+    // tenant module wins over tenant-admin role permissions.
+    if (!user || user.super_admin || modulesLoading) return;
     const moduleByPath: Record<string, string> = {
       '/inventory': 'inventory',
       '/sales': 'sales',

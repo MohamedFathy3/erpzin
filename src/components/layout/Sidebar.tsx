@@ -102,8 +102,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   };
 
   const moduleEnabled = (pageId: string) => {
-    if (user?.super_admin || user?.role?.toLowerCase() === 'admin' || modulesLoading) return true;
+    // Tenant module switches are the highest-level UI gate. A tenant admin
+    // must not see a disabled module even when role permissions grant access.
     const module = pageModules[pageId];
+    if (user?.super_admin) return true;
+    // Hide module entries while the tenant configuration is loading instead
+    // of briefly rendering disabled modules and removing them afterward.
+    if (modulesLoading) return !module;
     return !module || enabledModules.includes(module);
   };
 
