@@ -87,11 +87,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     '/finance': 'finance',
     '/crm': 'crm',
     '/reports': 'reports',
+    '/employee-financial-reports': 'employee_financial_reports',
+    '/warehouse-reports': 'warehouse_reports',
+    '/inventory-transfer-requests': 'inventory_transfer_requests',
+    '/industries': 'industries',
     '/manufacturing': 'manufacturing',
+    '/manufacturing/setup': 'manufacturing_setup',
+    '/product-ledger': 'product_ledger',
+    '/representative': 'representative',
     '/projects': 'projects',
     '/workflow': 'workflow',
     '/access-control': 'access_control',
     '/ai-assistant': 'ai_assistant',
+    '/settings': 'settings',
   };
   const requiredModule = moduleForPath[location.pathname];
   // Do not render a protected page while server-backed authorization state is
@@ -106,7 +114,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       </div>
     );
   }
-  const moduleAccess = Boolean(user.super_admin) || normalizedRole === 'admin' || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
+  const moduleAccess = Boolean(user.super_admin) || modulesLoading || !requiredModule || enabledModules.includes(requiredModule);
   if (!moduleAccess) {
     return <Navigate to="/dashboard" replace />;
   }

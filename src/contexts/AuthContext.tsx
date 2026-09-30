@@ -258,7 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // The platform super admin can inspect all modules. Tenant admins must
       // still respect the tenant-level module switches returned by the API.
       if (user.super_admin) {
-        setEnabledModules(['crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'projects', 'workflow', 'access_control', 'ai_assistant', 'automotive_service']);
+        setEnabledModules(['dashboard', 'pos', 'crm', 'email', 'whatsapp', 'google_calendar', 'google_drive', 'tasks', 'manufacturing', 'inventory', 'sales', 'purchasing', 'finance', 'hr', 'reports', 'employee_financial_reports', 'warehouse_reports', 'settings', 'industries', 'manufacturing_setup', 'product_ledger', 'inventory_transfer_requests', 'representative', 'projects', 'workflow', 'access_control', 'ai_assistant', 'automotive_service']);
         setModulesLoading(false);
         return;
       }
