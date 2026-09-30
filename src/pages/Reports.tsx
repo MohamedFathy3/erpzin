@@ -61,6 +61,7 @@ import ProfitLossReport from '@/components/reports/ProfitLossReport';
 import SalesAnalysisReport from '@/components/reports/SalesAnalysisReport';
 import CustomerSupplierMovement from '@/components/reports/CustomerSupplierMovement';
 import BackendReportsPanel from '@/components/reports/BackendReportsPanel';
+import DailyReportsDashboard from '@/components/reports/DailyReportsDashboard';
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // ==================== Types ====================
@@ -370,7 +371,7 @@ const Reports = () => {
   const { language, direction } = useLanguage();
   const { formatCurrency: formatRegionalCurrency } = useRegionalSettings();
   const printRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('daily');
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -1600,6 +1601,10 @@ const Reports = () => {
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="print:hidden">
           <TabsList className="w-full flex-wrap h-auto p-1 bg-muted/50">
+            <TabsTrigger value="daily" className="gap-2 data-[state=active]:bg-indigo-600 data-[state=active]:text-white">
+              <Calendar size={16} />
+              {language === 'ar' ? 'التقرير اليومي' : 'Daily Report'}
+            </TabsTrigger>
             <TabsTrigger value="dashboard" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Activity size={16} />
               {t.dashboard}
@@ -1637,6 +1642,10 @@ const Reports = () => {
               {language === 'ar' ? 'حركة العملاء/الموردين' : 'Customer/Supplier'}
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="daily" className="mt-6">
+            <DailyReportsDashboard />
+          </TabsContent>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6 mt-6">
