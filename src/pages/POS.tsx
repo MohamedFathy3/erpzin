@@ -73,6 +73,9 @@ interface CartItem {
   colorId?: number;
   stock?: number;
   discount_percentage?: number;  // ✅ خصم المنتج %
+  automotive_service_id?: number;
+  vehicle_size?: 'small' | 'large';
+  meter_quantity?: number;
 }
 
 interface SalesRepresentative {
@@ -141,6 +144,9 @@ const POS: React.FC = () => {
   const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
   const [showDeliverySelector, setShowDeliverySelector] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
+  const [selectedAutomotiveProduct, setSelectedAutomotiveProduct] = useState<Product | null>(null);
+  const [automotiveVehicleSize, setAutomotiveVehicleSize] = useState<'small' | 'large'>('small');
+  const [automotiveMeterQuantity, setAutomotiveMeterQuantity] = useState('1');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
   const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
@@ -346,7 +352,9 @@ const POS: React.FC = () => {
                 price: item.price,
                 discount_percentage: item.discount_percentage || 0,
                 color: item.colorName || null,
-                size: item.sizeName || null
+                size: item.sizeName || null,
+                vehicle_size: item.vehicle_size || null,
+                meter_quantity: item.meter_quantity || null
               })),
               discount_percentage: order.discount_percentage || 0,
               is_complimentary: order.is_complimentary || false,
@@ -460,6 +468,7 @@ const POS: React.FC = () => {
       image: prod.image,
       hasVariants: prod.has_variants,
       units: prod.units || [],
+      automotive_service: prod.automotive_service || null,
     }));
   }, [products]);
 
@@ -470,6 +479,12 @@ const POS: React.FC = () => {
 
   // ==================== Cart Operations ====================
   const addToCart = (product: Product) => {
+    if (product.automotive_service) {
+      setSelectedAutomotiveProduct(product);
+      setAutomotiveVehicleSize('small');
+      setAutomotiveMeterQuantity('1');
+      return;
+    }
     // إذا كان المنتج عنده متغيرات، افتح نافذة اختيار المتغيرات
     if (product.units && product.units.length > 0) {
       setSelectedProductForVariant(product);
@@ -509,6 +524,30 @@ const POS: React.FC = () => {
         discount_percentage: 0, // ✅ initialize discount
       }];
     });
+  };
+
+  const confirmAutomotiveProduct = () => {
+    if (!selectedAutomotiveProduct?.automotive_service) return;
+    const config = selectedAutomotiveProduct.automotive_service;
+    const isLarge = automotiveVehicleSize === 'large';
+    const metersPerCar = Number(isLarge ? config.large_vehicle_quantity : config.small_vehicle_quantity) || 1;
+    const price = Number(isLarge ? config.large_vehicle_price : config.small_vehicle_price) || Number(selectedAutomotiveProduct.price) || 0;
+    const cars = Math.max(1, Number(automotiveMeterQuantity) || 1);
+    setCartItems(prev => [...prev, {
+      id: selectedAutomotiveProduct.id,
+      name: selectedAutomotiveProduct.name,
+      nameAr: selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name,
+      price,
+      quantity: cars,
+      sku: selectedAutomotiveProduct.sku,
+      stock: Math.floor(Number(config.stock_quantity ?? selectedAutomotiveProduct.stock ?? 999999) / metersPerCar),
+      sizeName: `${isLarge ? 'سيارة كبيرة' : 'سيارة صغيرة'} · ${metersPerCar} متر`,
+      automotive_service_id: config.id,
+      vehicle_size: automotiveVehicleSize,
+      meter_quantity: metersPerCar,
+      discount_percentage: 0,
+    }]);
+    setSelectedAutomotiveProduct(null);
   };
 
   const addVariantToCart = (variant: {
@@ -1357,6 +1396,12 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               {transferRequests.filter((request: any) => request.status === 'pending').length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p> : transferRequests.filter((request: any) => request.status === 'pending').map((request: any) => <div key={`admin-${request.id}`} className="border-t py-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold">{request.invoice_details?.invoice_number || `#${request.invoice_id}`} · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'}</span><span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span></div>{request.invoice_details && <div className="mt-2 rounded bg-muted/40 p-2 text-xs"><div className="grid gap-1 sm:grid-cols-4"><span>{language === 'ar' ? 'العميل' : 'Customer'}: {request.invoice_details.customer?.name || '-'}</span><span>{language === 'ar' ? 'الإجمالي' : 'Total'}: {request.invoice_details.total}</span><span>{language === 'ar' ? 'التكلفة' : 'Cost'}: {request.invoice_details.cost}</span><span className="font-semibold text-emerald-600">{language === 'ar' ? 'الربح' : 'Profit'}: {request.invoice_details.profit}</span></div><div className="mt-2">{language === 'ar' ? 'الأصناف' : 'Items'}: {(request.invoice_details.items || []).map((item: any, index: number) => <span key={index} className="me-3">{item.product_name || '-'} × {item.quantity} ({item.price})</span>)}</div></div>}</div>)}
             </div>
             {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : !transferEmployee ? <div className="space-y-3"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'أدخل إيميل وباسورد مندوب المبيعات لعرض فواتيره اليوم فقط.' : 'Enter the sales representative email and password to show only today invoices.'}</p><Input type="email" value={transferEmail} onChange={(event) => setTransferEmail(event.target.value)} placeholder={language === 'ar' ? 'إيميل المندوب' : 'Representative email'} /><Input type="password" value={transferPassword} onChange={(event) => setTransferPassword(event.target.value)} placeholder={language === 'ar' ? 'الباسورد' : 'Password'} /><Button onClick={loginSalesRepForTransfer} disabled={!transferEmail || !transferPassword}>{language === 'ar' ? 'دخول وعرض فواتير اليوم' : 'Login and show today invoices'}</Button></div> : <div className="space-y-3 max-h-[60vh] overflow-auto"><div className="rounded-lg border p-3"><p className="font-semibold">{transferEmployee.name} · {language === 'ar' ? 'فواتير اليوم' : "Today's invoices"}</p><select className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={transferTargetId} onChange={(event) => setTransferTargetId(event.target.value)}><option value="">{language === 'ar' ? 'اختر الموظف المستلم' : 'Choose receiving employee'}</option>{transferEmployees.filter((employee) => employee.id !== transferEmployee.id).map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select>{transferInvoices.length === 0 ? <p className="py-5 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد فواتير لهذا المندوب اليوم' : 'No invoices for this representative today'}</p> : transferInvoices.map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><Button size="sm" variant="outline" disabled={!transferTargetId} onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div><div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات اليوم' : "Today's requests"}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm"><span><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</span>{request.status === 'pending' && <span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span>}</div>)}</div></div>}
+          </DialogContent>
+        </Dialog>
+        <Dialog open={!!selectedAutomotiveProduct} onOpenChange={(open) => !open && setSelectedAutomotiveProduct(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>تفاصيل خدمة السيارات</DialogTitle></DialogHeader>
+            {selectedAutomotiveProduct?.automotive_service && <div className="space-y-4" dir="rtl"><p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p><div><label className="mb-2 block text-sm font-medium">حجم السيارة</label><select className="h-10 w-full rounded-md border bg-background px-3" value={automotiveVehicleSize} onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}><option value="small">صغيرة — {selectedAutomotiveProduct.automotive_service.small_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.small_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option><option value="large">كبيرة — {selectedAutomotiveProduct.automotive_service.large_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.large_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option></select></div><div><label className="mb-2 block text-sm font-medium">عدد السيارات</label><Input type="number" min="1" value={automotiveMeterQuantity} onChange={(e) => setAutomotiveMeterQuantity(e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.</p></div><Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button></div>}
           </DialogContent>
         </Dialog>
         {/* Modals */}

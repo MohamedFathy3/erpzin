@@ -20,6 +20,14 @@ export interface AutomotiveServiceItem {
   name_ar?: string | null;
   selling_price: number;
   estimated_cost: number;
+  item_type?: 'service' | 'product';
+  unit?: string | null;
+  small_vehicle_quantity?: number | null;
+  large_vehicle_quantity?: number | null;
+  small_vehicle_price?: number | null;
+  large_vehicle_price?: number | null;
+  stock_quantity?: number | null;
+  product?: { id: number; sku: string; stock: number } | null;
   estimated_minutes?: number | null;
   warranty_eligible: boolean;
   active: boolean;

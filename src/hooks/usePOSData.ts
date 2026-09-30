@@ -92,6 +92,11 @@ export interface Product {
   category?: ProductCategory;
   created_at?: string;
   updated_at?: string;
+  automotive_service?: {
+    id: number; item_type: 'service' | 'product'; unit?: string | null;
+    small_vehicle_quantity?: number | null; large_vehicle_quantity?: number | null;
+    small_vehicle_price?: number | null; large_vehicle_price?: number | null; stock_quantity?: number | null;
+  } | null;
 }
 
 // ========== Categories Hook مع Offline Support ==========

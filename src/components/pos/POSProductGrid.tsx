@@ -26,6 +26,7 @@ interface Product {
   category_id?: string | null;  // 👈 null مسموح به
   hasVariants?: boolean;
   units?: any[];
+  automotive_service?: { id: number; item_type: 'service' | 'product'; unit?: string | null; small_vehicle_quantity?: number | null; large_vehicle_quantity?: number | null; small_vehicle_price?: number | null; large_vehicle_price?: number | null; stock_quantity?: number | null } | null;
 }
 
 interface POSProductGridProps {
@@ -160,10 +161,13 @@ const filteredProducts = useMemo(() => {
                     imageUrl ? "hidden" : "flex"
                   )}>
                     <span className="text-3xl sm:text-4xl text-muted-foreground/30">
-                      {product.hasVariants ? '🔄' : '👕'}
+                      {product.automotive_service ? '🚗' : product.hasVariants ? '🔄' : '👕'}
                     </span>
                   </div>
                   
+                  {product.automotive_service && (
+                    <div className="absolute top-1 end-1"><span className="px-1.5 py-0.5 bg-emerald-600/90 text-white text-[8px] rounded-md">خدمة سيارات</span></div>
+                  )}
                   {product.hasVariants && (
                     <div className="absolute top-1 start-1">
                       <span className="px-1.5 py-0.5 bg-primary/90 text-white text-[8px] rounded-md">
