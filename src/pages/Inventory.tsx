@@ -12,12 +12,13 @@ import LowStockAlerts from '@/components/inventory/LowStockAlerts';
 import InventoryCount from '@/components/inventory/InventoryCount';
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
+import AutomotiveServicesInventory from '@/components/inventory/AutomotiveServicesInventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc, CarFront } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -735,6 +736,10 @@ const Inventory: React.FC = () => {
                   <Package size={14} />
                   {language === 'ar' ? 'قائمة المنتجات' : 'Products'}
                 </TabsTrigger>
+                <TabsTrigger value="automotive-services" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
+                  <CarFront size={14} />
+                  {language === 'ar' ? 'خدمات السيارات' : 'Automotive Services'}
+                </TabsTrigger>
                 <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
                   <Palette size={14} />
                   {language === 'ar' ? 'الوحدات والمتغيرات' : 'Units & Variants'}
@@ -944,6 +949,10 @@ const Inventory: React.FC = () => {
                 <InventoryCount />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="automotive-services" className="flex-1 mt-2">
+            <AutomotiveServicesInventory />
           </TabsContent>
 
           <TabsContent value="variants" className="flex-1 mt-2">
