@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
@@ -371,6 +372,7 @@ const Reports = () => {
   const { language, direction } = useLanguage();
   const { formatCurrency: formatRegionalCurrency } = useRegionalSettings();
   const printRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('daily');
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
@@ -1577,6 +1579,10 @@ const Reports = () => {
 
               {/* Buttons Group */}
               <div className="flex gap-2">
+                <Button variant="default" size="sm" className="gap-2 bg-cyan-600 hover:bg-cyan-700" onClick={() => navigate('/unified-financial-reports')}>
+                  <DollarSign size={16} />
+                  {language === 'ar' ? 'التقرير المالي الموحد' : 'Unified Financial Report'}
+                </Button>
                 <Button variant="outline" size="sm" className="gap-2" onClick={handlePrintDashboard}>
                   <Printer size={16} />
                   {t.printReport}
