@@ -15,7 +15,7 @@ import { VariantSelectionModal } from './VariantSelectionModal';
 import { Product, Branch, Warehouse as WarehouseType, SelectedProduct } from '../types';
 import api from '@/lib/api';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { toast } from '@/hooks/use-toast';  // ✅ إضافة الـ toast
+import { toast } from '@/hooks/use-toast';
 
 interface AddBalanceModalProps {
   open: boolean;
@@ -27,7 +27,14 @@ interface AddBalanceModalProps {
   selectedWarehouse: string;
   onSave: (products: SelectedProduct[]) => void;
   isSaving: boolean;
-  onSuccess?: () => void;  // ✅ إضافة callback للنجاح
+  onSuccess?: () => void;
+
+  mode?: 'add' | 'edit';
+  editingRecordId?: number | null;
+  originalStock?: number | null;
+  originalWarehouseId?: number | null;
+  originalUnitId?: number | null;
+  originalColorId?: number | null;
 }
 
 type SearchType = 'name' | 'sku' | 'barcode';
@@ -37,78 +44,126 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   onOpenChange,
   selectedProducts,
   onProductsChange,
-  branches = [], 
+  branches = [],
   selectedBranch,
   selectedWarehouse,
   onSave,
   isSaving: externalIsSaving,
-  onSuccess  // ✅ استقبال الـ callback
+  onSuccess,
+  mode = 'add',
+  editingRecordId = null,
+  originalStock = null,
+  originalWarehouseId = null,
+  originalUnitId = null,
+  originalColorId = null,
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<SearchType>('name');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
-  const [localSelectedBranch, setLocalSelectedBranch] = useState(selectedBranch);
-  const [localSelectedWarehouse, setLocalSelectedWarehouse] = useState(selectedWarehouse);
+  const [localSelectedBranch, setLocalSelectedBranch] = useState<string>(String(selectedBranch || 'all'));
+  const [localSelectedWarehouse, setLocalSelectedWarehouse] = useState<string>(String(selectedWarehouse || 'all'));
   const [isInternalSaving, setIsInternalSaving] = useState(false);
-  
-  const isSaving = externalIsSaving || isInternalSaving;
 
-  // ✅ جلب المخازن بناءً على الفرع المختار
+  const isSaving = externalIsSaving || isInternalSaving;
+  const isEditMode = mode === 'edit';
+
+  // ✅ مزامنة القيم مع الـ props عند الفتح
+  useEffect(() => {
+    if (open) {
+      setLocalSelectedBranch(String(selectedBranch || 'all'));
+      setLocalSelectedWarehouse(String(selectedWarehouse || 'all'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // ✅ جلب المخازن
+  // ✅ جلب المخازن — في وضع التعديل نستخدم /products/warehouses
   const { data: warehouses = [], isLoading: isLoadingWarehouses } = useQuery({
-    queryKey: ['modal-warehouses', localSelectedBranch],
+    queryKey: [
+      'modal-warehouses',
+      localSelectedBranch,
+      isEditMode,
+      selectedProducts[0]?.product?.id ?? null,
+    ],
     queryFn: async () => {
-      if (!localSelectedBranch || localSelectedBranch === 'all') {
-        return [];
-      }
-      
       try {
+        if (isEditMode && selectedProducts[0]?.product?.id) {
+          const response = await api.post('/products/warehouses', {
+            product_id: selectedProducts[0].product.id,
+          });
+
+          console.log('📦 Product warehouses response:', response.data);
+
+          if (response.data?.result === 'Success') {
+            const data = response.data.data || [];
+            console.log('📦 Warehouses count:', data.length);
+
+            // ✅ فلتر بس لو الفرع محدد و branch_id مش null
+            if (localSelectedBranch && localSelectedBranch !== 'all') {
+              const filtered = data.filter(
+                (w: any) =>
+                  w.branch_id !== null &&
+                  String(w.branch_id) === String(localSelectedBranch)
+              );
+              console.log('📦 Filtered by branch:', localSelectedBranch, filtered.length);
+              return filtered;
+            }
+
+            return data;
+          }
+          return [];
+        }
+
+        // ✅ وضع الإضافة
+        const filters: any = { active: true };
+        if (localSelectedBranch && localSelectedBranch !== 'all') {
+          filters.branch_id = parseInt(localSelectedBranch, 10);
+        }
+
         const response = await api.post('/warehouse/index', {
-          filters: { 
-            active: true,
-            branch_id: parseInt(localSelectedBranch, 10)
-          },
+          filters,
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 1000,
-          paginate: false
+          paginate: false,
         });
-        
-        if (response.data.result === 'Success') {
-          return response.data.data || [];
-        }
+
+        if (response.data?.result === 'Success') return response.data.data || [];
         return [];
       } catch (error) {
         console.error('Error fetching warehouses:', error);
         return [];
       }
     },
-    enabled: open && !!localSelectedBranch && localSelectedBranch !== 'all',
+    enabled: open,
   });
-  
-  // ✅ هوك البحث المستقل
+  // ✅ البحث
   const { data: searchResults = [], isLoading: isSearching } = useSearchProducts({
-    searchQuery: searchQuery,
+    searchQuery,
     selectedBranch: localSelectedBranch,
     selectedWarehouse: localSelectedWarehouse,
-    searchType: searchType,
-    enabled: open
+    searchType,
+    enabled: open && !isEditMode,
   });
 
   const filteredProducts = searchResults.slice(0, 10);
 
-  // ✅ لما يتغير الفرع، نضبط المخزن على أول مخزن متاح أو 'all'
+  // ✅ في وضع الإضافة فقط: اختيار أول مخزن تلقائياً
+  // ✅ في وضع الإضافة فقط: اختيار أول مخزن
   useEffect(() => {
-    if (warehouses.length > 0 && localSelectedWarehouse === 'all') {
-      setLocalSelectedWarehouse(warehouses[0].id.toString());
-    } else if (warehouses.length === 0 && localSelectedBranch !== 'all') {
-      setLocalSelectedWarehouse('all');
-    }
-  }, [warehouses, localSelectedBranch]);
+    if (isEditMode) return;
+    if (!open) return;
+    if (warehouses.length === 0) return;
 
+    if (localSelectedWarehouse === 'all') {
+      setLocalSelectedWarehouse(String(warehouses[0].id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouses, isEditMode, open]);
   const handleAddProduct = (product: Product) => {
     if (product.units && product.units.length > 0) {
       setSelectedProductForVariant(product);
@@ -121,7 +176,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
         price: product.price || (product.cost || 0) * 1.3,
         unit_id: product.unit_id || null,
         warehouse_id: warehouseId || undefined,
-        branch_id: localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined
+        branch_id: localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined,
       };
       onProductsChange([...selectedProducts, newProduct]);
     }
@@ -148,33 +203,44 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     onProductsChange(updated);
   };
 
-  // ✅ دالة تحضير البيانات للإرسال
+  // ✅ تجهيز البيانات
   const prepareItemsForSave = () => {
     const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : null;
     const branchId = localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : null;
-    
-    return selectedProducts.map(item => {
-      if (!item.product?.id) {
-        console.error('Product missing id:', item);
-        return null;
-      }
-      
-      return {
-        product_id: item.product.id,
-        warehouse_id: item.warehouse_id || warehouseId,
-        branch_id: item.branch_id || branchId,
-        unit_id: item.unitId || item.unit_id || null,
-        color_id: item.colorId || null,
-        stock: item.quantity,
-        cost: item.cost
-      };
-    }).filter(item => item !== null && item.warehouse_id !== null);
+
+    return selectedProducts
+      .map(item => {
+        if (!item.product?.id) return null;
+
+        const finalWarehouseId = item.warehouse_id || warehouseId;
+
+        const base: any = {
+          product_id: item.product.id,
+          warehouse_id: finalWarehouseId,
+          branch_id: item.branch_id || branchId,
+          unit_id: item.unitId || item.unit_id || null,
+          color_id: item.colorId || null,
+          stock: item.quantity,
+          cost: item.cost,
+        };
+
+        if (isEditMode) {
+          base.old_stock = originalStock ?? 0;
+          base.old_warehouse_id = originalWarehouseId ?? finalWarehouseId;
+          base.old_unit_id = originalUnitId ?? base.unit_id;
+          base.old_color_id = originalColorId ?? base.color_id;
+          base.record_id = editingRecordId;
+        }
+
+        return base;
+      })
+      .filter(item => item !== null);
   };
 
-  // ✅ دالة الحفظ باستخدام API products/add-stock (المعدلة)
+  // ✅ الحفظ
   const handleSave = async () => {
     const items = prepareItemsForSave();
-    
+
     if (items.length === 0) {
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
@@ -183,65 +249,79 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
       });
       return;
     }
-    
+
     const missingWarehouse = items.some(item => !item.warehouse_id);
     if (missingWarehouse) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يجب تحديد مستودع لجميع المنتجات' : 'Please select a warehouse for all products',
+        title: language === 'ar' ? 'المخزن مطلوب' : 'Warehouse Required',
+        description:
+          language === 'ar'
+            ? 'من فضلك اختر المخزن قبل الحفظ'
+            : 'Please select a warehouse before saving',
         variant: 'destructive',
       });
       return;
     }
-    
+
     setIsInternalSaving(true);
-    
+
     try {
-      const payload = { items };
-      console.log('📦 Sending to products/add-stock:', payload);
-      
-      const response = await api.post('/products/add-stock', payload);
-      
-      // ✅ التحقق من نجاح العملية
-      if (response.data.status === 200 || response.data.success || response.data.result === 'Success' || response.data.message === 'Stock added successfully') {
-        
-        // ✅ عرض رسالة نجاح
+      const endpoint = isEditMode ? '/products/update-stock' : '/products/add-stock';
+      const payload = isEditMode ? items[0] : { items };
+
+      console.log(`📦 Sending to ${endpoint}:`, payload);
+
+      const response = await api.post(endpoint, payload);
+
+      if (
+        response.data?.status === 200 ||
+        response.data?.success ||
+        response.data?.result === 'Success' ||
+        (response.status >= 200 && response.status < 300)
+      ) {
         toast({
           title: language === 'ar' ? 'تم بنجاح' : 'Success',
-          description: response.data.message || (language === 'ar' ? 'تم إضافة الرصيد بنجاح' : 'Stock added successfully'),
+          description:
+            response.data?.message ||
+            (isEditMode
+              ? language === 'ar'
+                ? 'تم تحديث الرصيد بنجاح'
+                : 'Stock updated successfully'
+              : language === 'ar'
+                ? 'تم إضافة الرصيد بنجاح'
+                : 'Stock added successfully'),
           variant: 'default',
         });
-        
-        // ✅ تحديث كاش المنتجات
+
         await queryClient.invalidateQueries({ queryKey: ['products-with-balance'] });
-        
-        // ✅ استدعاء onSave و onSuccess
+        await queryClient.invalidateQueries({ queryKey: ['products'] });
+        await queryClient.invalidateQueries({ queryKey: ['product-list-warehouses'] });
+        await queryClient.invalidateQueries({ queryKey: ['modal-warehouses'] });
+
         onSave(selectedProducts);
-        if (onSuccess) {
-          onSuccess();
-        }
-        
-        // ✅ إعادة تعيين القائمة
+        if (onSuccess) onSuccess();
+
         onProductsChange([]);
-        
-        // ✅ إغلاق المودال
         onOpenChange(false);
-        
       } else {
-        // ✅ عرض رسالة خطأ من الـ API
         toast({
           title: language === 'ar' ? 'خطأ' : 'Error',
-          description: response.data.message || response.data.error || (language === 'ar' ? 'حدث خطأ أثناء الحفظ' : 'An error occurred while saving'),
+          description:
+            response.data?.message ||
+            response.data?.error ||
+            (language === 'ar' ? 'حدث خطأ أثناء الحفظ' : 'An error occurred while saving'),
           variant: 'destructive',
         });
       }
     } catch (error: any) {
       console.error('API Error:', error);
-      
-      // ✅ عرض رسالة خطأ
       toast({
         title: language === 'ar' ? 'خطأ في الاتصال' : 'Connection Error',
-        description: error?.response?.data?.message || error?.message || (language === 'ar' ? 'حدث خطأ في الاتصال بالسيرفر' : 'Connection error occurred'),
+        description:
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          (language === 'ar' ? 'حدث خطأ في الاتصال بالسيرفر' : 'Connection error occurred'),
         variant: 'destructive',
       });
     } finally {
@@ -250,7 +330,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   };
 
   const totalQuantity = selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
-  const totalValue = selectedProducts.reduce((sum, p) => sum + (p.quantity * (p.cost || 0)), 0);
+  const totalValue = selectedProducts.reduce((sum, p) => sum + p.quantity * (p.cost || 0), 0);
 
   const handleSearchTypeChange = (type: SearchType) => {
     setSearchType(type);
@@ -259,6 +339,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
 
   const t = {
     addBalance: language === 'ar' ? 'إضافة رصيد أول المدة' : 'Add Opening Balance',
+    editBalance: language === 'ar' ? 'تعديل الرصيد' : 'Edit Stock',
     date: language === 'ar' ? 'التاريخ' : 'Date',
     branch: language === 'ar' ? 'الفرع' : 'Branch',
     warehouse: language === 'ar' ? 'المستودع' : 'Warehouse',
@@ -270,14 +351,16 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     totalValue: language === 'ar' ? 'القيمة الإجمالية' : 'Total Value',
     cancel: language === 'ar' ? 'إلغاء' : 'Cancel',
     save: language === 'ar' ? 'حفظ' : 'Save',
+    update: language === 'ar' ? 'تحديث' : 'Update',
     allBranches: language === 'ar' ? 'جميع الفروع' : 'All Branches',
     allWarehouses: language === 'ar' ? 'جميع المستودعات' : 'All Warehouses',
     selectBranch: language === 'ar' ? 'اختر الفرع' : 'Select branch',
     selectWarehouse: language === 'ar' ? 'اختر المستودع' : 'Select warehouse',
+    currentBranch: language === 'ar' ? 'الفرع الحالي' : 'Current Branch',
+    currentWarehouse: language === 'ar' ? 'المخزن الحالي' : 'Current Warehouse',
     sku: language === 'ar' ? 'الرقم التسلسلي' : 'SKU',
     barcode: language === 'ar' ? 'الباركود' : 'Barcode',
     stock: language === 'ar' ? 'المخزون' : 'Stock',
-    searchBy: language === 'ar' ? 'نوع البحث' : 'Search Type',
     name: language === 'ar' ? 'الاسم' : 'Name',
   };
 
@@ -296,10 +379,22 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-4 pb-2 border-b">
             <DialogTitle className="flex items-center gap-2 text-xl">
-              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-                <Package className="text-emerald-600 dark:text-emerald-400" size={20} />
+              <div
+                className={`p-2 rounded-xl ${isEditMode
+                  ? 'bg-amber-100 dark:bg-amber-900/30'
+                  : 'bg-emerald-100 dark:bg-emerald-900/30'
+                  }`}
+              >
+                <Package
+                  className={
+                    isEditMode
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }
+                  size={20}
+                />
               </div>
-              {t.addBalance}
+              {isEditMode ? t.editBalance : t.addBalance}
             </DialogTitle>
           </DialogHeader>
 
@@ -319,19 +414,19 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   disabled={isSaving}
                 />
               </div>
-              
+
               <div>
                 <Label className="flex items-center gap-2 text-sm font-medium mb-1.5">
                   <Building2 size={14} className="text-muted-foreground" />
                   {t.branch}
                 </Label>
-                <Select 
-                  value={localSelectedBranch} 
+                <Select
+                  value={localSelectedBranch}
                   onValueChange={(value) => {
-                    setLocalSelectedBranch(value);
+                    setLocalSelectedBranch(String(value));
                     setLocalSelectedWarehouse('all');
-                  }} 
-                  disabled={isSaving}
+                  }}
+                  disabled={isSaving || isEditMode}
                 >
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder={t.selectBranch} />
@@ -339,163 +434,197 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   <SelectContent>
                     <SelectItem value="all">{t.allBranches}</SelectItem>
                     {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                      <SelectItem key={branch.id} value={String(branch.id)}>
                         {language === 'ar' ? branch.name_ar || branch.name : branch.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label className="flex items-center gap-2 text-sm font-medium mb-1.5">
                   <Warehouse size={14} className="text-muted-foreground" />
                   {t.warehouse}
                 </Label>
-                <Select 
-                  value={localSelectedWarehouse} 
-                  onValueChange={setLocalSelectedWarehouse} 
-                  disabled={isSaving || isLoadingWarehouses || localSelectedBranch === 'all'}
+                <Select
+                  value={localSelectedWarehouse}
+                  onValueChange={(v) => setLocalSelectedWarehouse(String(v))}
+                  disabled={isSaving || isLoadingWarehouses}
                 >
                   <SelectTrigger className="bg-background">
-                    <SelectValue placeholder={
-                      isLoadingWarehouses 
-                        ? (language === 'ar' ? 'جاري التحميل...' : 'Loading...')
-                        : (localSelectedBranch === 'all' 
-                          ? (language === 'ar' ? 'اختر فرعاً أولاً' : 'Select branch first')
-                          : t.selectWarehouse)
-                    } />
+                    <SelectValue
+                      placeholder={
+                        isLoadingWarehouses
+                          ? language === 'ar'
+                            ? 'جاري التحميل...'
+                            : 'Loading...'
+                          : t.selectWarehouse
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t.allWarehouses}</SelectItem>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
-                        {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
-                      </SelectItem>
-                    ))}
+
+                    {warehouses.map((warehouse: any) => {
+                      const wid = String(warehouse.warehouse_id ?? warehouse.id);
+                      const wname = language === 'ar'
+                        ? (warehouse.warehouse_name_ar || warehouse.warehouse_name || warehouse.name_ar || warehouse.name)
+                        : (warehouse.warehouse_name || warehouse.name);
+
+                      const bname = language === 'ar'
+                        ? (warehouse.branch_name_ar || warehouse.branch_name)
+                        : warehouse.branch_name;
+
+                      return (
+                        <SelectItem key={wid} value={wid}>
+                          {wname}
+                          {bname ? ` - ${bname}` : ''}
+                          {warehouse.stock !== undefined && ` (${warehouse.stock})`}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
-                {localSelectedBranch !== 'all' && warehouses.length === 0 && !isLoadingWarehouses && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    {language === 'ar' ? 'لا توجد مخازن لهذا الفرع' : 'No warehouses found for this branch'}
-                  </p>
-                )}
+
+                {localSelectedBranch !== 'all' &&
+                  warehouses.length === 0 &&
+                  !isLoadingWarehouses && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      {language === 'ar'
+                        ? 'لا توجد مخازن لهذا الفرع'
+                        : 'No warehouses found for this branch'}
+                    </p>
+                  )}
               </div>
             </div>
 
-            {/* Product Search Section */}
+            {/* Product Search */}
             <div className="border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <Package size={14} />
                   {t.products}
                 </h3>
-                
-                <div className="flex gap-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={searchType === 'name' ? 'default' : 'outline'}
-                    onClick={() => handleSearchTypeChange('name')}
-                    className="h-8 px-3"
-                    disabled={isSaving}
-                  >
-                    <Package size={12} className="me-1" />
-                    {t.name}
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={searchType === 'sku' ? 'default' : 'outline'}
-                    onClick={() => handleSearchTypeChange('sku')}
-                    className="h-8 px-3"
-                    disabled={isSaving}
-                  >
-                    <Hash size={12} className="me-1" />
-                    SKU
-                  </Button>
-                  
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={searchType === 'barcode' ? 'default' : 'outline'}
-                    onClick={() => handleSearchTypeChange('barcode')}
-                    className="h-8 px-3"
-                    disabled={isSaving}
-                  >
-                    <Barcode size={12} className="me-1" />
-                    {language === 'ar' ? 'باركود' : 'Barcode'}
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                <Input
-                  placeholder={getPlaceholder()}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-background"
-                  disabled={isSaving}
-                  autoFocus
-                />
-              </div>
 
-              {isSearching && (
-                <div className="text-center py-4">
-                  <Loader2 className="animate-spin mx-auto text-primary" size={24} />
-                </div>
-              )}
-
-              {searchQuery && !isSearching && filteredProducts.length > 0 && (
-                <div className="border rounded-lg overflow-hidden max-h-[250px] overflow-y-auto mb-4">
-                  {filteredProducts.map((product) => (
-                    <div
-                      key={product.id}
-                      className="p-3 cursor-pointer hover:bg-muted/50 border-b last:border-b-0 flex items-center justify-between transition-colors"
-                      onClick={() => handleAddProduct(product)}
+                {!isEditMode && (
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={searchType === 'name' ? 'default' : 'outline'}
+                      onClick={() => handleSearchTypeChange('name')}
+                      className="h-8 px-3"
+                      disabled={isSaving}
                     >
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {language === 'ar' 
-                            ? (product.name_ar || product.name || 'غير معروف') 
-                            : (product.name || 'Unknown')}
-                        </p>
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1">
-                          {product.sku && (
-                            <span className="font-mono flex items-center gap-1">
-                              <span className="font-medium">{t.sku}:</span> {product.sku}
-                            </span>
-                          )}
-                          {product.barcode && (
-                            <span className="font-mono flex items-center gap-1">
-                              <Barcode size={10} />
-                              <span className="font-medium">{t.barcode}:</span> {product.barcode}
-                            </span>
-                          )}
-                          {product.units && product.units.length > 0 && (
-                            <span className="text-emerald-600">
-                              {product.units.length} {language === 'ar' ? 'مقاس' : 'units'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-mono font-semibold">{formatCurrency(product.cost || 0)}</p>
-                        {product.stock && product.stock > 0 && (
-                          <p className="text-xs text-muted-foreground">{t.stock}: {product.stock}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      <Package size={12} className="me-1" />
+                      {t.name}
+                    </Button>
 
-              {searchQuery && !isSearching && filteredProducts.length === 0 && (
-                <div className="text-center py-4 text-muted-foreground border rounded-lg">
-                  {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products found'}
-                </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={searchType === 'sku' ? 'default' : 'outline'}
+                      onClick={() => handleSearchTypeChange('sku')}
+                      className="h-8 px-3"
+                      disabled={isSaving}
+                    >
+                      <Hash size={12} className="me-1" />
+                      SKU
+                    </Button>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={searchType === 'barcode' ? 'default' : 'outline'}
+                      onClick={() => handleSearchTypeChange('barcode')}
+                      className="h-8 px-3"
+                      disabled={isSaving}
+                    >
+                      <Barcode size={12} className="me-1" />
+                      {language === 'ar' ? 'باركود' : 'Barcode'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {!isEditMode && (
+                <>
+                  <div className="relative mb-3">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      size={16}
+                    />
+                    <Input
+                      placeholder={getPlaceholder()}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 bg-background"
+                      disabled={isSaving}
+                      autoFocus
+                    />
+                  </div>
+
+                  {isSearching && (
+                    <div className="text-center py-4">
+                      <Loader2 className="animate-spin mx-auto text-primary" size={24} />
+                    </div>
+                  )}
+
+                  {searchQuery && !isSearching && filteredProducts.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden max-h-[250px] overflow-y-auto mb-4">
+                      {filteredProducts.map((product) => (
+                        <div
+                          key={product.id}
+                          className="p-3 cursor-pointer hover:bg-muted/50 border-b last:border-b-0 flex items-center justify-between transition-colors"
+                          onClick={() => handleAddProduct(product)}
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">
+                              {language === 'ar'
+                                ? product.name_ar || product.name || 'غير معروف'
+                                : product.name || 'Unknown'}
+                            </p>
+                            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-1">
+                              {product.sku && (
+                                <span className="font-mono flex items-center gap-1">
+                                  <span className="font-medium">{t.sku}:</span> {product.sku}
+                                </span>
+                              )}
+                              {product.barcode && (
+                                <span className="font-mono flex items-center gap-1">
+                                  <Barcode size={10} />
+                                  <span className="font-medium">{t.barcode}:</span> {product.barcode}
+                                </span>
+                              )}
+                              {product.units && product.units.length > 0 && (
+                                <span className="text-emerald-600">
+                                  {product.units.length} {language === 'ar' ? 'مقاس' : 'units'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-mono font-semibold">
+                              {formatCurrency(product.cost || 0)}
+                            </p>
+                            {product.stock && product.stock > 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                {t.stock}: {product.stock}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchQuery && !isSearching && filteredProducts.length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground border rounded-lg">
+                      {language === 'ar' ? 'لا توجد منتجات مطابقة' : 'No matching products found'}
+                    </div>
+                  )}
+                </>
               )}
 
               <SelectedProductsTable
@@ -510,70 +639,87 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
           <DialogFooter className="p-4 pt-3 border-t bg-muted/30 flex justify-between items-center">
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium">
-                {t.totalQuantity}: <span className="font-bold text-emerald-600">{totalQuantity}</span>
+                {t.totalQuantity}:{' '}
+                <span className="font-bold text-emerald-600">{totalQuantity}</span>
               </span>
               <span className="text-sm font-medium">
-                {t.totalValue}: <span className="font-bold text-primary">{formatCurrency(totalValue)}</span>
+                {t.totalValue}:{' '}
+                <span className="font-bold text-primary">{formatCurrency(totalValue)}</span>
               </span>
             </div>
-            
+
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)} size="sm" disabled={isSaving}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                size="sm"
+                disabled={isSaving}
+              >
                 <X size={14} className="me-1.5" />
                 {t.cancel}
               </Button>
-              
-              <Button 
+
+              <Button
                 onClick={handleSave}
                 disabled={selectedProducts.length === 0 || isSaving}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+                className={`gap-2 ${isEditMode
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 size="sm"
               >
                 {isSaving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-                {t.save}
+                {isEditMode ? t.update : t.save}
               </Button>
             </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <VariantSelectionModal
-        product={selectedProductForVariant}
-        onClose={() => setSelectedProductForVariant(null)}
-        onAdd={(product, unit, color, quantity) => {
-          const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : undefined;
-          const branchId = localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined;
-          
-          const newProduct: SelectedProduct = {
-            product,
-            unitId: unit?.unit_id,
-            unitName: unit?.unit_name,
-            colorId: color?.color_id,
-            colorName: color?.color,
-            quantity,
-            cost: unit ? parseFloat(unit.cost_price) : (product.cost || 0),
-            price: unit ? parseFloat(unit.sell_price) : (product.price || (product.cost || 0) * 1.3),
-            warehouse_id: warehouseId,
-            branch_id: branchId
-          };
-          
-          const existingIndex = selectedProducts.findIndex(p => 
-            p.product.id === product.id && 
-            p.unitId === unit?.unit_id && 
-            p.colorId === color?.color_id
-          );
-          
-          if (existingIndex >= 0) {
-            const updated = [...selectedProducts];
-            updated[existingIndex].quantity += quantity;
-            onProductsChange(updated);
-          } else {
-            onProductsChange([...selectedProducts, newProduct]);
-          }
-          
-          setSelectedProductForVariant(null);
-        }}
-      />
+      {!isEditMode && (
+        <VariantSelectionModal
+          product={selectedProductForVariant}
+          onClose={() => setSelectedProductForVariant(null)}
+          onAdd={(product, unit, color, quantity) => {
+            const warehouseId =
+              localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : undefined;
+            const branchId =
+              localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : undefined;
+
+            const newProduct: SelectedProduct = {
+              product,
+              unitId: unit?.unit_id,
+              unitName: unit?.unit_name,
+              colorId: color?.color_id,
+              colorName: color?.color,
+              quantity,
+              cost: unit ? parseFloat(unit.cost_price) : product.cost || 0,
+              price: unit
+                ? parseFloat(unit.sell_price)
+                : product.price || (product.cost || 0) * 1.3,
+              warehouse_id: warehouseId,
+              branch_id: branchId,
+            };
+
+            const existingIndex = selectedProducts.findIndex(
+              p =>
+                p.product.id === product.id &&
+                p.unitId === unit?.unit_id &&
+                p.colorId === color?.color_id
+            );
+
+            if (existingIndex >= 0) {
+              const updated = [...selectedProducts];
+              updated[existingIndex].quantity += quantity;
+              onProductsChange(updated);
+            } else {
+              onProductsChange([...selectedProducts, newProduct]);
+            }
+
+            setSelectedProductForVariant(null);
+          }}
+        />
+      )}
     </>
   );
 };

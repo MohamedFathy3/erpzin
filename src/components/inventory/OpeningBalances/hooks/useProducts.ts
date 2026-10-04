@@ -1,6 +1,5 @@
 // hooks/useProducts.ts
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { ProductService } from '../services/productService';
 import { Product } from '../types';
 
