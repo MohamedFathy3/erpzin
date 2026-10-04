@@ -401,7 +401,8 @@ const POS: React.FC = () => {
 
   // ==================== Data Fetching ====================
   const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
-  const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(selectedCategory);
+  const productCategoryFilter = selectedCategory === 'automotive' ? 'all' : selectedCategory;
+  const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(productCategoryFilter);
   
   const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
@@ -445,6 +446,7 @@ const POS: React.FC = () => {
   // ==================== Data Transformation ====================
   const transformedCategories = useMemo(() => [
     { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
+    { id: 'automotive', name: 'Automotive Services', nameAr: 'خدمات السيارات', icon: '🚗' },
     ...(categories?.map(cat => ({
       id: cat.id,
       name: cat.name,
@@ -456,7 +458,7 @@ const POS: React.FC = () => {
   const transformedProducts = useMemo(() => {
     if (!products) return [];
     
-    return products.map((prod: Product) => ({
+    const mapped = products.map((prod: Product) => ({
       id: prod.id.toString(),
       name: prod.name,
       nameAr: prod.name_ar || prod.name,
@@ -472,7 +474,8 @@ const POS: React.FC = () => {
       units: prod.units || [],
       automotive_service: prod.automotive_service || null,
     }));
-  }, [products]);
+    return selectedCategory === 'automotive' ? mapped.filter((product) => Boolean(product.automotive_service)) : mapped;
+  }, [products, selectedCategory]);
 
   useEffect(() => {
     setSearchQuery('');
@@ -1458,7 +1461,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           companyInfo={{
             name: user?.name || 'متجرك',
             nameAr: user?.name_ar || user?.name,
-            logo: user?.logoUrl || user?.logo_url || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
+            logo: user?.logoUrl || user?.logo_url || user?.company_logo || user?.logo_icon_url || user?.logo_icon || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
             address: user?.address,
             addressAr: user?.address,
             phone: user?.phone,

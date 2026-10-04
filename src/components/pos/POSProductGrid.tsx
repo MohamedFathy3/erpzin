@@ -101,7 +101,9 @@ const filteredProducts = useMemo(() => {
 
   // فلترة حسب الفئة
   if (selectedCategory && selectedCategory !== 'all') {
-    filtered = filtered.filter(product => {
+    filtered = selectedCategory === 'automotive'
+      ? filtered.filter(product => Boolean(product.automotive_service))
+      : filtered.filter(product => {
       const productCatId = product.category_id?.toString() || '';
       console.log(`Product ${product.id} category_id:`, productCatId, 'vs selected:', selectedCategory);
       return productCatId === selectedCategory;

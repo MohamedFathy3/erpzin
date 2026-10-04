@@ -1,6 +1,8 @@
 import React, { forwardRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CompanyInfo {
   name: string;
@@ -60,6 +62,20 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     const { language } = useLanguage();
     const isRTL = language === 'ar';
     const { formatCurrency } = useRegionalSettings();
+    const { data: companySettings } = useQuery({
+      queryKey: ['pos-print-company-settings'],
+      queryFn: async () => (await supabase.from('company_settings').select('*').maybeSingle()).data,
+      staleTime: 5 * 60 * 1000,
+    });
+    const effectiveCompanyInfo = {
+      ...companyInfo,
+      name: companySettings?.name || companyInfo.name,
+      nameAr: companySettings?.name_ar || companyInfo.nameAr,
+      logo: companySettings?.logo_url || companySettings?.logo_icon_url || companyInfo.logo,
+      address: companySettings?.address || companyInfo.address,
+      phone: companySettings?.phone || companyInfo.phone,
+      tax_id: companySettings?.tax_number || companyInfo.tax_id,
+    };
     const getInvoiceNumber = () => {
       // ✅ backend payload key is invoice_number (snake_case)
       const anyData = invoiceData as Record<string, unknown>;
@@ -193,11 +209,11 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       >
         {/* Header */}
         <div className="text-center border-b border-dashed border-gray-300 pb-2 mb-2">
-          {companyInfo.logo && (
+          {effectiveCompanyInfo.logo && (
             <div className="flex justify-center mb-1">
               <img
-                src={companyInfo.logo}
-                alt={companyInfo.name}
+                src={effectiveCompanyInfo.logo}
+                alt={effectiveCompanyInfo.name}
                 className="h-10 w-auto object-contain"
                 crossOrigin="anonymous"
               />
@@ -205,7 +221,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           )}
 
           <h1 className="text-sm font-bold text-black">
-            {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
+            {isRTL && effectiveCompanyInfo.nameAr ? effectiveCompanyInfo.nameAr : effectiveCompanyInfo.name}
           </h1>
 
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
@@ -216,18 +232,18 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          {!safeInvoiceData.branchName && companyInfo.address && (
+          {!safeInvoiceData.branchName && effectiveCompanyInfo.address && (
             <p className="text-[9px] text-gray-700">
-              {isRTL ? companyInfo.addressAr || companyInfo.address : companyInfo.address}
+              {isRTL ? effectiveCompanyInfo.addressAr || effectiveCompanyInfo.address : effectiveCompanyInfo.address}
             </p>
           )}
 
-          {!safeInvoiceData.branchPhone && companyInfo.phone && (
-            <p className="text-[9px] text-gray-700">{texts.phone}: {companyInfo.phone}</p>
+          {!safeInvoiceData.branchPhone && effectiveCompanyInfo.phone && (
+            <p className="text-[9px] text-gray-700">{texts.phone}: {effectiveCompanyInfo.phone}</p>
           )}
 
-          {companyInfo.tax_id && (
-            <p className="text-[9px] text-gray-700">VAT: {companyInfo.tax_id}</p>
+          {effectiveCompanyInfo.tax_id && (
+            <p className="text-[9px] text-gray-700">VAT: {effectiveCompanyInfo.tax_id}</p>
           )}
         </div>
 
