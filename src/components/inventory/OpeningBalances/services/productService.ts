@@ -171,4 +171,9 @@
       const response = await api.post('/products/add-stock', { items });
       return response.data;
     }
+
+    async deleteProductBalance(productId: number): Promise<any> {
+      const response = await api.delete(`/products/opening-balance/${productId}`);
+      return response.data;
+    }
   }
