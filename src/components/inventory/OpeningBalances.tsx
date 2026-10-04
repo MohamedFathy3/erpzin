@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { 
   Package, Plus, Trash2, Loader2, Upload, Download, X, FileSpreadsheet, 
   Search, Save, FileText, CheckCircle, AlertCircle, ShoppingBag, 
-  MinusCircle, List, Grid3X3, ChevronRight, Building2, Warehouse, Calendar,
+  MinusCircle, List, Grid3X3, ChevronRight, Building2, Warehouse, Calendar, Pencil,
   Layers, Palette, Ruler
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -102,6 +102,10 @@ const OpeningBalances: React.FC = () => {
   const [importStep, setImportStep] = useState<'upload' | 'preview' | 'importing'>('upload');
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [activeView, setActiveView] = useState<'list' | 'grid'>('list');
+  const [editingBalance, setEditingBalance] = useState<Product | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState(0);
+  const [editingCost, setEditingCost] = useState(0);
+  const [editingPrice, setEditingPrice] = useState(0);
   
   // Variant selection states
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
@@ -315,6 +319,32 @@ const OpeningBalances: React.FC = () => {
     }
   });
 
+  const updateBalanceMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingBalance) throw new Error('No balance selected');
+      const response = await api.put(`/product/${editingBalance.id}`, {
+        stock: editingQuantity,
+        cost: editingCost,
+        price: editingPrice,
+        beginning_balance: true,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast({ title: language === 'ar' ? 'تم تحديث الرصيد بنجاح' : 'Balance updated successfully' });
+      setEditingBalance(null);
+      queryClient.invalidateQueries({ queryKey: ['products-with-balance'] });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: language === 'ar' ? 'تعذر تحديث الرصيد' : 'Could not update balance',
+        description: error.response?.data?.message || error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // قراءة ملف Excel
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -488,6 +518,13 @@ const OpeningBalances: React.FC = () => {
     }
   };
 
+  const handleEdit = (product: Product) => {
+    setEditingBalance(product);
+    setEditingQuantity(Number(product.stock || 0));
+    setEditingCost(Number(product.cost || 0));
+    setEditingPrice(Number(product.price || 0));
+  };
+
   const handleOpenModal = () => {
     setShowAddModal(true);
     setSelectedProducts([]);
@@ -630,6 +667,7 @@ const OpeningBalances: React.FC = () => {
     selectColor: language === 'ar' ? 'اختر اللون' : 'Select color',
     variantDetails: language === 'ar' ? 'تفاصيل المتغيرات' : 'Variant Details',
     addToList: language === 'ar' ? 'إضافة إلى القائمة' : 'Add to List',
+    edit: language === 'ar' ? 'تعديل الرصيد' : 'Edit Balance',
   };
 
   return (
@@ -777,6 +815,15 @@ const OpeningBalances: React.FC = () => {
                         {formatCurrency((product.stock || 0) * product.cost)}
                       </TableCell>
                       <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title={t.edit}
+                          onClick={() => handleEdit(product)}
+                          className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                        >
+                          <Pencil size={14} />
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="sm" 
@@ -801,6 +848,16 @@ const OpeningBalances: React.FC = () => {
                         <h4 className="font-semibold">{language === 'ar' && product.name_ar ? product.name_ar : product.name}</h4>
                         <p className="text-xs text-muted-foreground mt-0.5">{product.sku}</p>
                       </div>
+                      <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={t.edit}
+                        onClick={() => handleEdit(product)}
+                        className="text-muted-foreground hover:text-primary h-8 w-8 p-0"
+                      >
+                        <Pencil size={14} />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -809,6 +866,7 @@ const OpeningBalances: React.FC = () => {
                       >
                         <Trash2 size={14} />
                       </Button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
@@ -1061,6 +1119,42 @@ const OpeningBalances: React.FC = () => {
                 {t.saveAll}
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Opening Balance Modal */}
+      <Dialog open={!!editingBalance} onOpenChange={(open) => !open && setEditingBalance(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil size={18} className="text-primary" />
+              {t.edit}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' ? (editingBalance?.name_ar || editingBalance?.name) : editingBalance?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div>
+              <Label>{t.quantity}</Label>
+              <Input type="number" min="0" value={editingQuantity} onChange={(e) => setEditingQuantity(Math.max(0, Number(e.target.value)))} />
+            </div>
+            <div>
+              <Label>{t.costPrice}</Label>
+              <Input type="number" min="0" step="0.01" value={editingCost} onChange={(e) => setEditingCost(Math.max(0, Number(e.target.value)))} />
+            </div>
+            <div>
+              <Label>{t.salePrice}</Label>
+              <Input type="number" min="0" step="0.01" value={editingPrice} onChange={(e) => setEditingPrice(Math.max(0, Number(e.target.value)))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingBalance(null)}>{t.cancel}</Button>
+            <Button onClick={() => updateBalanceMutation.mutate()} disabled={updateBalanceMutation.isPending} className="gap-2">
+              {updateBalanceMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+              {language === 'ar' ? 'حفظ التعديل' : 'Save changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
