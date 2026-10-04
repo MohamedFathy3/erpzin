@@ -243,25 +243,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadWarehouses = async () => {
       if (!currentBranch) {
         setWarehouses([]);
+        setCurrentWarehouse(null);
         return;
       }
       
       try {
-        const { data, error } = await supabase
-          .from('warehouses')
-          .select('*')
-          .eq('is_active', true);
-        
-        if (error) throw error;
-        
-        setWarehouses(data || []);
-        
-        // Set first warehouse as default
-        if (data && data.length > 0 && !currentWarehouse) {
-          setCurrentWarehouse(data[0]);
-        }
+        const response = await api.post('/warehouse/index', {
+          filters: { branch_id: currentBranch.id, active: true },
+          orderBy: 'name',
+          orderByDirection: 'asc',
+          perPage: 500,
+          paginate: false,
+        });
+        const payload = response.data?.data;
+        const data = Array.isArray(payload) ? payload : (payload?.data || []);
+        const normalized = data.map((warehouse: any) => ({
+          ...warehouse,
+          id: String(warehouse.id),
+          name: warehouse.name ?? '',
+          name_ar: warehouse.name_ar ?? null,
+          is_active: warehouse.is_active ?? warehouse.active ?? true,
+        }));
+        setWarehouses(normalized);
+        setCurrentWarehouse((previous) => normalized.find((warehouse: Warehouse) => warehouse.id === previous?.id) || normalized[0] || null);
       } catch (error) {
         console.error('Error loading warehouses:', error);
+        setWarehouses([]);
+        setCurrentWarehouse(null);
       }
     };
     
