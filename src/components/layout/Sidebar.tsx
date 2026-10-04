@@ -93,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     tasks: 'google_calendar',
     reports: 'reports',
     'employee-financial-reports': 'employee_financial_reports',
+    'unified-financial-reports': 'reports',
     'warehouse-reports': 'warehouse_reports',
     'inventory-transfer-requests': 'inventory_transfer_requests',
     industries: 'industries',
@@ -121,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   const permissionForPage: Record<string, string[]> = {
     dashboard: ['dashboard.view'], automotive: ['automotive.view'], inventory: ['inventory.view'], sales: ['sales.view'], pos: ['sales.view'], posreturn: ['sales.pos_return.view'],
     purchasing: ['purchasing.view'], finance: ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'], hr: ['hr.view'], crm: ['crm.view'],
-    reports: ['reports.view'], 'employee-financial-reports': ['reports.view', 'hr.view'], projects: ['projects.view'], manufacturing: ['manufacturing.view'],
+    reports: ['reports.view'], 'unified-financial-reports': ['reports.view'], 'employee-financial-reports': ['reports.view', 'hr.view'], projects: ['projects.view'], manufacturing: ['manufacturing.view'],
     'access-control': ['access_control.view'], aiAssistant: ['ai_assistant.view'],
   };
   const permissionEnabled = (pageId: string) => {

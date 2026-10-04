@@ -148,6 +148,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
   },
   {
+    id: 'unified-financial-reports',
+    path: '/unified-financial-reports',
+    label: 'Unified Financial Report',
+    labelAr: 'التقرير المالي الموحد',
+    icon: 'FileBarChart',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'viewer'],
+  },
+  {
     id: 'employee-financial-reports',
     path: '/employee-financial-reports',
     label: 'Employee Financial Reports',

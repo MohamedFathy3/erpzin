@@ -20,6 +20,7 @@ import Finance from "./pages/Finance";
 import HR from "./pages/HR";
 import CRM from "./pages/CRM";
 import Reports from "./pages/Reports";
+import UnifiedFinancialReports from "./pages/UnifiedFinancialReports";
 import EmployeeFinancialReports from "./pages/EmployeeFinancialReports";
 import Settings from "./pages/Settings";
 import Industries from "./pages/Industries";
@@ -89,6 +90,7 @@ const App = () => (
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
                 <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+                <Route path="/unified-financial-reports" element={<ProtectedRoute><UnifiedFinancialReports /></ProtectedRoute>} />
                 <Route path="/employee-financial-reports" element={<ProtectedRoute><EmployeeFinancialReports /></ProtectedRoute>} />
                 <Route path="/warehouse-reports" element={<ProtectedRoute><WarehouseReports /></ProtectedRoute>} />
                 <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
