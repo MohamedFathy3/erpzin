@@ -1,6 +1,6 @@
 // components/AddBalanceModal.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,8 @@ interface AddBalanceModalProps {
   originalWarehouseId?: number | null;
   originalUnitId?: number | null;
   originalColorId?: number | null;
+  originalWarehouseName?: string | null;
+  originalBranchName?: string | null;
 }
 
 type SearchType = 'name' | 'sku' | 'barcode';
@@ -56,11 +58,16 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   originalWarehouseId = null,
   originalUnitId = null,
   originalColorId = null,
+  originalWarehouseName = null,
+  originalBranchName = null,
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
 
+  // ============================================================
+  // 1. State
+  // ============================================================
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<SearchType>('name');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -72,16 +79,25 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
   const isSaving = externalIsSaving || isInternalSaving;
   const isEditMode = mode === 'edit';
 
-  // ✅ مزامنة القيم مع الـ props عند الفتح
+  // ✅ عشان نمنع الـ useEffect من إعادة الـ set كل render
+  const prevOpenRef = useRef(false);
+
+  // ============================================================
+  // 2. useEffect — sync مع props عند الفتح فقط
+  // ============================================================
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
+      // ✅ بس لما المودال يفتح من مقفول
       setLocalSelectedBranch(String(selectedBranch || 'all'));
       setLocalSelectedWarehouse(String(selectedWarehouse || 'all'));
     }
+    prevOpenRef.current = open;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  // ✅ جلب المخازن
-  // ✅ جلب المخازن — في وضع التعديل نستخدم /products/warehouses
+
+  // ============================================================
+  // 3. useQuery — المخازن
+  // ============================================================
   const { data: warehouses = [], isLoading: isLoadingWarehouses } = useQuery({
     queryKey: [
       'modal-warehouses',
@@ -102,7 +118,6 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
             const data = response.data.data || [];
             console.log('📦 Warehouses count:', data.length);
 
-            // ✅ فلتر بس لو الفرع محدد و branch_id مش null
             if (localSelectedBranch && localSelectedBranch !== 'all') {
               const filtered = data.filter(
                 (w: any) =>
@@ -118,7 +133,6 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
           return [];
         }
 
-        // ✅ وضع الإضافة
         const filters: any = { active: true };
         if (localSelectedBranch && localSelectedBranch !== 'all') {
           filters.branch_id = parseInt(localSelectedBranch, 10);
@@ -141,7 +155,10 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     },
     enabled: open,
   });
-  // ✅ البحث
+
+  // ============================================================
+  // 4. useSearchProducts
+  // ============================================================
   const { data: searchResults = [], isLoading: isSearching } = useSearchProducts({
     searchQuery,
     selectedBranch: localSelectedBranch,
@@ -152,18 +169,69 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
 
   const filteredProducts = searchResults.slice(0, 10);
 
-  // ✅ في وضع الإضافة فقط: اختيار أول مخزن تلقائياً
-  // ✅ في وضع الإضافة فقط: اختيار أول مخزن
+  // ============================================================
+  // 5. useMemo — mergedBranches (بعد كل الـ hooks)
+  // ============================================================
+  const mergedBranches = useMemo(() => {
+    const list = [...(branches || [])];
+
+    if (localSelectedBranch && localSelectedBranch !== 'all') {
+      const exists = list.some((b: any) => String(b.id) === String(localSelectedBranch));
+      if (!exists) {
+        list.push({
+          id: Number(localSelectedBranch),
+          name: originalBranchName || `Branch ${localSelectedBranch}`,
+          name_ar: originalBranchName || null,
+        } as any);
+      }
+    }
+
+    return list;
+  }, [branches, localSelectedBranch, originalBranchName]);
+
+  // ============================================================
+  // 6. useMemo — mergedWarehouses (بعد useQuery)
+  // ============================================================
+  const mergedWarehouses = useMemo(() => {
+    const list = [...(warehouses || [])];
+
+    if (localSelectedWarehouse && localSelectedWarehouse !== 'all') {
+      const exists = list.some(
+        (w: any) => String(w.warehouse_id ?? w.id) === String(localSelectedWarehouse)
+      );
+      if (!exists) {
+        list.push({
+          warehouse_id: Number(localSelectedWarehouse),
+          id: Number(localSelectedWarehouse),
+          warehouse_name: originalWarehouseName || `Warehouse ${localSelectedWarehouse}`,
+          name: originalWarehouseName || `Warehouse ${localSelectedWarehouse}`,
+          stock: 0,
+          _isFallback: true,
+        } as any);
+      }
+    }
+
+    return list;
+  }, [warehouses, localSelectedWarehouse, originalWarehouseName]);
+
+  // ============================================================
+  // 7. useEffect — auto-select أول مخزن (وضع الإضافة فقط)
+  // ============================================================
   useEffect(() => {
     if (isEditMode) return;
     if (!open) return;
     if (warehouses.length === 0) return;
 
     if (localSelectedWarehouse === 'all') {
-      setLocalSelectedWarehouse(String(warehouses[0].id));
+      const firstId = (warehouses[0] as any).warehouse_id ?? warehouses[0].id;
+      setLocalSelectedWarehouse(String(firstId));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouses, isEditMode, open]);
+
+  // ============================================================
+  // 8. Handlers
+  // ============================================================
   const handleAddProduct = (product: Product) => {
     if (product.units && product.units.length > 0) {
       setSelectedProductForVariant(product);
@@ -203,7 +271,6 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
     onProductsChange(updated);
   };
 
-  // ✅ تجهيز البيانات
   const prepareItemsForSave = () => {
     const warehouseId = localSelectedWarehouse !== 'all' ? parseInt(localSelectedWarehouse) : null;
     const branchId = localSelectedBranch !== 'all' ? parseInt(localSelectedBranch) : null;
@@ -237,7 +304,6 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
       .filter(item => item !== null);
   };
 
-  // ✅ الحفظ
   const handleSave = async () => {
     const items = prepareItemsForSave();
 
@@ -381,8 +447,8 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
             <DialogTitle className="flex items-center gap-2 text-xl">
               <div
                 className={`p-2 rounded-xl ${isEditMode
-                  ? 'bg-amber-100 dark:bg-amber-900/30'
-                  : 'bg-emerald-100 dark:bg-emerald-900/30'
+                    ? 'bg-amber-100 dark:bg-amber-900/30'
+                    : 'bg-emerald-100 dark:bg-emerald-900/30'
                   }`}
               >
                 <Package
@@ -433,8 +499,8 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t.allBranches}</SelectItem>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={String(branch.id)}>
+                    {mergedBranches.map((branch: any) => (
+                      <SelectItem key={String(branch.id)} value={String(branch.id)}>
                         {language === 'ar' ? branch.name_ar || branch.name : branch.name}
                       </SelectItem>
                     ))}
@@ -466,7 +532,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                   <SelectContent>
                     <SelectItem value="all">{t.allWarehouses}</SelectItem>
 
-                    {warehouses.map((warehouse: any) => {
+                    {mergedWarehouses.map((warehouse: any) => {
                       const wid = String(warehouse.warehouse_id ?? warehouse.id);
                       const wname = language === 'ar'
                         ? (warehouse.warehouse_name_ar || warehouse.warehouse_name || warehouse.name_ar || warehouse.name)
@@ -480,7 +546,7 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                         <SelectItem key={wid} value={wid}>
                           {wname}
                           {bname ? ` - ${bname}` : ''}
-                          {warehouse.stock !== undefined && ` (${warehouse.stock})`}
+                          {warehouse.stock !== undefined && !warehouse._isFallback && ` (${warehouse.stock})`}
                         </SelectItem>
                       );
                     })}
@@ -663,8 +729,8 @@ export const AddBalanceModal: React.FC<AddBalanceModalProps> = ({
                 onClick={handleSave}
                 disabled={selectedProducts.length === 0 || isSaving}
                 className={`gap-2 ${isEditMode
-                  ? 'bg-amber-600 hover:bg-amber-700'
-                  : 'bg-emerald-600 hover:bg-emerald-700'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                 size="sm"
               >

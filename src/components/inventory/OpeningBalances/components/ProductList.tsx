@@ -46,6 +46,11 @@ export const ProductList: React.FC<ProductListProps> = ({
   const [originalUnitId, setOriginalUnitId] = useState<number | null>(null);
   const [originalColorId, setOriginalColorId] = useState<number | null>(null);
 
+  // ✅ بيانات إضافية للعرض
+  const [originalWarehouseName, setOriginalWarehouseName] = useState<string | null>(null);
+  const [originalBranchName, setOriginalBranchName] = useState<string | null>(null);
+  const [editingBranches, setEditingBranches] = useState<Branch[]>([]);
+
   const t = {
     product: language === 'ar' ? 'المنتج' : 'Product',
     quantity: language === 'ar' ? 'الكمية' : 'Quantity',
@@ -85,19 +90,37 @@ export const ProductList: React.FC<ProductListProps> = ({
       const unitId = stockRecord.unit_id ? Number(stockRecord.unit_id) : null;
       const colorId = stockRecord.color_id ? Number(stockRecord.color_id) : null;
       const recordId = stockRecord.record_id ? Number(stockRecord.record_id) : null;
-
-      // ✅ الكمية من الـ stock (اللي في الباك إند مختارة صح)
       const stockQty = Number(stockRecord.stock ?? 0);
       const cost = Number(stockRecord.cost ?? product.cost ?? 0);
       const price = Number(stockRecord.price ?? product.price ?? 0);
+
+      // ✅ حفظ أسماء المخزن والفرع
+      setOriginalWarehouseName(stockRecord.warehouse_name || null);
+      setOriginalBranchName(stockRecord.branch_name || null);
+
+      // ✅ ابني قايمة فروع مدمجة
+      const branchFromApi: Branch | null = stockRecord.branch_id
+        ? ({
+          id: stockRecord.branch_id,
+          name: stockRecord.branch_name || `Branch ${stockRecord.branch_id}`,
+          name_ar: stockRecord.branch_name_ar || null,
+        } as any)
+        : null;
+
+      const mergedBranches = [...branches];
+      if (branchFromApi && !mergedBranches.some(b => String(b.id) === String(branchFromApi.id))) {
+        mergedBranches.push(branchFromApi);
+      }
+      setEditingBranches(mergedBranches);
 
       console.log('📊 Resolved:', {
         warehouseId,
         branchId,
         stockQty,
-        product_stock: stockRecord.product_stock,
-        warehouse_stock: stockRecord.warehouse_stock,
-        unit_color_stock: stockRecord.unit_color_stock,
+        branchFromApi,
+        mergedBranches,
+        originalWarehouseName: stockRecord.warehouse_name,
+        originalBranchName: stockRecord.branch_name,
       });
 
       const selectedProduct: SelectedProduct = {
@@ -138,6 +161,7 @@ export const ProductList: React.FC<ProductListProps> = ({
       setIsLoadingStock(false);
     }
   };
+
   const handleCloseModal = () => {
     setIsBalanceModalOpen(false);
     setEditingProducts([]);
@@ -148,6 +172,9 @@ export const ProductList: React.FC<ProductListProps> = ({
     setOriginalWarehouseId(null);
     setOriginalUnitId(null);
     setOriginalColorId(null);
+    setOriginalWarehouseName(null);
+    setOriginalBranchName(null);
+    setEditingBranches([]);
   };
 
   return (
@@ -257,7 +284,7 @@ export const ProductList: React.FC<ProductListProps> = ({
         }}
         selectedProducts={editingProducts}
         onProductsChange={setEditingProducts}
-        branches={branches}
+        branches={editingBranches.length > 0 ? editingBranches : branches}
         selectedBranch={editingBranch}
         selectedWarehouse={editingWarehouse}
         onSave={() => { }}
@@ -268,6 +295,8 @@ export const ProductList: React.FC<ProductListProps> = ({
         originalWarehouseId={originalWarehouseId}
         originalUnitId={originalUnitId}
         originalColorId={originalColorId}
+        originalWarehouseName={originalWarehouseName}
+        originalBranchName={originalBranchName}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['products-with-balance'] });
           queryClient.invalidateQueries({ queryKey: ['products'] });
