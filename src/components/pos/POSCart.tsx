@@ -39,6 +39,8 @@ interface POSCartProps {
   onInvoiceDiscountChange?: (percentage: number, amount: number) => void;
   onItemDiscountChange?: (itemId: string, percentage: number, variantId?: string) => void;
   canManageDiscounts?: boolean;
+  extraCharge?: number;
+  onExtraChargeChange?: (amount: number) => void;
 }
 
 const POSCart: React.FC<POSCartProps> = ({
@@ -53,7 +55,9 @@ const POSCart: React.FC<POSCartProps> = ({
   invoiceDiscountAmount = 0,
   onInvoiceDiscountChange,
   onItemDiscountChange,
-  canManageDiscounts = false
+  canManageDiscounts = false,
+  extraCharge = 0,
+  onExtraChargeChange
 }) => {
   const { language } = useLanguage();
   const { taxRates } = useCurrencyTax();
@@ -86,7 +90,7 @@ const POSCart: React.FC<POSCartProps> = ({
   
   // ✅ الضريبة (تحسب بعد كل الخصومات)
   const tax = (subtotalAfterAllDiscounts * taxRate) / 100;
-  const total = subtotalAfterAllDiscounts + tax;
+  const total = subtotalAfterAllDiscounts + tax + extraCharge;
 
   // ✅ معالج تغيير خصم المنتج
   const handleItemDiscountChange = (item: CartItem, percentage: number) => {
@@ -311,6 +315,18 @@ const POSCart: React.FC<POSCartProps> = ({
             <div className="flex justify-between">
               <span>{language === 'ar' ? `الضريبة (${taxRate}%)` : `VAT (${taxRate}%)`}</span>
               <span>{formatCurrency(tax)}</span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <span>{language === 'ar' ? 'رسوم إضافية' : 'Additional Charge'}</span>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={extraCharge || ''}
+                onChange={(e) => onExtraChargeChange?.(Math.max(0, Number(e.target.value) || 0))}
+                className="w-24 h-7 text-sm text-center"
+              />
             </div>
             
             <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">

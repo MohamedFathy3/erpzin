@@ -73,6 +73,7 @@ interface PaymentModalProps {
   branchAddressAr?: string | null;
   invoiceDiscountPercentage?: number;
   invoiceDiscountAmount?: number;
+  extraCharge?: number;
   companyInfo: {
     name: string;
     nameAr?: string;
@@ -110,6 +111,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   branchAddressAr,
   invoiceDiscountPercentage = 0,
   invoiceDiscountAmount = 0,
+  extraCharge = 0,
   companyInfo,
 }) => {
   const { language } = useLanguage();
@@ -300,6 +302,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2))
       })),
       discount_percentage: invoiceDiscountToSave,
+      extra_charge: isComplimentary ? 0 : extraCharge,
       is_complimentary: isComplimentary,
       payments: payments,
       subtotal: isComplimentary ? 0 : subtotal,
@@ -328,6 +331,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         payments,
         invoice_number: offlineInvoiceNumber,
         discount_percentage: invoiceDiscountToSave,
+        extra_charge: isComplimentary ? 0 : extraCharge,
         is_complimentary: isComplimentary,
         sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
       });
@@ -400,6 +404,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           nameAr: salesRepresentative.name,
           commission_rate: salesRepresentative.commission_rate
         } : null,
+        extraCharge: isComplimentary ? 0 : extraCharge,
         deliveryPerson: deliveryPerson ? {
           name: deliveryPerson.name,
           nameAr: deliveryPerson.name,

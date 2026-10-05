@@ -182,6 +182,7 @@ const POS: React.FC = () => {
   // ✅ خصومات المنتجات والفاتورة
   const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
   const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
+  const [extraCharge, setExtraCharge] = useState(0);
   
   // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
   const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
@@ -726,7 +727,7 @@ const POS: React.FC = () => {
   };
   
   const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
-  const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
+  const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax() + extraCharge;
 
   // ==================== Payment Handlers ====================
 const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string, isComplimentary = false) => {
@@ -749,6 +750,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
     invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
     subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
     tax: isComplimentary ? 0 : calculateTax(),
+    extra_charge: isComplimentary ? 0 : extraCharge,
     total: isComplimentary ? 0 : calculateTotal(),
     customer_id: selectedCustomer?.id,
     delivery_id: selectedDelivery?.id,
@@ -811,6 +813,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
     setSelectedDelivery(null);
     setInvoiceDiscountPercentage(0);
     setInvoiceDiscountAmount(0);
+    setExtraCharge(0);
   };
 
   // ==================== Delivery Selection Handler ====================
@@ -1385,6 +1388,8 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               onInvoiceDiscountChange={handleInvoiceDiscountChange}
               onItemDiscountChange={handleItemDiscountChange}
               canManageDiscounts={canManagePosDiscounts}
+              extraCharge={extraCharge}
+              onExtraChargeChange={setExtraCharge}
             />
           </div>
         </div>
@@ -1429,6 +1434,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           total={calculateTotal()}
           subtotal={calculateSubtotalAfterAllDiscounts()}
           tax={calculateTax()}
+          extraCharge={extraCharge}
           cartItems={cartItems}
           canManageDiscounts={canManagePosDiscounts}
           onRequestCustomer={() => setShowCustomerSelector(true)}

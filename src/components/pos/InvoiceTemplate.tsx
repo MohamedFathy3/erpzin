@@ -27,6 +27,7 @@ interface InvoiceTemplateProps {
     date?: string;
     customer?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
+    salesRep?: { name: string; nameAr?: string } | null;
     branchName?: string;
     branchNameAr?: string;
     branchPhone?: string;
@@ -47,6 +48,7 @@ interface InvoiceTemplateProps {
     subtotal: number;
     tax: number;
     total: number;
+    extraCharge?: number;
     payments: { method: string; amount: number }[];
     change?: number;
     totalDiscountPercentage?: number;
@@ -115,6 +117,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       date: invoiceData.date || new Date().toISOString(),
       customer: invoiceData.customer || null,
       cashierName: invoiceData.cashierName || '---',
+      salesRep: invoiceData.salesRep || null,
       branchName: invoiceData.branchName,
       branchNameAr: invoiceData.branchNameAr,
       branchPhone: invoiceData.branchPhone,
@@ -123,6 +126,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       subtotal: invoiceData.subtotal || 0,
       tax: invoiceData.tax || 0,
       total: invoiceData.total || 0,
+      extraCharge: invoiceData.extraCharge || 0,
       payments: invoiceData.payments || [],
       change: invoiceData.change || 0,
       taxRate: invoiceData.taxRate || 14,
@@ -141,6 +145,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       card: isRTL ? 'شبكة' : 'Card',
       customer: isRTL ? 'العميل' : 'Customer',
       cashier: isRTL ? 'الكاشير' : 'Cashier',
+      salesRep: isRTL ? 'مندوب المبيعات' : 'Sales Representative',
       branch: isRTL ? 'الفرع' : 'Branch',
       phone: isRTL ? 'تليفون' : 'Phone',
       address: isRTL ? 'العنوان' : 'Address',
@@ -284,6 +289,12 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <span className="font-bold">{texts.cashier}:</span>
               <span className="ml-1">{safeInvoiceData.cashierName}</span>
             </div>
+            {safeInvoiceData.salesRep?.name && (
+              <div>
+                <span className="font-bold">{texts.salesRep}:</span>
+                <span className="ml-1">{isRTL ? (safeInvoiceData.salesRep.nameAr || safeInvoiceData.salesRep.name) : safeInvoiceData.salesRep.name}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -333,6 +344,13 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <div className="flex justify-between py-0.5 text-green-600 font-semibold">
                 <span>{texts.totalDiscount} ({safeInvoiceData.totalDiscountPercentage}%):</span>
                 <span>-{formatCurrency(safeInvoiceData.totalDiscountAmount)}</span>
+              </div>
+            )}
+
+            {safeInvoiceData.extraCharge > 0 && (
+              <div className="flex justify-between py-0.5 font-semibold">
+                <span>{isRTL ? 'رسوم إضافية' : 'Additional Charge'}:</span>
+                <span>+{formatCurrency(safeInvoiceData.extraCharge)}</span>
               </div>
             )}
 
