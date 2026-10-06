@@ -1,0 +1,251 @@
+// config/permissions.ts
+export type UserRole = 'admin' | 'Cashier' | 'Manager' | 'Accountant' | 'Sales' | 'purchasing' | 'warehouse' | 'HR' | 'viewer';
+
+export interface PagePermission {
+  id: string;
+  path: string;
+  label: string;
+  labelAr: string;
+  icon: string;
+  allowedRoles: UserRole[];
+}
+
+export const PAGES: PagePermission[] = [
+  {
+    id: 'access-control',
+    path: '/access-control',
+    label: 'Access Control',
+    labelAr: 'الأدوار والصلاحيات',
+    icon: 'ShieldCheck',
+    allowedRoles: ['admin', 'Manager'],
+  },
+  {
+    id: 'dashboard',
+    path: '/dashboard',
+    label: 'Dashboard',
+    labelAr: 'لوحة التحكم',
+    icon: 'LayoutDashboard',
+    allowedRoles: ['admin',  'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
+    id: 'automotive',
+    path: '/automotive',
+    label: 'Automotive Service',
+    labelAr: 'خدمة السيارات',
+    icon: 'CarFront',
+    allowedRoles: ['admin', 'Manager', 'HR', 'viewer'],
+  },
+  {
+    id: 'pos',
+    path: '/pos',
+    label: 'POS',
+    labelAr: 'نقطة البيع',
+    icon: 'ShoppingCart',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'Sales'],
+  },
+    {
+    id: 'posreturn',
+    path: '/POSRetrun',
+    label: 'POS Return',
+    labelAr: 'إرجاع نقاط البيع',
+    icon: 'RotateCcw',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'Sales'],
+  },
+  {
+    id: 'inventory',
+    path: '/inventory',
+    label: 'Inventory',
+    labelAr: 'المخزون',
+    icon: 'Package',
+    allowedRoles: ['admin', 'Manager', 'purchasing', 'warehouse'],
+  },
+  {
+    id: 'inventory-transfer-requests',
+    path: '/inventory-transfer-requests',
+    label: 'Inventory Transfer Requests',
+    labelAr: 'طلبات نقل المخزون',
+    icon: 'ArrowRightLeft',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'warehouse'],
+  },
+  {
+    id: 'sales',
+    path: '/sales',
+    label: 'Sales',
+    labelAr: 'المبيعات',
+    icon: 'Receipt',
+    allowedRoles: ['admin', 'Manager', 'Sales', 'Cashier', 'Accountant'],
+  },
+  {
+    id: 'purchasing',
+    path: '/purchasing',
+    label: 'Purchasing',
+    labelAr: 'المشتريات',
+    icon: 'Truck',
+    allowedRoles: ['admin', 'Manager', 'purchasing'],
+  },
+  {
+    id: 'finance',
+    path: '/finance',
+    label: 'Finance',
+    labelAr: 'المالية',
+    icon: 'Wallet',
+    allowedRoles: ['admin', 'Manager', 'Accountant'],
+  },
+  {
+    id: 'hr',
+    path: '/hr',
+    label: 'HR',
+    labelAr: 'الموارد البشرية',
+    icon: 'Users',
+    allowedRoles: ['admin', 'Manager', 'HR'],
+  },
+  {
+    id: 'crm',
+    path: '/crm',
+    label: 'CRM',
+    labelAr: 'العملاء',
+    icon: 'Crown',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
+    id: 'whatsapp',
+    path: '/whatsapp',
+    label: 'WhatsApp',
+    labelAr: 'واتساب Business',
+    icon: 'MessageCircle',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
+    id: 'google-integrations',
+    path: '/google-integrations',
+    label: 'Google Integrations',
+    labelAr: 'تكاملات Google',
+    icon: 'CalendarDays',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
+    id: 'calendar',
+    path: '/calendar',
+    label: 'Calendar',
+    labelAr: 'التقويم',
+    icon: 'CalendarDays',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
+    id: 'tasks',
+    path: '/tasks',
+    label: 'Tasks & Reminders',
+    labelAr: 'المهام والتذكيرات',
+    icon: 'CheckSquare',
+    allowedRoles: ['admin', 'Manager', 'Sales'],
+  },
+  {
+    id: 'reports',
+    path: '/reports',
+    label: 'Reports',
+    labelAr: 'التقارير',
+    icon: 'FileBarChart',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
+  },
+  {
+    id: 'employee-financial-reports',
+    path: '/employee-financial-reports',
+    label: 'Employee Financial Reports',
+    labelAr: 'التقارير المالية للموظفين',
+    icon: 'FileBarChart',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'HR'],
+  },
+  {
+    id: 'warehouse-reports',
+    path: '/warehouse-reports',
+    label: 'Warehouse Reports',
+    labelAr: 'تقارير المخازن',
+    icon: 'Warehouse',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
+    id: 'industries',
+    path: '/industries',
+    label: 'Industries',
+    labelAr: 'القطاعات والوحدات',
+    icon: 'Factory',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
+  },
+  {
+    id: 'manufacturing',
+    path: '/manufacturing',
+    label: 'Manufacturing',
+    labelAr: 'المصانع والإنتاج',
+    icon: 'Factory',
+    allowedRoles: ['admin', 'Manager', 'warehouse', 'purchasing', 'Accountant'],
+  },
+  {
+    id: 'manufacturingSetup',
+    path: '/manufacturing/setup',
+    label: 'Manufacturing Setup',
+    labelAr: 'إعدادات التصنيع',
+    icon: 'Settings2',
+    allowedRoles: ['admin', 'Manager', 'warehouse', 'purchasing', 'Accountant'],
+  },
+  {
+    id: 'projects',
+    path: '/projects',
+    label: 'Projects',
+    labelAr: 'المقاولات والمشروعات',
+    icon: 'HardHat',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales'],
+  },
+  {
+    id: 'productLedger',
+    path: '/product-ledger',
+    label: 'Product Ledger',
+    labelAr: 'كشف حركات المنتج',
+    icon: 'Activity',
+    allowedRoles: ['admin', 'Manager', 'Sales', 'Accountant', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
+    id: 'representative',
+    path: '/representative',
+    label: 'Representative Workspace',
+    labelAr: 'مساحة المندوب',
+    icon: 'UserRound',
+    allowedRoles: ['admin', 'Sales'],
+  },
+  {
+    id: 'workflow',
+    path: '/workflow',
+    label: 'Workflow Center',
+    labelAr: 'مركز ترابط العمليات',
+    icon: 'Activity',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
+  },
+  {
+    id: 'settings',
+    path: '/settings',
+    label: 'Settings',
+    labelAr: 'الإعدادات',
+    icon: 'Settings',
+    allowedRoles: ['admin'],
+  },
+];
+
+// ✅ دالة للتحقق من صلاحية الوصول للصفحة
+export const canAccessPage = (role: UserRole | undefined, path: string): boolean => {
+  if (!role) return false;
+  const normalizedRole = role.toLowerCase() as UserRole;
+  if (normalizedRole === 'admin') return true; // الأدمن كل حاجة
+  
+  const page = PAGES.find(p => p.path === path);
+  if (!page) return false;
+  
+  return page.allowedRoles.some(allowedRole => allowedRole.toLowerCase() === normalizedRole);
+};
+
+// ✅ دالة لجلب الصفحات المسموحة للمستخدم
+export const getAllowedPages = (role: UserRole | undefined): PagePermission[] => {
+  if (!role) return [];
+  const normalizedRole = role.toLowerCase() as UserRole;
+  if (normalizedRole === 'admin') return PAGES; // الأدمن كل حاجة
+  
+  return PAGES.filter(page => page.allowedRoles.some(allowedRole => allowedRole.toLowerCase() === normalizedRole));
+};

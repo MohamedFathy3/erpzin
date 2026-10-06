@@ -1,0 +1,357 @@
+// hooks/useDirectReturn.ts
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { toast } from 'sonner';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { generateId } from '@/lib/utils';
+
+export interface DirectReturnItem {
+  id: string;
+  product_id: number;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+  reason: string;
+  quantity_sold?: number;
+  product: {
+    id: number;
+    name: string;
+    name_ar?: string | null;
+    sku: string;
+    price: string;
+    image_url?: string | null;
+    imageUrl?: string;
+  };
+}
+
+export interface InvoiceProduct {
+  id: number;
+  name: string;
+  name_ar?: string | null;
+  sku: string;
+  price: string;
+  quantity_sold: number;
+  invoice_price: string;
+  image_url?: string | null;
+  stock?: number;
+}
+
+export interface UseDirectReturnProps {
+  onComplete?: (amount: number) => void;
+  currentShiftId?: string;
+}
+
+export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnProps = {}) => {
+  const queryClient = useQueryClient();
+  const { taxRates, defaultTaxRate, currencies, defaultCurrency, formatAmount } = useCurrencyTax();
+
+  // State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [items, setItems] = useState<DirectReturnItem[]>([]);
+  const [returnReason, setReturnReason] = useState('');
+  const [refundMethod, setRefundMethod] = useState('cash');
+  const [taxRateId, setTaxRateId] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+  const [searchMode, setSearchMode] = useState<'product' | 'invoice'>('invoice');
+  const [showResults, setShowResults] = useState(false);
+  const [invoiceTotalAmount, setInvoiceTotalAmount] = useState<number | null>(null);
+
+  // Set defaults
+  useEffect(() => {
+    if (defaultTaxRate && !taxRateId) setTaxRateId(String(defaultTaxRate.id));
+    if (defaultCurrency && !currencyId) setCurrencyId(String(defaultCurrency.id));
+  }, [defaultTaxRate, defaultCurrency, taxRateId, currencyId]);
+
+  // ========== Search Invoice by Number ==========
+  const { data: invoiceData, isLoading: isSearchingInvoice } = useQuery({
+    queryKey: ['invoice-search', invoiceNumber],
+    queryFn: async () => {
+      if (!invoiceNumber.trim()) return null;
+
+      try {
+        const response = await api.get('/invoices/search', {
+          params: { invoice_number: invoiceNumber }
+        });
+        setShowResults(true);
+        // حفظ total_amount
+        if (response.data?.data?.total_amount) {
+          setInvoiceTotalAmount(parseFloat(response.data.data.total_amount));
+        }
+        return response.data;
+      } catch (error: any) {
+        setShowResults(true);
+        if (error.response?.status === 404) {
+          toast.error('الفاتورة غير موجودة');
+        } else {
+          toast.error('خطأ في البحث عن الفاتورة');
+        }
+        return null;
+      }
+    },
+    enabled: !!invoiceNumber && invoiceNumber.length > 0 && searchMode === 'invoice',
+  });
+
+  // Reset when invoice number changes
+  useEffect(() => {
+    if (!invoiceNumber) {
+      setInvoiceTotalAmount(null);
+    }
+  }, [invoiceNumber]);
+
+  // ========== Search Regular Products ==========
+  const { data: regularProducts, isLoading: isSearchingProducts } = useQuery({
+    queryKey: ['product-search', searchQuery],
+    queryFn: async () => {
+      if (!searchQuery.trim() || searchMode !== 'product') return [];
+
+      try {
+        const response = await api.get('/products/search', {
+          params: { name: searchQuery }
+        });
+        setShowResults(true);
+        return response.data?.data || [];
+      } catch (error) {
+        console.error('Error searching products:', error);
+        setShowResults(true);
+        return [];
+      }
+    },
+    enabled: searchMode === 'product' && !!searchQuery,
+  });
+
+  // تعديل: بنحضر المنتجات من الفاتورة وبنغير السعر لـ total_amount
+  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any, index: number, array: any[]) => {
+    const totalAmount = invoiceTotalAmount || 0;
+    const totalQuantity = array.reduce((sum: number, i: any) => sum + i.quantity, 0);
+    
+    // حساب سعر المنتج = total_amount / عدد المنتجات
+    let unitPrice = item.price;
+    if (totalAmount > 0 && totalQuantity > 0) {
+      unitPrice = (totalAmount / totalQuantity).toFixed(2);
+    }
+    
+    return {
+      id: item.product_id,
+      name: item.product_name,
+      name_ar: item.product_name,
+      sku: item.sku || '',
+      price: unitPrice, // السعر المعدل 8100
+      quantity_sold: item.quantity,
+      invoice_price: unitPrice, // السعر المعدل
+      image_url: null,
+      stock: item.stock,
+    };
+  });
+
+  const filteredProducts = searchMode === 'invoice' ? invoiceProducts : (regularProducts || []);
+  const isSearching = searchMode === 'invoice' ? isSearchingInvoice : isSearchingProducts;
+
+  // ========== Item Management ==========
+  const addItem = (product: InvoiceProduct) => {
+    // السعر اللي هياخده هو 8100
+    const unitPrice = searchMode === 'invoice'
+      ? parseFloat(product.invoice_price || product.price || '0')
+      : parseFloat(product.price || '0');
+
+    const quantitySold = searchMode === 'invoice' ? product.quantity_sold : undefined;
+
+    const existing = items.find(i => i.product_id === product.id);
+
+    if (existing) {
+      if (quantitySold && existing.quantity + 1 > quantitySold) {
+        toast.error(`لا يمكن إرجاع أكثر من ${quantitySold} قطعة من هذا المنتج`);
+        return;
+      }
+
+      setItems(prev => prev.map(i =>
+        i.product_id === product.id
+          ? { ...i, quantity: i.quantity + 1 }
+          : i
+      ));
+    } else {
+      setItems(prev => [...prev, {
+        id: generateId(),
+        product_id: product.id,
+        product_name: product.name_ar || product.name,
+        sku: product.sku || 'N/A',
+        quantity: 1,
+        unit_price: unitPrice, // ده هيكون 8100
+        reason: '',
+        quantity_sold: quantitySold,
+        product: {
+          id: product.id,
+          name: product.name,
+          name_ar: product.name_ar,
+          sku: product.sku,
+          price: unitPrice.toString(),
+          image_url: product.image_url,
+          imageUrl: product.image_url
+        }
+      }]);
+    }
+
+    setSearchQuery('');
+    setShowResults(false);
+    
+    const productName = product.name_ar || product.name;
+    toast.success(`تم إضافة ${productName} بسعر ${unitPrice}`);
+  };
+
+  const updateQuantity = (id: string, delta: number) => {
+    setItems(prev => {
+      const newItems = prev.map(item => {
+        if (item.id === id) {
+          const newQty = item.quantity + delta;
+          if (item.quantity_sold && newQty > item.quantity_sold) {
+            toast.error(`لا يمكن إرجاع أكثر من ${item.quantity_sold} قطعة`);
+            return item;
+          }
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter((item): item is DirectReturnItem => item !== null);
+      return newItems;
+    });
+  };
+
+  const removeItem = (id: string) => {
+    setItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const updateItemReason = (id: string, reason: string) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, reason } : item));
+  };
+
+  const clearItems = () => {
+    setItems([]);
+  };
+
+  // ========== Calculations ==========
+  const subtotal = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
+  const selectedTaxRate = taxRates.find(t => t.id === Number(taxRateId));
+  const taxPercent = selectedTaxRate?.rate ?? 0;
+  const taxAmount = (subtotal * (taxPercent ?? 0)) / 100;
+  const total = subtotal + taxAmount;
+
+  const selectedCurrency = currencies.find(c => c.id === currencyId);
+
+  // ========== Process Return ==========
+  const processReturnMutation = useMutation({
+    mutationFn: async () => {
+      if (items.length === 0) throw new Error('لم يتم إضافة أي صنف');
+
+      const payload: any = {
+        refund_method: refundMethod,
+        reason: returnReason || 'مرتجع بدون سبب',
+        items: items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.unit_price  // السعر اللي هيتسجل 8100
+        })),
+        payments: [{
+          method: refundMethod,
+          amount: total
+        }]
+      };
+
+      if (searchMode === 'invoice' && invoiceNumber) {
+        payload.invoice_number = invoiceNumber;
+      }
+
+      console.log('📤 Sending payload:', payload);
+
+      const response = await api.post('/invoice-return/store', payload);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['active-shift'] });
+      toast.success('تم إنشاء فاتورة المرتجع بنجاح');
+      onComplete?.(total);
+      
+      setItems([]);
+      setInvoiceNumber('');
+      setReturnReason('');
+      setRefundMethod('cash');
+      setSearchQuery('');
+      setShowResults(false);
+      setInvoiceTotalAmount(null);
+    },
+    onError: (error: any) => {
+      console.error('❌ Return Error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.message || 'خطأ في معالجة المرتجع');
+    }
+  });
+
+  const closeResults = () => {
+    setShowResults(false);
+  };
+
+  const resetSearch = () => {
+    setSearchQuery('');
+    setInvoiceNumber('');
+    setShowResults(false);
+    setInvoiceTotalAmount(null);
+  };
+
+  const switchToInvoiceMode = () => {
+    setSearchMode('invoice');
+    setSearchQuery('');
+    setInvoiceNumber('');
+    setItems([]);
+    setShowResults(false);
+    setInvoiceTotalAmount(null);
+  };
+
+  const switchToProductMode = () => {
+    setSearchMode('product');
+    setSearchQuery('');
+    setInvoiceNumber('');
+    setItems([]);
+    setShowResults(false);
+    setInvoiceTotalAmount(null);
+  };
+
+  return {
+    searchMode,
+    searchQuery,
+    invoiceNumber,
+    items,
+    returnReason,
+    refundMethod,
+    taxRateId,
+    currencyId,
+    showResults,
+    invoiceData,
+    filteredProducts,
+    isSearching,
+    invoiceTotalAmount,
+    subtotal,
+    taxPercent,
+    taxAmount,
+    total,
+    selectedCurrency,
+    setSearchQuery,
+    setInvoiceNumber,
+    setReturnReason,
+    setRefundMethod,
+    setTaxRateId,
+    setCurrencyId,
+    setSearchMode,
+    setShowResults,
+    addItem,
+    updateQuantity,
+    removeItem,
+    updateItemReason,
+    clearItems,
+    closeResults,
+    resetSearch,
+    switchToInvoiceMode,
+    switchToProductMode,
+    processReturn: processReturnMutation.mutate,
+    isProcessing: processReturnMutation.isPending,
+  };
+};

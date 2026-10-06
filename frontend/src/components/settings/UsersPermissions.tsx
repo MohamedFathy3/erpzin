@@ -1,0 +1,1271 @@
+import { branchService } from '@/services/BranchService';
+import { treasuryService } from '@/services/TreasuryService';
+import type { Branch, Treasury } from '@/types/treasury';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  Users,
+  Briefcase,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  RefreshCw,
+  Download,
+  LayoutGrid,
+  List,
+  ChevronRight,
+  ChevronDown,
+  User,
+  Mail,
+  Phone,
+  DollarSign,
+  Hash,
+  Shield,
+  Eye,
+  EyeOff,
+  MoreVertical,
+  X,
+  Filter
+} from 'lucide-react';
+import api from '@/lib/api';
+import { useDebounce } from '@/hooks/use-debounce';
+import type { EmployeeFormData, ApiRole, ApiPermission, ApiResponse, Employee } from '@/types/employee';
+import { employeeService } from '@/services/EmployeeService';
+import { permissionLabel, roleLabel } from '@/utils/accessControlLabels';
+import EmployeeFinancialReportDialog from './EmployeeFinancialReportDialog';
+
+// ========== واجهات البيانات ==========
+
+const Employees = () => {
+  const { language, direction } = useLanguage();
+  const queryClient = useQueryClient();
+
+  // ========== حالات الواجهة ==========
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [reportEmployee, setReportEmployee] = useState<Employee | null>(null);
+
+  // حالات الدايلوجات
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // حالات الفلاتر
+  const [filters, setFilters] = useState({
+    search: '',
+    role: '',
+  });
+  const [showFilters, setShowFilters] = useState(false);
+  const debouncedSearch = useDebounce(filters.search, 500);
+
+  // حالات الفورم
+  const [formData, setFormData] = useState<EmployeeFormData>({
+    employee_code: '',
+    name: '',
+    position: '',
+    role_id: '',
+    phone: '',
+    email: '',
+    password: '',
+    salary: '',
+    is_active: true,
+    branch_id: null,
+    treasury_id: null,
+    permissions: [],
+  });
+
+  // ========== جلب بيانات الموظفين ==========
+  const {
+    data: employeesResponse,
+    isLoading: employeesLoading,
+    refetch: refetchEmployees
+  } = useQuery<ApiResponse<Employee>>({
+    queryKey: ['employees', debouncedSearch, filters.role],
+    queryFn: async () => {
+      try {
+        const payload: Record<string, unknown> = {
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 100,
+          paginate: true
+        };
+
+        // إضافة فلتر البحث لو موجود
+        const filterConditions: Record<string, unknown> = {};
+        if (debouncedSearch) {
+          filterConditions.name = debouncedSearch;
+        }
+        if (filters.role) {
+          filterConditions.role = filters.role;
+        }
+
+        if (Object.keys(filterConditions).length > 0) {
+          payload.filters = filterConditions;
+        }
+
+        console.log('📦 Fetching employees with payload:', payload);
+
+        const response = await api.post<ApiResponse<Employee>>('/employee/index', payload);
+
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch employees');
+      } catch (error) {
+        console.error('Error fetching employees:', error);
+        toast.error(language === 'ar' ? 'خطأ في جلب الموظفين' : 'Error fetching employees');
+        throw error;
+      }
+    }
+  });
+
+  // ========== جلب أدوار API ==========
+  const {
+    data: rolesResponse,
+    isLoading: rolesLoading
+  } = useQuery<ApiResponse<ApiRole>>({
+    queryKey: ['api-roles-employees'],
+    queryFn: async () => {
+      try {
+        const payload = {
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false
+        };
+
+        const response = await api.post<ApiResponse<ApiRole>>('/role/index', payload);
+
+        if (response.data.result === 'Success') {
+          return response.data;
+        }
+
+        throw new Error(response.data.message || 'Failed to fetch roles');
+      } catch (error) {
+        console.error('Error fetching roles:', error);
+        return { data: [] } as ApiResponse<ApiRole>;
+      }
+    }
+  });
+  const { data: permissionsResponse } = useQuery<{ data: ApiPermission[] }>({
+    queryKey: ['access-control-permissions'],
+    queryFn: async () => (await api.get('/access-control/permissions')).data,
+  });
+  const availablePermissions = permissionsResponse?.data || [];
+  const { data: branchesResponse } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => branchService.getAllBranches(),
+  });
+  const branches = branchesResponse?.data || [];
+
+  const { data: treasuriesResponse } = useQuery({
+    queryKey: ['treasuries'],
+    queryFn: () => treasuryService.getTreasuries(),
+  });
+  const treasuries = treasuriesResponse?.data || [];
+
+  // استخراج البيانات
+  const employees = employeesResponse?.data || [];
+  const roles = rolesResponse?.data || [];
+  const paginationMeta = employeesResponse?.meta;
+
+  // ========== إضافة موظف ==========
+  // const addEmployeeMutation = useMutation({
+  //   mutationFn: async (data: EmployeeFormData) => {
+  //     const response = await api.post('/employee', data);
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم إضافة الموظف بنجاح' : 'Employee added successfully');
+  //     setIsAddDialogOpen(false);
+  //     resetForm();
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في إضافة الموظف' : 'Error adding employee'));
+  //   }
+  // });
+
+  const addEmployeeMutation = useMutation({
+    mutationFn: employeeService.addEmployee,
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      toast.success(
+        language === 'ar'
+          ? 'تم إضافة الموظف بنجاح'
+          : 'Employee added successfully'
+      );
+
+      setIsAddDialogOpen(false);
+      resetForm();
+    },
+
+    onError: (error: any) => {
+      toast.error(
+        error.message ||
+        (language === 'ar'
+          ? 'خطأ في إضافة الموظف'
+          : 'Error adding employee')
+      );
+    }
+  });
+
+  // ========== تحديث موظف ==========
+  // const updateEmployeeMutation = useMutation({
+  //   mutationFn: async ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) => {
+  //     const response = await api.patch(`/employee/${id}`, data);
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم تحديث الموظف بنجاح' : 'Employee updated successfully');
+  //     setIsEditDialogOpen(false);
+  //     setSelectedEmployee(null);
+  //     resetForm();
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في تحديث الموظف' : 'Error updating employee'));
+  //   }
+  // });
+
+
+
+  const updateEmployeeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<EmployeeFormData> }) =>
+      employeeService.updateEmployee(id, data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      toast.success(
+        language === 'ar'
+          ? 'تم تحديث الموظف بنجاح'
+          : 'Employee updated successfully'
+      );
+
+      setIsEditDialogOpen(false);
+      setSelectedEmployee(null);
+      resetForm();
+    },
+
+    onError: (error: any) => {
+      console.log('🔥 Full Error Object:', error);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'حدث خطأ أثناء تحديث الموظف';
+
+      toast.error(message);
+    }
+  });
+
+  // ========== حذف موظف ==========
+  // const deleteEmployeeMutation = useMutation({
+  //   mutationFn: async (id: number) => {
+  //     const response = await api.delete(`/employee/delete/${id}`, {
+  //       data: { items: [id] }
+  //     });
+  //     return response.data;
+  //   },
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['employees'] });
+  //     toast.success(language === 'ar' ? 'تم حذف الموظف بنجاح' : 'Employee deleted successfully');
+  //   },
+  //   onError: (error: any) => {
+  //     toast.error(error.message || (language === 'ar' ? 'خطأ في حذف الموظف' : 'Error deleting employee'));
+  //   }
+  // });
+
+
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: (id: number) => employeeService.deleteEmployee(id),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success(language === 'ar' ? 'تم حذف الموظف بنجاح' : 'Employee deleted successfully');
+    },
+
+    onError: (error: any) => {
+      console.error('🔥 Full Delete Error:', error);
+      console.log('🔥 Error message:', error.message);
+      console.log('🔥 Error response:', error.response);
+      console.log('🔥 Error data:', error.response?.data);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'حدث خطأ أثناء حذف الموظف';
+      toast.error(message);
+    }
+  });
+  // ========== دوال المساعدة ==========
+  const resetForm = () => {
+    setFormData({
+      employee_code: '',
+      name: '',
+      position: '',
+      role_id: '',
+      phone: '',
+      email: '',
+      password: '',
+      salary: '',
+      is_active: true,
+      branch_id: null,
+      treasury_id: null,
+      permissions: [],
+    });
+    setShowPassword(false);
+  };
+
+  const handleEdit = (employee: Employee) => {
+    setSelectedEmployee(employee);
+
+    // البحث عن الـ role_id المناسب
+    const role = roles.find(r => r.name === employee.role);
+
+    setFormData({
+      employee_code: employee.employee_code,
+      name: employee.name,
+      position: employee.position,
+      role_id: role?.id || '',
+      phone: employee.phone,
+      email: employee.email,
+      password: '',
+      salary: employee.salary ?? '',
+      branch_id: employee.branch?.id ?? null,
+      treasury_id: employee.treasury?.id ?? null,
+      is_active: employee.is_active ?? true,
+      permissions: employee.permission_ids ?? [],
+    });
+
+    setIsEditDialogOpen(true);
+  };
+
+  const handleAdd = () => {
+    resetForm();
+
+    // توليد كود موظف تلقائي (مثال)
+    const lastCode = employees.length > 0
+      ? employees[0].employee_code
+      : 'EMP-0000';
+    const lastNumber = parseInt(lastCode.split('-')[1] || '0');
+    const newCode = `EMP-${String(lastNumber + 1).padStart(4, '0')}`;
+
+    setFormData(prev => ({
+      ...prev,
+      employee_code: newCode
+    }));
+
+    setIsAddDialogOpen(true);
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  // ========== الترجمات ==========
+  const t = {
+    en: {
+      title: 'Employees',
+      subtitle: 'Manage employees and their roles',
+      addEmployee: 'Add Employee',
+      editEmployee: 'Edit Employee',
+      employeeCode: 'Employee Code',
+      name: 'Name',
+      position: 'Position',
+      role: 'Role',
+      phone: 'Phone',
+      email: 'Email',
+      salary: 'Salary',
+      password: 'Password',
+      actions: 'Actions',
+      search: 'Search employees...',
+      filter: 'Filter',
+      clearFilters: 'Clear Filters',
+      close: 'Close',
+      save: 'Save Changes',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      noEmployees: 'No employees found',
+      totalEmployees: 'Total Employees',
+      withSalary: 'With Salary',
+      avgSalary: 'Avg Salary',
+      export: 'Export',
+      refresh: 'Refresh',
+      showPassword: 'Show Password',
+      hidePassword: 'Hide Password',
+      roleId: 'Role ID',
+      selectRole: 'Select Role',
+      employeeCodeAuto: 'Auto-generated',
+      from: 'from',
+      to: 'to',
+      of: 'of'
+    },
+    ar: {
+      title: 'الموظفين',
+      subtitle: 'إدارة الموظفين والأدوار',
+      addEmployee: 'إضافة موظف',
+      editEmployee: 'تعديل موظف',
+      employeeCode: 'كود الموظف',
+      name: 'الاسم',
+      position: 'الوظيفة',
+      role: 'الدور',
+      phone: 'الهاتف',
+      email: 'البريد الإلكتروني',
+      salary: 'الراتب',
+      password: 'كلمة المرور',
+      actions: 'الإجراءات',
+      search: 'بحث عن موظف...',
+      filter: 'فلتر',
+      clearFilters: 'مسح الفلاتر',
+      close: 'إغلاق',
+      save: 'حفظ التغييرات',
+      cancel: 'إلغاء',
+      delete: 'حذف',
+      noEmployees: 'لا يوجد موظفين',
+      totalEmployees: 'إجمالي الموظفين',
+      withSalary: 'براتب',
+      avgSalary: 'متوسط الراتب',
+      export: 'تصدير',
+      refresh: 'تحديث',
+      showPassword: 'إظهار كلمة المرور',
+      hidePassword: 'إخفاء كلمة المرور',
+      roleId: 'معرف الدور',
+      selectRole: 'اختر الدور',
+      employeeCodeAuto: 'تلقائي',
+      from: 'من',
+      to: 'إلى',
+      of: 'من'
+    }
+  }[language];
+
+
+  // ========== إحصائيات ==========
+  const stats = useMemo(() => {
+    const total = employees.length;
+    const withSalary = employees.filter(e => e.salary > 0).length;  // ✅ مش محتاج parseFloat
+    const avgSalary = total > 0
+      ? employees.reduce((sum, e) => sum + e.salary, 0) / total   // ✅ مش محتاج parseFloat
+      : 0;
+
+    return { total, withSalary, avgSalary };
+  }, [employees]);
+  // ========== التصفية المحلية (كمكمل) ==========
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery) return employees;
+
+    const query = searchQuery.toLowerCase();
+    return employees.filter(emp =>
+      emp.name.toLowerCase().includes(query) ||
+      emp.employee_code.toLowerCase().includes(query) ||
+      emp.position.toLowerCase().includes(query) ||
+      emp.email.toLowerCase().includes(query) ||
+      emp.phone.includes(query)
+    );
+  }, [employees, searchQuery]);
+
+  // ========== العرض ==========
+  if (employeesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" dir={direction}>
+      {/* Header */}
+      <Card className="border-0 bg-gradient-to-br from-primary/5 to-primary/0">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-primary/10">
+                <Briefcase className="text-primary" size={28} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">{t.title}</h1>
+                <p className="text-muted-foreground">{t.subtitle}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchEmployees()}>
+                <RefreshCw size={16} />
+                {t.refresh}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download size={16} />
+                {t.export}
+              </Button>
+              <Button size="sm" className="gap-2" onClick={handleAdd}>
+                <Plus size={16} />
+                {t.addEmployee}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Users className="text-primary" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t.totalEmployees}</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-accent/10">
+                <DollarSign className="text-accent" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t.withSalary}</p>
+                <p className="text-2xl font-bold">{stats.withSalary}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-warning/10">
+                <Briefcase className="text-warning" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t.avgSalary}</p>
+                <p className="text-2xl font-bold">
+                  {stats.avgSalary.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+            <Input
+              placeholder={t.search}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="ps-9"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            className={showFilters ? 'bg-primary/10' : ''}
+          >
+            <Filter size={16} />
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 border rounded-lg p-0.5 bg-background">
+            <Button
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('grid')}
+            >
+              <LayoutGrid size={14} />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('list')}
+            >
+              <List size={14} />
+            </Button>
+          </div>
+
+          {paginationMeta && (
+            <Badge variant="outline" className="text-xs">
+              {paginationMeta.from} - {paginationMeta.to} {t.of} {paginationMeta.total}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Panel */}
+      {showFilters && (
+        <Card className="border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium flex items-center gap-2">
+                <Filter size={16} />
+                {t.filter}
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFilters({ search: '', role: '' });
+                  setShowFilters(false);
+                }}
+                className="h-8 gap-1"
+              >
+                <X size={14} />
+                {t.close}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm">{t.role}</Label>
+                <Select
+                  value={filters.role}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, role: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectRole} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">{language === 'ar' ? 'كل الأدوار' : 'All Roles'}</SelectItem>
+                    {roles.map((role) => role.name && (
+                      <SelectItem key={role.id} value={roleLabel(role.name)}>
+                        {roleLabel(role.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilters({ search: '', role: '' })}
+                >
+                  {t.clearFilters}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Employees Display */}
+      {filteredEmployees.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Briefcase className="mx-auto text-muted-foreground mb-4" size={48} />
+            <p className="text-muted-foreground">{t.noEmployees}</p>
+          </CardContent>
+        </Card>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredEmployees.map((employee) => {
+            // اختيار أيقونة ولون حسب الدور
+            const roleLower = employee.role?.toLowerCase() || '';
+            let iconColor = '#64748b';
+            let IconComponent = Briefcase;
+
+            if (roleLower.includes('admin')) {
+              iconColor = '#f59e0b';
+              IconComponent = Shield;
+            } else if (roleLower.includes('manager') || roleLower.includes('مدير')) {
+              iconColor = '#3b82f6';
+              IconComponent = Users;
+            } else if (roleLower.includes('eng')) {
+              iconColor = '#10b981';
+              IconComponent = Briefcase;
+            } else if (roleLower.includes('account')) {
+              iconColor = '#8b5cf6';
+              IconComponent = DollarSign;
+            }
+
+            return (
+              <Card key={employee.id} className="hover:shadow-lg transition-all overflow-hidden">
+                <div className="h-1" style={{ background: `linear-gradient(to right, ${iconColor}33, ${iconColor}11)` }} />
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-12 w-12 border-2 border-background shadow-md">
+                      <AvatarFallback style={{ backgroundColor: `${iconColor}20`, color: iconColor }} className="font-semibold">
+                        {getInitials(employee.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold truncate">{employee.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => handleEdit(employee)}
+                        >
+                          <Edit size={14} />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{employee.position}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge variant="outline" style={{ backgroundColor: `${iconColor}15`, color: iconColor, borderColor: `${iconColor}40` }} className="text-xs">
+                          <IconComponent size={12} className="me-1" />
+                          {roleLabel(employee.role)}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {employee.employee_code}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator className="my-3" />
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail size={14} />
+                      <span className="truncate">{employee.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone size={14} />
+                      <span dir="ltr">{employee.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-accent font-semibold">
+                      <DollarSign size={14} />
+                      <span>{employee.salary ? employee.salary.toLocaleString() : 'N/A'}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <ScrollArea className="h-[500px]">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="w-[80px]">{t.employeeCode}</TableHead>
+                    <TableHead>{t.name}</TableHead>
+                    <TableHead>{t.position}</TableHead>
+                    <TableHead>{t.role}</TableHead>
+                    <TableHead>{t.phone}</TableHead>
+                    <TableHead>{t.email}</TableHead>
+                    <TableHead className="text-right">{t.salary}</TableHead>
+                    <TableHead className="text-center w-[100px]">{t.actions}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEmployees.map((employee) => (
+                    <TableRow key={employee.id} className="hover:bg-muted/30">
+                      <TableCell className="font-mono text-xs">
+                        {employee.employee_code}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {employee.name}
+                      </TableCell>
+                      <TableCell>{employee.position}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {roleLabel(employee.role)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell dir="ltr">{employee.phone}</TableCell>
+                      <TableCell className="text-xs">{employee.email}</TableCell>
+                      <TableCell className="text-right font-semibold text-accent">
+                        {employee.salary ? employee.salary.toLocaleString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setReportEmployee(employee)}
+                            title={language === 'ar' ? 'كشف الحساب والتعاملات' : 'Financial report'}
+                          >
+                            <DollarSign size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleEdit(employee)}
+                          >
+                            <Edit size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الموظف؟' : 'Are you sure you want to delete this employee?')) {
+                                deleteEmployeeMutation.mutate(employee.id);
+                              }
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
+      <EmployeeFinancialReportDialog
+        employee={reportEmployee}
+        open={!!reportEmployee}
+        onOpenChange={(open) => !open && setReportEmployee(null)}
+        language={language}
+      />
+
+      {/* Add Employee Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus size={20} />
+              {t.addEmployee}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.employeeCode}</Label>
+                <Input
+                  value={formData.employee_code}
+                  onChange={(e) => setFormData(prev => ({ ...prev, employee_code: e.target.value }))}
+                  placeholder="EMP-0001"
+                  dir="ltr"
+                />
+                <p className="text-xs text-muted-foreground">{t.employeeCodeAuto}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.name} *</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ahmed Abdullah"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.position}</Label>
+                <Input
+                  value={formData.position}
+                  onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
+                  placeholder="Software Engineer"
+                />
+              </div>
+
+              <div className="col-span-2 space-y-2">
+                <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+                <p className="text-xs text-muted-foreground">{language === 'ar' ? 'صلاحيات الـ Role تطبق أولاً، ويمكنك إضافة صلاحيات مباشرة لهذا المستخدم أو إزالتها بدون تغيير الدور.' : 'Role permissions apply first; add or remove direct permissions for this user without changing the role.'}</p>
+                <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
+                  {availablePermissions.map((permission) => {
+                    const checked = formData.permissions.includes(permission.id);
+                    return <label key={permission.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
+                      <span>{language === 'ar' ? permissionLabel(permission) : (permission.name || permission.key || permission.slug)}</span>
+                    </label>;
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.role}</Label>
+                <Select
+                  value={formData.role_id.toString()}
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, role_id: parseInt(v) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectRole} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {roleLabel(role.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                <Select
+                  value={formData.branch_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    branch_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون فرع' : 'No branch'}
+                    </SelectItem>
+                    {branches.map((branch: Branch) => (
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label>
+                {/* Treasury */}
+                <Select
+                  value={formData.treasury_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    treasury_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون خزينة' : 'No treasury'}
+                    </SelectItem>
+                    {treasuries.map((treasury: Treasury) => (
+                      <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                        {treasury.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.phone}</Label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="01012345678"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.email}</Label>
+                <Input
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="ahmed@email.com"
+                  dir="ltr"
+                  type="email"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.password} *</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••"
+                    dir="ltr"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.salary}</Label>
+                <Input
+                  type="number"
+                  value={formData.salary}
+                  onChange={(e) => setFormData(prev => ({ ...prev, salary: e.target.value ? parseFloat(e.target.value) : '' }))}
+                  placeholder="15000"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              {t.cancel}
+            </Button>
+            <Button
+              onClick={() => addEmployeeMutation.mutate(formData)}
+              disabled={addEmployeeMutation.isPending || !formData.name || !formData.password}
+            >
+              {addEmployeeMutation.isPending ? (
+                <RefreshCw className="animate-spin me-2" size={16} />
+              ) : null}
+              {t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Employee Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit size={20} />
+              {t.editEmployee}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.employeeCode}</Label>
+                <Input
+                  value={formData.employee_code}
+                  onChange={(e) => setFormData(prev => ({ ...prev, employee_code: e.target.value }))}
+                  dir="ltr"
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.name} *</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.position}</Label>
+                <Input
+                  value={formData.position}
+                  onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.role}</Label>
+                <Select
+                  value={formData.role_id.toString()}
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, role_id: parseInt(v) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.selectRole} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        {roleLabel(role.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'الصلاحيات الإضافية للمستخدم' : 'User permissions'}</Label>
+              <p className="text-xs text-muted-foreground">{language === 'ar' ? 'هذه صلاحيات مباشرة لهذا الموظف فقط، ولا تؤثر على باقي الموظفين في نفس الـ Role.' : 'These are direct permissions for this employee only; they do not affect other employees with the same role.'}</p>
+              <div className="grid grid-cols-2 gap-2 rounded-md border p-3 max-h-40 overflow-y-auto">
+                {availablePermissions.map((permission) => {
+                  const checked = formData.permissions.includes(permission.id);
+                  return <label key={permission.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={checked} onCheckedChange={(value) => setFormData(prev => ({ ...prev, permissions: value ? [...prev.permissions, permission.id] : prev.permissions.filter(id => id !== permission.id) }))} />
+                    <span>{language === 'ar' ? permissionLabel(permission) : (permission.name || permission.key || permission.slug)}</span>
+                  </label>;
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الفرع' : 'Branch'}</Label>
+                {/* Branch - Edit Dialog */}
+                <Select
+                  value={formData.branch_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    branch_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الفرع' : 'Select branch'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون فرع' : 'No branch'}
+                    </SelectItem>
+                    {branches.map((branch: Branch) => (
+                      <SelectItem key={branch.id} value={branch.id.toString()}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الخزينة' : 'Treasury'}</Label>
+                {/* Treasury - Edit Dialog */}
+                <Select
+                  value={formData.treasury_id?.toString() || 'none'}
+                  onValueChange={(v) => setFormData(prev => ({
+                    ...prev,
+                    treasury_id: v === 'none' ? null : Number(v)
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر الخزينة' : 'Select treasury'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {language === 'ar' ? 'بدون خزينة' : 'No treasury'}
+                    </SelectItem>
+                    {treasuries.map((treasury: Treasury) => (
+                      <SelectItem key={treasury.id} value={treasury.id.toString()}>
+                        {treasury.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.phone}</Label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.email}</Label>
+                <Input
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  dir="ltr"
+                  type="email"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t.password}</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder={language === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : 'Leave empty to keep current'}
+                    dir="ltr"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t.salary}</Label>
+                <Input
+                  type="number"
+                  value={formData.salary}
+                  onChange={(e) => setFormData(prev => ({ ...prev, salary: e.target.value ? parseFloat(e.target.value) : '' }))}
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              {t.cancel}
+            </Button>
+            <Button
+              onClick={() => selectedEmployee && updateEmployeeMutation.mutate({
+                id: selectedEmployee.id,
+                data: formData
+              })}
+              disabled={updateEmployeeMutation.isPending || !formData.name}
+            >
+              {updateEmployeeMutation.isPending ? (
+                <RefreshCw className="animate-spin me-2" size={16} />
+              ) : null}
+              {t.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default Employees;

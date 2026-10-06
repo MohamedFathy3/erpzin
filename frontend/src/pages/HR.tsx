@@ -1,0 +1,1578 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useForm } from 'react-hook-form';
+import { HrServices } from '@/services/HrService';
+import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import MainLayout from '@/components/layout/MainLayout';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
+import AdvancedFilter, { FilterValues } from '@/components/ui/advanced-filter';
+import AttendanceManager from '@/components/hr/AttendanceManager';
+import BiometricManager from '@/components/hr/BiometricManager';
+import { AddDeliveryPerson, AddEmployee } from '@/types/Hr';
+import {
+  Plus,
+  Search,
+  Users,
+  DollarSign,
+  UserCheck,
+  Truck,
+  Building,
+  Phone,
+  Briefcase,
+  Loader2,
+  RefreshCw,
+  Edit2,
+  Trash2,
+  Eye,
+  Filter,
+  X,
+  Key,
+  Shield,
+  Landmark,
+  MapPin,
+  Fingerprint
+} from 'lucide-react';
+import SalesmenManager from "@/components/sales/SalesmenManager";
+import api from '@/lib/api';
+import { useDebounce } from '@/hooks/use-debounce';
+
+// ========== أنواع البيانات ==========
+interface Role {
+  id: number;
+  name: string;
+}
+
+interface Permission {
+  id: number;
+  name?: string;
+  name_ar?: string;
+  key?: string;
+  slug?: string;
+  module?: string;
+}
+
+interface Branch {
+  id: number;
+  name: string;
+  name_ar?: string;
+}
+
+interface Treasury {
+  id: number;
+  name: string;
+  name_ar?: string;
+  is_main?: boolean;
+}
+
+interface Employee {
+  id: number;
+  employee_code: string;
+  name: string;
+  name_ar?: string;
+  position?: string;
+  department?: string;
+  role: Role | string | null; 
+  branch: Branch | null;
+  treasury: Treasury | null;
+  phone?: string;
+  email?: string;
+  salary: string | number;
+  is_active?: boolean;
+  created_at: string;
+  permission_ids?: number[];
+}
+
+interface DeliveryPerson {
+  id: string;
+  name: string;
+  name_ar?: string;
+  phone?: string;
+  vehicle_type?: string;
+  vehicle_number?: string;
+  is_active: boolean;
+}
+
+const HR = () => {
+  const { language, direction } = useLanguage();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('employees');
+  const [employeeFilters, setEmployeeFilters] = useState<FilterValues>({});
+  const [showEmployeeDialog, setShowEmployeeDialog] = useState(false);
+  const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Debounce للبحث
+  const debouncedSearch = useDebounce(searchTerm, 500);
+
+  // States for employee CRUD
+  const [isEditingEmployee, setIsEditingEmployee] = useState(false);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+
+  // States for delivery person CRUD
+  const [isEditingDelivery, setIsEditingDelivery] = useState(false);
+  const [currentDeliveryId, setCurrentDeliveryId] = useState<string | null>(null);
+
+  // ========== MISSING EMPLOYEE FORM STATE ==========
+  const [newEmployee, setNewEmployee] = useState<AddEmployee>({
+    employee_code: '',
+    name: '',
+    name_ar: '',
+    position: '',
+    phone: '',
+    email: '',
+    salary: 0,
+    is_active: true,
+    role_id: undefined,
+    treasury_id: undefined,
+    branch_id: undefined,
+    permissions: [],
+    password: ''
+  });
+
+
+  const [newDelivery, setNewDelivery] = useState<AddDeliveryPerson>({
+    name: '',
+    name_ar: '',
+    phone: '',
+    vehicle_type: '',
+    vehicle_number: '',
+    is_active: true
+  });
+
+
+  // ========== جلب الـ Roles ==========
+  const { data: roles = [], isLoading: rolesLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: () => HrServices.getRoles()
+  });
+
+  const { data: availablePermissions = [] } = useQuery<Permission[]>({
+    queryKey: ['hr-available-permissions'],
+    queryFn: async () => (await api.get('/access-control/permissions')).data?.data || [],
+  });
+
+  // ========== جلب الخزائن ==========
+  const { data: treasury = [], isLoading: treasuryLoading } = useQuery({
+    queryKey: ['treasury'],
+    queryFn: () => HrServices.getTreasury()
+  });
+
+  // ========== جلب الفروع ==========
+  const { data: branches = [], isLoading: branchesLoading } = useQuery({
+    queryKey: ['branches'],
+    queryFn: () => HrServices.getBranches()
+  });
+
+  // ========== Fetch Employees ==========
+  const {
+    data: employees = [],
+    isLoading: employeesLoading,
+    error: employeesError,
+    refetch: refetchEmployees
+  } = useQuery({
+    queryKey: ['employees', activeTab, employeeFilters, debouncedSearch],
+    queryFn: () => HrServices.getEmployeesWithFilters(employeeFilters, debouncedSearch),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    retry: 3,
+  });
+
+
+  // ========== Fetch Delivery Persons ==========
+  const {
+    data: deliveryPersons = [],
+    isLoading: deliveryLoading,
+    error: deliveryError,
+    refetch: refetchDelivery
+  } = useQuery({
+    queryKey: ['delivery-persons', activeTab, debouncedSearch],
+    queryFn: () => HrServices.getDeliveryPersons(debouncedSearch),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    retry: 3,
+    enabled: activeTab === 'delivery' || activeTab === 'employees',
+  });
+
+
+  // ========== Fetch Attendance ==========
+  const {
+    data: attendance = [],
+    isLoading: attendanceLoading,
+    error: attendanceError,
+    refetch: refetchAttendance
+  } = useQuery({
+    queryKey: ['attendance', activeTab, debouncedSearch],
+    queryFn: async () => {
+      try {
+        const payload = {
+          orderBy: 'id',
+          orderByDirection: 'desc',
+          perPage: 50,
+          paginate: false,
+          with: ['employee']
+        } as Record<string, unknown>;
+
+        const filters: Record<string, string> = {};
+
+
+        if (debouncedSearch) {
+          filters.employee_name = debouncedSearch;
+        }
+
+        if (Object.keys(filters).length > 0) {
+          payload.filters = filters;
+        }
+
+        const response = await api.post('/attendance/index', payload);
+
+        return response.data.data || [];
+      } catch (error: any) {
+        console.error('❌ Error fetching attendance:', error);
+        return [];
+      }
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: activeTab === 'attendance',
+  });
+
+  // ========== Mutations ==========
+
+  const addEmployeeMutation = useMutation({
+    mutationFn: (data: Partial<AddEmployee>) => HrServices.createEmployee(data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      setShowEmployeeDialog(false);
+      resetEmployeeForm();
+      setIsEditingEmployee(false);
+      setCurrentEmployeeId(null);
+
+      toast({
+        title:
+          language === 'ar'
+            ? 'تم إضافة الموظف بنجاح'
+            : 'Employee added successfully',
+      });
+    },
+
+    onError: (error: unknown) => {
+      console.error(error);
+
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as any)?.response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+  });
+  // ✅ Update employee mutation
+  const updateEmployeeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<AddEmployee> }) => HrServices.updateEmployee(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      setShowEmployeeDialog(false);
+      resetEmployeeForm();
+      setIsEditingEmployee(false);
+      setCurrentEmployeeId(null);
+
+      toast({
+        title: language === 'ar'
+          ? 'تم تحديث الموظف بنجاح'
+          : 'Employee updated successfully',
+      });
+    },
+    onError: (error: unknown) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+
+  });
+
+  // ✅ Delete employee mutation
+
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: (id: string) => HrServices.deleteEmployee(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+
+      toast({
+        title: language === 'ar'
+          ? 'تم حذف الموظف بنجاح'
+          : 'Employee deleted successfully',
+      });
+    },
+    onError: (error: unknown) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+
+const getRoleName = (role: Role | string | null | undefined): string => {
+  if (!role) return '-';
+  
+  if (typeof role === 'object' && 'name' in role) {
+    return role.name;
+  }
+  
+  if (typeof role === 'string') {
+    return role;
+  }
+  
+  return '-';
+};
+
+
+const addDeliveryMutation = useMutation({
+    mutationFn: (delivery: AddDeliveryPerson) => HrServices.createDeliveryPerson(delivery),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+
+      setShowDeliveryDialog(false);
+      resetDeliveryForm();
+      setIsEditingDelivery(false);
+      setCurrentDeliveryId(null);
+
+      toast({
+        title: language === 'ar'
+          ? 'تم إضافة مندوب التوصيل بنجاح'
+          : 'Delivery person added successfully',
+      });
+    },
+    onError: (error: unknown) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+
+
+  // ✅ Update delivery mutation
+  const updateDeliveryMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: AddDeliveryPerson }) =>
+      HrServices.updateDeliveryPerson(id, data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+
+      setShowDeliveryDialog(false);
+      resetDeliveryForm();
+      setIsEditingDelivery(false);
+      setCurrentDeliveryId(null);
+
+      toast({
+        title: language === 'ar'
+          ? 'تم تحديث مندوب التوصيل بنجاح'
+          : 'Delivery person updated successfully',
+      });
+    },
+    onError: (error: unknown) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+
+
+  // ✅ Delete delivery mutation
+  const deleteDeliveryMutation = useMutation({
+    mutationFn: (id: string) => HrServices.deleteDeliveryPerson(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-persons'] });
+
+      toast({
+        title: language === 'ar'
+          ? 'تم حذف مندوب التوصيل بنجاح'
+          : 'Delivery person deleted successfully',
+      });
+    },
+    onError: (error: unknown) => {
+      console.error(error);
+      toast({
+        title: language === 'ar' ? 'حدث خطأ' : 'Error occurred',
+        description: (error as unknown as any).response?.data?.message || (error as Error).message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+
+
+  // ========== Helper Functions ==========
+
+  const resetEmployeeForm = () => setNewEmployee({
+    employee_code: '',
+    name: '',
+    name_ar: '',
+    position: '',
+    phone: '',
+    email: '',
+    salary: 0,
+    is_active: true,
+    role_id: undefined,
+    treasury_id: undefined,
+    branch_id: undefined,
+    permissions: [],
+    password: ''
+  });
+
+  const resetDeliveryForm = () => {
+    setNewDelivery({
+      name: '',
+      name_ar: '',
+      phone: '',
+      vehicle_type: '',
+      vehicle_number: '',
+      is_active: true
+    });
+  };
+
+  const refreshAllData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchEmployees(),
+        refetchDelivery(),
+        refetchAttendance(),
+      ]);
+
+      toast({
+        title: language === 'ar' ? 'تم تحديث البيانات' : 'Data refreshed',
+        variant: 'default'
+      });
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // ========== Employee Handlers ==========
+
+  const handleAddEmployee = () => {
+    if (!newEmployee.employee_code || !newEmployee.name) {
+      toast({
+        title: language === 'ar' ? 'الكود والاسم مطلوبان' : 'Code and name are required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    addEmployeeMutation.mutate(newEmployee);
+  };
+
+const handleEditEmployee = async (employee: Employee) => {
+  try {
+    const employeeData = await HrServices.getEmployeeById(employee.id);
+    console.log('📦 Employee data from service:', employeeData);
+    let roleId: number | undefined = undefined;
+    
+    if (employeeData.role) {
+      if (typeof employeeData.role === 'object' && 'id' in employeeData.role) {
+        roleId = Number(employeeData.role.id);
+      } else if (typeof employeeData.role === 'string') {
+        const foundRole = roles.find((r: Role) => r.name === employeeData.role);
+        if (foundRole) {
+          roleId = foundRole.id;
+        }
+      }
+    }
+    const treasuryId = employeeData.treasury?.id ? Number(employeeData.treasury.id) : undefined;
+    const branchId = employeeData.branch?.id ? Number(employeeData.branch.id) : undefined;
+    setNewEmployee({
+      employee_code: employeeData.employee_code || '',
+      name: employeeData.name || '',
+      name_ar: employeeData.name_ar || '',
+      position: employeeData.position || '',
+      phone: employeeData.phone || '',
+      email: employeeData.email || '',
+      salary: Number(employeeData.salary) || 0,
+      is_active: employeeData.is_active ?? true,
+      role_id: roleId,
+      treasury_id: treasuryId,
+      branch_id: branchId,
+      permissions: employeeData.permission_ids || [],
+      password: ''
+    });
+
+    setIsEditingEmployee(true);
+    setCurrentEmployeeId(employee.id.toString());
+    setShowEmployeeDialog(true);
+  } catch (error: unknown) {
+    console.error('Error fetching employee details:', error);
+    toast({
+      title: language === 'ar' ? 'خطأ في جلب بيانات الموظف' : 'Error fetching employee details',
+      variant: 'destructive'
+    });
+  }
+};
+
+  const handleUpdateEmployee = () => {
+    if (!newEmployee.employee_code || !newEmployee.name) {
+      toast({
+        title: language === 'ar' ? 'الكود والاسم مطلوبان' : 'Code and name are required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!currentEmployeeId) {
+      toast({
+        title: language === 'ar' ? 'خطأ في معرف الموظف' : 'Invalid employee ID',
+        variant: 'destructive'
+      });
+      return;
+    }
+    updateEmployeeMutation.mutate({ id: currentEmployeeId, data: newEmployee });
+  };
+
+  const handleDeleteEmployee = (id: string, name: string) => {
+    const confirmMessage = language === 'ar'
+      ? `هل أنت متأكد من حذف الموظف "${name}"؟`
+      : `Are you sure you want to delete employee "${name}"?`;
+
+    if (window.confirm(confirmMessage)) {
+      deleteEmployeeMutation.mutate(id);
+    }
+  };
+
+  // ========== Delivery Handlers ==========
+
+  const handleAddDelivery = () => {
+    if (!newDelivery.name) {
+      toast({
+        title: language === 'ar' ? 'الاسم مطلوب' : 'Name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    addDeliveryMutation.mutate(newDelivery);
+  };
+
+  const handleUpdateDelivery = () => {
+    if (!newDelivery.name) {
+      toast({
+        title: language === 'ar' ? 'الاسم مطلوب' : 'Name is required',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!currentDeliveryId) {
+      toast({
+        title: language === 'ar' ? 'خطأ في معرف المناسب' : 'Invalid ID',
+        variant: 'destructive'
+      });
+      return;
+    }
+    updateDeliveryMutation.mutate({ id: currentDeliveryId, data: newDelivery });
+  };
+
+  const handleEditDelivery = (person: DeliveryPerson) => {
+    setIsEditingDelivery(true);
+    setCurrentDeliveryId(person.id);
+    setNewDelivery({
+      name: person.name,
+      name_ar: person.name_ar,
+      phone: person.phone,
+      vehicle_type: person.vehicle_type,
+      vehicle_number: person.vehicle_number,
+      is_active: person.is_active
+    });
+    setShowDeliveryDialog(true);
+  };
+
+
+  const handleDeleteDelivery = (id: string, name: string) => {
+    const confirmMessage = language === 'ar'
+      ? `هل أنت متأكد من حذف مندوب التوصيل "${name}"؟`
+      : `Are you sure you want to delete delivery person "${name}"?`;
+
+    if (window.confirm(confirmMessage)) {
+      deleteDeliveryMutation.mutate(id);
+    }
+  };
+
+  // ========== Filter Handlers ==========
+
+  const handleResetFilters = () => {
+    setEmployeeFilters({});
+    setSearchTerm('');
+  };
+
+  // ========== Data Processing ==========
+
+  const mergedAttendance = attendance.map((att: Record<string, unknown>) => {
+
+    const employee = employees.find((emp: Employee | undefined) => emp?.id === att.employee_id);
+    return {
+      ...att,
+      name: employee?.name || '',
+      name_ar: employee?.name_ar || '',
+      employee_code: employee?.employee_code || ''
+    };
+  });
+
+
+  // ========== Translations ==========
+  const translations = {
+    en: {
+      title: 'HR & Payroll',
+      employees: 'Employees',
+      deliveryPersons: 'Delivery Persons',
+      salesReps: 'Sales Representatives',
+      attendance: 'Attendance',
+      payroll: 'Payroll',
+      newEmployee: 'New Employee',
+      editEmployee: 'Edit Employee',
+      newDelivery: 'New Delivery Person',
+      editDelivery: 'Edit Delivery Person',
+      search: 'Search by name...',
+      code: 'Code',
+      name: 'Name',
+      nameAr: 'Name (Arabic)',
+      position: 'Position',
+      role: 'Role',
+      password: 'Password',
+      salary: 'Salary',
+      status: 'Status',
+      date: 'Date',
+      checkIn: 'Check In',
+      checkOut: 'Check Out',
+      totalEmployees: 'Total Employees',
+      activeEmployees: 'Active',
+      totalSalaries: 'Total Salaries',
+      presentToday: 'Present Today',
+      phone: 'Phone',
+      email: 'Email',
+      hireDate: 'Hire Date',
+      active: 'Active',
+      inactive: 'Inactive',
+      present: 'Present',
+      absent: 'Absent',
+      late: 'Late',
+      leave: 'On Leave',
+      vehicleType: 'Vehicle Type',
+      vehicleNumber: 'Vehicle Number',
+      motorcycle: 'Motorcycle',
+      car: 'Car',
+      treasury: 'Treasury',
+      branch: 'Branch',
+      bicycle: 'Bicycle',
+      available: 'Available',
+      unavailable: 'Unavailable',
+      add: 'Add',
+      edit: 'Edit',
+      update: 'Update',
+      delete: 'Delete',
+      view: 'View',
+      loading: 'Loading...',
+      noData: 'No data found',
+      refresh: 'Refresh Data',
+      error: 'Error loading data',
+      actions: 'Actions',
+      confirmDelete: 'Confirm Delete',
+      deleteConfirmation: 'Are you sure you want to delete this delivery person?',
+      save: 'Save',
+      cancel: 'Cancel',
+      all: 'All',
+      filter: 'Filter',
+      reset: 'Reset',
+      employeeDetails: 'Employee Details',
+      noRole: 'No Role',
+      selectRole: 'Select Role',
+      leaveEmptyForNoChange: 'Leave empty to keep current password',
+      createUserAccount: 'Create user account for login'
+    },
+    ar: {
+      title: 'الموارد البشرية والرواتب',
+      employees: 'الموظفين',
+      deliveryPersons: 'مناديب التوصيل',
+      salesReps: 'مندوبين المبيعات',
+      attendance: 'الحضور',
+      payroll: 'الرواتب',
+      newEmployee: 'موظف جديد',
+      editEmployee: 'تعديل الموظف',
+      newDelivery: 'مندوب توصيل جديد',
+      editDelivery: 'تعديل مندوب التوصيل',
+      search: 'بحث بالاسم...',
+      code: 'الكود',
+      name: 'الاسم',
+      nameAr: 'الاسم (عربي)',
+      position: 'المنصب',
+      role: 'الدور',
+      treasury: 'الخزينة',
+      branch: 'الفرع',
+      password: 'كلمة المرور',
+      salary: 'الراتب',
+      status: 'الحالة',
+      date: 'التاريخ',
+      checkIn: 'الحضور',
+      checkOut: 'الانصراف',
+      totalEmployees: 'إجمالي الموظفين',
+      activeEmployees: 'نشط',
+      totalSalaries: 'إجمالي الرواتب',
+      presentToday: 'حاضرين اليوم',
+      phone: 'الهاتف',
+      email: 'البريد الإلكتروني',
+      hireDate: 'تاريخ التعيين',
+      active: 'نشط',
+      inactive: 'غير نشط',
+      present: 'حاضر',
+      absent: 'غائب',
+      late: 'متأخر',
+      leave: 'إجازة',
+      vehicleType: 'نوع المركبة',
+      vehicleNumber: 'رقم المركبة',
+      motorcycle: 'دراجة نارية',
+      car: 'سيارة',
+      bicycle: 'دراجة هوائية',
+      available: 'متاح',
+      unavailable: 'غير متاح',
+      add: 'إضافة',
+      edit: 'تعديل',
+      update: 'تحديث',
+      delete: 'حذف',
+      view: 'عرض',
+      loading: 'جاري التحميل...',
+      noData: 'لا توجد بيانات',
+      refresh: 'تحديث البيانات',
+      error: 'خطأ في تحميل البيانات',
+      actions: 'الإجراءات',
+      confirmDelete: 'تأكيد الحذف',
+      deleteConfirmation: 'هل أنت متأكد من حذف مندوب التوصيل هذا؟',
+      save: 'حفظ',
+      cancel: 'إلغاء',
+      all: 'الكل',
+      filter: 'تصفية',
+      reset: 'إعادة تعيين',
+      employeeDetails: 'تفاصيل الموظف',
+      noRole: 'بدون دور',
+      selectRole: 'اختر الدور',
+      leaveEmptyForNoChange: 'اتركها فارغة للإبقاء على كلمة المرور الحالية',
+      createUserAccount: 'إنشاء حساب للموظف'
+    }
+  };
+
+  const t = translations[language];
+
+  // ========== Stats ==========
+
+  // Calculate total salaries
+  const totalSalaries = employees.reduce((sum: number, e: Employee) => {
+    const salary = parseFloat(e.salary as string) || 0;
+    return sum + salary;
+  }, 0);
+
+  const stats = [
+    {
+      label: t.totalEmployees,
+      value: employees.length,
+      icon: <Users className="text-primary" size={24} />,
+      color: 'bg-primary/10',
+      loading: employeesLoading
+    },
+    {
+      label: t.activeEmployees,
+      value: employees.filter((e: Employee) => (e.is_active ?? false) === true).length,
+      icon: <UserCheck className="text-accent" size={24} />,
+      color: 'bg-accent/10',
+      loading: employeesLoading
+    },
+    {
+      label: t.deliveryPersons,
+      value: deliveryPersons.filter((d: DeliveryPerson) => d.is_active === true).length,
+      icon: <Truck className="text-success" size={24} />,
+      color: 'bg-success/10',
+      loading: deliveryLoading
+    },
+    {
+      label: t.totalSalaries,
+      value: `${totalSalaries.toLocaleString()} YER`,
+      icon: <DollarSign className="text-warning" size={24} />,
+      color: 'bg-warning/10',
+      loading: employeesLoading
+    }
+  ];
+
+
+  const vehicleTypes = [
+    { value: 'motorcycle', label: t.motorcycle },
+    { value: 'car', label: t.car },
+    { value: 'bicycle', label: t.bicycle }
+  ];
+
+  return (
+    <MainLayout activeItem="hr">
+      <div className="space-y-6" dir={direction}>
+        {/* ========== Header ========== */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={refreshAllData}
+              disabled={isRefreshing}
+              className="gap-2"
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {t.refresh}
+            </Button>
+
+            {/* ========== Delivery Person Dialog ========== */}
+            <Dialog open={showDeliveryDialog} onOpenChange={(open) => {
+              setShowDeliveryDialog(open);
+              if (!open) {
+                resetDeliveryForm();
+                setIsEditingDelivery(false);
+                setCurrentDeliveryId(null);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Truck size={18} className="me-2" />
+                  {t.newDelivery}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {isEditingDelivery ? t.editDelivery : t.newDelivery}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.name} *</Label>
+                      <Input
+                        value={newDelivery.name}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.nameAr}</Label>
+                      <Input
+                        value={newDelivery.name_ar}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, name_ar: e.target.value }))}
+                        placeholder="الاسم"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t.phone}</Label>
+                    <Input
+                      value={newDelivery.phone}
+                      onChange={(e) => setNewDelivery(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="777123456"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.vehicleType}</Label>
+                      <Select
+                        value={newDelivery.vehicle_type}
+                        onValueChange={(value) => setNewDelivery(prev => ({ ...prev, vehicle_type: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t.vehicleType} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vehicleTypes.map(type => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.vehicleNumber}</Label>
+                      <Input
+                        value={newDelivery.vehicle_number}
+                        onChange={(e) => setNewDelivery(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                        placeholder="ABC-123"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="is_active"
+                      checked={newDelivery.is_active}
+                      onChange={(e) => setNewDelivery(prev => ({ ...prev, is_active: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="is_active" className="cursor-pointer">
+                      {newDelivery.is_active ? t.active : t.inactive}
+                    </Label>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => {
+                    setShowDeliveryDialog(false);
+                    resetDeliveryForm();
+                    setIsEditingDelivery(false);
+                    setCurrentDeliveryId(null);
+                  }}>
+                    {t.cancel}
+                  </Button>
+                  <Button
+                    onClick={isEditingDelivery ? handleUpdateDelivery : handleAddDelivery}
+                    disabled={isEditingDelivery ? updateDeliveryMutation.isPending : addDeliveryMutation.isPending}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {(isEditingDelivery ? updateDeliveryMutation.isPending : addDeliveryMutation.isPending) ? (
+                      <Loader2 className="h-4 w-4 animate-spin me-2" />
+                    ) : null}
+                    {isEditingDelivery ? t.update : t.add}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* ========== Employee Dialog ========== */}
+            <Dialog open={showEmployeeDialog} onOpenChange={(open) => {
+              setShowEmployeeDialog(open);
+              if (!open) {
+                resetEmployeeForm();
+                setIsEditingEmployee(false);
+                setCurrentEmployeeId(null);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary hover:bg-primary/90">
+                  <Plus size={18} className="me-2" />
+                  {t.newEmployee}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    {isEditingEmployee ? <Edit2 size={18} /> : <Plus size={18} />}
+                    {isEditingEmployee ? t.editEmployee : t.newEmployee}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {/* معلومات أساسية */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.code} *</Label>
+                      <Input
+                        value={newEmployee.employee_code}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, employee_code: e.target.value }))}
+                        placeholder="EMP004"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.name} *</Label>
+                      <Input
+                        value={newEmployee.name}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder={t.name}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.nameAr}</Label>
+                      <Input
+                        value={newEmployee.name_ar}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, name_ar: e.target.value }))}
+                        placeholder={t.nameAr}
+                        dir="rtl"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.position}</Label>
+                      <Input
+                        value={newEmployee.position}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, position: e.target.value }))}
+                        placeholder={t.position}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.phone}</Label>
+                      <Input
+                        value={newEmployee.phone}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder={t.phone}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.email}</Label>
+                      <Input
+                        value={newEmployee.email}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="email@example.com"
+                        type="email"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.role}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.role_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, role_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون دور' : 'No Role'}</option>
+                        {roles.map((role: Role) => (
+                          <option key={role.id} value={role.id.toString()}>
+                            {role.name}
+                          </option>
+                        ))}
+
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.salary}</Label>
+                      <Input
+                        type="number"
+                        value={newEmployee.salary}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, salary: e.target.value }))}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/20">
+                    <Label className="flex items-center gap-2"><Shield size={14} />{language === 'ar' ? 'الصلاحيات الإضافية للموظف' : 'Direct employee permissions'}</Label>
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? 'هذه الصلاحيات تخص الموظف وحده وتضاف فوق صلاحيات الدور.' : 'These permissions apply only to this employee and are added to the selected role.'}</p>
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                      {availablePermissions.map((permission) => {
+                        const checked = (newEmployee.permissions || []).includes(permission.id);
+                        return <label key={permission.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input type="checkbox" checked={checked} onChange={(event) => setNewEmployee(prev => ({ ...prev, permissions: event.target.checked ? [...(prev.permissions || []), permission.id] : (prev.permissions || []).filter(id => id !== permission.id) }))} />
+                          <span>{language === 'ar' ? (permission.name_ar || permission.name || permission.key || permission.slug) : (permission.name || permission.key || permission.slug)}</span>
+                        </label>;
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{t.branch}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.branch_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, branch_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون فرع' : 'No Branch'}</option>
+                        {branches.map((branch: Branch) => (
+                          <option key={branch.id} value={branch.id.toString()}>
+                            {branch.name}
+                          </option>
+                        ))}
+
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t.treasury}</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={newEmployee.treasury_id || ''}
+                        onChange={(e) => setNewEmployee(prev => ({ ...prev, treasury_id: e.target.value }))}
+                      >
+                        <option value="">{language === 'ar' ? 'بدون خزينة' : 'No Treasury'}</option>
+                        {treasury.map((treasuryItem: Treasury) => (
+                          <option key={treasuryItem.id} value={treasuryItem.id.toString()}>
+                            {treasuryItem.name}
+                          </option>
+                        ))}
+
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* ========== حقل الباسورد ========== */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Key size={14} />
+                      {t.password}
+                      {isEditingEmployee && (
+                        <span className="text-xs text-muted-foreground font-normal">
+                          ({t.leaveEmptyForNoChange})
+                        </span>
+                      )}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={newEmployee.password}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder={isEditingEmployee ? "••••••" : t.password}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="employee_is_active"
+                      checked={newEmployee.is_active}
+                      onChange={(e) => setNewEmployee(prev => ({ ...prev, is_active: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <Label htmlFor="employee_is_active" className="cursor-pointer">
+                      {newEmployee.is_active ? t.active : t.inactive}
+                    </Label>
+                  </div>
+
+                  {!isEditingEmployee && (
+                    <div className="bg-primary/5 p-3 rounded-lg border border-primary/20">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <Key size={14} />
+                        {t.createUserAccount}
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={isEditingEmployee ? handleUpdateEmployee : handleAddEmployee}
+                    disabled={isEditingEmployee ? updateEmployeeMutation.isPending : addEmployeeMutation.isPending}
+                    className="w-full bg-primary hover:bg-primary/90"
+                  >
+                    {(isEditingEmployee ? updateEmployeeMutation.isPending : addEmployeeMutation.isPending) ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin me-2" />
+                        {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
+                      </>
+                    ) : (
+                      isEditingEmployee ? t.update : t.add
+                    )}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        {/* ========== Stats ========== */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {stats.map((stat, index) => (
+            <Card key={index} className="card-elevated">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-lg ${stat.color}`}>
+                    {stat.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    {stat.loading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">{t.loading}</span>
+                      </div>
+                    ) : (
+                      <p className="text-xl font-bold text-foreground">{stat.value}</p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* ========== Tabs ========== */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="employees">{t.employees}</TabsTrigger>
+            <TabsTrigger value="salesreps" className="flex items-center gap-2">
+              <Briefcase size={16} />
+              {t.salesReps}
+            </TabsTrigger>
+            <TabsTrigger value="delivery">{t.deliveryPersons}</TabsTrigger>
+            <TabsTrigger value="attendance">{t.attendance}</TabsTrigger>
+            <TabsTrigger value="biometric" className="flex items-center gap-2">
+              <Fingerprint size={16} />
+              {language === 'ar' ? 'البصمة والرواتب' : 'Biometric & Payroll'}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ========== Employees Tab ========== */}
+          <TabsContent value="employees" className="mt-4">
+            <Card className="card-elevated">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <Input
+                      placeholder={t.search}
+                      className="ps-10"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    {searchTerm && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute end-2 top-1/2 -translate-y-1/2 h-6 w-6"
+                        onClick={() => setSearchTerm('')}
+                      >
+                        <X size={14} />
+                      </Button>
+                    )}
+                  </div>
+                  <AdvancedFilter
+                    fields={[
+                      {
+                        key: 'position',
+                        label: 'Position',
+                        labelAr: 'المنصب',
+                        type: 'select',
+                        options: [
+                          ...Array.from(new Set(employees.map((e: Employee) => e.position))).filter(Boolean).map(pos => ({
+                            value: pos as string,
+                            label: pos as string,
+                            labelAr: pos as string
+                          }))
+                        ]
+
+                      },
+                      {
+                        key: 'salary',
+                        label: 'Salary',
+                        labelAr: 'الراتب',
+                        type: 'numberRange'
+                      },
+                      {
+                        key: 'status',
+                        label: 'Status',
+                        labelAr: 'الحالة',
+                        type: 'select',
+                        options: [
+                          { value: 'active', label: 'Active', labelAr: 'نشط' },
+                          { value: 'inactive', label: 'Inactive', labelAr: 'غير نشط' },
+                        ]
+                      }
+                    ]}
+                    values={employeeFilters}
+                    onChange={setEmployeeFilters}
+                    onReset={handleResetFilters}
+                    language={language}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {employeesLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ms-2">{t.loading}</span>
+                  </div>
+                ) : employeesError ? (
+                  <div className="text-center py-12">
+                    <div className="text-red-500 font-medium">{t.error}</div>
+                    <Button
+                      variant="outline"
+                      onClick={() => refetchEmployees()}
+                      className="mt-4"
+                    >
+                      <RefreshCw className="h-4 w-4 me-2" />
+                      {language === 'ar' ? 'حاول مرة أخرى' : 'Try Again'}
+                    </Button>
+                  </div>
+                ) : employees.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Users className="mx-auto h-12 w-12 mb-4 opacity-20" />
+                    <p>{language === 'ar' ? 'لا يوجد موظفين' : 'No employees yet'}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t.code}</TableHead>
+                          <TableHead>{t.name}</TableHead>
+                          <TableHead>{t.position}</TableHead>
+                          <TableHead>{t.role}</TableHead>
+                          <TableHead>{t.branch}</TableHead>
+                          <TableHead>{t.treasury}</TableHead>
+                          <TableHead>{t.salary}</TableHead>
+                          <TableHead className="text-end">{t.actions}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {employees.map((employee: Employee) => (
+                          <TableRow key={employee.id}>
+                            <TableCell className="font-mono">{employee.employee_code}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                    {(language === 'ar' ? employee.name_ar || employee.name : employee.name).charAt(0)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">
+                                  {language === 'ar' ? employee.name_ar || employee.name : employee.name}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{employee.position || '-'}</TableCell>
+                            <TableCell>
+                              {employee.role ? (
+                                <div className="flex items-center gap-1">
+                                  <Shield size={14} className="text-muted-foreground" />
+                                   {getRoleName(employee.role)}
+                                </div>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {employee.branch ? (
+                                <div className="flex items-center gap-1">
+                                  <MapPin size={14} className="text-muted-foreground" />
+                                  {language === 'ar' ? employee.branch.name_ar || employee.branch.name : employee.branch.name}
+                                </div>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {employee.treasury ? (
+                                <div className="flex items-center gap-1">
+                                  <Landmark size={14} className="text-muted-foreground" />
+                                  {language === 'ar' ? employee.treasury.name_ar || employee.treasury.name : employee.treasury.name}
+                                  {employee.treasury.is_main && (
+                                    <Badge variant="outline" className="text-[10px] bg-primary/10">
+                                      {language === 'ar' ? 'رئيسية' : 'Main'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell>{parseFloat(employee.salary?.toString() || '0').toLocaleString()} YER</TableCell>
+
+                            <TableCell className="text-end">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditEmployee(employee)}
+                                  title={t.edit}
+                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                >
+                                  <Edit2 size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteEmployee(employee.id.toString(), employee.name_ar || employee.name)}
+                                  title={t.delete}
+                                  disabled={updateEmployeeMutation.isPending || deleteEmployeeMutation.isPending}
+                                >
+                                  {deleteEmployeeMutation.isPending && deleteEmployeeMutation.variables === employee.id.toString() ? (
+                                    <Loader2 size={14} className="animate-spin text-destructive" />
+                                  ) : (
+                                    <Trash2 size={14} className="text-destructive" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ========== Sales Reps Tab ========== */}
+          <TabsContent value="salesreps" className="mt-4">
+            <SalesmenManager />
+          </TabsContent>
+
+          {/* ========== Delivery Persons Tab ========== */}
+          <TabsContent value="delivery" className="mt-4">
+            <Card className="card-elevated">
+              <CardHeader className="pb-3">
+                <div className="relative max-w-sm">
+                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input
+                    placeholder={t.search}
+                    className="ps-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute end-2 top-1/2 -translate-y-1/2 h-6 w-6"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      <X size={14} />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {deliveryLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ms-2">{t.loading}</span>
+                  </div>
+                ) : deliveryError ? (
+                  <div className="text-center py-12">
+                    <div className="text-red-500 font-medium">{t.error}</div>
+                    <Button
+                      variant="outline"
+                      onClick={() => refetchDelivery()}
+                      className="mt-4"
+                    >
+                      <RefreshCw className="h-4 w-4 me-2" />
+                      {language === 'ar' ? 'حاول مرة أخرى' : 'Try Again'}
+                    </Button>
+                  </div>
+                ) : deliveryPersons.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Truck className="mx-auto h-12 w-12 mb-4 opacity-20" />
+                    <p>{language === 'ar' ? 'لا يوجد مناديب توصيل' : 'No delivery persons yet'}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t.name}</TableHead>
+                          <TableHead>{t.phone}</TableHead>
+                          <TableHead>{t.vehicleType}</TableHead>
+                          <TableHead>{t.vehicleNumber}</TableHead>
+                          <TableHead>{t.status}</TableHead>
+                          <TableHead className="text-end">{t.actions}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deliveryPersons.map((person: DeliveryPerson) => (
+                          <TableRow key={person.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="bg-success/10 text-success text-sm">
+                                    <Truck size={16} />
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">
+                                  {language === 'ar' ? person.name_ar || person.name : person.name}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Phone size={14} className="text-muted-foreground" />
+                                {person.phone || '-'}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {person.vehicle_type
+                                ? vehicleTypes.find(v => v.value === person.vehicle_type)?.label || person.vehicle_type
+                                : '-'
+                              }
+                            </TableCell>
+                            <TableCell>{person.vehicle_number || '-'}</TableCell>
+                            <TableCell>
+                              <Badge variant={person.is_active ? 'default' : 'secondary'}>
+                                {person.is_active ? t.active : t.inactive}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-end">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditDelivery(person)}
+                                  title={t.edit}
+                                  disabled={updateDeliveryMutation.isPending || deleteDeliveryMutation.isPending}
+                                >
+                                  <Edit2 size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteDelivery(person.id, person.name_ar || person.name)}
+                                  title={t.delete}
+                                  disabled={updateDeliveryMutation.isPending || deleteDeliveryMutation.isPending}
+                                >
+                                  {deleteDeliveryMutation.isPending && deleteDeliveryMutation.variables === person.id ? (
+                                    <Loader2 size={14} className="animate-spin text-destructive" />
+                                  ) : (
+                                    <Trash2 size={14} className="text-destructive" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ========== Attendance Tab ========== */}
+          <TabsContent value="attendance" className="mt-4">
+            <AttendanceManager
+              employees={employees}
+              attendance={mergedAttendance}
+            />
+          </TabsContent>
+
+          <TabsContent value="biometric" className="mt-4">
+            <BiometricManager employees={employees} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </MainLayout>
+  );
+};
+
+export default HR;

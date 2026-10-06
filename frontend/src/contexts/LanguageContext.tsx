@@ -1,0 +1,189 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+type Language = 'en' | 'ar';
+type Direction = 'ltr' | 'rtl';
+
+interface LanguageContextType {
+  language: Language;
+  direction: Direction;
+  setLanguage: (lang: Language) => void;
+  t: (key: string) => string;
+}
+
+const translations: Record<Language, Record<string, string>> = {
+  en: {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.inventory': 'Inventory',
+    'nav.pos': 'Point of Sale',
+    'nav.sales': 'Sales',
+    'nav.purchasing': 'Purchasing',
+    'nav.finance': 'Finance',
+    'nav.hr': 'HR & Payroll',
+    'nav.crm': 'Customers & Loyalty',
+    'nav.reports': 'Reports',
+    'nav.settings': 'Settings',
+    'nav.logout': 'Logout',
+    
+    // Dashboard
+    'dashboard.title': 'Analytics Dashboard',
+    'dashboard.welcome': 'Welcome back',
+    'dashboard.todaySales': "Today's Sales",
+    'dashboard.totalRevenue': 'Monthly Revenue',
+    'dashboard.netProfit': 'Net Profit',
+    'dashboard.totalOrders': 'Monthly Orders',
+    'dashboard.avgOrderValue': 'Avg Order Value',
+    'dashboard.salesTrend': 'Sales Trend & AI Prediction',
+    'dashboard.branchRevenue': 'Branch Revenue',
+    'dashboard.categoryPerformance': 'Category Performance',
+    'dashboard.topProducts': 'Top Products',
+    'dashboard.recentTransactions': 'Recent Transactions',
+    'dashboard.lowStock': 'Low Stock Alerts',
+    'dashboard.aiPrediction': 'AI Prediction',
+    'dashboard.actualSales': 'Actual Sales',
+    'dashboard.vsYesterday': 'vs yesterday',
+    'dashboard.thisMonth': 'this month',
+    'dashboard.revenueMinusExpenses': 'Revenue - Expenses',
+    'dashboard.viewAll': 'View All',
+    'dashboard.items': 'items',
+    'dashboard.ofTotalSales': 'of total sales',
+    'dashboard.revenue': 'Revenue',
+    'dashboard.growth': 'Growth',
+    'dashboard.currentStock': 'Current Stock',
+    'dashboard.reorderLevel': 'Reorder Level',
+    'dashboard.cash': 'Cash',
+    'dashboard.card': 'Card',
+    'dashboard.split': 'Split',
+    
+    // Common
+    'common.search': 'Search...',
+    'common.all': 'All',
+    'common.today': 'Today',
+    'common.thisWeek': 'This Week',
+    'common.thisMonth': 'This Month',
+    'common.thisYear': 'This Year',
+    'common.currency': 'YER',
+    'common.branches': 'Branches',
+    'common.noData': 'No data available',
+    
+    // Branches
+    'branch.abra': 'Abra',
+    'branch.primark': 'Primark',
+    'branch.fashionKings': 'Fashion Kings',
+    'branch.ahyan': 'Ahyan',
+    
+    // Categories
+    'category.boys': 'Boys',
+    'category.girls': 'Girls',
+    'category.women': 'Women',
+    'category.men': 'Men',
+    'category.kids': 'Kids',
+  },
+  ar: {
+    // Navigation
+    'nav.dashboard': 'لوحة التحكم',
+    'nav.inventory': 'المخزون',
+    'nav.pos': 'نقطة البيع',
+    'nav.sales': 'المبيعات',
+    'nav.purchasing': 'المشتريات',
+    'nav.finance': 'المالية',
+    'nav.hr': 'الموارد البشرية',
+    'nav.crm': 'العملاء والولاء',
+    'nav.reports': 'التقارير',
+    'nav.settings': 'الإعدادات',
+    'nav.logout': 'تسجيل الخروج',
+    
+    // Dashboard
+    'dashboard.title': 'لوحة التحليلات',
+    'dashboard.welcome': 'مرحباً بعودتك',
+    'dashboard.todaySales': 'مبيعات اليوم',
+    'dashboard.totalRevenue': 'إيرادات الشهر',
+    'dashboard.netProfit': 'صافي الربح',
+    'dashboard.totalOrders': 'طلبات الشهر',
+    'dashboard.avgOrderValue': 'متوسط قيمة الطلب',
+    'dashboard.salesTrend': 'مؤشر المبيعات والتوقعات',
+    'dashboard.branchRevenue': 'إيرادات الفروع',
+    'dashboard.categoryPerformance': 'أداء الفئات',
+    'dashboard.topProducts': 'أفضل المنتجات',
+    'dashboard.recentTransactions': 'آخر العمليات',
+    'dashboard.lowStock': 'تنبيهات نقص المخزون',
+    'dashboard.aiPrediction': 'التوقعات',
+    'dashboard.actualSales': 'المبيعات الفعلية',
+    'dashboard.vsYesterday': 'مقارنة بالأمس',
+    'dashboard.thisMonth': 'هذا الشهر',
+    'dashboard.revenueMinusExpenses': 'الإيرادات - المصروفات',
+    'dashboard.viewAll': 'عرض الكل',
+    'dashboard.items': 'منتج',
+    'dashboard.ofTotalSales': 'من إجمالي المبيعات',
+    'dashboard.revenue': 'الإيراد',
+    'dashboard.growth': 'النمو',
+    'dashboard.currentStock': 'الكمية الحالية',
+    'dashboard.reorderLevel': 'حد الطلب',
+    'dashboard.cash': 'نقدي',
+    'dashboard.card': 'بطاقة',
+    'dashboard.split': 'مقسم',
+    
+    // Common
+    'common.search': 'بحث...',
+    'common.all': 'الكل',
+    'common.today': 'اليوم',
+    'common.thisWeek': 'هذا الأسبوع',
+    'common.thisMonth': 'هذا الشهر',
+    'common.thisYear': 'هذا العام',
+    'common.currency': 'ريال',
+    'common.branches': 'الفروع',
+    'common.noData': 'لا توجد بيانات للعرض',
+    
+    // Branches
+    'branch.abra': 'أبرا',
+    'branch.primark': 'بريمارك',
+    'branch.fashionKings': 'فاشن كينغز',
+    'branch.ahyan': 'أحيان',
+    
+    // Categories
+    'category.boys': 'أولاد',
+    'category.girls': 'بنات',
+    'category.women': 'نساء',
+    'category.men': 'رجال',
+    'category.kids': 'أطفال',
+  },
+};
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem('injaz-language');
+    return (saved as Language) || 'ar';
+  });
+  const direction: Direction = language === 'ar' ? 'rtl' : 'ltr';
+
+  useEffect(() => {
+    document.documentElement.dir = direction;
+    document.documentElement.lang = language;
+    document.body.style.fontFamily = language === 'ar' ? "'Cairo', sans-serif" : "'Inter', sans-serif";
+  }, [language, direction]);
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem('injaz-language', lang);
+  };
+
+  const t = (key: string): string => {
+    return translations[language][key] || key;
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, direction, setLanguage, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+};
+
+export const useLanguage = () => {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+};
