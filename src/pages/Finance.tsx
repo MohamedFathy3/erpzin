@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { 
   LayoutDashboard, 
   Receipt,
@@ -101,21 +102,10 @@ const Finance = () => {
   return (
     <MainLayout activeItem="finance">
       <div className="space-y-6" dir={direction}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-foreground">
-            {language === 'ar' ? 'الإدارة المالية' : 'Financial Management'}
-          </h1>
-        </div>
+        <ModuleHeader eyebrow={language === 'ar' ? 'مركز المال' : 'Finance center'} title={language === 'ar' ? 'الإدارة المالية' : 'Financial management'} description={language === 'ar' ? 'السيولة والقيود والإيرادات والمصروفات والتقارير في مساحة واحدة.' : 'Cash, journals, revenue, expenses and reports in one workspace.'} icon={<Wallet className="h-5 w-5" />} />
 
         <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setFinanceFilters({}); }}>
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 lg:w-auto lg:inline-grid">
-            {tabs.map(tab => (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
-                <tab.icon size={16} />
-                <span className="hidden lg:inline">{tab.label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <ModuleTabs value={activeTab} onChange={(value) => { setActiveTab(value); setFinanceFilters({}); }} tabs={tabs.map(tab => ({ value: tab.id, label: tab.label, icon: <tab.icon size={16} /> }))} />
 
           {showFilter && (
             <div className="mt-4">

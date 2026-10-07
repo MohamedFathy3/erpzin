@@ -4,11 +4,12 @@ import { HrServices } from '@/services/HrService';
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
+import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -1218,19 +1219,13 @@ const handleEditEmployee = async (employee: Employee) => {
 
         {/* ========== Tabs ========== */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="employees">{t.employees}</TabsTrigger>
-            <TabsTrigger value="salesreps" className="flex items-center gap-2">
-              <Briefcase size={16} />
-              {t.salesReps}
-            </TabsTrigger>
-            <TabsTrigger value="delivery">{t.deliveryPersons}</TabsTrigger>
-            <TabsTrigger value="attendance">{t.attendance}</TabsTrigger>
-            <TabsTrigger value="biometric" className="flex items-center gap-2">
-              <Fingerprint size={16} />
-              {language === 'ar' ? 'البصمة والرواتب' : 'Biometric & Payroll'}
-            </TabsTrigger>
-          </TabsList>
+          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
+            { value: 'employees', label: t.employees, icon: <Users size={16} /> },
+            { value: 'salesreps', label: t.salesReps, icon: <Briefcase size={16} /> },
+            { value: 'delivery', label: t.deliveryPersons, icon: <Truck size={16} /> },
+            { value: 'attendance', label: t.attendance, icon: <UserCheck size={16} /> },
+            { value: 'biometric', label: language === 'ar' ? 'البصمة والرواتب' : 'Biometric & payroll', icon: <Fingerprint size={16} /> },
+          ]} />
 
           {/* ========== Employees Tab ========== */}
           <TabsContent value="employees" className="mt-4">
