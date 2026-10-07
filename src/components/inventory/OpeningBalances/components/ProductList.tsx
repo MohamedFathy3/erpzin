@@ -188,7 +188,7 @@ export const ProductList: React.FC<ProductListProps> = ({
               <TableHead className="text-right font-semibold">{t.costPrice}</TableHead>
               <TableHead className="text-right font-semibold">{t.salePrice}</TableHead>
               <TableHead className="text-right font-semibold">{t.total}</TableHead>
-              <TableHead className="text-right w-[100px]" />
+              <TableHead className="text-right w-[170px]">{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
             </TableRow>
           </TableHeader>
 

@@ -299,9 +299,7 @@ const OpeningBalances: React.FC = () => {
   // حذف الرصيد
   const deleteBalanceMutation = useMutation({
     mutationFn: async (productId: number) => {
-      const response = await api.delete(`/product/delete`, {
-       data: { items: [productId] }
-      });
+      const response = await api.delete(`/products/opening-balance/${productId}`);
       return response.data;
     },
     onSuccess: () => {
@@ -791,7 +789,7 @@ const OpeningBalances: React.FC = () => {
                     <TableHead className="text-right font-semibold">{t.costPrice}</TableHead>
                     <TableHead className="text-right font-semibold">{t.salePrice}</TableHead>
                     <TableHead className="text-right font-semibold">{t.total}</TableHead>
-                    <TableHead className="text-right w-[60px]"></TableHead>
+                    <TableHead className="text-right w-[170px]">{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -815,23 +813,29 @@ const OpeningBalances: React.FC = () => {
                         {formatCurrency((product.stock || 0) * product.cost)}
                       </TableCell>
                       <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           title={t.edit}
                           onClick={() => handleEdit(product)}
-                          className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          className="gap-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          aria-label={t.edit}
                         >
                           <Pencil size={14} />
+                          <span className="hidden sm:inline">{t.edit}</span>
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="sm" 
                           onClick={() => handleDelete(product)}
-                          className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                          className="gap-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                          aria-label={language === 'ar' ? 'حذف' : 'Delete'}
                         >
                           <Trash2 size={14} />
+                          <span className="hidden sm:inline">{language === 'ar' ? 'حذف' : 'Delete'}</span>
                         </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
