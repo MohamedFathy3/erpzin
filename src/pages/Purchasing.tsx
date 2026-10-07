@@ -6,11 +6,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { ModuleHeader } from '@/components/layout/ModuleHeader';
+import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import SupplierForm from '@/components/purchasing/SupplierForm';
@@ -444,20 +444,11 @@ const Purchasing = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="invoices" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <FileText size={16} className="me-2" />
-              {language === 'ar' ? 'فواتير الشراء' : 'Invoices'}
-            </TabsTrigger>
-            <TabsTrigger value="returns" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
-              <RotateCcw size={16} className="me-2" />
-              {language === 'ar' ? 'المرتجعات' : 'Returns'}
-            </TabsTrigger>
-            <TabsTrigger value="suppliers" className="data-[state=active]:bg-violet-100 data-[state=active]:text-violet-800">
-              <Building2 size={16} className="me-2" />
-              {language === 'ar' ? 'الموردين' : 'Suppliers'}
-            </TabsTrigger>
-          </TabsList>
+          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
+            { value: 'invoices', label: language === 'ar' ? 'فواتير الشراء' : 'Invoices', icon: <FileText size={16} /> },
+            { value: 'returns', label: language === 'ar' ? 'المرتجعات' : 'Returns', icon: <RotateCcw size={16} /> },
+            { value: 'suppliers', label: language === 'ar' ? 'الموردون' : 'Suppliers', icon: <Building2 size={16} /> },
+          ]} />
 
           {/* ========== فواتير الشراء ========== */}
           <TabsContent value="invoices" className="mt-4">

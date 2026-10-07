@@ -230,11 +230,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
         collapsed ? 'w-[72px]' : 'w-64',
         mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
       )}
-      style={{ background: '#0b1220' }}
+      style={{ background: '#ffffff' }}
     >
       {/* Logo */}
       <div className={cn(
-        'flex items-center bg-white m-2 rounded-lg border-2 border-sidebar overflow-hidden transition-all duration-300',
+        'flex items-center bg-slate-50 m-3 rounded-2xl border border-slate-200/80 overflow-hidden transition-all duration-300',
         collapsed ? 'justify-center p-3' : 'justify-center p-4'
       )}>
         <div className="relative w-full h-12 flex items-center justify-center">

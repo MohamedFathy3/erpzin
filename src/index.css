@@ -662,3 +662,18 @@
 .app-main .border-primary { border-color: #99f6e4; }
 .app-main .bg-primary\/10 { background-color: #f0fdfa; }
 .app-main .shadow-lg, .app-main .shadow-xl { box-shadow: 0 10px 25px rgb(15 23 42 / .08); }
+
+/* Light SaaS navigation shell */
+.app-sidebar { border-inline-end: 1px solid #e5e7eb; box-shadow: 0 10px 30px rgb(15 23 42 / .035); }
+.app-sidebar .sidebar-item { border: 1px solid transparent; border-radius: .8rem; color: #64748b; font-size: .875rem; }
+.app-sidebar .sidebar-item:hover { background: #f8fafc; color: #0f172a; }
+.app-sidebar .sidebar-item-active { background: #ecfdf5; border-color: #d1fae5; color: #047857; box-shadow: inset -3px 0 0 #10b981; }
+.app-sidebar .text-sidebar-foreground\/35 { color: #94a3b8; }
+.app-sidebar .border-sidebar-border { border-color: #eef2f7; }
+
+.module-header h1 { color: #0f172a; font-size: 1.55rem; font-weight: 800; }
+.module-tabs { background: transparent !important; border-radius: 0 !important; border-inline: 0 !important; border-top: 0 !important; padding: 0 !important; box-shadow: none !important; }
+.module-tabs > div { gap: .25rem; }
+.module-tabs button { border-radius: .5rem .5rem 0 0; }
+.app-main .grid > .card, .app-main .space-y-6 > .card { border-radius: 1rem; }
+.app-main [data-state="active"] { transition: all .18s ease; }

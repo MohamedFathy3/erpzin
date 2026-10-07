@@ -20,11 +20,11 @@ interface ModuleHeaderProps {
 }
 
 export const ModuleHeader: React.FC<ModuleHeaderProps> = ({ eyebrow, title, description, icon, actions }) => (
-  <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+  <div className="module-header flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-center gap-3">
-      {icon && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">{icon}</div>}
+      {icon && <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">{icon}</div>}
       <div className="min-w-0">
-        {eyebrow && <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary/75">{eyebrow}</p>}
+        {eyebrow && <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600">{eyebrow}</p>}
         <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
@@ -40,7 +40,7 @@ interface ModuleTabsProps {
 }
 
 export const ModuleTabs: React.FC<ModuleTabsProps> = ({ tabs, value, onChange }) => (
-  <div className="overflow-x-auto rounded-xl border border-border/70 bg-card p-1 shadow-sm">
+  <div className="module-tabs overflow-x-auto border-b border-slate-200/80">
     <div className="flex min-w-max items-center gap-1">
       {tabs.map((tab) => (
         <button
@@ -48,8 +48,8 @@ export const ModuleTabs: React.FC<ModuleTabsProps> = ({ tabs, value, onChange })
           type="button"
           onClick={() => onChange(tab.value)}
           className={cn(
-            'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-            value === tab.value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            'flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-all',
+            value === tab.value ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-muted-foreground hover:border-slate-300 hover:text-foreground'
           )}
         >
           {tab.icon}

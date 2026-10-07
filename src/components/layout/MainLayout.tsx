@@ -110,10 +110,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header onMenuToggle={() => setMobileNavOpen((open) => !open)} />
           <main className={cn(
-            'flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8',
+            'flex-1 overflow-y-auto px-4 py-6 sm:px-8 lg:px-10',
             'app-main bg-[#f7f9fc]'
           )}>
-            <div className="mx-auto w-full max-w-[1680px]">{children}</div>
+            <div className="mx-auto w-full max-w-[1760px]">{children}</div>
           </main>
         </div>
       </div>
