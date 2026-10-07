@@ -1,102 +1,80 @@
-// pages/Dashboard.tsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApp } from '@/contexts/AppContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
-import DashboardHeader from '@/components/dashboard/DashboardHeader';
-import DashboardKPIs from '@/components/dashboard/DashboardKPIs';
-import QuickAccessGrid from '@/components/dashboard/QuickAccessGrid';
 import SalesTrendChart from '@/components/dashboard/SalesTrendChart';
 import CategoryPerformanceChart from '@/components/dashboard/CategoryPerformanceChart';
 import BranchRevenueChart from '@/components/dashboard/BranchRevenueChart';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
-import LowStockAlert from '@/components/dashboard/LowStockAlert';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Factory, FileCheck2, WalletCards, TrendingDown } from 'lucide-react';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { ArrowUpRight, BarChart3, Boxes, Factory, FileText, Plus, Receipt, ShoppingCart, Users, Wallet, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { language } = useLanguage();
+  const { user } = useAuth();
+  const { currentBranch } = useApp();
   const { formatCurrency } = useRegionalSettings();
-  const { 
-    revenueReport,
-    dashboardMetrics,
-    recentTransactions,
-    lowStockProducts,
-    isLoading,
-    dashboardSummary
-  } = useDashboardData();
+  const { revenueReport, dashboardMetrics, recentTransactions, isLoading, dashboardSummary } = useDashboardData();
+  const ar = language === 'ar';
+  const firstName = user?.email?.split('@')[0] || (ar ? 'المستخدم' : 'there');
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return language === 'ar' ? 'صباح الخير' : 'Good Morning';
-    if (hour < 18) return language === 'ar' ? 'مساء الخير' : 'Good Afternoon';
-    return language === 'ar' ? 'مساء الخير' : 'Good Evening';
-  };
+  const actions = [
+    { label: ar ? 'فاتورة بيع' : 'Sales invoice', icon: Receipt, route: '/sales' },
+    { label: ar ? 'إضافة منتج' : 'New product', icon: Boxes, route: '/inventory' },
+    { label: ar ? 'مصروف جديد' : 'New expense', icon: Wallet, route: '/finance' },
+    { label: ar ? 'تقرير سريع' : 'Quick report', icon: BarChart3, route: '/reports' },
+  ];
+
+  const kpis = [
+    { label: ar ? 'مبيعات اليوم' : "Today's sales", value: formatCurrency(dashboardMetrics.todaySales), note: ar ? 'مقابل الأمس' : 'vs yesterday', change: dashboardMetrics.salesChange },
+    { label: ar ? 'إجمالي الإيرادات' : 'Total revenue', value: formatCurrency(dashboardMetrics.totalRevenue), note: ar ? 'هذا الشهر' : 'This month' },
+    { label: ar ? 'طلبات مكتملة' : 'Completed orders', value: dashboardMetrics.totalOrders.toLocaleString(), note: ar ? 'كل الفروع' : 'All branches' },
+  ];
 
   return (
     <MainLayout>
-      <div className="space-y-6 animate-fade-in">
-        {/* Welcome Header */}
-        <DashboardHeader greeting={getGreeting()} />
-
-        {/* Quick Access */}
-        <QuickAccessGrid />
-
-        {/* KPI Cards */}
-        <DashboardKPIs metrics={dashboardMetrics} isLoading={isLoading} />
-
-        {dashboardSummary && <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card className="overflow-hidden border-orange-200 bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/30 dark:to-background">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0"><CardTitle className="flex items-center gap-2 text-base"><Building2 className="text-orange-600" size={20} /> موقف عقود ومشروعات المقاولات</CardTitle><span className="rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-700">مالي</span></CardHeader>
-            <CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[
-              ['قيمة العقود', dashboardSummary.projects_finance.contract_value, WalletCards],
-              ['التكلفة الفعلية', dashboardSummary.projects_finance.actual_cost, TrendingDown],
-              ['المستخلصات القائمة', dashboardSummary.projects_finance.claims_outstanding, FileCheck2],
-              ['ربح تقديري', dashboardSummary.projects_finance.profit_estimate, Building2],
-            ].map(([label, value, Icon]) => <div key={String(label)} className="rounded-xl border bg-background/70 p-3"><Icon size={16} className="mb-2 text-orange-600" /><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-sm font-bold">{formatCurrency(Number(value))}</p></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground"><span>مشروعات نشطة: <b className="text-foreground">{dashboardSummary.projects_finance.active_count}</b></span><span>مستخلصات معلقة: <b className="text-foreground">{dashboardSummary.projects_finance.pending_claims}</b></span><span>المحصل: <b className="text-foreground">{formatCurrency(dashboardSummary.projects_finance.claims_paid)}</b></span></div></CardContent>
-          </Card>
-          <Card className="overflow-hidden border-cyan-200 bg-gradient-to-br from-cyan-50 to-white dark:from-cyan-950/30 dark:to-background">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0"><CardTitle className="flex items-center gap-2 text-base"><Factory className="text-cyan-600" size={20} /> تكلفة أوامر الإنتاج وخطوط المصنع</CardTitle><span className="rounded-full bg-cyan-100 px-2 py-1 text-xs text-cyan-700">تشغيل</span></CardHeader>
-            <CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[
-              ['أوامر قيد التشغيل', dashboardSummary.manufacturing_summary.orders_in_progress],
-              ['أوامر مكتملة', dashboardSummary.manufacturing_summary.completed_orders],
-              ['تكلفة مخططة', formatCurrency(dashboardSummary.manufacturing_summary.planned_cost)],
-              ['تكلفة فعلية', formatCurrency(dashboardSummary.manufacturing_summary.actual_cost)],
-            ].map(([label, value]) => <div key={String(label)} className="rounded-xl border bg-background/70 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-sm font-bold">{value}</p></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground"><span>المخطط: <b className="text-foreground">{dashboardSummary.manufacturing_summary.planned_quantity}</b></span><span>المنتج التام: <b className="text-foreground">{dashboardSummary.manufacturing_summary.produced_quantity}</b></span></div></CardContent>
-          </Card>
-        </div>}
-
-        {/* Low Stock Alert */}
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
-            <SalesTrendChart 
-              branchId={undefined}
-              reportData={revenueReport}
-            />
-          </div>
+      <div className="dashboard-canvas space-y-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <section className="dashboard-hero">
           <div>
-            <CategoryPerformanceChart 
-              categories={revenueReport?.top_categories || []}
-            />
+            <p className="dashboard-eyebrow">{ar ? 'نظرة تشغيلية' : 'Operations overview'}</p>
+            <h1>{ar ? `أهلًا ${firstName}` : `Good to see you, ${firstName}`}</h1>
+            <p className="dashboard-muted">{currentBranch ? (ar ? `أنت تتابع ${currentBranch.name_ar || currentBranch.name}` : `Monitoring ${currentBranch.name}`) : (ar ? 'كل الفروع في شاشة واحدة' : 'All branches in one view')}</p>
           </div>
-        </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => navigate('/reports')} className="dashboard-outline-button"><BarChart3 className="me-2 h-4 w-4" />{ar ? 'مركز التقارير' : 'Reports hub'}</Button>
+            <Button onClick={() => navigate('/pos')} className="dashboard-primary-button"><Plus className="me-2 h-4 w-4" />{ar ? 'بدء عملية بيع' : 'Start sale'}</Button>
+          </div>
+        </section>
 
-        {/* Second Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div>
-            <BranchRevenueChart 
-              branches={revenueReport?.branch_revenues || []}
-            />
+        <section className="dashboard-command-grid">
+          <div className="dashboard-section-label">{ar ? 'إجراءات متكررة' : 'Frequent actions'}</div>
+          <div className="dashboard-actions">
+            {actions.map(({ label, icon: Icon, route }) => <button key={route} type="button" onClick={() => navigate(route)} className="dashboard-action"><span className="dashboard-action-icon"><Icon className="h-4 w-4" /></span><span>{label}</span><ArrowUpRight className="ms-auto h-4 w-4 opacity-45" /></button>)}
           </div>
-          <div>
-            <RecentTransactions 
-              transactions={recentTransactions}
-            />
-          </div>
-        </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {kpis.map((kpi, index) => <Card key={kpi.label} className="dashboard-kpi"><CardContent className="p-5"><div className="flex items-start justify-between"><p className="dashboard-label">{kpi.label}</p><span className="dashboard-kpi-index">0{index + 1}</span></div>{isLoading ? <div className="mt-4 h-8 w-32 animate-pulse rounded bg-muted" /> : <p className="dashboard-kpi-value">{kpi.value}</p>}<p className="mt-2 text-xs text-muted-foreground">{kpi.note}{kpi.change !== undefined && <span className={kpi.change >= 0 ? 'ms-2 text-emerald-600' : 'ms-2 text-red-500'}>{kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change).toFixed(1)}%</span>}</p></CardContent></Card>)}
+        </section>
+
+        {dashboardSummary && <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark"><Factory className="h-4 w-4" /></span>{ar ? 'المشروعات والتكلفة' : 'Projects & cost'}<button onClick={() => navigate('/projects')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[['العقود', dashboardSummary.projects_finance.contract_value], ['التكلفة', dashboardSummary.projects_finance.actual_cost], ['المستخلصات', dashboardSummary.projects_finance.claims_outstanding], ['الربح التقديري', dashboardSummary.projects_finance.profit_estimate]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{formatCurrency(Number(value))}</strong></div>)}</div></CardContent></Card>
+          <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark cyan"><Factory className="h-4 w-4" /></span>{ar ? 'تشغيل المصنع' : 'Manufacturing flow'}<button onClick={() => navigate('/manufacturing')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[['قيد التشغيل', dashboardSummary.manufacturing_summary.orders_in_progress], ['مكتملة', dashboardSummary.manufacturing_summary.completed_orders], ['التكلفة المخططة', formatCurrency(dashboardSummary.manufacturing_summary.planned_cost)], ['التكلفة الفعلية', formatCurrency(dashboardSummary.manufacturing_summary.actual_cost)]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{value}</strong></div>)}</div></CardContent></Card>
+        </section>}
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="dashboard-data-card lg:col-span-2"><CardHeader><CardTitle><span className="dashboard-card-mark"><BarChart3 className="h-4 w-4" /></span>{ar ? 'حركة المبيعات' : 'Sales movement'}<span className="ms-auto text-xs font-normal text-muted-foreground">{ar ? 'آخر 30 يوم' : 'Last 30 days'}</span></CardTitle></CardHeader><CardContent><SalesTrendChart branchId={undefined} reportData={revenueReport} /></CardContent></Card>
+          <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark"><AlertTriangle className="h-4 w-4" /></span>{ar ? 'تنبيهات التشغيل' : 'Attention needed'}</CardTitle></CardHeader><CardContent><div className="space-y-3"><div className="dashboard-alert"><Boxes className="h-4 w-4 text-amber-600" /><span>{ar ? 'مراجعة الأصناف منخفضة المخزون' : 'Review low-stock products'}</span><ChevronLeft className="ms-auto h-4 w-4" /></div><div className="dashboard-alert"><FileText className="h-4 w-4 text-blue-600" /><span>{ar ? 'متابعة التقارير اليومية' : 'Review daily reports'}</span><ChevronLeft className="ms-auto h-4 w-4" /></div><div className="dashboard-alert"><Users className="h-4 w-4 text-violet-600" /><span>{ar ? 'متابعة العملاء الجدد' : 'Follow up new customers'}</span><ChevronLeft className="ms-auto h-4 w-4" /></div></div></CardContent></Card>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2"><Card className="dashboard-data-card"><CardHeader><CardTitle>{ar ? 'أداء الفئات' : 'Category performance'}</CardTitle></CardHeader><CardContent><CategoryPerformanceChart categories={revenueReport?.top_categories || []} /></CardContent></Card><Card className="dashboard-data-card"><CardHeader><CardTitle>{ar ? 'آخر العمليات' : 'Recent activity'}</CardTitle></CardHeader><CardContent><RecentTransactions transactions={recentTransactions} /></CardContent></Card></section>
+        <section className="grid grid-cols-1 gap-4"><Card className="dashboard-data-card"><CardHeader><CardTitle>{ar ? 'الإيراد حسب الفرع' : 'Revenue by branch'}</CardTitle></CardHeader><CardContent><BranchRevenueChart branches={revenueReport?.branch_revenues || []} /></CardContent></Card></section>
       </div>
     </MainLayout>
   );

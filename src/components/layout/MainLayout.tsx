@@ -104,14 +104,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-[#f4f7fb]">
+      <div className="app-shell flex h-screen w-full overflow-hidden bg-[#f7f9fc]">
         {mobileNavOpen && <button aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[1px] md:hidden" onClick={() => setMobileNavOpen(false)} />}
         <Sidebar activeItem={currentActive} onNavigate={handleNavigate} mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header onMenuToggle={() => setMobileNavOpen((open) => !open)} />
           <main className={cn(
             'flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8',
-            'bg-[#f4f7fb]'
+            'app-main bg-[#f7f9fc]'
           )}>
             <div className="mx-auto w-full max-w-[1680px]">{children}</div>
           </main>

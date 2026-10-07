@@ -343,7 +343,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border/70 bg-card/95 px-4 shadow-sm backdrop-blur sm:px-6">
+    <header className="app-header sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur sm:px-6">
       <Button variant="ghost" size="icon" className="shrink-0 rounded-xl md:hidden" onClick={onMenuToggle} aria-label={language === 'ar' ? 'فتح القائمة' : 'Open navigation'}>
         <Menu className="h-5 w-5" />
       </Button>

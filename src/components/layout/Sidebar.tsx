@@ -226,11 +226,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 z-50 flex h-screen flex-col bg-sidebar transition-all duration-300 md:relative md:z-auto',
+        'app-sidebar fixed inset-y-0 z-50 flex h-screen flex-col bg-sidebar transition-all duration-300 md:relative md:z-auto',
         collapsed ? 'w-[72px]' : 'w-64',
         mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
       )}
-      style={{ background: 'linear-gradient(180deg, hsl(222 47% 16%) 0%, hsl(222 47% 11%) 100%)' }}
+      style={{ background: '#0b1220' }}
     >
       {/* Logo */}
       <div className={cn(
