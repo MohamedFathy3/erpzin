@@ -110,7 +110,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     // ✅ لو مختارش لون، نستخدم أول لون (أو نستخدم بيانات بدون لون)
     if (!selectedColor) {
       return {
-        unitId: unit.unit_id,
+        unitId: unit.id,
         colorId: unit.colors[0]?.color_id || 0,
         price: parseFloat(unit.sell_price || '0'),
         stock: unit.colors.reduce((sum, color) => sum + color.stock, 0), // مجموع المخزون لكل الألوان
@@ -123,7 +123,7 @@ const POSVariantSelector: React.FC<POSVariantSelectorProps> = ({
     if (!color) return null;
     
     return {
-      unitId: unit.unit_id,
+      unitId: unit.id,
       colorId: color.color_id,
       price: parseFloat(unit.sell_price || '0'),
       stock: color.stock,

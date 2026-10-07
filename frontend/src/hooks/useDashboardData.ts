@@ -46,6 +46,7 @@ export interface PurchaseInvoice {
   };
   branch: string;
   total_amount: string;
+  net_amount?: number;
   invoice_date: string;
 }
 
@@ -252,7 +253,7 @@ export const useDashboardData = () => {
       id: `sale-${inv.id}`,
       type: 'sale' as const,
       reference: inv.invoice_number,
-      amount: Number(inv.total_amount) || 0,
+      amount: Number(inv.net_amount ?? inv.total_amount) || 0,
       date: normalizeTransactionDate(inv.created_at),
       customer: inv.customer?.name || 'Unknown',
       branch: inv.branch || 'Main',

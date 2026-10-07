@@ -46,6 +46,8 @@ export interface PurchaseInvoice {
     discount_total: string;
     tax_total: string;
     total_amount: string;
+    net_amount?: number;
+    returned_amount?: number;
     paid_amount?: string;
     remaining_amount?: string;
     payment_status?: string;

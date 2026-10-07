@@ -104,7 +104,9 @@ export interface PurchaseInvoice {
   discount_total: number;
   tax_total: number;
   total_amount: number;
+  net_amount?: number;
   paid_amount: number;
+  returned_amount?: number;
   remaining_amount: number;
   posting_journal_entry_id?: number | null;
   workflow_status?: string | null;

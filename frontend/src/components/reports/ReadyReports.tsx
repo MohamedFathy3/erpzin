@@ -628,7 +628,7 @@ checkOut: 'تسجيل الخروج',
             inv.invoice_number,
             inv.customer.name,
             inv.sales_representative.name || '-',
-            formatCurrency(Number(inv.total_amount)),
+            formatCurrency(Number(inv.net_amount ?? inv.total_amount)),
             inv.currency || '-',
             inv.branch
           ]),
@@ -718,7 +718,7 @@ checkOut: 'تسجيل الخروج',
             inv.currency || '-',
             inv.warehouse
           ]),
-          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
+          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.net_amount ?? inv.total_amount), 0)
         };
       }
 
@@ -727,7 +727,7 @@ checkOut: 'تسجيل الخروج',
           const name = inv.supplier?.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
           if (!acc[name]) acc[name] = { name, invoices: 0, total: 0 };
           acc[name].invoices = (acc[name].invoices || 0) + 1;
-          acc[name].total = (acc[name].total || 0) + Number(inv.total_amount);
+          acc[name].total = (acc[name].total || 0) + Number(inv.net_amount ?? inv.total_amount);
           return acc;
         }, {});
         
@@ -738,7 +738,7 @@ checkOut: 'تسجيل الخروج',
             s.invoices,
             formatCurrency(s.total)
           ]),
-          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0)
+          total: purchaseInvoices.reduce((sum, inv) => sum + Number(inv.net_amount ?? inv.total_amount), 0)
         };
       }
 
@@ -759,7 +759,7 @@ checkOut: 'تسجيل الخروج',
       case 'supplierBalances': {
         const balances = purchaseInvoices.reduce((acc: Record<string, number>, inv) => {
           const name = inv.supplier?.name || (language === 'ar' ? 'غير معروف' : 'Unknown');
-          acc[name] = (acc[name] || 0) + Number(inv.total_amount);
+          acc[name] = (acc[name] || 0) + Number(inv.remaining_amount ?? inv.net_amount ?? inv.total_amount);
           return acc;
         }, {});
         

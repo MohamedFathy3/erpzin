@@ -9,6 +9,7 @@ import { BarcodeScanner, BarcodeLabelPrinter } from '@/components/inventory/Barc
 import BarcodePrintingCenter from '@/components/inventory/BarcodePrintingCenter';
 import StockTransfer from '@/components/inventory/StockTransfer';
 import LowStockAlerts from '@/components/inventory/LowStockAlerts';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
 import InventoryCount from '@/components/inventory/InventoryCount';
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
@@ -931,11 +932,14 @@ const Inventory: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="alerts" className="flex-1 mt-2">
-            <Card className="shadow-md border-border">
-              <CardContent className="p-4">
+            <div className="space-y-6">
+              <NotificationCenter displayMode="page" />
+              <Card className="shadow-md border-border">
+                <CardContent className="p-4">
                 <LowStockAlerts />
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="count" className="flex-1 mt-2">

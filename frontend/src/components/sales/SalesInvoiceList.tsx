@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus, Eye, Receipt, RotateCcw, X, Filter, Search,
   ChevronDown, ChevronUp, Printer, FileSpreadsheet,
@@ -448,6 +450,8 @@ const SalesInvoiceList = () => {
   const { user: appUser } = useApp();
   const { user: authUser } = useAuth();
   const user = authUser || appUser as any;
+  const roleName = typeof user?.role === 'string' ? user.role : user?.role?.name;
+  const isAdmin = Boolean(user?.super_admin) || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(roleName || '').toLowerCase());
   const [showForm, setShowForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
   const [showReturnForm, setShowReturnForm] = useState(false);
@@ -455,6 +459,8 @@ const SalesInvoiceList = () => {
   const [filtersCollapsed, setFiltersCollapsed] = useState(true);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [invoiceToPrint, setInvoiceToPrint] = useState<SalesInvoice | null>(null);
+  const [invoiceToTransfer, setInvoiceToTransfer] = useState<SalesInvoice | null>(null);
+  const [selectedTransferRepresentative, setSelectedTransferRepresentative] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const cancelInvoiceMutation = useMutation({
@@ -467,7 +473,15 @@ const SalesInvoiceList = () => {
   });
   const transferInvoiceMutation = useMutation({
     mutationFn: ({ invoiceId, employeeId }: { invoiceId: number; employeeId: number }) => api.post('/invoice-transfer-requests', { invoice_type: 'sales', invoice_id: invoiceId, to_employee_id: employeeId }),
-    onSuccess: () => toast.success(language === 'ar' ? 'تم إرسال طلب تحويل الفاتورة للمدير' : 'Transfer request sent to admin'),
+    onSuccess: async (response: any) => {
+      const approved = response.data?.data?.status === 'approved';
+      toast.success(approved
+        ? (language === 'ar' ? 'تم تحويل الفاتورة وتحديث عمولة المندوب' : 'Invoice transferred and representative commission updated')
+        : (language === 'ar' ? 'تم إرسال طلب تحويل الفاتورة للمدير' : 'Transfer request sent to admin'));
+      setInvoiceToTransfer(null);
+      setSelectedTransferRepresentative('');
+      await queryClient.invalidateQueries({ queryKey: ['sales-invoices'] });
+    },
     onError: (error: any) => toast.error(error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال طلب التحويل' : 'Unable to send transfer request')),
   });
 
@@ -477,8 +491,15 @@ const SalesInvoiceList = () => {
     if (confirmed) cancelInvoiceMutation.mutate(invoice.id);
   };
   const handleTransferInvoice = (invoice: SalesInvoice) => {
-    const employeeId = Number(window.prompt(language === 'ar' ? 'اكتب رقم الموظف البائع المستلم' : 'Enter receiving seller employee ID'));
-    if (employeeId > 0) transferInvoiceMutation.mutate({ invoiceId: invoice.id, employeeId });
+    setInvoiceToTransfer(invoice);
+    setSelectedTransferRepresentative('');
+  };
+
+  const submitTransferInvoice = () => {
+    const representative = salesmen.find((salesman: any) => String(salesman.id) === selectedTransferRepresentative);
+    const employeeId = Number(representative?.employee_id);
+    if (!invoiceToTransfer || !Number.isInteger(employeeId) || employeeId <= 0) return;
+    transferInvoiceMutation.mutate({ invoiceId: invoiceToTransfer.id, employeeId });
   };
 
   // Company Info للطباعة
@@ -1310,6 +1331,50 @@ const SalesInvoiceList = () => {
       )}
 
       <InvoiceReturnForm isOpen={showReturnForm} onClose={() => { setShowReturnForm(false); setSelectedInvoiceForReturn(null); }} invoiceData={selectedInvoiceForReturn} />
+
+      <Dialog open={Boolean(invoiceToTransfer)} onOpenChange={(open) => {
+        if (!open) {
+          setInvoiceToTransfer(null);
+          setSelectedTransferRepresentative('');
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{language === 'ar' ? 'اختيار مندوب الفاتورة المستلم' : 'Choose receiving sales representative'}</DialogTitle>
+            <DialogDescription>
+              {invoiceToTransfer?.invoice_number || ''} · {isAdmin
+                ? (language === 'ar' ? 'سيتم التحويل وتحديث العمولة فور التسجيل.' : 'The invoice and commission update immediately on submission.')
+                : (language === 'ar' ? 'ستُحدّث العمولة بعد موافقة المدير.' : 'Commission updates after admin approval.')}
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={selectedTransferRepresentative} onValueChange={setSelectedTransferRepresentative}>
+            <SelectTrigger>
+              <SelectValue placeholder={language === 'ar' ? 'اختر مندوب المبيعات' : 'Select a sales representative'} />
+            </SelectTrigger>
+            <SelectContent>
+              {salesmen
+                .filter((salesman: any) => salesman.active && salesman.employee_id)
+                .map((salesman: any) => (
+                  <SelectItem key={salesman.id} value={String(salesman.id)}>
+                    {(language === 'ar' ? salesman.name_ar || salesman.name : salesman.name) || salesman.employee_name}
+                    {' · '}{Number(salesman.commission_rate || 0)}%
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoiceToTransfer(null)}>
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={submitTransferInvoice} disabled={!selectedTransferRepresentative || transferInvoiceMutation.isPending}>
+              {transferInvoiceMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {isAdmin
+                ? (language === 'ar' ? 'تسجيل التحويل' : 'Transfer invoice')
+                : (language === 'ar' ? 'إرسال طلب التحويل' : 'Submit transfer request')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Print Dialog Modal */}
       {showPrintDialog && invoiceToPrint && (

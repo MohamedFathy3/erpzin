@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { cn } from '@/lib/utils';
-import { Minus, Plus, Trash2, CreditCard, Pause, AlertCircle, Info, Percent } from 'lucide-react';
+import { Minus, Plus, Trash2, CreditCard, Pause, AlertCircle, Info, Percent, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ interface POSCartProps {
   onClearCart: () => void;
   onHoldOrder: () => void;
   onPay: () => void;
+  onComplimentary: () => void;
   heldOrdersCount: number;
   // ✅ إضافات للخصومات
   invoiceDiscountPercentage?: number;
@@ -48,6 +49,7 @@ const POSCart: React.FC<POSCartProps> = ({
   onClearCart,
   onHoldOrder,
   onPay,
+  onComplimentary,
   heldOrdersCount,
   invoiceDiscountPercentage = 0,
   invoiceDiscountAmount = 0,
@@ -320,20 +322,31 @@ const POSCart: React.FC<POSCartProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className={cn('grid gap-2', canManageDiscounts ? 'grid-cols-3' : 'grid-cols-2')}>
             <Button
               variant="outline"
               onClick={onHoldOrder}
               disabled={items.length === 0}
-              className="flex-1 h-12 border-warning text-warning hover:bg-warning hover:text-warning-foreground"
+              className="h-12 border-warning text-warning hover:bg-warning hover:text-warning-foreground"
             >
               <Pause size={18} className="me-2" />
               <span>{language === 'ar' ? 'تعليق' : 'Hold'}</span>
             </Button>
+            {canManageDiscounts && (
+              <Button
+                variant="outline"
+                onClick={onComplimentary}
+                disabled={items.length === 0}
+                className="h-12 border-amber-500 text-amber-700 hover:bg-amber-500/10"
+              >
+                <Gift size={18} className="me-2" />
+                <span>{language === 'ar' ? 'مجاملات' : 'Complimentary'}</span>
+              </Button>
+            )}
             <Button
               onClick={onPay}
               disabled={items.length === 0}
-              className="flex-1 h-12 bg-success hover:bg-success/90 text-success-foreground"
+              className="h-12 bg-success hover:bg-success/90 text-success-foreground"
             >
               <CreditCard size={18} className="me-2" />
               <span>{language === 'ar' ? 'دفع' : 'Pay'}</span>

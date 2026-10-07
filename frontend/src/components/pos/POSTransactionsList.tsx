@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import PrintableInvoice from '@/components/ui/PrintableInvoice';
@@ -41,7 +42,8 @@ import {
   Tag,
   Share2,
   CheckCircle,
-  XCircle
+  XCircle,
+  Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -75,9 +77,9 @@ interface Payment {
 }
 
 interface Amounts {
-  total: string;
-  paid: string;
-  remaining: string;
+  total: string | number;
+  paid: string | number;
+  remaining: string | number;
 }
 
 interface Sale {
@@ -94,6 +96,8 @@ interface Sale {
   discount_percentage?: number;
   discount_amount?: number;
   is_complimentary?: boolean;
+  returned_amount?: number;
+  return_status?: 'none' | 'partial' | 'full';
 }
 
 // ✅ تحديث واجهة ReturnItem
@@ -158,6 +162,12 @@ interface POSTransactionsListProps {
 
 const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) => {
   const { language } = useLanguage();
+  const queryClient = useQueryClient();
+  const { user, permissions } = useAuth();
+  const canManageComplimentary = Boolean(user?.super_admin)
+    || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase())
+    || permissions.includes('*')
+    || permissions.includes('sales.pos_discount.apply');
 
   // ========== State ==========
   const [activeTab, setActiveTab] = useState<'sales' | 'returns'>('sales');
@@ -239,6 +249,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     customer: language === 'ar' ? 'العميل' : 'Customer',
     cashier: language === 'ar' ? 'الكاشير' : 'Cashier',
     total: language === 'ar' ? 'الإجمالي' : 'Total',
+    returnedAmount: language === 'ar' ? 'المرتجع' : 'Returned',
     paid: language === 'ar' ? 'المدفوع' : 'Paid',
     remaining: language === 'ar' ? 'المتبقي' : 'Remaining',
     actions: language === 'ar' ? 'إجراءات' : 'Actions',
@@ -301,7 +312,13 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   });
   const transferActionMutation = useMutation({
     mutationFn: ({ id, action }: { id: number; action: 'approve' | 'reject' }) => api.post(`/invoice-transfer-requests/${id}/${action}`),
-    onSuccess: () => transferRequestsQuery.refetch(),
+    onSuccess: async () => {
+      await Promise.all([
+        transferRequestsQuery.refetch(),
+        refetchSales(),
+        queryClient.invalidateQueries({ queryKey: ['sales-invoices'] }),
+      ]);
+    },
     onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'هذا الإجراء متاح للمدير فقط' : 'This action is available to admins only')),
   });
 
@@ -328,6 +345,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         return [];
       }
     }
+  });
+  const makeComplimentaryMutation = useMutation({
+    mutationFn: (invoiceId: number) => api.post(`/invoices/${invoiceId}/complimentary`),
+    onSuccess: async () => {
+      await refetchSales();
+      window.alert(language === 'ar' ? 'تم تحويل الفاتورة إلى مجاملة ورد المبلغ المسدد.' : 'Invoice converted to complimentary and paid amounts refunded.');
+    },
+    onError: (error: any) => window.alert(error?.response?.data?.message || (language === 'ar' ? 'تعذر تحويل الفاتورة إلى مجاملة' : 'Could not convert invoice to complimentary')),
   });
 
   // ✅ جلب المرتجعات
@@ -892,7 +917,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto scroll-smooth">
-                <div className="min-w-[1200px]">
+                <div className="min-w-[1320px]">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
@@ -902,13 +927,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.cashier}</TableHead>
                         <TableHead className="w-[250px] whitespace-nowrap">{t.paymentMethod}</TableHead>
                         <TableHead className="w-[300px] whitespace-nowrap text-right">{t.total}</TableHead>
-                        <TableHead className="w-[100px] whitespace-nowrap text-center">{t.actions}</TableHead>
+                        <TableHead className="w-[140px] whitespace-nowrap text-right">{t.returnedAmount}</TableHead>
+                        <TableHead className="w-[140px] whitespace-nowrap text-center">{t.actions}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {salesLoading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
+                          <TableCell colSpan={8} className="text-center py-8">
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin text-primary" />
                               <span className="text-muted-foreground">{t.loading}</span>
@@ -917,7 +943,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                         </TableRow>
                       ) : filteredSales.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             <Receipt className="mx-auto h-12 w-12 mb-4 opacity-20" />
                             <p>{t.noData}</p>
                           </TableCell>
@@ -965,10 +991,15 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                               </div>
                             </TableCell>
                             <TableCell>
-                              {renderPaymentMethods(sale.payments)}
+                              {sale.is_complimentary
+                                ? <Badge variant="outline" className="border-amber-500 text-amber-700">{language === 'ar' ? 'مجاملات' : 'Complimentary'}</Badge>
+                                : renderPaymentMethods(sale.payments)}
                             </TableCell>
                             <TableCell className="text-right">
                               {renderAmounts(sale.amounts)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-orange-600">
+                              {sale.returned_amount ? formatNumber(sale.returned_amount) : '-'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
@@ -994,6 +1025,24 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                                 >
                                   <Printer size={16} />
                                 </Button>
+                                {canManageComplimentary && !sale.is_complimentary && !sale.returned_amount && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-amber-600"
+                                    title={language === 'ar' ? 'تحويل الفاتورة إلى مجاملة ورد المبلغ' : 'Convert to complimentary and refund payment'}
+                                    disabled={makeComplimentaryMutation.isPending}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      const confirmed = window.confirm(language === 'ar'
+                                        ? `سيتم تحويل الفاتورة ${sale.invoice_number} إلى مجاملة، ورد المدفوعات حسب وسيلة الدفع وعكس القيود. هل تريد المتابعة؟`
+                                        : `Convert ${sale.invoice_number} to complimentary, refund payments by their original method, and reverse its journal entries?`);
+                                      if (confirmed) makeComplimentaryMutation.mutate(sale.id);
+                                    }}
+                                  >
+                                    <Gift size={16} />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"

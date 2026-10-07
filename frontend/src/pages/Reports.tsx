@@ -174,6 +174,7 @@ interface PurchaseInvoice {
   discount_total: string;
   tax_total: string;
   total_amount: string;
+  net_amount?: number;
   items: any[];
   created_at: string;
 }
@@ -346,6 +347,28 @@ interface ChartDataPoint {
   orders: number;
 }
 
+interface UnifiedFinancialReport {
+  summary: {
+    sales: number;
+    sales_cost: number;
+    gross_profit: number;
+    purchases: number;
+    purchase_returns: number;
+    expenses: number;
+    revenues: number;
+    net_profit: number;
+    sales_count: number;
+    purchase_count: number;
+  };
+  daily: Array<{
+    date: string;
+    revenue: number;
+    cost: number;
+    result: number;
+    invoice_count: number;
+  }>;
+}
+
 interface CategoryStock {
   name: string;
   stock: number;
@@ -370,7 +393,7 @@ const Reports = () => {
   const { language, direction } = useLanguage();
   const { formatCurrency: formatRegionalCurrency } = useRegionalSettings();
   const printRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('dailyReport');
   const [dateRange, setDateRange] = useState('month');
   const [startDate, setStartDate] = useState(format(subMonths(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -426,6 +449,20 @@ const Reports = () => {
   const dateTo = format(range.end, 'yyyy-MM-dd');
   const dateTimeFrom = `${dateFrom} 00:00:00`;
   const dateTimeTo = `${dateTo} 23:59:59`;
+
+  const { data: unifiedFinancialReport, isLoading: dailyReportLoading, refetch: refetchDailyReport } = useQuery<UnifiedFinancialReport>({
+    queryKey: ['unified-financial-report', dateFrom, dateTo, selectedBranch],
+    queryFn: async () => {
+      const response = await api.get('/reports/unified-financial', {
+        params: {
+          from: dateFrom,
+          to: dateTo,
+          ...(selectedBranch !== 'all' ? { branch_id: selectedBranch } : {}),
+        },
+      });
+      return response.data.data;
+    },
+  });
 
   // ==================== Fetch Branches ====================
   const { data: branches = [], isLoading: loadingBranches } = useQuery<Branch[]>({
@@ -638,7 +675,7 @@ const Reports = () => {
     const totalOrders = totalRegularOrders + totalPOSOrders;
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-    const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + Number(inv.net_amount ?? inv.total_amount), 0);
     const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
     const totalRevenues = revenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 
@@ -1600,6 +1637,10 @@ const Reports = () => {
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="print:hidden">
           <TabsList className="w-full flex-wrap h-auto p-1 bg-muted/50">
+            <TabsTrigger value="dailyReport" className="gap-2 data-[state=active]:bg-violet-600 data-[state=active]:text-white">
+              <Calendar size={16} />
+              {language === 'ar' ? 'التقرير اليومي' : 'Daily report'}
+            </TabsTrigger>
             <TabsTrigger value="dashboard" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Activity size={16} />
               {t.dashboard}
@@ -1637,6 +1678,49 @@ const Reports = () => {
               {language === 'ar' ? 'حركة العملاء/الموردين' : 'Customer/Supplier'}
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="dailyReport" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <div>
+                  <CardTitle>{language === 'ar' ? 'التقرير اليومي الشامل' : 'Comprehensive daily report'}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">{dateFrom} — {dateTo}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refetchDailyReport()} disabled={dailyReportLoading}>
+                  <Activity size={15} className={dailyReportLoading ? 'me-2 animate-spin' : 'me-2'} />
+                  {language === 'ar' ? 'تحديث' : 'Refresh'}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'الإيرادات' : 'Revenue'}</p><p className="mt-1 text-xl font-bold text-emerald-600">{formatCurrency(unifiedFinancialReport?.summary.sales ?? 0)}</p></CardContent></Card>
+                  <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'التكلفة' : 'Cost'}</p><p className="mt-1 text-xl font-bold text-amber-600">{formatCurrency(unifiedFinancialReport?.summary.sales_cost ?? 0)}</p></CardContent></Card>
+                  <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'النتيجة' : 'Result'}</p><p className="mt-1 text-xl font-bold text-violet-600">{formatCurrency(unifiedFinancialReport?.summary.gross_profit ?? 0)}</p></CardContent></Card>
+                  <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</p><p className="mt-1 text-xl font-bold">{formatNumber(unifiedFinancialReport?.summary.sales_count ?? 0)}</p></CardContent></Card>
+                </div>
+                <div className="h-[340px] rounded-lg border p-3">
+                  {dailyReportLoading ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{language === 'ar' ? 'جاري تحميل التقرير...' : 'Loading report...'}</div>
+                  ) : (unifiedFinancialReport?.daily?.length ?? 0) > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={unifiedFinancialReport?.daily || []} margin={{ top: 12, right: 12, left: 4, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={formatCompactNumber} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        <Legend />
+                        <Bar dataKey="revenue" name={language === 'ar' ? 'الإيرادات' : 'Revenue'} fill="#10b981" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="cost" name={language === 'ar' ? 'التكلفة' : 'Cost'} fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="result" name={language === 'ar' ? 'النتيجة' : 'Result'} fill="#6366f1" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد بيانات في الفترة المحددة' : 'No data for the selected period'}</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6 mt-6">

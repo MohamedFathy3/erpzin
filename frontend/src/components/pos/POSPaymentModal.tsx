@@ -44,11 +44,14 @@ interface CartItem {
   sku: string;
   sizeName?: string;
   colorName?: string;
+  unitId?: number;
+  colorId?: number;
   discount_percentage?: number;
 }
 
 interface PaymentModalProps {
   isOpen: boolean;
+  autoSaveComplimentary?: boolean;
   onClose: () => void;
   total: number;
   subtotal: number;
@@ -86,6 +89,7 @@ interface PaymentModalProps {
 
 const POSPaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
+  autoSaveComplimentary = false,
   onClose,
   total,
   subtotal,
@@ -126,6 +130,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   const { formatCurrency } = useRegionalSettings();
 
   const invoiceRef = useRef<HTMLDivElement>(null);
+  const autoSaveHandledRef = useRef(false);
+  const saveAndPrintRef = useRef<(type: 'save' | 'print' | 'both', forceComplimentary?: boolean) => Promise<void>>(async () => {});
 
   const { activeTaxRates } = useCurrencyTax();
   const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
@@ -225,8 +231,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
- const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
-  if (isComplimentary && (!customer?.id || !Number.isSafeInteger(Number(customer.id)) || !customer.name?.trim())) {
+ const handleSaveAndPrint = async (type: 'save' | 'print' | 'both', forceComplimentary = false) => {
+  const complimentary = forceComplimentary || isComplimentary;
+  const finalAmountDue = complimentary ? 0 : total;
+  if (complimentary && (!customer?.id || !Number.isSafeInteger(Number(customer.id)) || !customer.name?.trim())) {
     toast({
       title: language === 'ar' ? 'اختر العميل أولاً' : 'Select a customer first',
       description: language === 'ar' ? 'فاتورة المجاملات تتطلب اختيار عميل مسجل.' : 'A complimentary invoice requires a registered customer.',
@@ -237,7 +245,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   }
   let payments: { method: string; amount: number }[] = [];
 
-  if (isComplimentary) {
+  if (complimentary) {
     payments = [];
   } else if (paymentMethod === 'split') {
     Object.entries(splitAmounts).forEach(([method, amount]) => {
@@ -254,10 +262,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
 
   payments = payments.filter(payment => payment.amount > 0);
 
-  const totalDiscountPercentage = calculateTotalDiscountPercentage();
+  const totalDiscountPercentage = complimentary ? 100 : calculateTotalDiscountPercentage();
   const originalTotal = getOriginalTotal();
-  const totalDiscountAmount = isComplimentary ? originalTotal : originalTotal - total;
-  const invoiceDiscountToSave = isComplimentary ? 100 : invoiceDiscountPercentage;
+  const totalDiscountAmount = complimentary ? originalTotal : originalTotal - total;
+  const invoiceDiscountToSave = complimentary ? 100 : invoiceDiscountPercentage;
 
   setIsProcessing(true);
   try {
@@ -268,17 +276,19 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         product_id: parseInt(item.id),
         quantity: item.quantity,
         price: item.price,
+        product_unit_id: item.unitId || null,
+        color_id: item.colorId || null,
         color: item.colorName || null,
         size: item.sizeName || null,
         discount_percentage: item.discount_percentage || 0,
         discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2))
       })),
       discount_percentage: invoiceDiscountToSave,
-      is_complimentary: isComplimentary,
+      is_complimentary: complimentary,
       payments: payments,
-      subtotal: isComplimentary ? 0 : subtotal,
-      tax: isComplimentary ? 0 : tax,
-      total: amountDue,
+      subtotal: complimentary ? 0 : subtotal,
+      tax: complimentary ? 0 : tax,
+      total: finalAmountDue,
       shift_id: shiftId,
       branch_id: branchId,
       delivery_id: parseInt(String(deliveryPerson?.id)) || null,
@@ -293,16 +303,16 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       const offlineInvoiceNumber = `INV-OFFLINE-${Date.now()}`;
       const offlineId = await saveOrderOffline({
         items: cartItems,
-        subtotal: isComplimentary ? 0 : subtotal,
-        tax: isComplimentary ? 0 : tax,
-        total: amountDue,
+        subtotal: complimentary ? 0 : subtotal,
+        tax: complimentary ? 0 : tax,
+        total: finalAmountDue,
         customer_id: customer?.id,
         delivery_id: deliveryPerson?.id,
         payment_method: paymentMethod,
         payments,
         invoice_number: offlineInvoiceNumber,
         discount_percentage: invoiceDiscountToSave,
-        is_complimentary: isComplimentary,
+        is_complimentary: complimentary,
         sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
       });
 
@@ -389,10 +399,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           colorName: item.colorName,
           colorNameAr: item.colorName,
         })),
-        subtotal: isComplimentary ? originalTotal : subtotal,
-        tax: isComplimentary ? 0 : tax,
+        subtotal: complimentary ? originalTotal : subtotal,
+        tax: complimentary ? 0 : tax,
         taxRate: defaultTax?.rate || 0,
-        total: amountDue,
+        total: finalAmountDue,
         payments: payments,
         change: calculateChange(),
         totalDiscountPercentage: totalDiscountPercentage,
@@ -401,12 +411,12 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         discount_percentage: totalDiscountPercentage,
         discount_amount: totalDiscountAmount,
         amounts: {
-          total: amountDue,
+          total: finalAmountDue,
           paid: payments.reduce((sum, payment) => sum + payment.amount, 0),
-          remaining: amountDue - payments.reduce((sum, payment) => sum + payment.amount, 0),
+          remaining: finalAmountDue - payments.reduce((sum, payment) => sum + payment.amount, 0),
         },
-        is_complimentary: isComplimentary,
-        isComplimentary,
+        is_complimentary: complimentary,
+        isComplimentary: complimentary,
       };
 
       console.log('📄 Print data with invoice number:', printData.invoice_number);
@@ -414,7 +424,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       setCompletedInvoice({ payments, printData });
 
       if (type === 'save') {
-        onComplete(payments, invoiceNumberFromServer, isComplimentary);  // إرسال رقم الفاتورة وعلامة المجاملة
+        onComplete(payments, invoiceNumberFromServer, complimentary);
       } else if (type === 'print') {
         handlePrint();
       } else if (type === 'both') {
@@ -437,6 +447,22 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     setIsProcessing(false);
   }
 };
+
+  useEffect(() => {
+    saveAndPrintRef.current = handleSaveAndPrint;
+  });
+
+  useEffect(() => {
+    if (!isOpen || !autoSaveComplimentary) {
+      autoSaveHandledRef.current = false;
+      return;
+    }
+    if (autoSaveHandledRef.current) return;
+
+    autoSaveHandledRef.current = true;
+    setIsComplimentary(true);
+    void saveAndPrintRef.current('save', true);
+  }, [isOpen, autoSaveComplimentary]);
 
   const handleComplete = () => handleSaveAndPrint('save');
   const handleSaveAndPrintNow = () => handleSaveAndPrint('both');

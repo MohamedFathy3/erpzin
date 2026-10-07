@@ -137,6 +137,8 @@ const POS: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
   const [showPayment, setShowPayment] = useState(false);
+  const [autoSaveComplimentary, setAutoSaveComplimentary] = useState(false);
+  const [pendingComplimentaryInvoice, setPendingComplimentaryInvoice] = useState(false);
   const [showHeldOrders, setShowHeldOrders] = useState(false);
   const [showVariantSelector, setShowVariantSelector] = useState(false);
   const [showCustomerSelector, setShowCustomerSelector] = useState(false);
@@ -699,6 +701,22 @@ const POS: React.FC = () => {
   
   const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
   const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax();
+
+  const handleComplimentaryInvoice = () => {
+    if (!canManagePosDiscounts || cartItems.length === 0) return;
+    if (!selectedCustomer) {
+      setPendingComplimentaryInvoice(true);
+      setShowCustomerSelector(true);
+      toast({
+        title: language === 'ar' ? 'اختر العميل أولاً' : 'Select a customer first',
+        description: language === 'ar' ? 'فاتورة المجاملات تتطلب عميلًا مسجلًا.' : 'A complimentary invoice requires a registered customer.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setAutoSaveComplimentary(true);
+    setShowPayment(true);
+  };
 
   // ==================== Payment Handlers ====================
 const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string, isComplimentary = false) => {
@@ -1345,6 +1363,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               onClearCart={clearCart}
               onHoldOrder={holdOrder}
               onPay={() => setShowPayment(true)}
+              onComplimentary={handleComplimentaryInvoice}
               heldOrdersCount={heldOrders.length}
               invoiceDiscountPercentage={invoiceDiscountPercentage}
               invoiceDiscountAmount={invoiceDiscountAmount}
@@ -1385,7 +1404,11 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
         {/* Modals */}
         <POSPaymentModal
           isOpen={showPayment}
-          onClose={() => setShowPayment(false)}
+          autoSaveComplimentary={autoSaveComplimentary}
+          onClose={() => {
+            setShowPayment(false);
+            setAutoSaveComplimentary(false);
+          }}
           total={calculateTotal()}
           subtotal={calculateSubtotalAfterAllDiscounts()}
           tax={calculateTax()}
@@ -1394,6 +1417,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
           onRequestCustomer={() => setShowCustomerSelector(true)}
           onComplete={(payments, invoiceNum, complimentary) => {
             console.log('📄 Invoice Number from modal:', invoiceNum);
+            setAutoSaveComplimentary(false);
             handlePaymentComplete(payments, invoiceNum, complimentary);
           }}
           customer={selectedCustomer ? { 
@@ -1458,8 +1482,18 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
         <POSCustomerSelector
           isOpen={showCustomerSelector}
-          onClose={() => setShowCustomerSelector(false)}
-          onSelectCustomer={setSelectedCustomer}
+          onClose={() => {
+            setShowCustomerSelector(false);
+            if (pendingComplimentaryInvoice) setPendingComplimentaryInvoice(false);
+          }}
+          onSelectCustomer={(customer) => {
+            setSelectedCustomer(customer);
+            if (pendingComplimentaryInvoice) {
+              setPendingComplimentaryInvoice(false);
+              setAutoSaveComplimentary(true);
+              setShowPayment(true);
+            }
+          }}
           selectedCustomer={selectedCustomer}
           branchId={userBranch?.id || currentBranch?.id}
         />

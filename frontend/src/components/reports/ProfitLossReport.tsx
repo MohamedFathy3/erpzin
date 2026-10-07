@@ -355,7 +355,7 @@ const ProfitLossReport: React.FC = () => {
     const totalSales = regularSales + posSales;
     
     // Purchases (Cost of Goods Sold)
-    const totalPurchases = currentPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const totalPurchases = currentPurchases.reduce((sum, inv) => sum + Number(inv.net_amount ?? inv.total_amount), 0);
     
     // Expenses from /finance/index
     const totalExpenses = currentExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
@@ -397,7 +397,7 @@ const ProfitLossReport: React.FC = () => {
   // ==================== Calculate Previous Period Totals ====================
   const previousTotals = useMemo(() => {
     const prevRegularSales = previousSales.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-    const prevPurchases = previousPurchases.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const prevPurchases = previousPurchases.reduce((sum, inv) => sum + Number(inv.net_amount ?? inv.total_amount), 0);
     const prevExpenses = previousExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
     const prevRevenues = previousRevenues.reduce((sum, rev) => sum + Number(rev.amount), 0);
 

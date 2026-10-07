@@ -363,7 +363,8 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
     remaining: invoices.reduce((sum, inv) => {
       const total = Number(inv.total_amount);
       const paid = Number(inv.paid_amount || 0);
-      return sum + (total - paid);
+      const returned = Number(inv.returned_amount || 0);
+      return sum + Math.max(0, total - paid - returned);
     }, 0)
   };
 
@@ -372,7 +373,8 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
   const handlePayClick = (invoice: PurchaseInvoice) => {
     const total = Number(invoice.total_amount);
     const paid = Number(invoice.paid_amount || 0);
-    const remaining = total - paid;
+    const returned = Number(invoice.returned_amount || 0);
+    const remaining = Math.max(0, total - paid - returned);
 
     setSelectedInvoiceForPayment(invoice);
     setPaymentData({
@@ -557,6 +559,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                               <TableHead>{language === 'ar' ? 'موعد الاستحقاق' : 'Due date'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
+                              <TableHead className="text-end">{language === 'ar' ? 'المرتجع' : 'Returned'}</TableHead>
                               <TableHead className="text-end">{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
                               <TableHead>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
                               <TableHead>{language === 'ar' ? 'الإجراءات' : 'Actions'}</TableHead>
@@ -565,7 +568,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                           <TableBody>
                             {invoices.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                   {language === 'ar' ? 'لا توجد فواتير' : 'No invoices'}
                                 </TableCell>
                               </TableRow>
@@ -573,7 +576,8 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                               invoices.map((inv: PurchaseInvoice) => {
                                 const total = Number(inv.total_amount);
                                 const paid = Number(inv.paid_amount || 0);
-                                const remaining = total - paid;
+                                const returned = Number(inv.returned_amount || 0);
+                                const remaining = Math.max(0, total - paid - returned);
                                 const paymentStatus = inv.payment_status ||
                                   (remaining <= 0 ? 'paid' : remaining < total ? 'partial' : 'unpaid');
 
@@ -585,6 +589,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                     <TableCell>{formatDate(inv.due_date)}</TableCell>
                                     <TableCell className="text-end font-medium">{formatCurrency(total)}</TableCell>
                                     <TableCell className="text-end">{formatCurrency(paid)}</TableCell>
+                                    <TableCell className="text-end">{formatCurrency(returned)}</TableCell>
                                     <TableCell className="text-end font-medium text-destructive">{formatCurrency(remaining)}</TableCell>
                                     <TableCell>
                                       <Badge variant={
@@ -627,7 +632,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                   </TableRow>
                                   {expandedPaymentsInvoiceId === inv.id && (
                                     <TableRow>
-                                      <TableCell colSpan={8} className="bg-muted/30 p-3">
+                                      <TableCell colSpan={9} className="bg-muted/30 p-3">
                                         {!inv.payments?.length ? (
                                           <p className="py-3 text-center text-sm text-muted-foreground">
                                             {language === 'ar' ? 'لا توجد دفعات مسجلة على هذه الفاتورة.' : 'No payments recorded for this invoice.'}

@@ -46,12 +46,14 @@ interface InvoiceTableRow {
   supplier_name: string;
   treasury_name: string;
   total_amount: number;
+  net_amount: number;
   payment_method: string;
   discount_total: string;
   invoice_date: string;
   due_date: string;
   items_count: number;
   paid_amount: number;
+  returned_amount: number;
   remaining_amount: number;
 }
 
@@ -157,8 +159,13 @@ const Purchasing = () => {
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,
     items_count: invoice.items?.length || 0,
+    net_amount: Number(invoice.net_amount ?? Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.returned_amount || 0))),
     paid_amount: invoice.paid_amount,
-    remaining_amount: invoice.remaining_amount,
+    returned_amount: Number(invoice.returned_amount || 0),
+    remaining_amount: Math.max(
+      0,
+      Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0) - Number(invoice.returned_amount || 0)
+    ),
   }));
 
   const paginationMeta = invoicesResponse?.meta;
@@ -298,8 +305,8 @@ const Purchasing = () => {
   const purchaseReturnsCount = purchaseReturnsResponse?.meta?.total || purchaseReturnsResponse?.data?.length || 0;
 
   // ========== حساب الإحصائيات ==========
-  const totalBalance = suppliers.reduce((sum: number, s: Supplier) => sum + Number(s.credit_limit || 0), 0);
-  const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.total_amount || 0), 0);
+  const totalBalance = invoicesList.reduce((sum: number, invoice: InvoiceTableRow) => sum + Number(invoice.remaining_amount || 0), 0);
+  const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.net_amount || 0), 0);
 
   const stats = [
     {
@@ -498,6 +505,7 @@ const Purchasing = () => {
                         <TableHead>{language === 'ar' ? 'المبلغ' : 'Amount'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المدفوع' : 'Paid'}</TableHead>
                         <TableHead>{language === 'ar' ? 'الخصم' : 'Discount'}</TableHead>
+                        <TableHead>{language === 'ar' ? 'المرتجع' : 'Returned'}</TableHead>
                         <TableHead>{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
                         <TableHead>{language === 'ar' ? 'طريقة الدفع' : 'Payment'}</TableHead>
                         <TableHead>{language === 'ar' ? 'الأصناف' : 'Items'}</TableHead>
@@ -508,7 +516,7 @@ const Purchasing = () => {
                     <TableBody>
                       {invoicesLoading ? (
                         <TableRow>
-                          <TableCell colSpan={11} className="text-center py-8">
+                          <TableCell colSpan={13} className="text-center py-8">
                             <div className="flex justify-center">
                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                             </div>
@@ -516,7 +524,7 @@ const Purchasing = () => {
                         </TableRow>
                       ) : invoicesList.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                             {language === 'ar' ? 'لا توجد فواتير' : 'No invoices yet'}
                           </TableCell>
                         </TableRow>
@@ -527,10 +535,13 @@ const Purchasing = () => {
                             <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
                             <TableCell>{inv.supplier_name}</TableCell>
                             <TableCell>{inv.treasury_name}</TableCell>
-                            <TableCell>{inv.total_amount.toLocaleString()} YER</TableCell>
+                            <TableCell>{inv.net_amount.toLocaleString()} YER</TableCell>
                             <TableCell className="text-green-600">{inv.paid_amount.toLocaleString()} YER</TableCell>
                             <TableCell className="text-red-500 font-medium">
                               -{inv.discount_total?.toLocaleString() || 0} YER
+                            </TableCell>
+                            <TableCell className="text-orange-600 font-medium">
+                              {inv.returned_amount > 0 ? inv.returned_amount.toLocaleString() : '-'} YER
                             </TableCell>
                             <TableCell className={inv.remaining_amount > 0 ? 'text-orange-500' : ''}>
                               {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} YER

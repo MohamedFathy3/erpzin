@@ -97,6 +97,7 @@ interface SalesInvoice {
   due_date: string | null;
   note: string | null;
   total_amount: string;
+  net_amount?: number;
   items: any[];
   created_at: string;
 }
@@ -374,7 +375,7 @@ const CustomerSupplierMovement: React.FC = () => {
     };
   }
   
-  const amount = Number(invoice.total_amount) || 0;
+  const amount = Number(invoice.net_amount ?? invoice.total_amount) || 0;
   acc[supplierId].totalAmount += amount;
   acc[supplierId].invoiceCount += 1;
   

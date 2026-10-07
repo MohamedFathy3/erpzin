@@ -186,7 +186,7 @@ export const useCategories = () => {
 
 // ========== Products Hook with Offline Support ==========
 export const useProducts = (categoryId?: string | null) => {
-  const { userBranch, currentBranch } = useApp();
+  const { userBranch, currentBranch, loadingBranches } = useApp();
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [offlineProducts, setOfflineProducts] = useState<any[]>([]);
@@ -216,18 +216,16 @@ export const useProducts = (categoryId?: string | null) => {
     }
   }, [isOfflineMode, categoryId]);
 
+  const branchId = userBranch?.id || currentBranch?.id;
+
   // Online query
   const { data: onlineProducts, isLoading: onlineLoading } = useQuery<Product[]>({
     queryKey: ['pos-products', categoryId, userBranch?.id, currentBranch?.id],
+    enabled: !isOfflineMode && !loadingBranches && Boolean(branchId),
     queryFn: async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const payload: any = {};
-
-        const branchId = userBranch?.id || currentBranch?.id;
-        if (branchId) {
-          payload.branch_id = branchId;
-        }
+        const payload: any = { branch_id: branchId };
 
         if (categoryId && categoryId !== 'all' && categoryId !== '') {
           payload.category_id = parseInt(categoryId);

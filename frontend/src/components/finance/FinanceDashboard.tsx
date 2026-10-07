@@ -97,7 +97,9 @@ interface PurchaseInvoice {
     name: string | null;
   };
   total_amount: string;
+  net_amount?: number;
   paid_amount?: string;
+  returned_amount?: number;
   remaining_amount?: string;
   payment_status: string;
   invoice_date: string;
@@ -372,8 +374,9 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     const profitMargin = totalSalesAmount > 0 ? (netProfit / totalSalesAmount) * 100 : 0;
 
     const totalPayables = purchaseInvoices.reduce((sum, inv) => {
-      const remaining = inv.remaining_amount ? Number(inv.remaining_amount) : 
-                       (Number(inv.total_amount) - Number(inv.paid_amount || 0));
+      const remaining = inv.remaining_amount !== undefined
+        ? Number(inv.remaining_amount)
+        : Math.max(0, Number(inv.total_amount) - Number(inv.paid_amount || 0) - Number(inv.returned_amount || 0));
       return sum + remaining;
     }, 0);
 

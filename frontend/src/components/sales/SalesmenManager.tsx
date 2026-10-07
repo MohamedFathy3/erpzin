@@ -519,13 +519,13 @@ const deleteMutation = useMutation({
       </Dialog>
 
       <Dialog open={Boolean(reportSalesman)} onOpenChange={(open) => !open && setReportSalesman(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90dvh] w-[min(96vw,80rem)] max-w-5xl flex-col overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b px-5 py-4">
             <DialogTitle>
               {language === 'ar' ? 'تقرير المندوب:' : 'Representative report:'} {reportSalesman?.name}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label>{language === 'ar' ? 'من تاريخ' : 'From'}</Label>

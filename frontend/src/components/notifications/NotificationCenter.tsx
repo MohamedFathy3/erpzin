@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, Bell, Check, CheckCircle, Info, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -17,7 +18,11 @@ type NotificationItem = {
   created_at: string;
 };
 
-const NotificationCenter: React.FC = () => {
+interface NotificationCenterProps {
+  displayMode?: 'popover' | 'page';
+}
+
+const NotificationCenter: React.FC<NotificationCenterProps> = ({ displayMode = 'popover' }) => {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -52,6 +57,72 @@ const NotificationCenter: React.FC = () => {
       ? <AlertTriangle className="h-4 w-4 text-yellow-600" />
       : <Info className="h-4 w-4 text-primary" />;
 
+  const notificationList = notifications.length === 0 ? (
+    <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
+      <Bell size={32} className="mb-2 opacity-50" />
+      <p className="text-sm">{text.empty}</p>
+    </div>
+  ) : (
+    <div className="divide-y">
+      {notifications.map(item => (
+        <div
+          key={item.id}
+          className={cn('cursor-pointer p-4 transition-colors hover:bg-muted/50', !item.read_at && 'bg-primary/5')}
+          onClick={() => {
+            if (!item.read_at) markRead.mutate(item.id);
+            if (item.data.url) window.location.href = item.data.url;
+          }}
+        >
+          <div className="flex items-start gap-3">
+            {icon(item.data.type || item.type)}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{item.data.title || 'Notification'}</p>
+                {!item.read_at && <Badge variant="secondary">{language === 'ar' ? 'جديد' : 'New'}</Badge>}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{item.data.message || ''}</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">{relative(item.created_at)}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const notificationActions = (
+    <div className="flex items-center gap-1">
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()} title={text.title}>
+        <RefreshCw size={14} className={cn(isLoading && 'animate-spin')} />
+      </Button>
+      {unreadCount > 0 && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => markAll.mutate()}>
+          <Check size={14} className="me-1" />{text.all}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (displayMode === 'page') {
+    return (
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+            <div className="flex items-center gap-2">
+              <Bell size={18} className="text-primary" />
+              <h3 className="font-semibold">{text.title}</h3>
+              <Badge variant="secondary">{notifications.length}</Badge>
+              {unreadCount > 0 && <Badge variant="destructive">{unreadCount}</Badge>}
+            </div>
+            {notificationActions}
+          </div>
+          <ScrollArea className="h-[min(60vh,640px)]">
+            {notificationList}
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -67,30 +138,10 @@ const NotificationCenter: React.FC = () => {
             <h3 className="font-semibold">{text.title}</h3>
             {unreadCount > 0 && <Badge variant="secondary">{unreadCount}</Badge>}
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => refetch()}><RefreshCw size={14} className={cn(isLoading && 'animate-spin')} /></Button>
-            {unreadCount > 0 && <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => markAll.mutate()}><Check size={14} className="me-1" />{text.all}</Button>}
-          </div>
+          {notificationActions}
         </div>
         <ScrollArea className="h-[400px]">
-          {notifications.length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center text-muted-foreground"><Bell size={32} className="mb-2 opacity-50" /><p className="text-sm">{text.empty}</p></div>
-          ) : (
-            <div className="divide-y">
-              {notifications.map(item => (
-                <div key={item.id} className={cn('cursor-pointer p-4 transition-colors hover:bg-muted/50', !item.read_at && 'bg-primary/5')} onClick={() => { if (!item.read_at) markRead.mutate(item.id); if (item.data.url) window.location.href = item.data.url; }}>
-                  <div className="flex items-start gap-3">
-                    {icon(item.data.type || item.type)}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{item.data.title || 'Notification'}</p>
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.data.message || ''}</p>
-                      <p className="mt-2 text-[10px] text-muted-foreground">{relative(item.created_at)}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {notificationList}
         </ScrollArea>
       </PopoverContent>
     </Popover>
