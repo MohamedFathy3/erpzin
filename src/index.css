@@ -7,8 +7,8 @@
 @layer base {
   :root {
     /* Fusion X ERP Design System - Deep Navy, Electric Cyan & Violet */
-    --background: 210 20% 98%;
-    --foreground: 217 47% 19%;
+    --background: 210 29% 97%;
+    --foreground: 222 32% 17%;
 
     --card: 0 0% 100%;
     --card-foreground: 217 47% 19%;
@@ -17,17 +17,17 @@
     --popover-foreground: 217 47% 19%;
 
     /* Navy Blue Primary */
-    --primary: 217 47% 19%;
+    --primary: 222 47% 25%;
     --primary-foreground: 0 0% 100%;
 
     /* Light Gray Secondary */
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 217 47% 19%;
+    --secondary: 210 27% 94%;
+    --secondary-foreground: 222 32% 17%;
 
-    --muted: 210 15% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 210 24% 93%;
+    --muted-foreground: 215 16% 44%;
 
-    --accent: 188 92% 44%;
+    --accent: 161 72% 39%;
     --accent-foreground: 0 0% 100%;
 
     /* Success Green Gradient Colors */
@@ -44,21 +44,21 @@
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 47% 19%;
+    --border: 214 24% 88%;
+    --input: 214 24% 84%;
+    --ring: 222 47% 25%;
 
     --radius: 0.625rem;
 
     /* Sidebar - Dark Navy */
-    --sidebar-background: 217 47% 12%;
+    --sidebar-background: 222 47% 14%;
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 188 92% 54%;
+    --sidebar-primary: 161 72% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 47% 18%;
+    --sidebar-accent: 222 38% 22%;
     --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 217 40% 20%;
-    --sidebar-ring: 188 92% 54%;
+    --sidebar-border: 222 35% 24%;
+    --sidebar-ring: 161 72% 56%;
     --sidebar-muted: 217 30% 35%;
 
     /* Charts */
@@ -193,11 +193,11 @@
   }
 
   .sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200;
   }
 
   .sidebar-item-active {
-    @apply bg-sidebar-accent text-sidebar-primary font-medium;
+    @apply bg-sidebar-accent text-sidebar-primary font-semibold shadow-sm;
   }
 
   .kpi-card {

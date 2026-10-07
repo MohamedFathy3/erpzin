@@ -214,7 +214,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
         'h-screen bg-sidebar flex flex-col transition-all duration-300 relative flex-shrink-0',
         collapsed ? 'w-[72px]' : 'w-64'
       )}
-      style={{ background: 'linear-gradient(180deg, hsl(217 47% 14%) 0%, hsl(217 47% 10%) 100%)' }}
+      style={{ background: 'linear-gradient(180deg, hsl(222 47% 16%) 0%, hsl(222 47% 11%) 100%)' }}
     >
       {/* Logo */}
       <div className={cn(
@@ -259,7 +259,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        {!collapsed && <p className="mb-2 px-3 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/35">{language === 'ar' ? 'مساحة العمل' : 'Workspace'}</p>}
         {navItems.map((item) => (
           <NavItem
             key={item.id}

@@ -338,7 +338,7 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 shadow-sm">
+    <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border/70 bg-card/95 px-4 shadow-sm backdrop-blur sm:px-6">
       {/* Search Section - تصميم منفصل للأزرار */}
       <div className="flex items-center gap-3 flex-1 max-w-2xl relative" ref={searchRef}>
         {/* Search Type Buttons - خارج الـ Input */}
