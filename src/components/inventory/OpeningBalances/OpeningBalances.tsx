@@ -271,6 +271,7 @@ const OpeningBalances: React.FC = () => {
           ) : activeView === 'list' ? (
             <ProductList 
               products={products} 
+              branches={branches}
               onDelete={deleteBalance.mutate}
               isDeleting={deleteBalance.isPending}
               deletingId={deleteBalance.variables as number | null}

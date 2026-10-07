@@ -243,7 +243,8 @@ export const ProductList: React.FC<ProductListProps> = ({
                         size="sm"
                         onClick={() => handleOpenEdit(product)}
                         disabled={isDeleting || deletingId === product.id || isLoadingStock}
-                        className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                        className="gap-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                        aria-label={t.edit}
                         title={t.edit}
                       >
                         {isLoadingStock ? (
@@ -251,14 +252,23 @@ export const ProductList: React.FC<ProductListProps> = ({
                         ) : (
                           <Pencil size={14} />
                         )}
+                        <span className="hidden sm:inline">{t.edit}</span>
                       </Button>
 
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDelete(product.id)}
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            language === 'ar'
+                              ? `هل تريد حذف رصيد ${product.name_ar || product.name}؟`
+                              : `Delete the opening balance for ${product.name}?`
+                          );
+                          if (confirmed) onDelete(product.id);
+                        }}
                         disabled={deletingId === product.id}
-                        className="text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                        className="gap-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50"
+                        aria-label={t.delete}
                         title={t.delete}
                       >
                         {deletingId === product.id ? (
@@ -266,6 +276,7 @@ export const ProductList: React.FC<ProductListProps> = ({
                         ) : (
                           <Trash2 size={14} />
                         )}
+                        <span className="hidden sm:inline">{t.delete}</span>
                       </Button>
                     </div>
                   </TableCell>
