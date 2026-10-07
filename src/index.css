@@ -7,27 +7,27 @@
 @layer base {
   :root {
     /* Fusion X ERP Design System - Deep Navy, Electric Cyan & Violet */
-    --background: 210 29% 97%;
-    --foreground: 222 32% 17%;
+    --background: 210 24% 98%;
+    --foreground: 222 32% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 217 47% 19%;
+    --card-foreground: 222 32% 14%;
 
     --popover: 0 0% 100%;
     --popover-foreground: 217 47% 19%;
 
     /* Navy Blue Primary */
-    --primary: 222 47% 25%;
+    --primary: 222 42% 18%;
     --primary-foreground: 0 0% 100%;
 
     /* Light Gray Secondary */
-    --secondary: 210 27% 94%;
-    --secondary-foreground: 222 32% 17%;
+    --secondary: 210 22% 94%;
+    --secondary-foreground: 222 32% 14%;
 
-    --muted: 210 24% 93%;
-    --muted-foreground: 215 16% 44%;
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 16% 42%;
 
-    --accent: 161 72% 39%;
+    --accent: 174 72% 36%;
     --accent-foreground: 0 0% 100%;
 
     /* Success Green Gradient Colors */
@@ -44,11 +44,11 @@
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
 
-    --border: 214 24% 88%;
-    --input: 214 24% 84%;
-    --ring: 222 47% 25%;
+    --border: 214 22% 88%;
+    --input: 214 22% 84%;
+    --ring: 174 72% 36%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
     /* Sidebar - Dark Navy */
     --sidebar-background: 222 47% 14%;
@@ -635,3 +635,30 @@
 .app-sidebar .sidebar-item { border: 1px solid transparent; border-radius: .75rem; color: rgb(226 232 240 / .64); }
 .app-sidebar .sidebar-item:hover { background: rgb(255 255 255 / .06); color: #fff; }
 .app-sidebar .sidebar-item-active { background: linear-gradient(90deg, rgb(34 211 238 / .16), rgb(99 102 241 / .14)); border-color: rgb(103 232 249 / .12); color: #67e8f9; box-shadow: inset 3px 0 0 #22d3ee; }
+
+/* ERP-wide visual reset: one coherent product language across every module */
+.app-main { padding-block: 1.5rem; }
+.app-main .card-elevated, .app-main [class*="rounded-lg"][class*="border"], .app-main [class*="rounded-xl"][class*="border"], .app-main [class*="rounded-2xl"][class*="border"] { border-color: rgb(226 232 240 / .85); box-shadow: 0 1px 3px rgb(15 23 42 / .035); }
+.app-main .card-elevated, .app-main [class*="bg-card"] { background-color: hsl(var(--card)); }
+.app-main h1 { letter-spacing: -.025em; }
+.app-main h2, .app-main h3 { letter-spacing: -.015em; }
+.app-main button:not([role="switch"]), .app-main [role="button"] { transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.app-main button:not([role="switch"]):active, .app-main [role="button"]:active { transform: translateY(1px); }
+.app-main input, .app-main textarea, .app-main select, .app-main [data-radix-select-trigger] { min-height: 2.5rem; border-color: #e2e8f0; border-radius: .7rem; background: #fff; box-shadow: 0 1px 1px rgb(15 23 42 / .02); }
+.app-main input:focus, .app-main textarea:focus, .app-main [data-radix-select-trigger]:focus { border-color: #5eead4; box-shadow: 0 0 0 3px rgb(20 184 166 / .10); }
+.app-main table { border-collapse: separate; border-spacing: 0; }
+.app-main thead tr { background: #f8fafc; }
+.app-main thead th { color: #64748b; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.app-main tbody tr { border-color: #f1f5f9; transition: background .16s ease; }
+.app-main tbody tr:hover { background: #f8fafc; }
+.app-main [role="tablist"] { border: 1px solid #e2e8f0; border-radius: .9rem; background: #f8fafc; padding: .25rem; }
+.app-main [role="tab"] { border-radius: .65rem; color: #64748b; font-weight: 600; }
+.app-main [role="tab"][data-state="active"] { background: #0f172a; color: #fff; box-shadow: 0 2px 5px rgb(15 23 42 / .12); }
+.app-main .bg-orange-50, .app-main .bg-orange-100, .app-main .bg-amber-50, .app-main .bg-amber-100, .app-main .bg-cyan-50, .app-main .bg-cyan-100, .app-main .bg-violet-50, .app-main .bg-violet-100, .app-main .bg-emerald-50, .app-main .bg-emerald-100, .app-main .bg-purple-50, .app-main .bg-purple-100 { background-color: #f8fafc; }
+.app-main .text-orange-600, .app-main .text-orange-700, .app-main .text-cyan-600, .app-main .text-cyan-700, .app-main .text-violet-600, .app-main .text-violet-700, .app-main .text-purple-600, .app-main .text-emerald-600 { color: #0f766e; }
+.app-main .bg-primary { background-color: #0f172a; }
+.app-main .hover\:bg-primary\/90:hover { background-color: #1e293b; }
+.app-main .text-primary { color: #0f766e; }
+.app-main .border-primary { border-color: #99f6e4; }
+.app-main .bg-primary\/10 { background-color: #f0fdfa; }
+.app-main .shadow-lg, .app-main .shadow-xl { box-shadow: 0 10px 25px rgb(15 23 42 / .08); }
