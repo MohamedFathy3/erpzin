@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -15,6 +15,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut, enabledModules, modulesLoading } = useAuth();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const getActiveFromPath = () => {
     const path = location.pathname;
@@ -26,6 +27,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   const currentActive = activeItem || getActiveFromPath();
 
   useEffect(() => {
+    setMobileNavOpen(false);
     // Route protection follows the same hierarchy as the Sidebar: a disabled
     // tenant module wins over tenant-admin role permissions.
     if (!user || user.super_admin || modulesLoading) return;
@@ -103,9 +105,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden bg-[#f4f7fb]">
-        <Sidebar activeItem={currentActive} onNavigate={handleNavigate} />
+        {mobileNavOpen && <button aria-label="Close navigation" className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-[1px] md:hidden" onClick={() => setMobileNavOpen(false)} />}
+        <Sidebar activeItem={currentActive} onNavigate={handleNavigate} mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <Header />
+          <Header onMenuToggle={() => setMobileNavOpen((open) => !open)} />
           <main className={cn(
             'flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8',
             'bg-[#f4f7fb]'

@@ -68,9 +68,11 @@ const getIcon = (iconName: string) => {
 interface SidebarProps {
   activeItem?: string;
   onNavigate?: (item: string) => void;
+  mobileOpen?: boolean;
+  onClose?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate, mobileOpen = false, onClose }) => {
   const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
   const { user, signOut, enabledModules, modulesLoading, permissions, permissionsLoading } = useAuth(); // ✅ استخدم signOut من useAuth
@@ -173,6 +175,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
     return items;
   }, [allowedPages, enabledModules, language, modulesLoading, user?.super_admin]);
 
+  const navigationGroups = React.useMemo(() => {
+    const groups = [
+      { key: 'operations', label: language === 'ar' ? 'التشغيل' : 'Operations', ids: ['pos', 'sales', 'purchasing', 'inventory', 'inventory-transfer-requests', 'productLedger', 'manufacturing', 'manufacturingSetup', 'automotive'] },
+      { key: 'relationships', label: language === 'ar' ? 'العملاء والفريق' : 'Relationships', ids: ['crm', 'representative', 'projects', 'tasks', 'workflow', 'whatsapp'] },
+      { key: 'insights', label: language === 'ar' ? 'المال والتقارير' : 'Finance & Insights', ids: ['finance', 'reports', 'unified-financial-reports', 'employee-financial-reports', 'warehouse-reports'] },
+      { key: 'workspace', label: language === 'ar' ? 'مساحة العمل' : 'Workspace', ids: ['calendar', 'google-integrations', 'industries', 'aiAssistant'] },
+    ];
+    return groups.map((group) => ({ ...group, items: group.ids.map((id) => navItems.find((item) => item.id === id)).filter(Boolean) as typeof navItems }))
+      .filter((group) => group.items.length > 0);
+  }, [language, navItems]);
+
+  const ungroupedItems = navItems.filter((item) => !navigationGroups.some((group) => group.items.some((groupItem) => groupItem.id === item.id)));
+
   // ✅ دالة معالجة تسجيل الخروج
   const handleLogout = async () => {
     try {
@@ -211,8 +226,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
   return (
     <aside
       className={cn(
-        'h-screen bg-sidebar flex flex-col transition-all duration-300 relative flex-shrink-0',
-        collapsed ? 'w-[72px]' : 'w-64'
+        'fixed inset-y-0 z-50 flex h-screen flex-col bg-sidebar transition-all duration-300 md:relative md:z-auto',
+        collapsed ? 'w-[72px]' : 'w-64',
+        mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
       )}
       style={{ background: 'linear-gradient(180deg, hsl(222 47% 16%) 0%, hsl(222 47% 11%) 100%)' }}
     >
@@ -261,16 +277,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {!collapsed && <p className="mb-2 px-3 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/35">{language === 'ar' ? 'مساحة العمل' : 'Workspace'}</p>}
-        {navItems.map((item) => (
-          <NavItem
-            key={item.id}
-            icon={item.icon}
-            label={item.label}
-            active={activeItem === item.id}
-            collapsed={collapsed}
-            onClick={() => onNavigate?.(item.id)}
-          />
-        ))}
+        <NavItem icon={<Icons.LayoutDashboard size={20} />} label={language === 'ar' ? 'لوحة التحكم' : 'Dashboard'} active={activeItem === 'dashboard'} collapsed={collapsed} onClick={() => { onNavigate?.('dashboard'); onClose?.(); }} />
+        {navigationGroups.map((group) => <React.Fragment key={group.key}>
+          {!collapsed && <p className="mb-1 mt-5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/35">{group.label}</p>}
+          {group.items.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
+        </React.Fragment>)}
+        {ungroupedItems.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
       </nav>
 
       {/* Bottom Items */}
@@ -288,6 +300,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate 
                   handleLogout(); // ✅ استدعاء دالة تسجيل الخروج
                 } else {
                   onNavigate?.(item.id);
+                  onClose?.();
                 }
               }}
             />

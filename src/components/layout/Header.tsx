@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import {
   Search,
+  Menu,
   Languages,
   Building2,
   ChevronDown,
@@ -101,7 +102,11 @@ interface Product {
 
 type SearchType = 'name' | 'sku' | 'barcode' | 'category';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onMenuToggle?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   const navigate = useNavigate();
   const { t, language, setLanguage } = useLanguage();
   const { 
@@ -339,6 +344,9 @@ const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-border/70 bg-card/95 px-4 shadow-sm backdrop-blur sm:px-6">
+      <Button variant="ghost" size="icon" className="shrink-0 rounded-xl md:hidden" onClick={onMenuToggle} aria-label={language === 'ar' ? 'فتح القائمة' : 'Open navigation'}>
+        <Menu className="h-5 w-5" />
+      </Button>
       {/* Search Section - تصميم منفصل للأزرار */}
       <div className="flex items-center gap-3 flex-1 max-w-2xl relative" ref={searchRef}>
         {/* Search Type Buttons - خارج الـ Input */}
