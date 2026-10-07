@@ -347,8 +347,6 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             product_id: parseInt(item.id),
             quantity: item.quantity,
             price: item.price,
-            color: item.colorName || null,
-            size: item.sizeName || null,
             discount_amount: totalDiscountAmount
           })),
           discount_percentage: totalDiscountPercentage,

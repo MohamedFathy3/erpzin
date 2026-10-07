@@ -354,9 +354,6 @@ const POS: React.FC = () => {
                 quantity: item.quantity,
                 price: item.price,
                 discount_percentage: item.discount_percentage || 0,
-                color: item.colorName || null,
-                size: item.sizeName || null,
-                vehicle_size: item.vehicle_size || null,
                 meter_quantity: item.meter_quantity || null
               })),
               discount_percentage: order.discount_percentage || 0,

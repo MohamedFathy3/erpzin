@@ -322,8 +322,6 @@ const POS: React.FC = () => {
                 product_id: parseInt(item.id),
                 quantity: item.quantity,
                 price: item.price,
-                color: item.colorName || null,
-                size: item.sizeName || null
               })),
               payments: order.payments || [],
               subtotal: order.subtotal,
