@@ -175,9 +175,26 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         };
 
         const response = await api.post('/product/index', payload);
-        
+
         if (response.data.result === 'Success') {
-          return response.data.data || [];
+          const rows = Array.isArray(response.data.data) ? response.data.data : [];
+          const query = debouncedSearchQuery.trim().toLocaleLowerCase();
+          const matches = (value: unknown) => String(value ?? '').toLocaleLowerCase().includes(query);
+
+          // بعض نسخ الـAPI تعيد القائمة كاملة رغم إرسال filters؛ لا نعرض نتائج غير مطابقة.
+          return rows.filter((product: any) => {
+            switch (searchType) {
+              case 'sku':
+                return matches(product.sku);
+              case 'barcode':
+                return matches(product.barcode) || product.units?.some((unit: any) => matches(unit.barcode));
+              case 'category':
+                return matches(product.category_id) || matches(product.category?.id) || matches(product.category?.name);
+              case 'name':
+              default:
+                return matches(product.name) || matches(product.name_ar);
+            }
+          });
         }
         return [];
       } catch (error) {

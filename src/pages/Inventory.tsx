@@ -209,7 +209,7 @@ const Inventory: React.FC = () => {
 
   // ========== جلب المنتجات (الفلترة بتتم في الباك إند) ==========
   const { data: dbProducts = [], refetch, isLoading: productsLoading } = useQuery({
-    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter],
+    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter, searchQuery],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -238,6 +238,9 @@ const Inventory: React.FC = () => {
         // ✅ فلترة حسب المخزن
         if (warehouseFilter !== 'all') {
           payload.filters.warehouse_id = parseInt(warehouseFilter);
+        }
+        if (searchQuery.trim()) {
+          payload.filters.name = searchQuery.trim();
         }
 
         console.log('📦 Fetching products with payload:', payload);
@@ -333,11 +336,12 @@ const Inventory: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let filtered = products.filter(product => {
       // ✅ البحث (الاسم - SKU - الباركود)
-      const matchesSearch = searchQuery === '' ||
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.nameAr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.barcode && product.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
+      const query = searchQuery.trim().toLocaleLowerCase();
+      const matchesSearch = query === '' ||
+        product.name.toLocaleLowerCase().includes(query) ||
+        (product.nameAr || '').toLocaleLowerCase().includes(query) ||
+        product.sku.toLocaleLowerCase().includes(query) ||
+        (product.barcode && product.barcode.toLocaleLowerCase().includes(query));
 
       // ✅ فلترة المخزون
       let matchesStock = true;
