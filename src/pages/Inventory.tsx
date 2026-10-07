@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
+import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import CategoryManager from '@/components/inventory/CategoryManager';
 import ProductList, { Product, transformApiProduct } from '@/components/inventory/ProductList';
 import ProductForm, { ProductFormData } from '@/components/inventory/ProductForm';
@@ -15,7 +16,7 @@ import PromotionsManager from '@/components/inventory/PromotionsManager';
 import AutomotiveServicesInventory from '@/components/inventory/AutomotiveServicesInventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc, CarFront } from 'lucide-react';
@@ -711,91 +712,28 @@ const Inventory: React.FC = () => {
   return (
     <MainLayout activeItem="inventory">
       <div className="h-full flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & Products'}
-            </h1>
-            <p className="text-muted-foreground">
-              {language === 'ar' ? 'إدارة المنتجات والتصنيفات والمخزون' : 'Manage products, categories, and inventory'}
-            </p>
-          </div>
-        </div>
+        <ModuleHeader
+          eyebrow={language === 'ar' ? 'دورة المخزون' : 'Inventory cycle'}
+          title={language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & products'}
+          description={language === 'ar' ? 'المنتجات والتصنيفات والتحويلات والجرد في مساحة تشغيل واحدة.' : 'Products, categories, transfers and counts in one operating workspace.'}
+          icon={<Package className="h-5 w-5" />}
+          actions={<Button onClick={handleAddProduct} className="rounded-lg"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add product'}</Button>}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          {/* Tabs Header */}
-          <div className="flex flex-wrap items-center gap-6 pb-4 border-b border-border mb-4">
-            {/* المنتجات والإعدادات */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground px-1">
-                {language === 'ar' ? 'المنتجات' : 'Products'}
-              </span>
-              <TabsList className="h-10 bg-muted/60 p-1 rounded-lg shadow-sm">
-                <TabsTrigger value="products" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
-                  <Package size={14} />
-                  {language === 'ar' ? 'قائمة المنتجات' : 'Products'}
-                </TabsTrigger>
-                <TabsTrigger value="automotive-services" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
-                  <CarFront size={14} />
-                  {language === 'ar' ? 'خدمات السيارات' : 'Automotive Services'}
-                </TabsTrigger>
-                <TabsTrigger value="variants" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
-                  <Palette size={14} />
-                  {language === 'ar' ? 'الوحدات والمتغيرات' : 'Units & Variants'}
-                </TabsTrigger>
-                <TabsTrigger value="barcode" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all">
-                  <Tag size={14} />
-                  {language === 'ar' ? 'طباعة الباركود' : 'Barcode'}
-                </TabsTrigger>
-                <TabsTrigger value="promotions" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <Gift size={14} />
-                  {language === 'ar' ? 'العروض' : 'Promotions'}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            {/* إدارة المخزون */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground px-1">
-                {language === 'ar' ? 'إدارة المخزون' : 'Stock Management'}
-              </span>
-              <TabsList className="h-10 bg-emerald-50/80 dark:bg-emerald-950/30 p-1 rounded-lg shadow-sm">
-                <TabsTrigger value="transfers" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <ArrowRightLeft size={14} />
-                  {language === 'ar' ? 'التحويلات' : 'Transfers'}
-                </TabsTrigger>
-                <TabsTrigger value="count" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <ClipboardList size={14} />
-                  {language === 'ar' ? 'الجرد' : 'Count'}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            {/* التنبيهات */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground px-1">
-                {language === 'ar' ? 'المراقبة' : 'Monitoring'}
-              </span>
-              <TabsList className="h-10 bg-violet-50/80 dark:bg-violet-950/30 p-1 rounded-lg shadow-sm">
-                <TabsTrigger value="alerts" className="flex items-center gap-1.5 text-xs px-3.5 rounded-md data-[state=active]:bg-violet-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-                  <Bell size={14} />
-                  {language === 'ar' ? 'التنبيهات' : 'Alerts'}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-          </div>
+          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
+            { value: 'products', label: language === 'ar' ? 'المنتجات' : 'Products', icon: <Package size={14} /> },
+            { value: 'transfers', label: language === 'ar' ? 'التحويلات' : 'Transfers', icon: <ArrowRightLeft size={14} /> },
+            { value: 'count', label: language === 'ar' ? 'الجرد' : 'Stock count', icon: <ClipboardList size={14} /> },
+            { value: 'alerts', label: language === 'ar' ? 'التنبيهات' : 'Alerts', icon: <Bell size={14} /> },
+            { value: 'variants', label: language === 'ar' ? 'الوحدات والمتغيرات' : 'Variants', icon: <Palette size={14} /> },
+            { value: 'barcode', label: language === 'ar' ? 'الباركود' : 'Barcode', icon: <Tag size={14} /> },
+            { value: 'promotions', label: language === 'ar' ? 'العروض' : 'Promotions', icon: <Gift size={14} /> },
+            { value: 'automotive-services', label: language === 'ar' ? 'خدمات السيارات' : 'Auto services', icon: <CarFront size={14} /> },
+          ]} />
 
           {/* Products Tab */}
           <TabsContent value="products" className="flex-1 flex flex-col mt-2">
-            {/* Actions Bar */}
-            <div className="flex items-center gap-2 flex-wrap mb-4">
-              <Button onClick={handleAddProduct} className="bg-primary hover:bg-primary/90">
-                <Plus size={16} className="me-2" />
-                {language === 'ar' ? 'إضافة منتج' : 'Add Product'}
-              </Button>
-            </div>
-
             {/* Filters Card */}
             <Card className="mb-4">
               <CardContent className="p-4">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import MainLayout from '@/components/layout/MainLayout';
+import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import AdvancedFilter, { FilterField, FilterValues } from '@/components/ui/advanced-filter';
@@ -781,30 +782,13 @@ const handleToggleStatus = (customer: Customer) => {
   return (
     <MainLayout activeItem="crm">
       <div className="space-y-6" dir={direction}>
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <Crown className="text-warning" size={28} />
-            <h1 className="text-2xl font-bold text-foreground">{t.title}</h1>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowLoyaltySettings(true)}
-              className="gap-2"
-            >
-              <Settings size={18} />
-              {loyaltySettings.id ? t.editSettings : t.createSettings}
-            </Button>
-            <Button
-              className="bg-primary hover:bg-primary/90 gap-2"
-              onClick={() => setShowAddCustomer(true)}
-            >
-              <Plus size={18} />
-              {t.newCustomer}
-            </Button>
-          </div>
-        </div>
+        <ModuleHeader
+          eyebrow={language === 'ar' ? 'دورة العملاء' : 'Customer cycle'}
+          title={t.title}
+          description={language === 'ar' ? 'العملاء والصفقات والولاء والبريد في مركز واحد.' : 'Customers, deals, loyalty and email in one focused center.'}
+          icon={<Crown className="h-5 w-5" />}
+          actions={<><Button variant="outline" onClick={() => setShowLoyaltySettings(true)} className="gap-2 rounded-lg"><Settings size={18} />{loyaltySettings.id ? t.editSettings : t.createSettings}</Button><Button onClick={() => setShowAddCustomer(true)} className="gap-2 rounded-lg"><Plus size={18} />{t.newCustomer}</Button></>}
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -825,30 +809,13 @@ const handleToggleStatus = (customer: Customer) => {
           ))}
         </div>
 
-        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="customers" className="flex items-center gap-2">
-              <Users size={16} />
-              {t.customers}
-            </TabsTrigger>
-            <TabsTrigger value="email" className="flex items-center gap-2">
-              <FileText size={16} />
-              {language === 'ar' ? 'إرسال بريد' : 'Send Email'}
-            </TabsTrigger>
-            <TabsTrigger value="pipeline" className="flex items-center gap-2">
-              <TrendingUp size={16} />
-              {language === 'ar' ? 'Pipeline والصفقات' : 'Pipeline & Deals'}
-            </TabsTrigger>
-            <TabsTrigger value="loyalty" className="flex items-center gap-2">
-              <Crown size={16} />
-              {t.loyaltyProgram}
-            </TabsTrigger>
-            <TabsTrigger value="pipeline" className="flex items-center gap-2">
-              <TrendingUp size={16} />
-              CRM Pipeline
-            </TabsTrigger>
-          </TabsList>
+          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
+            { value: 'customers', label: t.customers, icon: <Users size={16} /> },
+            { value: 'email', label: language === 'ar' ? 'إرسال بريد' : 'Send email', icon: <FileText size={16} /> },
+            { value: 'pipeline', label: language === 'ar' ? 'الصفقات والمراحل' : 'Pipeline & deals', icon: <TrendingUp size={16} /> },
+            { value: 'loyalty', label: t.loyaltyProgram, icon: <Crown size={16} /> },
+          ]} />
           <TabsContent value="pipeline" className="mt-4">
             <CrmPipeline />
           </TabsContent>

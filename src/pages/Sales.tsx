@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useLanguage } from "@/contexts/LanguageContext";
 import MainLayout from "@/components/layout/MainLayout";
 import SalesInvoiceList from "@/components/sales/SalesInvoiceList";
@@ -7,6 +7,7 @@ import SalesReturns from "@/components/sales/SalesReturns";
 import Shift from "@/components/sales/shift";
 import POSTransactionsList from "@/components/pos/POSTransactionsList";
 import { FileText, RotateCcw, Receipt } from "lucide-react";
+import { ModuleHeader, ModuleTabs } from "@/components/layout/ModuleHeader";
 
 const Sales = () => {
   const { language } = useLanguage();
@@ -14,46 +15,21 @@ const Sales = () => {
 
   return (
     <MainLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            {language === 'ar' ? 'إدارة المبيعات' : 'Sales Management'}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {language === 'ar' 
-              ? 'فواتير المبيعات والمرتجعات'
-              : 'Sales invoices and returns'}
-          </p>
-        </div>
+      <div className="space-y-5">
+        <ModuleHeader
+          eyebrow={language === 'ar' ? 'دورة المبيعات' : 'Sales cycle'}
+          title={language === 'ar' ? 'إدارة المبيعات' : 'Sales management'}
+          description={language === 'ar' ? 'كل الفواتير والمرتجعات والورديات في مساحة عمل واحدة.' : 'Invoices, returns and shifts in one focused workspace.'}
+          icon={<Receipt className="h-5 w-5" />}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="pos-invoices" className="flex items-center gap-2">
-              <Receipt className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {language === 'ar' ? 'فواتير نقطة البيع' : 'POS Invoices'}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="invoices" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {language === 'ar' ? 'فواتير المبيعات' : 'Sales Invoices'}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="returns" className="flex items-center gap-2">
-              <RotateCcw className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {language === 'ar' ? 'المرتجعات' : 'Returns'}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="shift" className="flex items-center gap-2">
-              <Receipt className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {language === 'ar' ? '  الورديه ' : 'POS shift'}
-              </span>
-            </TabsTrigger>
-          </TabsList>
-
+          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
+            { value: 'pos-invoices', label: language === 'ar' ? 'فواتير نقطة البيع' : 'POS invoices', icon: <Receipt className="h-4 w-4" /> },
+            { value: 'invoices', label: language === 'ar' ? 'فواتير المبيعات' : 'Sales invoices', icon: <FileText className="h-4 w-4" /> },
+            { value: 'returns', label: language === 'ar' ? 'المرتجعات' : 'Returns', icon: <RotateCcw className="h-4 w-4" /> },
+            { value: 'shift', label: language === 'ar' ? 'الورديات' : 'Shifts', icon: <Receipt className="h-4 w-4" /> },
+          ]} />
           <TabsContent value="pos-invoices" className="mt-6">
             <POSTransactionsList />
           </TabsContent>

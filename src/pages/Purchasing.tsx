@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
+import { ModuleHeader } from '@/components/layout/ModuleHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -416,26 +417,13 @@ const Purchasing = () => {
   return (
     <MainLayout activeItem="purchasing">
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {language === 'ar' ? 'إدارة المشتريات والموردين' : 'Purchasing & Suppliers'}
-            </h1>
-            <p className="text-muted-foreground">
-              {language === 'ar' ? 'إدارة فواتير الشراء والموردين والمدفوعات' : 'Manage purchase invoices, suppliers and payments'}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => setShowInvoiceForm(true)}
-              className="bg-primary"
-            >
-              <Plus size={16} className="me-2" />
-              {language === 'ar' ? 'فاتورة شراء' : 'Purchase Invoice'}
-            </Button>
-          </div>
-        </div>
+        <ModuleHeader
+          eyebrow={language === 'ar' ? 'دورة التوريد' : 'Procurement cycle'}
+          title={language === 'ar' ? 'المشتريات والموردون' : 'Purchasing & suppliers'}
+          description={language === 'ar' ? 'الفواتير والمرتجعات والموردون والمدفوعات في مسار واحد واضح.' : 'Invoices, returns, suppliers and payments in one clear workflow.'}
+          icon={<Building2 className="h-5 w-5" />}
+          actions={<Button onClick={() => setShowInvoiceForm(true)} className="rounded-lg"><Plus size={16} className="me-2" />{language === 'ar' ? 'فاتورة شراء' : 'Purchase invoice'}</Button>}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
