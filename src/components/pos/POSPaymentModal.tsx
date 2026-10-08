@@ -358,8 +358,13 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create invoice');
+        let errorData: any = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Keep a useful fallback when the server returns a non-JSON error.
+        }
+        throw new Error(errorData?.message || 'Failed to create invoice');
       }
 
       const result = await response.json();
@@ -453,9 +458,12 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     }
   } catch (error) {
     console.error('Error saving invoice:', error);
+    const errorMessage = error instanceof Error && error.message
+      ? error.message
+      : (language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
     toast({
       title: language === 'ar' ? 'خطأ' : 'Error',
-      description: language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice',
+      description: errorMessage,
       variant: 'destructive',
     });
   } finally {
