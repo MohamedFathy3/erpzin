@@ -149,6 +149,7 @@ const POS: React.FC = () => {
   const [selectedAutomotiveProduct, setSelectedAutomotiveProduct] = useState<Product | null>(null);
   const [automotiveVehicleSize, setAutomotiveVehicleSize] = useState<'small' | 'large'>('small');
   const [automotiveMeterQuantity, setAutomotiveMeterQuantity] = useState('1');
+  const [automotiveServicePrice, setAutomotiveServicePrice] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
   const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
@@ -354,7 +355,8 @@ const POS: React.FC = () => {
                 quantity: item.quantity,
                 price: item.price,
                 discount_percentage: item.discount_percentage || 0,
-                meter_quantity: item.meter_quantity || null
+                meter_quantity: item.meter_quantity || null,
+                item_type: item.itemType || 'product'
               })),
               discount_percentage: order.discount_percentage || 0,
               extra_charge: order.extra_charge || 0,
@@ -487,6 +489,7 @@ const POS: React.FC = () => {
       setSelectedAutomotiveProduct(product);
       setAutomotiveVehicleSize('small');
       setAutomotiveMeterQuantity('1');
+      setAutomotiveServicePrice(product.automotive_service.item_type === 'service' ? '' : String(product.price || ''));
       return;
     }
     // إذا كان المنتج عنده متغيرات، افتح نافذة اختيار المتغيرات
@@ -536,7 +539,12 @@ const POS: React.FC = () => {
     const config = selectedAutomotiveProduct.automotive_service;
     const isLarge = automotiveVehicleSize === 'large';
     const metersPerCar = Number(isLarge ? config.large_vehicle_quantity : config.small_vehicle_quantity) || 1;
-    const price = Number(isLarge ? config.large_vehicle_price : config.small_vehicle_price) || Number(selectedAutomotiveProduct.price) || 0;
+    const configuredPrice = Number(isLarge ? config.large_vehicle_price : config.small_vehicle_price) || Number(selectedAutomotiveProduct.price) || 0;
+    const price = config.item_type === 'service' ? Number(automotiveServicePrice) : configuredPrice;
+    if (config.item_type === 'service' && (!Number.isFinite(price) || price <= 0)) {
+      toast({ title: 'أدخل سعر الخدمة', description: 'الخدمة بدون سعر ثابت ويجب على الكاشير تحديد سعرها.', variant: 'destructive' });
+      return;
+    }
     const cars = Math.max(1, Number(automotiveMeterQuantity) || 1);
     setCartItems(prev => [...prev, {
       id: selectedAutomotiveProduct.id,
@@ -1422,7 +1430,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
         <Dialog open={!!selectedAutomotiveProduct} onOpenChange={(open) => !open && setSelectedAutomotiveProduct(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>تفاصيل خدمة السيارات</DialogTitle></DialogHeader>
-            {selectedAutomotiveProduct?.automotive_service && <div className="space-y-4" dir="rtl"><p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p><div><label className="mb-2 block text-sm font-medium">حجم السيارة</label><select className="h-10 w-full rounded-md border bg-background px-3" value={automotiveVehicleSize} onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}><option value="small">صغيرة — {selectedAutomotiveProduct.automotive_service.small_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.small_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option><option value="large">كبيرة — {selectedAutomotiveProduct.automotive_service.large_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.large_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option></select></div><div><label className="mb-2 block text-sm font-medium">عدد السيارات</label><Input type="number" min="1" value={automotiveMeterQuantity} onChange={(e) => setAutomotiveMeterQuantity(e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.</p></div><Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button></div>}
+            {selectedAutomotiveProduct?.automotive_service && <div className="space-y-4" dir="rtl"><p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p><div><label className="mb-2 block text-sm font-medium">حجم السيارة</label><select className="h-10 w-full rounded-md border bg-background px-3" value={automotiveVehicleSize} onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}><option value="small">صغيرة — {selectedAutomotiveProduct.automotive_service.small_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.small_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option><option value="large">كبيرة — {selectedAutomotiveProduct.automotive_service.large_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.large_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option></select></div>{selectedAutomotiveProduct.automotive_service.item_type === 'service' && <div><label className="mb-2 block text-sm font-medium">سعر الخدمة الذي يحدده الكاشير *</label><Input type="number" min="0.01" step="0.01" value={automotiveServicePrice} onChange={(e) => setAutomotiveServicePrice(e.target.value)} placeholder="اكتب السعر" /><p className="mt-1 text-xs text-muted-foreground">هذه الخدمة بلا سعر ثابت، وسيُحفظ السعر مع الفاتورة والوردية والتقارير.</p></div>}<div><label className="mb-2 block text-sm font-medium">عدد السيارات</label><Input type="number" min="1" value={automotiveMeterQuantity} onChange={(e) => setAutomotiveMeterQuantity(e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.</p></div><Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button></div>}
           </DialogContent>
         </Dialog>
         {/* Modals */}

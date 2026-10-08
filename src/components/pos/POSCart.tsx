@@ -23,6 +23,8 @@ interface CartItem {
   stock?: number;
   discount_percentage?: number;
   discount_amount?: number;
+  itemType?: 'product' | 'service';
+  meter_quantity?: number;
 }
 
 interface POSCartProps {
@@ -184,6 +186,12 @@ const POSCart: React.FC<POSCartProps> = ({
                           </p>
                         )}
                         <p className="text-xs text-muted-foreground">{item.sku}</p>
+                        {(item.itemType === 'service' || item.meter_quantity) && (
+                          <p className="text-xs text-violet-600">
+                            {item.itemType === 'service' ? (language === 'ar' ? 'خدمة' : 'Service') : ''}
+                            {item.meter_quantity ? ` · ${item.meter_quantity} ${language === 'ar' ? 'متر/سيارة' : 'm/car'}` : ''}
+                          </p>
+                        )}
 
                         {canManageDiscounts && <div className="flex items-center gap-2 mt-2">
                           <div className="flex items-center gap-1 bg-primary/5 rounded-lg px-2 py-1">

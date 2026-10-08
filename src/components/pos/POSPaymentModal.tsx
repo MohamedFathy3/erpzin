@@ -49,6 +49,7 @@ interface CartItem {
   discount_percentage?: number;
   itemType?: 'product' | 'service';
   automotive_service_id?: number;
+  meter_quantity?: number;
 }
 
 interface PaymentModalProps {
@@ -295,6 +296,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         quantity: item.quantity,
         price: item.price,
         meter_quantity: item.meter_quantity || null,
+        item_type: item.itemType || 'product',
         discount_percentage: item.discount_percentage || 0,
         discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2))
       })),
