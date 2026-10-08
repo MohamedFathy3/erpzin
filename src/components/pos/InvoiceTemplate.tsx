@@ -349,7 +349,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
             {safeInvoiceData.extraCharge > 0 && (
               <div className="flex justify-between py-0.5 font-semibold">
-                <span>{isRTL ? 'رسوم إضافية' : 'Additional Charge'}:</span>
+                <span>{isRTL ? 'بند الزيادات' : 'Sales Increases'}:</span>
                 <span>+{formatCurrency(safeInvoiceData.extraCharge)}</span>
               </div>
             )}

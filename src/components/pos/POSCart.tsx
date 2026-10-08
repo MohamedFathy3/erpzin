@@ -318,7 +318,7 @@ const POSCart: React.FC<POSCartProps> = ({
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <span>{language === 'ar' ? 'رسوم إضافية' : 'Additional Charge'}</span>
+              <span>{language === 'ar' ? 'بند الزيادات' : 'Sales Increases'}</span>
               <Input
                 type="number"
                 min={0}

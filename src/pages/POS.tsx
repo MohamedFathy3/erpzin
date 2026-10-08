@@ -357,6 +357,7 @@ const POS: React.FC = () => {
                 meter_quantity: item.meter_quantity || null
               })),
               discount_percentage: order.discount_percentage || 0,
+              extra_charge: order.extra_charge || 0,
               is_complimentary: order.is_complimentary || false,
               sales_representative_id: order.sales_representative_id || null,
               payments: order.payments || [],
