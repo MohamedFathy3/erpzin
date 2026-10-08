@@ -79,6 +79,7 @@ interface Amounts {
   paid: string;
   remaining: string;
   extra_charge?: string | number;
+  overpaid?: string | number;
 }
 
 interface Sale {
@@ -100,6 +101,9 @@ interface Sale {
   refunded_amount?: number;
   extra_charge?: number;
   extra_charge_label?: string;
+  cash_received_amount?: number;
+  overpaid_amount?: number;
+  change_amount?: number;
   is_complimentary?: boolean;
 }
 
@@ -590,10 +594,12 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     );
   };
 
-  const renderAmounts = (amounts: Amounts) => {
+  const renderAmounts = (amounts: Amounts, sale?: Sale) => {
     const total = parseFloat(amounts?.total || '0');
     const paid = parseFloat(amounts?.paid || '0');
     const remaining = parseFloat(amounts?.remaining || '0');
+    const extraCharge = parseFloat(String(sale?.extra_charge ?? amounts?.extra_charge ?? '0'));
+    const overpaid = parseFloat(String(sale?.overpaid_amount ?? amounts?.overpaid ?? '0'));
     
     return (
       <div className="whitespace-nowrap">
@@ -605,6 +611,14 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">{t.paid}</p>
             <p className="text-sm font-semibold text-emerald-600">{formatNumber(paid)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">{language === 'ar' ? 'بند الزيادات' : 'Increases'}</p>
+            <p className="text-sm font-semibold text-orange-600">{formatNumber(extraCharge)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">{t.overpaid}</p>
+            <p className="text-sm font-semibold text-blue-600">{formatNumber(overpaid)}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">{remaining > 0 ? t.remaining : t.overpaid}</p>
@@ -957,7 +971,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                               {renderPaymentMethods(sale.payments)}
                             </TableCell>
                             <TableCell className="text-right">
-                              {renderAmounts(sale.amounts)}
+                              {renderAmounts(sale.amounts, sale)}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-center gap-1">
@@ -1172,7 +1186,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       parseFloat(selectedSale.amounts?.remaining || '0') > 0 ? "text-amber-600" : 
                       parseFloat(selectedSale.amounts?.remaining || '0') < 0 ? "text-blue-600" : "text-muted-foreground"
                     )}>
-                      {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
+                      {formatNumber(parseFloat(selectedSale.amounts?.remaining || '0') > 0
+                        ? parseFloat(selectedSale.amounts?.remaining || '0')
+                        : (selectedSale.overpaid_amount ?? selectedSale.amounts?.overpaid ?? 0))}
                     </p>
                   </div>
                   <div className="p-3 bg-orange-500/5 rounded-lg border border-orange-500/20 text-center">
