@@ -75,6 +75,7 @@ interface Amounts {
   total: string;
   paid: string;
   remaining: string;
+  extra_charge?: string | number;
 }
 
 interface Sale {
@@ -88,8 +89,14 @@ interface Sale {
   payments: Payment[];
   created_at: string;
   cashier: string;
-    discount_percentage?: number;
+  discount_percentage?: number;
   discount_amount?: number;
+  original_total_amount?: number;
+  net_amount?: number;
+  returned_amount?: number;
+  refunded_amount?: number;
+  extra_charge?: number;
+  extra_charge_label?: string;
   
 }
 
@@ -1015,7 +1022,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                 </div>
 
                 {/* Amounts Summary */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 text-center">
                     <p className="text-xs text-muted-foreground mb-1">{t.totalAmount}</p>
                     <p className="text-lg font-bold text-primary">{formatNumber(selectedSale.amounts?.total || '0')}</p>
@@ -1036,10 +1043,18 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       {formatNumber(Math.abs(parseFloat(selectedSale.amounts?.remaining || '0')))}
                     </p>
                   </div>
+                  <div className="p-3 bg-orange-500/5 rounded-lg border border-orange-500/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'بند الزيادات' : 'Sales increases'}</p>
+                    <p className="text-lg font-bold text-orange-600">{formatNumber(selectedSale.extra_charge ?? selectedSale.amounts?.extra_charge ?? '0')}</p>
+                  </div>
+                  <div className="p-3 bg-red-500/5 rounded-lg border border-red-500/20 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المرتجع / المسترد' : 'Returned / Refunded'}</p>
+                    <p className="text-lg font-bold text-red-600">{formatNumber(selectedSale.returned_amount || 0)} / {formatNumber(selectedSale.refunded_amount || 0)}</p>
+                  </div>
                 </div>
 
                 {/* Payment Breakdown */}
-                {selectedSale.payments && selectedSale.payments.length > 1 && (
+                {selectedSale.payments && selectedSale.payments.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold flex items-center gap-2">
                       <PieChart size={16} className="text-primary" />
