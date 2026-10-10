@@ -849,7 +849,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                   )}
 
                   {/* QUICK STATS */}
-                  <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                     <Card className="rounded-xl border-emerald-500/30 bg-emerald-500/5 shadow-none">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -882,6 +882,18 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                         </div>
                         <p className="mt-2 text-xl font-bold text-blue-600">
                           {formatNumber(shiftReport.summary?.net?.sales)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl border-purple-500/30 bg-purple-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Wallet className="h-3.5 w-3.5" />
+                          {language === "ar" ? "المبلغ الفعلي" : "Actual Amount"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold text-purple-600">
+                          {formatNumber(shiftReport.reconciliation?.actual_amount)}
                         </p>
                       </CardContent>
                     </Card>
