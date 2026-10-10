@@ -397,7 +397,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
 
           <div class="print-section">
             <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
-            <div class="print-row"><span>${language === 'ar' ? 'المبلغ المتوقع:' : 'Expected Amount:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
             <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
             <hr/>
             <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'الفرق:' : 'Difference:'}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(shift.difference)}</span></div>
@@ -457,7 +456,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
     cardSales: language === 'ar' ? 'مبيعات بطاقة' : 'Card Sales',
     walletSales: language === 'ar' ? 'مبيعات المحفظة' : 'Wallet Sales',
     returns: language === 'ar' ? 'مرتجعات' : 'Returns',
-    expected: language === 'ar' ? 'المتوقع' : 'Expected',
     actual: language === 'ar' ? 'الفعلي' : 'Actual',
     difference: language === 'ar' ? 'الفرق' : 'Difference',
     notes: language === 'ar' ? 'ملاحظات' : 'Notes',
@@ -646,7 +644,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                       <Receipt size={14} />{t.returns}{sortField === 'returns_amount' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                     </div>
                   </TableHead>
-                  <TableHead className="text-right">{t.expected}</TableHead>
                   <TableHead className="text-right">{t.actual}</TableHead>
                   <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'difference') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('difference'); setSortDirection('desc'); } }}>
                     <div className="flex items-center justify-end gap-1">{t.difference}{sortField === 'difference' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
@@ -672,7 +669,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                       <TableCell className="text-right text-purple-600">{formatNumber(shift.wallet_sales)}</TableCell>
                       <TableCell className="text-right text-blue-600">{formatNumber(shift.card_sales)}</TableCell>
                       <TableCell className="text-right text-red-600">-{formatNumber(shift.returns_amount)}</TableCell>
-                      <TableCell className="text-right">{formatNumber(shift.expected_amount)}</TableCell>
                       <TableCell className="text-right">{formatNumber(shift.actual_amount)}</TableCell>
                       <TableCell className="text-right">{getDifferenceBadge(shift.difference)}</TableCell>
                       <TableCell>{getStatusBadge(shift.status)}</TableCell>
@@ -2134,11 +2130,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                           label: language === "ar" ? "المرتجعات النقدية" : "Cash Returns",
                           value: shiftReport.reconciliation?.cash_returns,
                           negative: true,
-                        },
-                        {
-                          label: language === "ar" ? "المبلغ المتوقع" : "Expected Amount",
-                          value: shiftReport.reconciliation?.expected_amount,
-                          strong: true,
                         },
                         {
                           label: language === "ar" ? "المبلغ الفعلي" : "Actual Amount",
