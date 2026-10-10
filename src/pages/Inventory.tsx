@@ -19,12 +19,13 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc, CarFront } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc, CarFront, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { ProductVariant } from '@/hooks/useVariantData';
+import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -348,6 +349,7 @@ const Inventory: React.FC = () => {
       if (stockFilter === 'in_stock') matchesStock = product.stock > 10;
       else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
+      else if (stockFilter === 'minimum_stock') matchesStock = product.stock <= (product.minStock ?? 5);
 
       return matchesSearch && matchesStock;
     });
@@ -408,6 +410,44 @@ const Inventory: React.FC = () => {
     setSelectedCategory(null);
     setSearchQuery('');
     setSortBy('created_desc');
+  };
+
+  const exportMinimumStockToExcel = () => {
+    const minimumStockProducts = filteredProducts.filter(
+      product => product.stock <= (product.minStock ?? 5)
+    );
+    if (minimumStockProducts.length === 0) {
+      toast({
+        title: language === 'ar' ? 'لا توجد منتجات للتصدير' : 'No products to export',
+        description: language === 'ar' ? 'لا توجد منتجات وصلت إلى الحد الأدنى للمخزون.' : 'No products have reached their minimum stock level.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const rows = minimumStockProducts.map(product => language === 'ar' ? {
+      'اسم المنتج': product.nameAr || product.name,
+      'كود المنتج': product.sku,
+      'الباركود': product.barcode || '',
+      'التصنيف': product.categoryAr || product.category,
+      'الكمية الحالية': product.stock,
+      'الحد الأدنى للمخزون': product.minStock ?? 5,
+    } : {
+      'Product name': product.name,
+      'SKU': product.sku,
+      'Barcode': product.barcode || '',
+      'Category': product.category,
+      'Current stock': product.stock,
+      'Minimum stock': product.minStock ?? 5,
+    });
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, language === 'ar' ? 'الحد الأدنى' : 'Minimum Stock');
+    XLSX.writeFile(workbook, `minimum-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast({
+      title: language === 'ar' ? 'تم تصدير ملف Excel' : 'Excel export complete',
+      description: language === 'ar' ? `تم تصدير ${minimumStockProducts.length} منتج.` : `Exported ${minimumStockProducts.length} products.`,
+    });
   };
 
   const hasActiveFilters =
@@ -802,6 +842,33 @@ const Inventory: React.FC = () => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-3 md:flex-row">
+                  {/* Stock level and minimum threshold filter */}
+                  <Select value={stockFilter} onValueChange={setStockFilter}>
+                    <SelectTrigger className="h-9 w-full md:w-64">
+                      <SelectValue placeholder={language === 'ar' ? 'حالة المخزون' : 'Stock level'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'ar' ? 'كل مستويات المخزون' : 'All stock levels'}</SelectItem>
+                      <SelectItem value="in_stock">{language === 'ar' ? 'متوفر' : 'In stock'}</SelectItem>
+                      <SelectItem value="low_stock">{language === 'ar' ? 'مخزون منخفض (10 أو أقل)' : 'Low stock (10 or less)'}</SelectItem>
+                      <SelectItem value="out_of_stock">{language === 'ar' ? 'نفد المخزون' : 'Out of stock'}</SelectItem>
+                      <SelectItem value="minimum_stock">{language === 'ar' ? 'الحد الأدنى للمخزون' : 'Minimum stock'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 gap-2"
+                    onClick={exportMinimumStockToExcel}
+                    disabled={stockFilter !== 'minimum_stock' || filteredProducts.length === 0}
+                  >
+                    <FileSpreadsheet size={16} />
+                    {language === 'ar' ? 'تنزيل نتائج الحد الأدنى Excel' : 'Export minimum stock to Excel'}
+                  </Button>
                 </div>
 
                 {/* Warehouse Filter */}
