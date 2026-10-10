@@ -40,6 +40,8 @@ import {
   FileText,
   RotateCcw,
   Calculator,
+  Gift,   // ✅ مطلوب لتاب المجاملات
+  Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -734,8 +736,8 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
 
                   <p className="mt-1 text-sm text-muted-foreground">
                     {language === "ar"
-                      ? "ملخص مالي وتفاصيل المبيعات والمرتجعات"
-                      : "Financial summary, sales and returns details"}
+                      ? "ملخص مالي وتفاصيل المبيعات والمرتجعات والمجاملات"
+                      : "Financial summary, sales, returns and complimentary details"}
                   </p>
                 </div>
               </div>
@@ -787,7 +789,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
             ) : shiftReport ? (
               <Tabs defaultValue="summary" className="space-y-5">
                 {/* ========================= TABS NAV ========================= */}
-                <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-5">
+                <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-6">
                   <TabsTrigger value="summary" className="gap-1.5">
                     <Receipt className="h-4 w-4" />
                     {language === "ar" ? "الملخص" : "Summary"}
@@ -804,6 +806,20 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     {Number(shiftReport.summary?.sales?.invoices_count ?? 0) > 0 && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                         {shiftReport.summary.sales.invoices_count}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+
+                  {/* ✅ تاب المجاملات الجديد */}
+                  <TabsTrigger value="complimentary" className="gap-1.5">
+                    <Gift className="h-4 w-4" />
+                    {language === "ar" ? "المجاملات" : "Complimentary"}
+                    {Number(shiftReport.summary?.complimentary?.count ?? 0) > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="ml-1 h-5 bg-purple-100 px-1.5 text-xs text-purple-700"
+                      >
+                        {shiftReport.summary.complimentary.count}
                       </Badge>
                     )}
                   </TabsTrigger>
@@ -825,8 +841,9 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                 </TabsList>
 
                 {/* ========================= TAB 1: SUMMARY ========================= */}
-                <TabsContent value="summary" className="space-y-5">
-                  {/* تنبيه: أصناف بدون تكلفة (بتأثر على دقة الربح) */}
+                {/* ========================= TAB 1: SUMMARY ========================= */}
+                <TabsContent value="summary" className="space-y-6">
+                  {/* ==================== تنبيهات ==================== */}
                   {Number(shiftReport.checks?.items_without_cost_count ?? 0) > 0 && (
                     <Card className="rounded-xl border-amber-500/40 bg-amber-500/10 shadow-none">
                       <CardContent className="flex items-start gap-3 p-4">
@@ -848,83 +865,141 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     </Card>
                   )}
 
-                  {/* QUICK STATS */}
-                  <section className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                    <Card className="rounded-xl border-emerald-500/30 bg-emerald-500/5 shadow-none">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <TrendingUp className="h-3.5 w-3.5" />
-                          {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
-                        </div>
-                        <p className="mt-2 text-xl font-bold text-emerald-600">
-                          {formatNumber(shiftReport.summary?.sales?.gross_sales)}
-                        </p>
-                      </CardContent>
-                    </Card>
+                  {/* ==================== KPIs الرئيسية ==================== */}
+                  <section>
+                    <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-muted-foreground">
+                      <TrendingUp className="h-4 w-4" />
+                      {language === "ar" ? "المؤشرات الرئيسية" : "Key Metrics"}
+                    </h3>
 
-                    <Card className="rounded-xl border-red-500/30 bg-red-500/5 shadow-none">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          {language === "ar" ? "إجمالي المرتجعات" : "Returns"}
-                        </div>
-                        <p className="mt-2 text-xl font-bold text-red-600">
-                          {formatNumber(shiftReport.summary?.returns?.total_amount)}
-                        </p>
-                      </CardContent>
-                    </Card>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {/* Gross Sales */}
+                      <Card className="relative overflow-hidden rounded-xl border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 shadow-none">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                              <TrendingUp className="h-4 w-4" />
+                              {language === "ar" ? "المبيعات" : "Sales"}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-500/30 bg-white/50 text-xs"
+                            >
+                              {formatNumber(shiftReport.summary?.sales?.invoices_count)}{" "}
+                              {language === "ar" ? "فاتورة" : "inv."}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-2xl font-bold text-emerald-600">
+                            {formatNumber(shiftReport.summary?.sales?.gross_sales)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
+                          </p>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="rounded-xl border-blue-500/30 bg-blue-500/5 shadow-none">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Wallet className="h-3.5 w-3.5" />
-                          {language === "ar" ? "صافي المبيعات" : "Net Sales"}
-                        </div>
-                        <p className="mt-2 text-xl font-bold text-blue-600">
-                          {formatNumber(shiftReport.summary?.net?.sales)}
-                        </p>
-                      </CardContent>
-                    </Card>
+                      {/* Returns */}
+                      <Card className="relative overflow-hidden rounded-xl border-red-500/30 bg-gradient-to-br from-red-500/10 to-red-500/5 shadow-none">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs font-medium text-red-700">
+                              <RotateCcw className="h-4 w-4" />
+                              {language === "ar" ? "المرتجعات" : "Returns"}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="border-red-500/30 bg-white/50 text-xs"
+                            >
+                              {formatNumber(shiftReport.summary?.returns?.count)}{" "}
+                              {language === "ar" ? "مرتجع" : "ret."}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-2xl font-bold text-red-600">
+                            {formatNumber(shiftReport.summary?.returns?.total_amount)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {language === "ar" ? "إجمالي المرتجعات" : "Total Returns"}
+                          </p>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="rounded-xl border-purple-500/30 bg-purple-500/5 shadow-none">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Wallet className="h-3.5 w-3.5" />
-                          {language === "ar" ? "المبلغ الفعلي" : "Actual Amount"}
-                        </div>
-                        <p className="mt-2 text-xl font-bold text-purple-600">
-                          {formatNumber(shiftReport.reconciliation?.actual_amount)}
-                        </p>
-                      </CardContent>
-                    </Card>
+                      {/* Complimentary */}
+                      <Card className="relative overflow-hidden rounded-xl border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-purple-500/5 shadow-none">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs font-medium text-purple-700">
+                              <Gift className="h-4 w-4" />
+                              {language === "ar" ? "المجاملات" : "Complimentary"}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="border-purple-500/30 bg-white/50 text-xs"
+                            >
+                              {formatNumber(shiftReport.summary?.complimentary?.count)}{" "}
+                              {language === "ar" ? "فاتورة" : "inv."}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-2xl font-bold text-purple-600">
+                            {formatNumber(shiftReport.summary?.complimentary?.total_cost)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {language === "ar" ? "تكلفة المجاملات" : "Comp. Cost"}
+                          </p>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="rounded-xl border-amber-500/30 bg-amber-500/5 shadow-none">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <DollarSign className="h-3.5 w-3.5" />
-                          {language === "ar" ? "صافي الربح" : "Net Profit"}
-                        </div>
-                        <p
-                          className={`mt-2 text-xl font-bold ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
-                              ? "text-amber-600"
-                              : "text-red-600"
-                            }`}
-                        >
-                          {formatNumber(shiftReport.summary?.net?.profit)}
-                        </p>
-                      </CardContent>
-                    </Card>
+                      {/* Net Profit */}
+                      <Card
+                        className={`relative overflow-hidden rounded-xl shadow-none ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
+                            ? "border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-amber-500/5"
+                            : "border-red-500/30 bg-gradient-to-br from-red-500/10 to-red-500/5"
+                          }`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div
+                              className={`flex items-center gap-2 text-xs font-medium ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
+                                  ? "text-amber-700"
+                                  : "text-red-700"
+                                }`}
+                            >
+                              <DollarSign className="h-4 w-4" />
+                              {language === "ar" ? "صافي الربح" : "Net Profit"}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="border-slate-300 bg-white/50 text-xs"
+                            >
+                              {shiftReport.summary?.net?.profit_margin ?? 0}%
+                            </Badge>
+                          </div>
+                          <p
+                            className={`mt-3 text-2xl font-bold ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
+                                ? "text-amber-600"
+                                : "text-red-600"
+                              }`}
+                          >
+                            {formatNumber(shiftReport.summary?.net?.profit)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {language === "ar" ? "بعد كل الخصومات" : "After all deductions"}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </section>
 
-                  {/* SECTION 1: SALES */}
+                  {/* ==================== قسم المبيعات ==================== */}
                   <section className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
-                        <TrendingUp className="h-4 w-4 text-emerald-600" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                          <TrendingUp className="h-4 w-4 text-emerald-600" />
+                        </div>
+                        <h3 className="text-base font-bold">
+                          {language === "ar" ? "تفاصيل المبيعات" : "Sales Breakdown"}
+                        </h3>
                       </div>
-                      <h3 className="text-base font-bold">
-                        {language === "ar" ? "المبيعات" : "Sales"}
-                      </h3>
                       <Badge variant="secondary" className="text-xs">
                         {formatNumber(shiftReport.summary?.sales?.invoices_count)}{" "}
                         {language === "ar" ? "فاتورة" : "invoices"}
@@ -932,419 +1007,365 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <Card className="rounded-xl shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <FileText className="h-3.5 w-3.5" />
-                            {language === "ar" ? "عدد الفواتير" : "Invoices"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold">
-                            {formatNumber(shiftReport.summary?.sales?.invoices_count)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <FileText className="h-3.5 w-3.5" />
+                          {language === "ar" ? "عدد الفواتير" : "Invoices"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold">
+                          {formatNumber(shiftReport.summary?.sales?.invoices_count)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl border-emerald-500/30 bg-emerald-500/5 shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <TrendingUp className="h-3.5 w-3.5" />
-                            {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-emerald-600">
-                            {formatNumber(shiftReport.summary?.sales?.gross_sales)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Package className="h-3.5 w-3.5" />
+                          {language === "ar" ? "إجمالي الكميات" : "Total Qty"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold">
+                          {formatNumber(shiftReport.summary?.sales?.total_quantity)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Calculator className="h-3.5 w-3.5" />
-                            {language === "ar" ? "تكلفة المبيعات" : "Sales Cost"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-slate-600">
-                            {formatNumber(shiftReport.summary?.sales?.total_cost)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calculator className="h-3.5 w-3.5" />
+                          {language === "ar" ? "تكلفة البضاعة" : "COGS"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-slate-600">
+                          {formatNumber(shiftReport.summary?.sales?.total_cost)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl border-emerald-500/30 bg-emerald-500/5 shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <DollarSign className="h-3.5 w-3.5" />
-                            {language === "ar" ? "إجمالي الربح" : "Gross Profit"}
-                          </div>
-                          <p
-                            className={`mt-2 text-xl font-bold ${Number(shiftReport.summary?.sales?.gross_profit ?? 0) >= 0
-                                ? "text-emerald-600"
-                                : "text-red-600"
-                              }`}
-                          >
-                            {formatNumber(shiftReport.summary?.sales?.gross_profit)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {shiftReport.summary?.sales?.profit_margin ?? 0}%{" "}
-                            {language === "ar" ? "هامش" : "margin"}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-emerald-700">
+                          <DollarSign className="h-3.5 w-3.5" />
+                          {language === "ar" ? "ربح المبيعات" : "Gross Profit"}
+                        </div>
+                        <p
+                          className={`mt-2 text-lg font-bold ${Number(shiftReport.summary?.sales?.gross_profit ?? 0) >= 0
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                            }`}
+                        >
+                          {formatNumber(shiftReport.summary?.sales?.gross_profit)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {shiftReport.summary?.sales?.profit_margin ?? 0}%{" "}
+                          {language === "ar" ? "هامش" : "margin"}
+                        </p>
+                      </div>
                     </div>
                   </section>
 
-                  {/* SECTION 2: RETURNS */}
+                  {/* ==================== قسم المرتجعات ==================== */}
                   <section className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10">
-                        <RotateCcw className="h-4 w-4 text-red-600" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10">
+                          <RotateCcw className="h-4 w-4 text-red-600" />
+                        </div>
+                        <h3 className="text-base font-bold">
+                          {language === "ar" ? "تفاصيل المرتجعات" : "Returns Breakdown"}
+                        </h3>
                       </div>
-                      <h3 className="text-base font-bold">
-                        {language === "ar" ? "المرتجعات" : "Returns"}
-                      </h3>
                       <Badge variant="secondary" className="text-xs">
                         {formatNumber(shiftReport.summary?.returns?.count)}{" "}
                         {language === "ar" ? "مرتجع" : "returns"}
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                      <Card className="rounded-xl shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            {language === "ar" ? "عدد المرتجعات" : "Returns Count"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold">
-                            {formatNumber(shiftReport.summary?.returns?.count)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {language === "ar" ? "عدد المرتجعات" : "Count"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold">
+                          {formatNumber(shiftReport.summary?.returns?.count)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl border-red-500/30 bg-red-500/5 shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Receipt className="h-3.5 w-3.5" />
-                            {language === "ar" ? "قيمة المرتجعات" : "Returns Amount"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-red-600">
-                            {formatNumber(shiftReport.summary?.returns?.total_amount)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {language === "ar" ? "مجموع بنود المرتجع" : "Sum of return lines"}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-red-700">
+                          <Receipt className="h-3.5 w-3.5" />
+                          {language === "ar" ? "قيمة المرتجعات" : "Value"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-red-600">
+                          {formatNumber(shiftReport.summary?.returns?.total_amount)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Calculator className="h-3.5 w-3.5" />
-                            {language === "ar" ? "تكلفة المرتجعات" : "Returns Cost"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-slate-600">
-                            {formatNumber(shiftReport.summary?.returns?.total_cost)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calculator className="h-3.5 w-3.5" />
+                          {language === "ar" ? "تكلفة المرتجعات" : "Cost"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-slate-600">
+                          {formatNumber(shiftReport.summary?.returns?.total_cost)}
+                        </p>
+                      </div>
 
-                      <Card className="rounded-xl border-red-500/30 bg-red-500/5 shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <DollarSign className="h-3.5 w-3.5" />
-                            {language === "ar" ? "المبلغ المُسترد" : "Refunded Amount"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-red-600">
-                            {formatNumber(shiftReport.summary?.returns?.total_refunded)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {language === "ar" ? "المدفوع فعلياً للعميل" : "Actually paid back"}
-                          </p>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="rounded-xl border-red-500/30 bg-red-500/5 shadow-none">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <TrendingDown className="h-3.5 w-3.5" />
-                            {language === "ar" ? "الربح المعكوس" : "Profit Reversed"}
-                          </div>
-                          <p className="mt-2 text-xl font-bold text-red-600">
-                            {formatNumber(shiftReport.summary?.returns?.profit_reversed)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {shiftReport.summary?.returns?.profit_margin ?? 0}%{" "}
-                            {language === "ar" ? "هامش" : "margin"}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-red-700">
+                          <TrendingDown className="h-3.5 w-3.5" />
+                          {language === "ar" ? "الربح المعكوس" : "Profit Lost"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-red-600">
+                          {formatNumber(shiftReport.summary?.returns?.profit_reversed)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatNumber(shiftReport.summary?.returns?.total_refunded)}{" "}
+                          {language === "ar" ? "مُسترد" : "refunded"}
+                        </p>
+                      </div>
                     </div>
                   </section>
 
-                  {/* SECTION 3: NET */}
+                  {/* ==================== قسم المجاملات ==================== */}
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
+                          <Gift className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <h3 className="text-base font-bold">
+                          {language === "ar" ? "تفاصيل المجاملات" : "Complimentary Breakdown"}
+                        </h3>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className="bg-purple-100 text-xs text-purple-700"
+                      >
+                        {language === "ar" ? "لا تُحسب في المبيعات" : "Not in sales"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-purple-700">
+                          <Gift className="h-3.5 w-3.5" />
+                          {language === "ar" ? "عدد الفواتير" : "Invoices"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-purple-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.count)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-purple-700">
+                          <DollarSign className="h-3.5 w-3.5" />
+                          {language === "ar" ? "القيمة السوقية" : "Market Value"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-purple-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.market_value)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-red-700">
+                          <Calculator className="h-3.5 w-3.5" />
+                          {language === "ar" ? "التكلفة الفعلية" : "Actual Cost"}
+                        </div>
+                        <p className="mt-2 text-lg font-bold text-red-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.total_cost)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                        <div className="flex items-center gap-2 text-xs text-amber-700">
+                          <TrendingDown className="h-3.5 w-3.5" />
+                          {language === "ar" ? "الربح بعد المجاملات" : "Profit After"}
+                        </div>
+                        <p
+                          className={`mt-2 text-lg font-bold ${Number(
+                            shiftReport.summary?.complimentary?.profit_after_complimentary ?? 0,
+                          ) >= 0
+                              ? "text-amber-600"
+                              : "text-red-600"
+                            }`}
+                        >
+                          {formatNumber(
+                            shiftReport.summary?.complimentary?.profit_after_complimentary,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* ==================== التسوية المالية ==================== */}
                   <section className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10">
                         <Calculator className="h-4 w-4 text-blue-600" />
                       </div>
                       <h3 className="text-base font-bold">
-                        {language === "ar" ? "الصافي" : "Net"}
+                        {language === "ar" ? "التسوية المالية" : "Financial Reconciliation"}
                       </h3>
                     </div>
 
                     <Card className="rounded-xl border-blue-500/30 bg-gradient-to-br from-blue-500/5 to-transparent shadow-none">
-                      <CardContent className="space-y-4 p-5">
-                        {/* صافي المبيعات */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                          <span className="font-medium text-muted-foreground">
-                            {language === "ar" ? "صافي المبيعات" : "Net Sales"}
-                          </span>
-                          <div className="flex items-center gap-2 font-mono">
-                            <span className="text-emerald-600">
-                              {formatNumber(shiftReport.summary?.sales?.gross_sales)}
+                      <CardContent className="p-5">
+                        <div className="space-y-3">
+                          {/* المبيعات */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-medium text-muted-foreground">
+                              {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
                             </span>
-                            <span className="text-muted-foreground">−</span>
-                            <span className="text-red-600">
-                              {formatNumber(shiftReport.summary?.returns?.total_amount)}
-                            </span>
-                            <span className="text-muted-foreground">=</span>
-                            <span className="text-lg font-bold text-blue-600">
-                              {formatNumber(shiftReport.summary?.net?.sales)}
+                            <span className="font-mono font-semibold text-emerald-600">
+                              + {formatNumber(shiftReport.summary?.sales?.gross_sales)}
                             </span>
                           </div>
-                        </div>
 
-                        {/* صافي التكلفة */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                          <span className="font-medium text-muted-foreground">
-                            {language === "ar" ? "صافي التكلفة" : "Net Cost"}
-                          </span>
-                          <div className="flex items-center gap-2 font-mono">
-                            <span className="text-slate-600">
-                              {formatNumber(shiftReport.summary?.sales?.total_cost)}
+                          {/* المرتجعات */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-medium text-muted-foreground">
+                              {language === "ar" ? "المرتجعات" : "Returns"}
                             </span>
-                            <span className="text-muted-foreground">−</span>
-                            <span className="text-red-600">
-                              {formatNumber(shiftReport.summary?.returns?.total_cost)}
-                            </span>
-                            <span className="text-muted-foreground">=</span>
-                            <span className="text-lg font-bold text-slate-700">
-                              {formatNumber(shiftReport.summary?.net?.cost)}
+                            <span className="font-mono font-semibold text-red-600">
+                              − {formatNumber(shiftReport.summary?.returns?.total_amount)}
                             </span>
                           </div>
-                        </div>
 
-                        <div className="border-t-2 border-dashed border-blue-500/30" />
+                          {/* خط */}
+                          <div className="border-t border-dashed border-blue-500/30" />
 
-                        {/* صافي الربح */}
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-base font-bold">
-                              {language === "ar" ? "صافي الربح" : "Net Profit"}
-                            </p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {language === "ar"
-                                ? "= صافي المبيعات − صافي التكلفة (= إجمالي الربح − الربح المعكوس)"
-                                : "= Net Sales − Net Cost (= Gross Profit − Profit Reversed)"}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-2xl font-bold ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
-                                }`}
-                            >
-                              {formatNumber(shiftReport.summary?.net?.profit)}
+                          {/* صافي المبيعات */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-semibold">
+                              {language === "ar" ? "صافي المبيعات" : "Net Sales"}
                             </span>
-                            <Badge variant="outline" className="text-xs">
-                              {shiftReport.summary?.net?.profit_margin ?? 0}%
-                            </Badge>
+                            <span className="font-mono text-lg font-bold text-blue-600">
+                              = {formatNumber(shiftReport.summary?.net?.sales)}
+                            </span>
+                          </div>
+
+                          {/* التكلفة */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-medium text-muted-foreground">
+                              {language === "ar" ? "تكلفة البضاعة" : "COGS"}
+                            </span>
+                            <span className="font-mono font-semibold text-slate-600">
+                              − {formatNumber(shiftReport.summary?.net?.cost)}
+                            </span>
+                          </div>
+
+                          {/* خط */}
+                          <div className="border-t border-dashed border-blue-500/30" />
+
+                          {/* صافي الربح قبل المجاملات */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-semibold">
+                              {language === "ar" ? "الربح قبل المجاملات" : "Profit Before Comp."}
+                            </span>
+                            <span className="font-mono text-lg font-bold text-emerald-600">
+                              = {formatNumber(shiftReport.summary?.net?.profit)}
+                            </span>
+                          </div>
+
+                          {/* تكلفة المجاملات */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <span className="font-medium text-muted-foreground">
+                              {language === "ar" ? "تكلفة المجاملات" : "Comp. Cost"}
+                            </span>
+                            <span className="font-mono font-semibold text-purple-600">
+                              − {formatNumber(shiftReport.summary?.complimentary?.total_cost)}
+                            </span>
+                          </div>
+
+                          {/* خط سميك */}
+                          <div className="border-t-2 border-blue-500/40" />
+
+                          {/* صافي الربح النهائي */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                            <div>
+                              <p className="text-base font-bold">
+                                {language === "ar" ? "صافي الربح النهائي" : "Final Net Profit"}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {language === "ar"
+                                  ? "بعد خصم تكلفة المجاملات"
+                                  : "After deducting comp. cost"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-2xl font-bold ${Number(shiftReport.summary?.net?.profit ?? 0) >= 0
+                                    ? "text-emerald-600"
+                                    : "text-red-600"
+                                  }`}
+                              >
+                                {formatNumber(
+                                  Number(shiftReport.summary?.net?.profit ?? 0) -
+                                  Number(shiftReport.summary?.complimentary?.total_cost ?? 0),
+                                )}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {shiftReport.summary?.net?.profit_margin ?? 0}%
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
                   </section>
 
-                  {/* SECTION 4: SHIFT INFO */}
+                  {/* ==================== التحصيل حسب طريقة الدفع ==================== */}
                   <section className="space-y-3">
-                    <h3 className="flex items-center gap-2 text-base font-bold">
-                      <Receipt className="h-5 w-5 text-primary" />
-                      {language === "ar" ? "بيانات الوردية" : "Shift Information"}
-                    </h3>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      {[
-                        {
-                          label: language === "ar" ? "رقم الوردية" : "Shift Number",
-                          value: `#${shiftReport.shift?.id ?? selectedShift?.id ?? "-"}`,
-                        },
-                        {
-                          label: language === "ar" ? "الكاشير" : "Cashier",
-                          value: shiftReport.shift?.cashier || selectedShift?.employee || "-",
-                        },
-                        {
-                          label: language === "ar" ? "وقت الفتح" : "Opened At",
-                          value: formatDateTime(shiftReport.shift?.opened_at),
-                        },
-                        {
-                          label: language === "ar" ? "وقت الإغلاق" : "Closed At",
-                          value: formatDateTime(shiftReport.shift?.closed_at),
-                        },
-                        {
-                          label: language === "ar" ? "الأدمن (فتح الوردية)" : "Admin",
-                          value: shiftReport.shift?.opened_by_admin?.name || "-",
-                        },
-                        {
-                          label: language === "ar" ? "الفرع" : "Branch",
-                          value: shiftReport.shift?.branch_name || (shiftReport.shift?.branch_id ? `#${shiftReport.shift.branch_id}` : "-"),
-                        },
-                        {
-                          label: language === "ar" ? "مدة الوردية" : "Duration",
-                          value: `${Math.floor(Math.abs(Number(shiftReport.shift?.duration_minutes ?? 0)) / 60)}h ${Math.abs(Number(shiftReport.shift?.duration_minutes ?? 0)) % 60}m`,
-                        },
-                        {
-                          label: language === "ar" ? "عدد العملاء" : "Customers",
-                          value: formatNumber((shiftReport.customers || []).length),
-                        },
-                        {
-                          label: language === "ar" ? "عدد المناديب" : "Representatives",
-                          value: formatNumber(
-                            (shiftReport.sales_representatives || []).filter((r: any) => r.id || r.name).length,
-                          ),
-                        },
-                      ].map((item) => (
-                        <Card key={item.label} className="rounded-xl shadow-none">
-                          <CardContent className="p-4">
-                            <p className="text-xs text-muted-foreground">{item.label}</p>
-                            <p className="mt-2 break-words text-sm font-semibold">{item.value}</p>
-                          </CardContent>
-                        </Card>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                        <Wallet className="h-4 w-4 text-primary" />
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {language === "ar"
+                          ? "التحصيل حسب طريقة الدفع"
+                          : "Collections by Payment Method"}
+                      </h3>
                     </div>
-                  </section>
 
-                  {/* SECTION 4.5: العملاء + مناديب المبيعات */}
-                  {[
-                    {
-                      key: "customers",
-                      title: language === "ar" ? "العملاء" : "Customers",
-                      nameLabel: language === "ar" ? "العميل" : "Customer",
-                      empty: language === "ar" ? "عميل نقدي" : "Walk-in Customer",
-                      rows: shiftReport.customers,
-                    },
-                    {
-                      key: "reps",
-                      title: language === "ar" ? "مناديب المبيعات" : "Sales Representatives",
-                      nameLabel: language === "ar" ? "المندوب" : "Representative",
-                      empty: language === "ar" ? "بدون مندوب" : "No representative",
-                      rows: shiftReport.sales_representatives,
-                    },
-                  ].map((g) =>
-                    (g.rows || []).length > 0 ? (
-                      <section key={g.key} className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold">{g.title}</h3>
-                          <Badge variant="secondary" className="text-xs">
-                            {g.rows.length}
-                          </Badge>
-                        </div>
-
-                        <div className="overflow-x-auto rounded-xl border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/30">
-                                <TableHead>{g.nameLabel}</TableHead>
-                                <TableHead>{language === "ar" ? "الفواتير" : "Invoices"}</TableHead>
-                                <TableHead>{language === "ar" ? "المبيعات" : "Sales"}</TableHead>
-                                <TableHead>{language === "ar" ? "التكلفة" : "Cost"}</TableHead>
-                                <TableHead>{language === "ar" ? "الربح" : "Profit"}</TableHead>
-                                <TableHead>{language === "ar" ? "المرتجعات" : "Returns"}</TableHead>
-                                <TableHead>{language === "ar" ? "صافي المبيعات" : "Net Sales"}</TableHead>
-                                <TableHead>{language === "ar" ? "صافي الربح" : "Net Profit"}</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {g.rows.map((r: any, idx: number) => (
-                                <TableRow key={`${g.key}-${r.id ?? "none"}-${idx}`}>
-                                  <TableCell className="min-w-[140px] font-medium">
-                                    {r.name || (r.id ? `#${r.id}` : g.empty)}
-                                  </TableCell>
-                                  <TableCell>{formatNumber(r.invoices_count)}</TableCell>
-                                  <TableCell>{formatNumber(r.sales)}</TableCell>
-                                  <TableCell>{formatNumber(r.cost)}</TableCell>
-                                  <TableCell
-                                    className={`font-semibold ${Number(r.profit) >= 0 ? "text-emerald-600" : "text-red-600"}`}
-                                  >
-                                    {formatNumber(r.profit)}
-                                  </TableCell>
-                                  <TableCell className={Number(r.returns_amount) > 0 ? "text-red-600" : ""}>
-                                    {formatNumber(r.returns_amount)}
-                                    {Number(r.returns_count) > 0 && (
-                                      <span className="ml-1 text-xs text-muted-foreground">
-                                        ({r.returns_count})
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>{formatNumber(r.net_sales)}</TableCell>
-                                  <TableCell
-                                    className={`font-semibold ${Number(r.net_profit) >= 0 ? "text-emerald-600" : "text-red-600"}`}
-                                  >
-                                    {formatNumber(r.net_profit)}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </section>
-                    ) : null,
-                  )}
-
-                  {/* SECTION 5: COLLECTIONS */}
-                  <section className="space-y-3">
-                    <h3 className="text-base font-bold">
-                      {language === "ar"
-                        ? "التحصيل حسب طريقة الدفع"
-                        : "Collections by Payment Method"}
-                    </h3>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                       {[
                         {
                           label: language === "ar" ? "نقدي" : "Cash",
                           value: shiftReport.collections?.cash,
                           Icon: DollarSign,
-                          color: "text-emerald-600 bg-emerald-500/10",
+                          color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
                         },
                         {
                           label: language === "ar" ? "بطاقة" : "Card",
                           value: shiftReport.collections?.card,
                           Icon: CreditCard,
-                          color: "text-blue-600 bg-blue-500/10",
+                          color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
                         },
                         {
-                          label: language === "ar" ? "محفظة إلكترونية" : "Wallet",
+                          label: language === "ar" ? "محفظة" : "Wallet",
                           value: shiftReport.collections?.wallet,
                           Icon: Wallet,
-                          color: "text-purple-600 bg-purple-500/10",
+                          color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
                         },
                         {
                           label: language === "ar" ? "طرق أخرى" : "Other",
                           value: shiftReport.collections?.other,
                           Icon: Receipt,
-                          color: "text-slate-600 bg-slate-500/10",
+                          color: "text-slate-600 bg-slate-500/10 border-slate-500/20",
                         },
                       ].map(({ label, value, Icon, color }) => (
-                        <Card key={label} className="rounded-xl shadow-none">
+                        <Card
+                          key={label}
+                          className={`rounded-xl border shadow-none ${color.split(" ")[2]}`}
+                        >
                           <CardContent className="flex items-center gap-3 p-4">
                             <div
-                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color}`}
+                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${color
+                                .split(" ")
+                                .slice(0, 2)
+                                .join(" ")}`}
                             >
                               <Icon className="h-5 w-5" />
                             </div>
-
                             <div className="min-w-0">
-                              <p className="text-sm text-muted-foreground">{label}</p>
-                              <p className="mt-1 break-words text-xl font-bold">
+                              <p className="text-xs text-muted-foreground">{label}</p>
+                              <p className="mt-1 break-words text-lg font-bold">
                                 {formatNumber(value)}
                               </p>
                             </div>
@@ -1353,11 +1374,11 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                       ))}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/10 to-transparent p-4">
                       <span className="font-semibold">
                         {language === "ar" ? "إجمالي التحصيل" : "Total Collections"}
                       </span>
-                      <span className="text-xl font-bold text-primary">
+                      <span className="text-2xl font-bold text-primary">
                         {formatNumber(shiftReport.collections?.total)}
                       </span>
                     </div>
@@ -1365,49 +1386,77 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     {Math.abs(Number(shiftReport.checks?.collections_minus_sales ?? 0)) >= 0.01 && (
                       <p className="text-xs text-muted-foreground">
                         {language === "ar"
-                          ? `ملاحظة: الفرق بين إجمالي التحصيل وإجمالي المبيعات = ${formatNumber(
+                          ? `ملاحظة: الفرق بين التحصيل والمبيعات = ${formatNumber(
                             shiftReport.checks.collections_minus_sales,
-                          )} (قد يكون بسبب مبيعات آجلة أو ضريبة أو خصم على مستوى الفاتورة).`
-                          : `Note: collections − gross sales = ${formatNumber(
+                          )} (قد يكون بسبب مبيعات آجلة أو ضريبة).`
+                          : `Note: collections − sales = ${formatNumber(
                             shiftReport.checks.collections_minus_sales,
-                          )} (may be due to credit sales, tax, or invoice-level discounts).`}
+                          )} (may be due to credit sales or tax).`}
                       </p>
                     )}
                   </section>
 
-                  {/* SECTION 6: TOP 5 PRODUCTS */}
+                  {/* ==================== أفضل 5 منتجات ==================== */}
                   {(shiftReport.top_products || []).length > 0 && (
                     <section className="space-y-3">
-                      <h3 className="text-base font-bold">
-                        {language === "ar" ? "أفضل 5 منتجات" : "Top 5 Products"}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10">
+                          <TrendingUp className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <h3 className="text-base font-bold">
+                          {language === "ar" ? "أفضل 5 منتجات" : "Top 5 Products"}
+                        </h3>
+                      </div>
 
                       <div className="overflow-x-auto rounded-xl border">
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-muted/30">
                               <TableHead>{language === "ar" ? "الصنف" : "Product"}</TableHead>
-                              <TableHead>{language === "ar" ? "الكمية" : "Qty"}</TableHead>
-                              <TableHead>{language === "ar" ? "إجمالي البيع" : "Sales"}</TableHead>
-                              <TableHead>{language === "ar" ? "التكلفة" : "Cost"}</TableHead>
-                              <TableHead>{language === "ar" ? "الربح" : "Profit"}</TableHead>
-                              <TableHead>{language === "ar" ? "هامش الربح" : "Margin"}</TableHead>
+                              <TableHead className="text-center">
+                                {language === "ar" ? "الكمية" : "Qty"}
+                              </TableHead>
+                              <TableHead className="text-end">
+                                {language === "ar" ? "المبيعات" : "Sales"}
+                              </TableHead>
+                              <TableHead className="text-end">
+                                {language === "ar" ? "التكلفة" : "Cost"}
+                              </TableHead>
+                              <TableHead className="text-end">
+                                {language === "ar" ? "الربح" : "Profit"}
+                              </TableHead>
+                              <TableHead className="text-center">
+                                {language === "ar" ? "الهامش" : "Margin"}
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {shiftReport.top_products.slice(0, 5).map((p: any, idx: number) => (
                               <TableRow key={`top-${p.product_id ?? "x"}-${idx}`}>
-                                <TableCell className="font-medium">{p.product_name}</TableCell>
-                                <TableCell>{formatNumber(p.quantity)}</TableCell>
-                                <TableCell>{formatNumber(p.selling_total)}</TableCell>
-                                <TableCell>{formatNumber(p.total_cost)}</TableCell>
+                                <TableCell className="min-w-[180px] font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/10 text-xs font-bold text-amber-600">
+                                      {idx + 1}
+                                    </div>
+                                    {p.product_name}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {formatNumber(p.quantity)}
+                                </TableCell>
+                                <TableCell className="text-end">
+                                  {formatNumber(p.selling_total)}
+                                </TableCell>
+                                <TableCell className="text-end text-slate-600">
+                                  {formatNumber(p.total_cost)}
+                                </TableCell>
                                 <TableCell
-                                  className={`font-semibold ${Number(p.profit) >= 0 ? "text-emerald-600" : "text-red-600"
+                                  className={`text-end font-semibold ${Number(p.profit) >= 0 ? "text-emerald-600" : "text-red-600"
                                     }`}
                                 >
                                   {formatNumber(p.profit)}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center">
                                   <Badge
                                     variant={
                                       Number(p.profit_margin) >= 30
@@ -1427,6 +1476,190 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                         </Table>
                       </div>
                     </section>
+                  )}
+
+                  {/* ==================== بيانات الوردية ==================== */}
+                  <section className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/10">
+                        <Receipt className="h-4 w-4 text-slate-600" />
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {language === "ar" ? "بيانات الوردية" : "Shift Information"}
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {[
+                        {
+                          label: language === "ar" ? "رقم الوردية" : "Shift Number",
+                          value: `#${shiftReport.shift?.id ?? selectedShift?.id ?? "-"}`,
+                          icon: Receipt,
+                        },
+                        {
+                          label: language === "ar" ? "الكاشير" : "Cashier",
+                          value: shiftReport.shift?.cashier || selectedShift?.employee || "-",
+                          icon: User,
+                        },
+                        {
+                          label: language === "ar" ? "وقت الفتح" : "Opened At",
+                          value: formatDateTime(shiftReport.shift?.opened_at),
+                          icon: Clock,
+                        },
+                        {
+                          label: language === "ar" ? "وقت الإغلاق" : "Closed At",
+                          value: formatDateTime(shiftReport.shift?.closed_at),
+                          icon: Clock,
+                        },
+                        {
+                          label: language === "ar" ? "المدير (فتح الوردية)" : "Admin",
+                          value: shiftReport.shift?.opened_by_admin?.name || "-",
+                          icon: User,
+                        },
+                        {
+                          label: language === "ar" ? "الفرع" : "Branch",
+                          value: shiftReport.shift?.branch_name || shiftReport.shift?.branch_id || "-",
+                          icon: Building2,
+                        },
+                        {
+                          label: language === "ar" ? "المدة" : "Duration",
+                          value: `${Math.floor(
+                            Math.abs(Number(shiftReport.shift?.duration_minutes ?? 0)) / 60,
+                          )}h ${Math.abs(Number(shiftReport.shift?.duration_minutes ?? 0)) % 60}m`,
+                          icon: Clock,
+                        },
+                        {
+                          label: language === "ar" ? "عدد العملاء" : "Customers",
+                          value: formatNumber((shiftReport.customers || []).length),
+                          icon: User,
+                        },
+                      ].map((item) => (
+                        <Card key={item.label} className="rounded-xl shadow-none">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <item.icon className="h-3.5 w-3.5" />
+                              {item.label}
+                            </div>
+                            <p className="mt-2 break-words text-sm font-semibold">{item.value}</p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* ==================== العملاء والمناديب ==================== */}
+                  {[
+                    {
+                      key: "customers",
+                      title: language === "ar" ? "العملاء" : "Customers",
+                      nameLabel: language === "ar" ? "العميل" : "Customer",
+                      empty: language === "ar" ? "عميل نقدي" : "Walk-in",
+                      rows: shiftReport.customers,
+                      Icon: User,
+                      color: "blue",
+                    },
+                    {
+                      key: "reps",
+                      title: language === "ar" ? "مناديب المبيعات" : "Sales Representatives",
+                      nameLabel: language === "ar" ? "المندوب" : "Rep",
+                      empty: language === "ar" ? "بدون مندوب" : "None",
+                      rows: shiftReport.sales_representatives,
+                      Icon: TrendingUp,
+                      color: "purple",
+                    },
+                  ].map((g) =>
+                    (g.rows || []).length > 0 ? (
+                      <section key={g.key} className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg bg-${g.color}-500/10`}
+                          >
+                            <g.Icon className={`h-4 w-4 text-${g.color}-600`} />
+                          </div>
+                          <h3 className="text-base font-bold">{g.title}</h3>
+                          <Badge variant="secondary" className="text-xs">
+                            {g.rows.length}
+                          </Badge>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30">
+                                <TableHead>{g.nameLabel}</TableHead>
+                                <TableHead className="text-center">
+                                  {language === "ar" ? "الفواتير" : "Invoices"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "المبيعات" : "Sales"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "التكلفة" : "Cost"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "الربح" : "Profit"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "المرتجعات" : "Returns"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "صافي المبيعات" : "Net Sales"}
+                                </TableHead>
+                                <TableHead className="text-end">
+                                  {language === "ar" ? "صافي الربح" : "Net Profit"}
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {g.rows.map((r: any, idx: number) => (
+                                <TableRow key={`${g.key}-${r.id ?? "none"}-${idx}`}>
+                                  <TableCell className="min-w-[140px] font-medium">
+                                    {r.name || (r.id ? `#${r.id}` : g.empty)}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {formatNumber(r.invoices_count)}
+                                  </TableCell>
+                                  <TableCell className="text-end">
+                                    {formatNumber(r.sales)}
+                                  </TableCell>
+                                  <TableCell className="text-end text-slate-600">
+                                    {formatNumber(r.cost)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`text-end font-semibold ${Number(r.profit) >= 0 ? "text-emerald-600" : "text-red-600"
+                                      }`}
+                                  >
+                                    {formatNumber(r.profit)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`text-end ${Number(r.returns_amount) > 0 ? "text-red-600" : "text-muted-foreground"
+                                      }`}
+                                  >
+                                    {formatNumber(r.returns_amount)}
+                                    {Number(r.returns_count) > 0 && (
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        ({r.returns_count})
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-end font-medium">
+                                    {formatNumber(r.net_sales)}
+                                  </TableCell>
+                                  <TableCell
+                                    className={`text-end font-semibold ${Number(r.net_profit) >= 0
+                                        ? "text-emerald-600"
+                                        : "text-red-600"
+                                      }`}
+                                  >
+                                    {formatNumber(r.net_profit)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </section>
+                    ) : null,
                   )}
                 </TabsContent>
 
@@ -1515,7 +1748,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     </Table>
                   </div>
 
-                  {/* Products Totals */}
                   {shiftReport.products?.totals && (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                       {[
@@ -1625,7 +1857,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                           </summary>
 
                           <div className="space-y-4 border-t bg-muted/10 p-4">
-                            {/* Invoice summary */}
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                               {[
                                 {
@@ -1656,7 +1887,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                               ))}
                             </div>
 
-                            {/* Invoice items table */}
                             <div className="overflow-x-auto rounded-lg border bg-background">
                               <Table>
                                 <TableHeader>
@@ -1726,7 +1956,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                               </Table>
                             </div>
 
-                            {/* Payment methods */}
                             <div className="rounded-lg border bg-background p-3">
                               <p className="mb-3 font-semibold">
                                 {language === "ar" ? "طرق الدفع" : "Payment Methods"}
@@ -1772,7 +2001,400 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                   )}
                 </TabsContent>
 
-                {/* ========================= TAB 4: RETURNS ========================= */}
+                {/* ========================= TAB 4: COMPLIMENTARY ========================= */}
+                <TabsContent value="complimentary" className="space-y-5">
+                  {/* Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10">
+                        <Gift className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {language === "ar" ? "فواتير المجاملة" : "Complimentary Invoices"}
+                      </h3>
+                      <Badge
+                        variant="secondary"
+                        className="bg-purple-100 text-xs text-purple-700"
+                      >
+                        {formatNumber(shiftReport.summary?.complimentary?.count)}{" "}
+                        {language === "ar" ? "فاتورة" : "invoices"}
+                      </Badge>
+                    </div>
+
+                    <Badge
+                      variant="outline"
+                      className="border-purple-500/30 bg-purple-500/5 text-xs text-purple-700"
+                    >
+                      {language === "ar" ? "لا تُحسب ضمن المبيعات" : "Not counted in sales"}
+                    </Badge>
+                  </div>
+
+                  {/* Quick Stats */}
+                  <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    <Card className="rounded-xl border-purple-500/30 bg-purple-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Gift className="h-3.5 w-3.5" />
+                          {language === "ar" ? "عدد الفواتير" : "Invoices"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold text-purple-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.count)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Package className="h-3.5 w-3.5" />
+                          {language === "ar" ? "إجمالي الكميات" : "Total Quantity"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold">
+                          {formatNumber(shiftReport.summary?.complimentary?.total_quantity)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl border-purple-500/30 bg-purple-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <DollarSign className="h-3.5 w-3.5" />
+                          {language === "ar" ? "القيمة السوقية" : "Market Value"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold text-purple-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.market_value)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {language === "ar" ? "بسعر البيع" : "At selling price"}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl border-red-500/30 bg-red-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calculator className="h-3.5 w-3.5" />
+                          {language === "ar" ? "التكلفة الفعلية" : "Actual Cost"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold text-red-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.total_cost)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {language === "ar" ? "ما تتحمله الشركة" : "Borne by company"}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Tag className="h-3.5 w-3.5" />
+                          {language === "ar" ? "إجمالي الخصم" : "Total Discount"}
+                        </div>
+                        <p className="mt-2 text-xl font-bold text-slate-600">
+                          {formatNumber(shiftReport.summary?.complimentary?.discount_amount)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="rounded-xl border-amber-500/30 bg-amber-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <TrendingDown className="h-3.5 w-3.5" />
+                          {language === "ar" ? "الربح بعد المجاملات" : "Profit After Comp."}
+                        </div>
+                        <p
+                          className={`mt-2 text-xl font-bold ${Number(
+                            shiftReport.summary?.complimentary?.profit_after_complimentary ?? 0,
+                          ) >= 0
+                            ? "text-amber-600"
+                            : "text-red-600"
+                            }`}
+                        >
+                          {formatNumber(
+                            shiftReport.summary?.complimentary?.profit_after_complimentary,
+                          )}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </section>
+
+                  {/* Explanation Card */}
+                  <Card className="rounded-xl border-purple-500/20 bg-purple-500/5 shadow-none">
+                    <CardContent className="flex items-start gap-3 p-4">
+                      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-purple-600" />
+                      <div className="text-sm">
+                        <p className="font-semibold text-purple-700">
+                          {language === "ar" ? "ملاحظة مهمة" : "Important Note"}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">
+                          {language === "ar"
+                            ? "فواتير المجاملة لا تُحسب ضمن المبيعات، لكن يتم تسجيل قيمتها السوقية وتكلفتها الفعلية. التكلفة الفعلية تُخصم من صافي الربح."
+                            : "Complimentary invoices are not counted in sales, but their market value and actual cost are recorded. The actual cost is deducted from net profit."}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Complimentary Invoices List */}
+                  {(shiftReport.complimentary_invoices || []).length > 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold">
+                        {language === "ar"
+                          ? "تفاصيل فواتير المجاملة"
+                          : "Complimentary Invoice Details"}
+                      </p>
+
+                      {shiftReport.complimentary_invoices.map((inv: any) => (
+                        <details
+                          key={inv.id}
+                          className="group overflow-hidden rounded-xl border border-purple-500/20"
+                        >
+                          <summary className="cursor-pointer list-none p-4 transition-colors hover:bg-purple-500/5 [&::-webkit-details-marker]:hidden">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-bold">
+                                    {language === "ar" ? "فاتورة" : "Invoice"} #
+                                    {inv.invoice_number || inv.id}
+                                  </p>
+                                  <Badge
+                                    variant="outline"
+                                    className="border-purple-500/30 bg-purple-100 text-xs text-purple-700"
+                                  >
+                                    <Gift className="mr-1 h-3 w-3" />
+                                    {language === "ar" ? "مجاملة" : "Complimentary"}
+                                  </Badge>
+                                </div>
+
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  {inv.customer || (language === "ar" ? "عميل نقدي" : "Walk-in Customer")}
+                                  {" · "}
+                                  {inv.date || "-"}
+                                  {inv.sales_rep
+                                    ? ` · ${language === "ar" ? "المندوب" : "Rep"}: ${inv.sales_rep}`
+                                    : ""}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <div className="text-end">
+                                  <p className="text-xs text-muted-foreground">
+                                    {language === "ar" ? "القيمة السوقية" : "Market Value"}
+                                  </p>
+                                  <p className="font-bold text-purple-600">
+                                    {formatNumber(inv.market_value)}
+                                  </p>
+                                </div>
+
+                                <div className="text-end">
+                                  <p className="text-xs text-muted-foreground">
+                                    {language === "ar" ? "التكلفة" : "Cost"}
+                                  </p>
+                                  <p className="font-bold text-red-600">
+                                    {formatNumber(inv.cost_borne)}
+                                  </p>
+                                </div>
+
+                                <span className="text-muted-foreground transition-transform group-open:rotate-180">
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="m6 9 6 6 6-6" />
+                                  </svg>
+                                </span>
+                              </div>
+                            </div>
+                          </summary>
+
+                          <div className="space-y-4 border-t bg-muted/10 p-4">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                              {[
+                                {
+                                  label: language === "ar" ? "عدد البنود" : "Items",
+                                  value: inv.items_count ?? inv.items?.length ?? 0,
+                                },
+                                {
+                                  label: language === "ar" ? "إجمالي الكمية" : "Quantity",
+                                  value: formatNumber(inv.total_quantity),
+                                },
+                                {
+                                  label: language === "ar" ? "القيمة السوقية" : "Market Value",
+                                  value: formatNumber(inv.market_value),
+                                  highlight: "purple",
+                                },
+                                {
+                                  label: language === "ar" ? "التكلفة الفعلية" : "Actual Cost",
+                                  value: formatNumber(inv.cost_borne),
+                                  highlight: "red",
+                                },
+                                {
+                                  label: language === "ar" ? "نسبة الخصم" : "Discount %",
+                                  value: `${inv.discount_percentage ?? 0}%`,
+                                },
+                              ].map((item: any) => (
+                                <div
+                                  key={item.label}
+                                  className="rounded-lg border bg-background p-3"
+                                >
+                                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                                  <p
+                                    className={`mt-1 break-words font-semibold ${item.highlight === "purple"
+                                      ? "text-purple-600"
+                                      : item.highlight === "red"
+                                        ? "text-red-600"
+                                        : ""
+                                      }`}
+                                  >
+                                    {item.value}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="overflow-x-auto rounded-lg border bg-background">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted/30">
+                                    <TableHead>{language === "ar" ? "الصنف" : "Product"}</TableHead>
+                                    <TableHead>{language === "ar" ? "الكمية" : "Qty"}</TableHead>
+                                    <TableHead>{language === "ar" ? "السعر" : "Price"}</TableHead>
+                                    <TableHead>{language === "ar" ? "الإجمالي" : "Total"}</TableHead>
+                                    <TableHead>{language === "ar" ? "تكلفة الوحدة" : "Unit Cost"}</TableHead>
+                                    <TableHead>{language === "ar" ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {(inv.items || []).length > 0 ? (
+                                    inv.items.map((item: any, index: number) => {
+                                      const quantity = Number(item.quantity ?? 0);
+                                      const unitPrice = Number(
+                                        item.selling_price ?? item.unit_price ?? item.price ?? 0,
+                                      );
+                                      const salesTotal = Number(
+                                        item.selling_total ?? item.total ?? unitPrice * quantity,
+                                      );
+                                      const unitCost = Number(item.unit_cost ?? item.cost_price ?? 0);
+                                      const totalCost = Number(item.total_cost ?? unitCost * quantity);
+
+                                      return (
+                                        <TableRow key={`${inv.id}-${item.id ?? index}`}>
+                                          <TableCell className="min-w-[150px] font-medium">
+                                            {item.product_name ||
+                                              item.name ||
+                                              (language === "ar" ? "غير محدد" : "Unnamed")}
+                                          </TableCell>
+                                          <TableCell>{formatNumber(quantity)}</TableCell>
+                                          <TableCell>{formatNumber(unitPrice)}</TableCell>
+                                          <TableCell className="font-semibold text-purple-600">
+                                            {formatNumber(salesTotal)}
+                                          </TableCell>
+                                          <TableCell
+                                            className={
+                                              item.cost_missing ? "font-semibold text-amber-600" : ""
+                                            }
+                                          >
+                                            {formatNumber(unitCost)}
+                                          </TableCell>
+                                          <TableCell className="font-semibold text-red-600">
+                                            {formatNumber(totalCost)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell
+                                        colSpan={6}
+                                        className="py-6 text-center text-muted-foreground"
+                                      >
+                                        {language === "ar"
+                                          ? "لا توجد تفاصيل بنود"
+                                          : "No line items available"}
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed py-10 text-center">
+                      <Gift className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">
+                        {language === "ar"
+                          ? "لا توجد فواتير مجاملة في هذه الوردية"
+                          : "No complimentary invoices in this shift"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Complimentary Products Summary */}
+                  {(shiftReport.complimentary_products || []).length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4 text-purple-600" />
+                        <h3 className="text-base font-bold">
+                          {language === "ar"
+                            ? "المنتجات المجاملة (مجمعة)"
+                            : "Complimentary Products (Aggregated)"}
+                        </h3>
+                        <Badge variant="secondary" className="text-xs">
+                          {shiftReport.complimentary_products.length}
+                        </Badge>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-xl border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/30">
+                              <TableHead>{language === "ar" ? "الصنف" : "Product"}</TableHead>
+                              <TableHead>{language === "ar" ? "الكمية" : "Qty"}</TableHead>
+                              <TableHead>
+                                {language === "ar" ? "القيمة السوقية" : "Market Value"}
+                              </TableHead>
+                              <TableHead>{language === "ar" ? "التكلفة" : "Cost"}</TableHead>
+                              <TableHead>{language === "ar" ? "الفرق" : "Difference"}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {shiftReport.complimentary_products.map((p: any, idx: number) => {
+                              const diff =
+                                Number(p.market_value ?? 0) - Number(p.total_cost ?? 0);
+                              return (
+                                <TableRow key={`comp-prod-${p.product_id ?? "x"}-${idx}`}>
+                                  <TableCell className="min-w-[150px] font-medium">
+                                    {p.product_name ||
+                                      (language === "ar" ? "غير محدد" : "Unnamed")}
+                                  </TableCell>
+                                  <TableCell>{formatNumber(p.quantity)}</TableCell>
+                                  <TableCell className="font-semibold text-purple-600">
+                                    {formatNumber(p.market_value)}
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-red-600">
+                                    {formatNumber(p.total_cost)}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {formatNumber(diff)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* ========================= TAB 5: RETURNS ========================= */}
                 <TabsContent value="returns" className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-base font-bold">
@@ -1785,7 +2407,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     </Badge>
                   </div>
 
-                  {/* Returns summary */}
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[
                       {
@@ -1820,7 +2441,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     ))}
                   </div>
 
-                  {/* Returns by source + refund method */}
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
                     {[
                       {
@@ -1866,7 +2486,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     ))}
                   </div>
 
-                  {/* Return details */}
                   {(shiftReport.returns_details || []).length > 0 ? (
                     <div className="space-y-3">
                       <p className="text-sm font-semibold">
@@ -1890,8 +2509,8 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                                   <Badge
                                     variant={ret.source === "pos" ? "default" : "outline"}
                                     className={`text-xs ${ret.source === "pos"
-                                        ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                                        : "bg-purple-100 text-purple-700 hover:bg-purple-100"
+                                      ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                                      : "bg-purple-100 text-purple-700 hover:bg-purple-100"
                                       }`}
                                   >
                                     {ret.source === "pos" ? "POS" : "Sales"}
@@ -1997,7 +2616,6 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                               </div>
                             )}
 
-                            {/* Return line items */}
                             <div className="overflow-x-auto rounded-lg border bg-background">
                               <Table>
                                 <TableHeader>
@@ -2091,7 +2709,7 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                   )}
                 </TabsContent>
 
-                {/* ===================== TAB 5: RECONCILIATION ===================== */}
+                {/* ===================== TAB 6: RECONCILIATION ===================== */}
                 <TabsContent value="reconciliation" className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-base font-bold">
@@ -2144,6 +2762,11 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                           negative: true,
                         },
                         {
+                          label: language === "ar" ? "المبلغ المتوقع" : "Expected Amount",
+                          value: shiftReport.reconciliation?.expected_amount,
+                          strong: true,
+                        },
+                        {
                           label: language === "ar" ? "المبلغ الفعلي" : "Actual Amount",
                           value: shiftReport.reconciliation?.actual_amount,
                           strong: true,
@@ -2181,10 +2804,10 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
 
                         <span
                           className={`text-xl font-bold ${Number(shiftReport.reconciliation?.difference || 0) < 0
-                              ? "text-red-600"
-                              : Number(shiftReport.reconciliation?.difference || 0) > 0
-                                ? "text-amber-600"
-                                : "text-emerald-600"
+                            ? "text-red-600"
+                            : Number(shiftReport.reconciliation?.difference || 0) > 0
+                              ? "text-amber-600"
+                              : "text-emerald-600"
                             }`}
                         >
                           {shiftReport.reconciliation?.difference === null ||
@@ -2196,15 +2819,14 @@ const ShiftsList: React.FC<ShiftsListProps> = ({ onClose }) => {
                     </CardContent>
                   </Card>
 
-                  {/* Reconciliation Summary */}
                   {shiftReport.reconciliation?.actual_amount !== null &&
                     shiftReport.reconciliation?.actual_amount !== undefined && (
                       <Card
                         className={`rounded-xl shadow-none ${shiftReport.reconciliation?.status === "balanced"
-                            ? "border-emerald-500/30 bg-emerald-500/5"
-                            : shiftReport.reconciliation?.status === "over"
-                              ? "border-amber-500/30 bg-amber-500/5"
-                              : "border-red-500/30 bg-red-500/5"
+                          ? "border-emerald-500/30 bg-emerald-500/5"
+                          : shiftReport.reconciliation?.status === "over"
+                            ? "border-amber-500/30 bg-amber-500/5"
+                            : "border-red-500/30 bg-red-500/5"
                           }`}
                       >
                         <CardContent className="flex items-center gap-3 p-4">
