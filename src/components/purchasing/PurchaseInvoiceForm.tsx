@@ -452,9 +452,18 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       }
     } catch (error: any) {
       console.error('Error saving invoice:', error);
+      const responseError = error.response?.data;
+      const validationErrors = responseError?.errors
+        ? Object.values(responseError.errors).flat().join(' - ')
+        : '';
+      const errorDescription = validationErrors
+        || responseError?.error
+        || responseError?.message
+        || error.message
+        || (language === 'ar' ? 'تعذر حفظ الفاتورة' : 'Unable to save invoice');
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.response?.data?.message || error.message,
+        title: language === 'ar' ? 'فشل حفظ الفاتورة' : 'Invoice save failed',
+        description: errorDescription,
         variant: 'destructive'
       });
     } finally {

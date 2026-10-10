@@ -162,6 +162,7 @@ export const permissionLabel = (permission: {
   if (permission.name_ar) return permission.name_ar;
   const source = permission.name || permission.key || permission.slug || '';
   if (!source) return 'صلاحية';
+  if (permissionKey(permission) === 'purchases-invoices.update') return 'تعديل فواتير المشتريات المرحّلة';
   return translatePermissionName(source);
 };
 
