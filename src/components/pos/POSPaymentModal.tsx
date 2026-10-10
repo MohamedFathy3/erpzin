@@ -32,7 +32,7 @@ const defaultPaymentMethods: PaymentMethod[] = [
   { id: 'cash', icon: <Banknote size={20} />, label: 'Cash', labelAr: 'نقدي', color: 'bg-success', shortcut: 'ctrl+1' },
   { id: 'card', icon: <CreditCard size={20} />, label: 'Card', labelAr: 'شبكة', color: 'bg-blue-500', shortcut: 'ctrl+2' },
   { id: 'wallet', icon: <Wallet size={20} />, label: 'Wallet', labelAr: 'محفظة', color: 'bg-purple-500', shortcut: 'ctrl+3' },
-    { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-indigo-500', shortcut: 'ctrl+4' },
+  { id: 'split', icon: <Split size={20} />, label: 'Split', labelAr: 'تقسيم', color: 'bg-indigo-500', shortcut: 'ctrl+4' },
 
 ];
 
@@ -50,6 +50,10 @@ interface CartItem {
   itemType?: 'product' | 'service';
   automotive_service_id?: number;
   meter_quantity?: number;
+  vehicle_size?: 'small' | 'large';  // ← ✅ أضف
+  unitId?: number;                    // ← ✅ أضف
+  colorId?: number;                   // ← ✅ أضف
+  stock?: number;
 }
 
 interface PaymentModalProps {
@@ -231,20 +235,20 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   const calculateTotalDiscountPercentage = (): number => {
     if (!cartItems.length) return 0;
     if (isComplimentary) return 100;
-    
+
     const originalTotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
+
     const afterItemDiscount = cartItems.reduce((sum, item) => {
       const itemOriginal = item.price * item.quantity;
       const itemDiscountPercent = (item.discount_percentage || 0) / 100;
       return sum + (itemOriginal * (1 - itemDiscountPercent));
     }, 0);
-    
+
     const finalTotal = afterItemDiscount * (1 - (invoiceDiscountPercentage / 100));
-    
+
     const totalDiscountAmount = originalTotal - finalTotal;
     const totalDiscountPercentage = originalTotal > 0 ? (totalDiscountAmount / originalTotal) * 100 : 0;
-    
+
     return Math.round(totalDiscountPercentage * 100) / 100;
   };
 
@@ -252,226 +256,256 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
- const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
-  if (isComplimentary && (!customer?.id || !Number.isSafeInteger(Number(customer.id)) || !customer.name?.trim())) {
-    toast({
-      title: language === 'ar' ? 'اختر العميل أولاً' : 'Select a customer first',
-      description: language === 'ar' ? 'فاتورة المجاملات تتطلب اختيار عميل مسجل.' : 'A complimentary invoice requires a registered customer.',
-      variant: 'destructive',
-    });
-    onRequestCustomer?.();
-    return;
-  }
-  let payments: { method: string; amount: number }[] = [];
+  const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
+    if (isComplimentary && (!customer?.id || !Number.isSafeInteger(Number(customer.id)) || !customer.name?.trim())) {
+      toast({
+        title: language === 'ar' ? 'اختر العميل أولاً' : 'Select a customer first',
+        description: language === 'ar' ? 'فاتورة المجاملات تتطلب اختيار عميل مسجل.' : 'A complimentary invoice requires a registered customer.',
+        variant: 'destructive',
+      });
+      onRequestCustomer?.();
+      return;
+    }
+    let payments: { method: string; amount: number }[] = [];
 
-  if (isComplimentary) {
-    payments = [];
-  } else if (paymentMethod === 'split') {
-    Object.entries(splitAmounts).forEach(([method, amount]) => {
-      const numAmount = parseFloat(amount) || 0;
-      if (numAmount > 0) {
-        payments.push({ method, amount: numAmount });
-      }
-    });
-  } else if (paymentMethod === 'cash') {
-    payments = [{ method: 'cash', amount: parseFloat(cashAmount) || amountDue }];
-  } else {
-    payments = [{ method: paymentMethod, amount: amountDue }];
-  }
+    if (isComplimentary) {
+      payments = [];
+    } else if (paymentMethod === 'split') {
+      Object.entries(splitAmounts).forEach(([method, amount]) => {
+        const numAmount = parseFloat(amount) || 0;
+        if (numAmount > 0) {
+          payments.push({ method, amount: numAmount });
+        }
+      });
+    } else if (paymentMethod === 'cash') {
+      payments = [{ method: 'cash', amount: parseFloat(cashAmount) || amountDue }];
+    } else {
+      payments = [{ method: paymentMethod, amount: amountDue }];
+    }
 
-  payments = payments.filter(payment => payment.amount > 0);
+    payments = payments.filter(payment => payment.amount > 0);
 
-  const totalDiscountPercentage = calculateTotalDiscountPercentage();
-  const originalTotal = getOriginalTotal();
-  const totalDiscountAmount = isComplimentary ? originalTotal : originalTotal - total;
-  const invoiceDiscountToSave = isComplimentary ? 100 : invoiceDiscountPercentage;
+    const totalDiscountPercentage = calculateTotalDiscountPercentage();
+    const originalTotal = getOriginalTotal();
+    const totalDiscountAmount = isComplimentary ? originalTotal : originalTotal - total;
+    const invoiceDiscountToSave = isComplimentary ? 100 : invoiceDiscountPercentage;
 
-  setIsProcessing(true);
-  try {
-    const invoiceData = {
-      customer_id: customer ? parseInt(String(customer.id), 10) || null : null,
-      sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
-      items: cartItems.map(item => ({
-        product_id: parseInt(item.id),
-        quantity: item.quantity,
-        price: item.price,
-        meter_quantity: item.meter_quantity || null,
-        item_type: item.itemType || 'product',
-        discount_percentage: item.discount_percentage || 0,
-        discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2))
-      })),
-      discount_percentage: invoiceDiscountToSave,
-      extra_charge: isComplimentary ? 0 : extraCharge,
-      is_complimentary: isComplimentary,
-      payments: payments,
-      subtotal: isComplimentary ? 0 : subtotal,
-      tax: isComplimentary ? 0 : tax,
-      total: amountDue,
-      shift_id: shiftId,
-      branch_id: branchId,
-      delivery_id: parseInt(String(deliveryPerson?.id)) || null,
-    };
+    setIsProcessing(true);
+    try {
+      const invoiceData = {
+        customer_id: customer ? parseInt(String(customer.id), 10) || null : null,
+        sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
+        items: cartItems.map(item => {
+          // ✅ تحديد نوع البند
+          const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
 
-    let invoiceId = '';
-    let invoiceNumberFromServer = '';  // ✅ متغير لتخزين رقم الفاتورة من السيرفر
-    let success = false;
+          // ✅ استخراج automotive_service_id
+          let serviceId: number | null = item.automotive_service_id ?? null;
 
-    if (isOffline) {
-      // ✅ في حالة عدم الاتصال، نولد رقم مؤقت
-      const offlineInvoiceNumber = `INV-OFFLINE-${Date.now()}`;
-      const offlineId = await saveOrderOffline({
-        items: cartItems,
-        subtotal: isComplimentary ? 0 : subtotal,
-        tax: isComplimentary ? 0 : tax,
-        total: amountDue,
-        customer_id: customer?.id,
-        delivery_id: deliveryPerson?.id,
-        payment_method: paymentMethod,
-        payments,
-        invoice_number: offlineInvoiceNumber,
+          // لو مش موجود، استخرجه من id (بيبدأ بـ "service-")
+          if (!serviceId && typeof item.id === 'string' && item.id.startsWith('service-')) {
+            const parsed = parseInt(item.id.replace('service-', ''), 10);
+            serviceId = Number.isFinite(parsed) ? parsed : null;
+          }
+
+          // ✅ استخراج product_id
+          let productId: number | null = null;
+          if (!isService) {
+            if (typeof item.id === 'string') {
+              const parsed = parseInt(item.id.replace(/\D/g, ''), 10);
+              productId = Number.isFinite(parsed) ? parsed : null;
+            } else if (typeof item.id === 'number') {
+              productId = item.id;
+            }
+          }
+
+          return {
+            product_id: productId,
+            automotive_service_id: serviceId,
+            item_type: isService ? 'service' : 'product',
+            product_name: item.nameAr || item.name || null,
+            quantity: Number(item.quantity),
+            price: Number(item.price),
+            meter_quantity: item.meter_quantity ?? null,
+            vehicle_size: (item as any).vehicle_size ?? null,
+            discount_percentage: Number(item.discount_percentage || 0),
+            discount_amount: Number((item.price * item.quantity * (item.discount_percentage || 0) / 100).toFixed(2)),
+            product_unit_id: (item as any).unitId ?? null,
+            color_id: (item as any).colorId ?? null,
+          };
+        }),
         discount_percentage: invoiceDiscountToSave,
         extra_charge: isComplimentary ? 0 : extraCharge,
         is_complimentary: isComplimentary,
-        sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
-      });
+        payments: payments,
+        subtotal: isComplimentary ? 0 : subtotal,
+        tax: isComplimentary ? 0 : tax,
+        total: amountDue,
+        shift_id: shiftId,
+        branch_id: branchId,
+        delivery_id: parseInt(String(deliveryPerson?.id)) || null,
+      };
 
-      if (offlineId) {
-        invoiceId = offlineId;
-        invoiceNumberFromServer = offlineInvoiceNumber;
+      let invoiceId = '';
+      let invoiceNumberFromServer = '';  // ✅ متغير لتخزين رقم الفاتورة من السيرفر
+      let success = false;
+
+      if (isOffline) {
+        // ✅ في حالة عدم الاتصال، نولد رقم مؤقت
+        const offlineInvoiceNumber = `INV-OFFLINE-${Date.now()}`;
+        const offlineId = await saveOrderOffline({
+          items: cartItems,
+          subtotal: isComplimentary ? 0 : subtotal,
+          tax: isComplimentary ? 0 : tax,
+          total: amountDue,
+          customer_id: customer?.id,
+          delivery_id: deliveryPerson?.id,
+          payment_method: paymentMethod,
+          payments,
+          invoice_number: offlineInvoiceNumber,
+          discount_percentage: invoiceDiscountToSave,
+          extra_charge: isComplimentary ? 0 : extraCharge,
+          is_complimentary: isComplimentary,
+          sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
+        });
+
+        if (offlineId) {
+          invoiceId = offlineId;
+          invoiceNumberFromServer = offlineInvoiceNumber;
+          success = true;
+          toast({
+            title: language === 'ar' ? 'نجاح' : 'Success',
+            description: language === 'ar'
+              ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً'
+              : 'Invoice saved locally. Will sync later',
+          });
+        } else {
+          throw new Error('Failed to save offline');
+        }
+      } else {
+        const response = await fetch('/api/invoice/store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${Cookies.get('token') || ''}`,
+          },
+          body: JSON.stringify(invoiceData)
+        });
+
+        if (!response.ok) {
+          let errorData: any = null;
+          try {
+            errorData = await response.json();
+          } catch {
+            // Keep a useful fallback when the server returns a non-JSON error.
+          }
+          throw new Error(errorData?.message || 'Failed to create invoice');
+        }
+
+        const result = await response.json();
+        console.log('📦 Server response:', result);
+
+        // ✅ استخراج رقم الفاتورة من الـ response
+        invoiceId = result.data?.id || `INV-${Date.now()}`;
+        invoiceNumberFromServer = result.data?.invoice_number || result.data?.invoiceNumber || `INV-${Date.now()}`;
+
+        console.log('📄 Invoice number from server:', invoiceNumberFromServer);
+
         success = true;
         toast({
           title: language === 'ar' ? 'نجاح' : 'Success',
-          description: language === 'ar'
-            ? 'تم حفظ الفاتورة محلياً. سيتم مزامنتها لاحقاً'
-            : 'Invoice saved locally. Will sync later',
+          description: language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully',
         });
-      } else {
-        throw new Error('Failed to save offline');
-      }
-    } else {
-      const response = await fetch('/api/invoice/store', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${Cookies.get('token') || ''}`,
-        },
-        body: JSON.stringify(invoiceData)
-      });
-
-      if (!response.ok) {
-        let errorData: any = null;
-        try {
-          errorData = await response.json();
-        } catch {
-          // Keep a useful fallback when the server returns a non-JSON error.
-        }
-        throw new Error(errorData?.message || 'Failed to create invoice');
       }
 
-      const result = await response.json();
-      console.log('📦 Server response:', result);
-      
-      // ✅ استخراج رقم الفاتورة من الـ response
-      invoiceId = result.data?.id || `INV-${Date.now()}`;
-      invoiceNumberFromServer = result.data?.invoice_number || result.data?.invoiceNumber || `INV-${Date.now()}`;
-      
-      console.log('📄 Invoice number from server:', invoiceNumberFromServer);
-      
-      success = true;
-      toast({
-        title: language === 'ar' ? 'نجاح' : 'Success',
-        description: language === 'ar' ? 'تم حفظ الفاتورة بنجاح' : 'Invoice saved successfully',
-      });
-    }
-
-    if (success) {
-      const printData = {
-        id: String(invoiceId),
-        invoice_number: invoiceNumberFromServer,  // ✅ استخدام رقم الفاتورة من السيرفر
-        date: new Date().toISOString(),
-        cashierName: user?.name,
-        branchName: branchName || undefined,
-        branchNameAr: branchNameAr || undefined,
-        branchPhone: branchPhone || companyInfo?.phone,
-        branchAddress: isRTL
-          ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
-          : branchAddress || companyInfo?.address,
-        customer: customer ? {
-          name: customer.name,
-          name_ar: customer.name_ar || customer.name,
-          nameAr: customer.name_ar || customer.name,
-          phone: customer.phone
-        } : null,
-        salesRep: salesRepresentative ? {
-          name: salesRepresentative.name,
-          nameAr: salesRepresentative.name,
-          commission_rate: salesRepresentative.commission_rate
-        } : null,
-        extraCharge: isComplimentary ? 0 : extraCharge,
-        deliveryPerson: deliveryPerson ? {
-          name: deliveryPerson.name,
-          nameAr: deliveryPerson.name,
-          phone: deliveryPerson.phone
-        } : null,
-        items: cartItems.map(item => ({
-          name: item.name,
-          nameAr: item.nameAr || item.name,
-          itemType: item.itemType || (item.automotive_service_id ? 'service' : 'product'),
-          quantity: item.quantity,
-          price: item.price,
-          total_price: Number((item.price * item.quantity * (1 - (item.discount_percentage || 0) / 100)).toFixed(2)),
-          sizeName: item.sizeName,
-          sizeNameAr: item.sizeName,
-          colorName: item.colorName,
-          colorNameAr: item.colorName,
-        })),
-        subtotal: isComplimentary ? originalTotal : subtotal,
-        tax: isComplimentary ? 0 : tax,
-        taxRate: defaultTax?.rate || 0,
-        total: amountDue,
-        payments: payments,
-        change: calculateChange(),
-        totalDiscountPercentage: totalDiscountPercentage,
-        totalDiscountAmount: totalDiscountAmount,
-        invoiceDiscountPercentage: invoiceDiscountToSave,
-        discount_percentage: totalDiscountPercentage,
-        discount_amount: totalDiscountAmount,
-        amounts: {
+      if (success) {
+        const printData = {
+          id: String(invoiceId),
+          invoice_number: invoiceNumberFromServer,  // ✅ استخدام رقم الفاتورة من السيرفر
+          date: new Date().toISOString(),
+          cashierName: user?.name,
+          branchName: branchName || undefined,
+          branchNameAr: branchNameAr || undefined,
+          branchPhone: branchPhone || companyInfo?.phone,
+          branchAddress: isRTL
+            ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address
+            : branchAddress || companyInfo?.address,
+          customer: customer ? {
+            name: customer.name,
+            name_ar: customer.name_ar || customer.name,
+            nameAr: customer.name_ar || customer.name,
+            phone: customer.phone
+          } : null,
+          salesRep: salesRepresentative ? {
+            name: salesRepresentative.name,
+            nameAr: salesRepresentative.name,
+            commission_rate: salesRepresentative.commission_rate
+          } : null,
+          extraCharge: isComplimentary ? 0 : extraCharge,
+          deliveryPerson: deliveryPerson ? {
+            name: deliveryPerson.name,
+            nameAr: deliveryPerson.name,
+            phone: deliveryPerson.phone
+          } : null,
+          items: cartItems.map(item => ({
+            name: item.name,
+            nameAr: item.nameAr || item.name,
+            itemType: item.itemType || (item.automotive_service_id ? 'service' : 'product'),
+            quantity: item.quantity,
+            price: item.price,
+            total_price: Number((item.price * item.quantity * (1 - (item.discount_percentage || 0) / 100)).toFixed(2)),
+            sizeName: item.sizeName,
+            sizeNameAr: item.sizeName,
+            colorName: item.colorName,
+            colorNameAr: item.colorName,
+          })),
+          subtotal: isComplimentary ? originalTotal : subtotal,
+          tax: isComplimentary ? 0 : tax,
+          taxRate: defaultTax?.rate || 0,
           total: amountDue,
-          paid: payments.reduce((sum, payment) => sum + payment.amount, 0),
-          remaining: amountDue - payments.reduce((sum, payment) => sum + payment.amount, 0),
-        },
-        is_complimentary: isComplimentary,
-        isComplimentary,
-      };
+          payments: payments,
+          change: calculateChange(),
+          totalDiscountPercentage: totalDiscountPercentage,
+          totalDiscountAmount: totalDiscountAmount,
+          invoiceDiscountPercentage: invoiceDiscountToSave,
+          discount_percentage: totalDiscountPercentage,
+          discount_amount: totalDiscountAmount,
+          amounts: {
+            total: amountDue,
+            paid: payments.reduce((sum, payment) => sum + payment.amount, 0),
+            remaining: amountDue - payments.reduce((sum, payment) => sum + payment.amount, 0),
+          },
+          is_complimentary: isComplimentary,
+          isComplimentary,
+        };
 
-      console.log('📄 Print data with invoice number:', printData.invoice_number);
+        console.log('📄 Print data with invoice number:', printData.invoice_number);
 
-      setCompletedInvoice({ payments, printData });
+        setCompletedInvoice({ payments, printData });
 
-      if (type === 'save') {
-        onComplete(payments, invoiceNumberFromServer, isComplimentary);  // إرسال رقم الفاتورة وعلامة المجاملة
-      } else if (type === 'print') {
-        setShowPrintOptions(true);
-      } else if (type === 'both') {
-        setShowPrintOptions(true);
+        if (type === 'save') {
+          onComplete(payments, invoiceNumberFromServer, isComplimentary);  // إرسال رقم الفاتورة وعلامة المجاملة
+        } else if (type === 'print') {
+          setShowPrintOptions(true);
+        } else if (type === 'both') {
+          setShowPrintOptions(true);
+        }
       }
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      const errorMessage = error instanceof Error && error.message
+        ? error.message
+        : (language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (error) {
-    console.error('Error saving invoice:', error);
-    const errorMessage = error instanceof Error && error.message
-      ? error.message
-      : (language === 'ar' ? 'فشل في حفظ الفاتورة' : 'Failed to save invoice');
-    toast({
-      title: language === 'ar' ? 'خطأ' : 'Error',
-      description: errorMessage,
-      variant: 'destructive',
-    });
-  } finally {
-    setIsProcessing(false);
-  }
-};
+  };
 
   const handleComplete = () => handleSaveAndPrint('save');
   const handleSaveAndPrintNow = () => handleSaveAndPrint('both');
@@ -727,29 +761,29 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           </label>}
 
           {!isComplimentary && <>
-          <div className="flex gap-2 mb-6 justify-center">
-            {paymentMethods.map((method) => (
-              <button
-                key={method.id}
-                onClick={() => setPaymentMethod(method.id)}
-                title={method.shortcut}
-                className={cn(
-                  'flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium transition-all text-sm relative flex-1 max-w-[140px]',
-                  paymentMethod === method.id
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                )}
-              >
-                {method.icon}
-                {language === 'ar' ? method.labelAr : method.label}
-                <span className="absolute -top-1 -end-1 text-[10px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
-                  {method.shortcut}
-                </span>
-              </button>
-            ))}
-          </div>
+            <div className="flex gap-2 mb-6 justify-center">
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => setPaymentMethod(method.id)}
+                  title={method.shortcut}
+                  className={cn(
+                    'flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium transition-all text-sm relative flex-1 max-w-[140px]',
+                    paymentMethod === method.id
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  )}
+                >
+                  {method.icon}
+                  {language === 'ar' ? method.labelAr : method.label}
+                  <span className="absolute -top-1 -end-1 text-[10px] px-1 bg-background border border-border rounded text-muted-foreground font-mono">
+                    {method.shortcut}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-          {renderPaymentContent()}
+            {renderPaymentContent()}
           </>}
 
           {(paymentMethod === 'cash' || paymentMethod === 'split') && calculateChange() > 0 && (

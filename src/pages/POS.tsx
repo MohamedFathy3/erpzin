@@ -8,8 +8,8 @@ import { useApp } from '@/contexts/AppContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { cn } from '@/lib/utils';
-import { 
-  Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User, 
+import {
+  Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User,
   Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
   ShoppingBag, AlertCircle, CheckCircle2,
   UserCheck, Share2
@@ -35,11 +35,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Link } from 'react-router-dom';
-import { 
-  saveOrderOffline, 
-  getUnsyncedOrders, 
-  markOrderSynced, 
-  getOfflineStats 
+import {
+  saveOrderOffline,
+  getUnsyncedOrders,
+  markOrderSynced,
+  getOfflineStats
 } from '@/lib/offlineDB';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -125,6 +125,25 @@ interface OfflineStats {
   lastUpdated: string;
 }
 
+// ==================== Automotive pricing helpers ====================
+const toPositive = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+// السعر الثابت للخدمة حسب حجم السيارة (مع الرجوع لسعر البيع ثم سعر المنتج)
+const getFixedServicePrice = (config: any, size: 'small' | 'large', productPrice?: unknown): number => {
+  const sizePrice = size === 'large' ? config?.large_vehicle_price : config?.small_vehicle_price;
+  return toPositive(sizePrice) || toPositive(config?.selling_price) || toPositive(productPrice);
+};
+
+// خدمة بدون سعر ثابت => الكاشير يدخل السعر يدوياً
+const isManualPriceService = (config: any, productPrice?: unknown): boolean => {
+  if (config?.has_fixed_price === false || config?.is_custom_priced === true) return true;
+  return getFixedServicePrice(config, 'small', productPrice) <= 0
+    && getFixedServicePrice(config, 'large', productPrice) <= 0;
+};
+
 // ==================== Main Component ====================
 const POS: React.FC = () => {
   const { language } = useLanguage();
@@ -132,7 +151,7 @@ const POS: React.FC = () => {
   const { formatCurrency } = useRegionalSettings();
   const { taxRates } = useCurrencyTax();
   const navigate = useNavigate();
-  
+
   // ==================== States ====================
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -184,7 +203,7 @@ const POS: React.FC = () => {
   const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
   const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
   const [extraCharge, setExtraCharge] = useState(0);
-  
+
   // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
   const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
   const lastScannedBarcode = useRef<string>('');
@@ -204,7 +223,7 @@ const POS: React.FC = () => {
       setCartItems(items => items.map(item => ({ ...item, discount_percentage: 0 })));
     }
   }, [canManagePosDiscounts]);
-  
+
   const [branchDetails, setBranchDetails] = useState<{
     phone?: string | null;
     address?: string | null;
@@ -215,7 +234,7 @@ const POS: React.FC = () => {
     const fetchBranchDetails = async () => {
       const branch = userBranch || currentBranch;
       if (!branch?.id) return;
-      
+
       try {
         const response = await api.get(`/branch/${branch.id}`);
         if (response.data?.data) {
@@ -236,9 +255,9 @@ const POS: React.FC = () => {
   // ==================== Branch Data ====================
   const branchData = useMemo(() => {
     const branch = userBranch || currentBranch;
-    
+
     if (!branch) return null;
-    
+
     return {
       id: branch.id,
       name: branch.name,
@@ -248,7 +267,7 @@ const POS: React.FC = () => {
       addressAr: branchDetails?.address_ar || branchDetails?.address || null
     };
   }, [userBranch, currentBranch, branchDetails]);
-  
+
   // ==================== Tax Logic ====================
   const getActiveTax = () => {
     if (!taxRates || taxRates.length === 0) return null;
@@ -277,8 +296,8 @@ const POS: React.FC = () => {
       setIsOffline(true);
       toast({
         title: language === 'ar' ? 'أنت الآن في وضع عدم الاتصال' : 'You are offline',
-        description: language === 'ar' 
-          ? 'سيتم حفظ الفواتير محلياً ومزامنتها لاحقاً' 
+        description: language === 'ar'
+          ? 'سيتم حفظ الفواتير محلياً ومزامنتها لاحقاً'
           : 'Invoices will be saved locally and synced later',
         variant: 'destructive',
       });
@@ -328,7 +347,7 @@ const POS: React.FC = () => {
     setSyncing(true);
     try {
       const unsyncedOrders = await getUnsyncedOrders();
-      
+
       if (unsyncedOrders.length === 0) {
         toast({
           title: language === 'ar' ? 'لا توجد طلبات للمزامنة' : 'No orders to sync',
@@ -350,14 +369,23 @@ const POS: React.FC = () => {
             },
             body: JSON.stringify({
               customer_id: parseInt(order.customer_id || '1'),
-              items: order.items.map((item: any) => ({
-                product_id: parseInt(item.id),
-                quantity: item.quantity,
-                price: item.price,
-                discount_percentage: item.discount_percentage || 0,
-                meter_quantity: item.meter_quantity || null,
-                item_type: item.itemType || 'product'
-              })),
+              items: order.items.map((item: any) => {
+                const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
+
+                return {
+                  automotive_service_id: isService ? item.automotive_service_id : null,
+                  product_id: isService
+                    ? null
+                    : parseInt(String(item.id).replace(/\D/g, ''), 10),
+                  item_type: isService ? 'service' : 'product',
+                  product_name: item.nameAr || item.name,
+                  quantity: Number(item.quantity),
+                  price: Number(item.price),
+                  discount_percentage: Number(item.discount_percentage || 0),
+                  meter_quantity: item.meter_quantity ?? null,
+                  vehicle_size: item.vehicle_size ?? null,
+                };
+              }),
               discount_percentage: order.discount_percentage || 0,
               extra_charge: order.extra_charge || 0,
               is_complimentary: order.is_complimentary || false,
@@ -366,7 +394,7 @@ const POS: React.FC = () => {
               subtotal: order.subtotal,
               tax: order.tax,
               total: order.total,
-            })
+            }),
           });
 
           if (response.ok) {
@@ -382,10 +410,10 @@ const POS: React.FC = () => {
 
       await checkUnsyncedOrders();
       await loadOfflineStats();
-      
+
       toast({
         title: language === 'ar' ? 'تمت المزامنة' : 'Sync completed',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? `تمت مزامنة ${successCount} طلب، فشل ${failCount}`
           : `${successCount} orders synced, ${failCount} failed`,
         variant: failCount > 0 ? 'destructive' : 'default',
@@ -404,16 +432,16 @@ const POS: React.FC = () => {
   const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
   const productCategoryFilter = selectedCategory === 'automotive' ? 'all' : selectedCategory;
   const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(productCategoryFilter);
-  
+
   const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    
+
     if (value.length >= 3) {
       setIsBarcodeScanning(true);
-      
+
       if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
       scanTimeoutRef.current = setTimeout(() => {
         setIsBarcodeScanning(false);
@@ -424,20 +452,20 @@ const POS: React.FC = () => {
   };
 
   useEffect(() => {
-    console.log('🔍 Barcode scan result:', { 
-      barcodeProduct, 
+    console.log('🔍 Barcode scan result:', {
+      barcodeProduct,
       searchQuery,
     });
-    
+
     if (barcodeProduct && barcodeProduct.id) {
       console.log('✅ Adding product to cart:', barcodeProduct.name);
-      
+
       addToCart(barcodeProduct as Product);
       setSearchQuery('');
-      
+
       toast({
         title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? (barcodeProduct.name_ar || barcodeProduct.name)
           : barcodeProduct.name,
       });
@@ -458,7 +486,7 @@ const POS: React.FC = () => {
 
   const transformedProducts = useMemo(() => {
     if (!products) return [];
-    
+
     const mapped = products.map((prod: Product) => ({
       id: prod.id.toString(),
       name: prod.name,
@@ -486,10 +514,16 @@ const POS: React.FC = () => {
   // ==================== Cart Operations ====================
   const addToCart = (product: Product) => {
     if (product.automotive_service) {
+      const config = product.automotive_service;
       setSelectedAutomotiveProduct(product);
       setAutomotiveVehicleSize('small');
       setAutomotiveMeterQuantity('1');
-      setAutomotiveServicePrice(product.automotive_service.item_type === 'service' ? '' : String(product.price || ''));
+      // ✅ سعر ثابت => يتحدد تلقائياً | بدون سعر => الكاشير يدخله
+      setAutomotiveServicePrice(
+        isManualPriceService(config, product.price)
+          ? ''
+          : String(getFixedServicePrice(config, 'small', product.price))
+      );
       return;
     }
     // إذا كان المنتج عنده متغيرات، افتح نافذة اختيار المتغيرات
@@ -507,7 +541,7 @@ const POS: React.FC = () => {
         if (existing.stock !== undefined && existing.quantity >= existing.stock) {
           toast({
             title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
-            description: language === 'ar' 
+            description: language === 'ar'
               ? `الحد الأقصى ${existing.stock} قطعة فقط`
               : `Maximum ${existing.stock} items only`,
             variant: 'destructive',
@@ -536,34 +570,53 @@ const POS: React.FC = () => {
 
   const confirmAutomotiveProduct = () => {
     if (!selectedAutomotiveProduct?.automotive_service) return;
+
     const config = selectedAutomotiveProduct.automotive_service;
     const isLarge = automotiveVehicleSize === 'large';
     const metersPerCar = Number(isLarge ? config.large_vehicle_quantity : config.small_vehicle_quantity) || 1;
-    const configuredPrice = Number(isLarge ? config.large_vehicle_price : config.small_vehicle_price) || Number(selectedAutomotiveProduct.price) || 0;
-    const price = config.item_type === 'service' ? Number(automotiveServicePrice) : configuredPrice;
-    if (config.item_type === 'service' && (!Number.isFinite(price) || price <= 0)) {
-      toast({ title: 'أدخل سعر الخدمة', description: 'الخدمة بدون سعر ثابت ويجب على الكاشير تحديد سعرها.', variant: 'destructive' });
-      return;
+
+    // ✅ تحديد السعر
+    let price: number;
+    if (isManualPriceService(config, selectedAutomotiveProduct.price)) {
+      // الكاشير يدخل السعر يدوياً
+      price = Number(automotiveServicePrice);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast({
+          title: 'أدخل سعر الخدمة',
+          description: 'هذه الخدمة بلا سعر ثابت، أدخل السعر يدوياً.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else {
+      // سعر ثابت من إعدادات الخدمة
+      price = getFixedServicePrice(config, automotiveVehicleSize, selectedAutomotiveProduct.price);
     }
+
     const cars = Math.max(1, Number(automotiveMeterQuantity) || 1);
+
     setCartItems(prev => [...prev, {
-      id: selectedAutomotiveProduct.id,
+      id: `service-${config.id}`,
       name: selectedAutomotiveProduct.name,
       nameAr: selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name,
       price,
       quantity: cars,
-      sku: selectedAutomotiveProduct.sku,
-      stock: Math.floor(Number(config.stock_quantity ?? selectedAutomotiveProduct.stock ?? 999999) / metersPerCar),
+      sku: selectedAutomotiveProduct.sku || `AUTO-${config.code}`,
+      // الخدمات لا تستهلك مخزوناً؛ المنتجات فقط تُخصم أمتارها
+      stock: (config as any).item_type === 'product'
+        ? Math.floor(Number(config.stock_quantity ?? 0) / metersPerCar)
+        : 999999,
       sizeName: `${isLarge ? 'سيارة كبيرة' : 'سيارة صغيرة'} · ${metersPerCar} متر`,
       automotive_service_id: config.id,
-      itemType: config.item_type === 'service' ? 'service' : 'product',
+      itemType: 'service',
       vehicle_size: automotiveVehicleSize,
       meter_quantity: metersPerCar,
       discount_percentage: 0,
     }]);
-    setSelectedAutomotiveProduct(null);
-  };
 
+    setSelectedAutomotiveProduct(null);
+    setAutomotiveServicePrice('');
+  };
   const addVariantToCart = (variant: {
     productId: string;
     unitId: number;
@@ -577,7 +630,7 @@ const POS: React.FC = () => {
     if (!selectedProductForVariant) return;
 
     const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
-    
+
     setCartItems(prev => {
       const existing = prev.find(item => item.variantId === variantId);
       if (existing) {
@@ -623,15 +676,15 @@ const POS: React.FC = () => {
     } else {
       setCartItems(prev =>
         prev.map(item => {
-          const match = variantId 
-            ? item.variantId === variantId 
+          const match = variantId
+            ? item.variantId === variantId
             : item.id === itemKey && !item.variantId;
           if (match) {
             // التحقق من المخزون
             if (item.stock !== undefined && quantity > item.stock) {
               toast({
                 title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
-                description: language === 'ar' 
+                description: language === 'ar'
                   ? `الحد الأقصى ${item.stock} قطعة فقط`
                   : `Maximum ${item.stock} items only`,
                 variant: 'destructive',
@@ -659,7 +712,7 @@ const POS: React.FC = () => {
 
   const holdOrder = () => {
     if (cartItems.length === 0) return;
-    
+
     const subtotal = calculateSubtotalAfterItemDiscounts();
     const tax = (subtotal * taxRate) / 100;
     const total = subtotal + tax;
@@ -673,7 +726,7 @@ const POS: React.FC = () => {
 
     setHeldOrders(prev => [...prev, newHeldOrder]);
     setCartItems([]);
-    
+
     toast({
       title: language === 'ar' ? 'تم تعليق الطلب' : 'Order held',
       description: language === 'ar' ? `رقم الطلب: ${newHeldOrder.id.slice(-4)}` : `Order #${newHeldOrder.id.slice(-4)}`
@@ -692,8 +745,8 @@ const POS: React.FC = () => {
   // ✅ دالة خصم المنتج
   const handleItemDiscountChange = (itemId: string, percentage: number, variantId?: string) => {
     setCartItems(prev => prev.map(item => {
-      const match = variantId 
-        ? item.variantId === variantId 
+      const match = variantId
+        ? item.variantId === variantId
         : item.id === itemId && !item.variantId;
       if (match) {
         return { ...item, discount_percentage: percentage };
@@ -716,7 +769,7 @@ const POS: React.FC = () => {
       return sum + (itemTotal * (1 - discountRate));
     }, 0);
   };
-  
+
   const calculateSubtotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const calculateItemDiscountsTotal = () => {
     return cartItems.reduce((sum, item) => {
@@ -725,47 +778,91 @@ const POS: React.FC = () => {
       return sum + (itemTotal * discountRate);
     }, 0);
   };
-  
+
   const calculateSubtotalAfterAllDiscounts = () => {
     const afterItemDiscounts = calculateSubtotalAfterItemDiscounts();
     const invoiceDiscount = (afterItemDiscounts * invoiceDiscountPercentage) / 100;
     return afterItemDiscounts - invoiceDiscount;
   };
-  
+
   const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
   const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax() + extraCharge;
 
   // ==================== Payment Handlers ====================
-const handlePaymentComplete = async (payments: { method: string; amount: number }[], invoiceNum?: string, isComplimentary = false) => {
- const finalInvoiceNumber = invoiceNum || invoiceNumber || `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
-  
-  if (invoiceNum) {
-    setInvoiceNumber(invoiceNum);
-  }
-  
-  const orderData = {
-    items: cartItems.map(item => ({
-      ...item,
-      discount_percentage: item.discount_percentage || 0,
-      item_total: (item.price * item.quantity) * (1 - (item.discount_percentage || 0) / 100)
-    })),
-    invoice_number: finalInvoiceNumber,
-    subtotal: calculateSubtotal(),
-    item_discounts_total: calculateItemDiscountsTotal(),
-    invoice_discount_percentage: isComplimentary ? 100 : invoiceDiscountPercentage,
-    invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
-    subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
-    tax: isComplimentary ? 0 : calculateTax(),
-    extra_charge: isComplimentary ? 0 : extraCharge,
-    total: isComplimentary ? 0 : calculateTotal(),
-    customer_id: selectedCustomer?.id,
-    delivery_id: selectedDelivery?.id,
-    sales_rep_id: selectedSalesRep?.id,
-    shift_id: currentShift?.id,
-    payments
-  };
+  const handlePaymentComplete = async (
+    payments: { method: string; amount: number }[],
+    invoiceNum?: string,
+    isComplimentary = false
+  ) => {
+    const finalInvoiceNumber = invoiceNum || invoiceNumber ||
+      `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
 
-  console.log('📦 Order Data:', orderData);
+    if (invoiceNum) setInvoiceNumber(invoiceNum);
+
+    // ✅ تحويل بنود السلة للـ API payload الصح
+    const cleanItems = cartItems.map(item => {
+      const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
+
+      // ✅ أضف console.log هنا عشان تشوف القيم
+      console.log('🔍 Cart item being processed:', {
+        id: item.id,
+        name: item.name,
+        itemType: item.itemType,
+        automotive_service_id: item.automotive_service_id,
+        vehicle_size: item.vehicle_size,
+        meter_quantity: item.meter_quantity,
+        isService,
+      });
+
+      // ✅ استخرج automotive_service_id من الـ id لو مش موجود
+      let serviceId = item.automotive_service_id;
+
+      // لو مش موجود، حاول تستخرجه من الـ id (لأنه بيبدأ بـ "service-")
+      if (!serviceId && typeof item.id === 'string' && item.id.startsWith('service-')) {
+        serviceId = parseInt(item.id.replace('service-', ''), 10);
+      }
+
+      return {
+        automotive_service_id: isService ? serviceId : null,
+        product_id: isService
+          ? null
+          : (typeof item.id === 'string'
+            ? parseInt(item.id.replace(/\D/g, ''), 10)
+            : item.id),
+
+        item_type: isService ? 'service' : 'product',
+        product_name: item.nameAr || item.name,  // ← ✅ ضيف ده عشان ما يحصلش Undefined
+        quantity: Number(item.quantity),
+        price: Number(item.price),
+        discount_percentage: Number(item.discount_percentage || 0),
+        meter_quantity: item.meter_quantity ?? null,
+        vehicle_size: item.vehicle_size ?? null,
+        product_unit_id: item.unitId ?? null,
+        color_id: item.colorId ?? null,
+      };
+    });
+
+    const orderData = {
+      items: cleanItems,
+      invoice_number: finalInvoiceNumber,
+      subtotal: calculateSubtotal(),
+      item_discounts_total: calculateItemDiscountsTotal(),
+      invoice_discount_percentage: isComplimentary ? 100 : invoiceDiscountPercentage,
+      invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
+      subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
+      tax: isComplimentary ? 0 : calculateTax(),
+      extra_charge: isComplimentary ? 0 : extraCharge,
+      total: isComplimentary ? 0 : calculateTotal(),
+      customer_id: selectedCustomer?.id ? parseInt(selectedCustomer.id, 10) : undefined,
+      delivery_id: selectedDelivery?.id,
+      sales_rep_id: selectedSalesRep?.id,
+      shift_id: currentShift?.id,
+      payments,
+    };
+
+
+
+    console.log('📦 Order Data:', orderData);
 
     if (!navigator.onLine || isOffline) {
       try {
@@ -956,6 +1053,22 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
 
   const isLoading = categoriesLoading || productsLoading;
 
+  // ==================== Automotive pricing (derived) ====================
+  const automotiveConfig: any = selectedAutomotiveProduct?.automotive_service || null;
+  const automotiveProductPrice = Number(selectedAutomotiveProduct?.price) || 0;
+  const automotiveIsManual = automotiveConfig ? isManualPriceService(automotiveConfig, automotiveProductPrice) : false;
+  const automotiveFixedPrice = automotiveConfig && !automotiveIsManual
+    ? getFixedServicePrice(automotiveConfig, automotiveVehicleSize, automotiveProductPrice)
+    : 0;
+  const automotiveSizeLabel = (size: 'small' | 'large') => {
+    if (!automotiveConfig) return '';
+    const meters = Number(size === 'large' ? automotiveConfig.large_vehicle_quantity : automotiveConfig.small_vehicle_quantity) || 0;
+    const parts = [size === 'large' ? 'كبيرة' : 'صغيرة'];
+    if (meters > 0) parts.push(`${meters} متر`);
+    if (!automotiveIsManual) parts.push(getFixedServicePrice(automotiveConfig, size, automotiveProductPrice).toLocaleString());
+    return parts.join(' — ');
+  };
+
   // ==================== Render ====================
   return (
     <TooltipProvider delayDuration={300}>
@@ -969,7 +1082,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                 {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
               </h1>
             </div>
-            
+
             {/* Offline/Online Status */}
             <div className={cn(
               "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
@@ -978,22 +1091,22 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
               <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
             </div>
-            
+
             {/* Branch Info */}
             {(userBranch || currentBranch) && (
               <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
                 <Building2 size={14} />
                 <span>
-                  {userBranch 
+                  {userBranch
                     ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
-                    : currentBranch 
+                    : currentBranch
                       ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
                       : null
                   }
                 </span>
               </div>
             )}
-            
+
             {/* User Info */}
             <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-xl shadow-sm">
               <div className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white">
@@ -1003,7 +1116,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                 <span className="text-sm font-semibold text-gray-800">{user?.name}</span>
               </div>
             </div>
-            
+
             {currentShift && (
               <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">
                 {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
@@ -1016,9 +1129,9 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
             <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
               {/* Sync Button */}
               {unsyncedCount > 0 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={syncOfflineOrders}
                   disabled={syncing || isOffline}
                   className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 relative gap-1.5 px-2"
@@ -1042,9 +1155,9 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                 {transferRequests.filter((request) => request.status === 'pending').length > 0 && <span className="absolute -top-1 -end-1 w-4 h-4 bg-fuchsia-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{transferRequests.filter((request) => request.status === 'pending').length}</span>}
               </Button>
               {/* Held Orders */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowHeldOrders(true)}
                 className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 relative gap-1.5 px-2"
               >
@@ -1058,14 +1171,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Button>
 
               {/* Customer */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowCustomerSelector(true)}
                 className={cn(
                   "gap-1.5 px-2",
-                  selectedCustomer 
-                    ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20" 
+                  selectedCustomer
+                    ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
                     : "text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/20"
                 )}
               >
@@ -1074,14 +1187,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Button>
 
               {/* Delivery Man Button */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowDeliverySelector(true)}
                 className={cn(
                   "gap-1.5 px-2",
-                  selectedDelivery 
-                    ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20" 
+                  selectedDelivery
+                    ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20"
                     : "text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/20"
                 )}
               >
@@ -1093,14 +1206,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Button>
 
               {/* Sales Rep */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowSalesRepSelector(true)}
                 className={cn(
                   "gap-1.5 px-2",
-                  selectedSalesRep 
-                    ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20" 
+                  selectedSalesRep
+                    ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
                     : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
                 )}
               >
@@ -1112,9 +1225,9 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Button>
 
               {/* Returns */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowReturns(true)}
                 className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 gap-1.5 px-2"
               >
@@ -1123,14 +1236,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
               </Button>
 
               {/* Shift */}
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowShiftPanel(true)}
                 className={cn(
                   "gap-1.5 px-2",
-                  currentShift 
-                    ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20" 
+                  currentShift
+                    ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20"
                     : "text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
                 )}
               >
@@ -1213,9 +1326,9 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
             {/* Logout */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleLogout}
                   className="text-white/80 hover:text-white hover:bg-white/10"
                 >
@@ -1252,7 +1365,7 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                   />
                   <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                 </div>
-                
+
                 {searchQuery.length >= 3 && (
                   <Button
                     type="button"
@@ -1272,14 +1385,14 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
                   </Button>
                 )}
               </div>
-              
+
               {isBarcodeScanning && (
                 <div className="flex items-center gap-1 text-xs text-green-500">
                   <Loader2 size={12} className="animate-spin" />
                   <span>{language === 'ar' ? 'جاري معالجة الباركود...' : 'Processing barcode...'}</span>
                 </div>
               )}
-              
+
               {categoriesOffline && (
                 <div className="flex items-center gap-1 text-xs text-amber-500">
                   <WifiOff size={12} />
@@ -1430,7 +1543,68 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
         <Dialog open={!!selectedAutomotiveProduct} onOpenChange={(open) => !open && setSelectedAutomotiveProduct(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>تفاصيل خدمة السيارات</DialogTitle></DialogHeader>
-            {selectedAutomotiveProduct?.automotive_service && <div className="space-y-4" dir="rtl"><p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p><div><label className="mb-2 block text-sm font-medium">حجم السيارة</label><select className="h-10 w-full rounded-md border bg-background px-3" value={automotiveVehicleSize} onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}><option value="small">صغيرة — {selectedAutomotiveProduct.automotive_service.small_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.small_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option><option value="large">كبيرة — {selectedAutomotiveProduct.automotive_service.large_vehicle_quantity || 0} متر — {Number(selectedAutomotiveProduct.automotive_service.large_vehicle_price || selectedAutomotiveProduct.price).toLocaleString()}</option></select></div>{selectedAutomotiveProduct.automotive_service.item_type === 'service' && <div><label className="mb-2 block text-sm font-medium">سعر الخدمة الذي يحدده الكاشير *</label><Input type="number" min="0.01" step="0.01" value={automotiveServicePrice} onChange={(e) => setAutomotiveServicePrice(e.target.value)} placeholder="اكتب السعر" /><p className="mt-1 text-xs text-muted-foreground">هذه الخدمة بلا سعر ثابت، وسيُحفظ السعر مع الفاتورة والوردية والتقارير.</p></div>}<div><label className="mb-2 block text-sm font-medium">عدد السيارات</label><Input type="number" min="1" value={automotiveMeterQuantity} onChange={(e) => setAutomotiveMeterQuantity(e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.</p></div><Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button></div>}
+            {selectedAutomotiveProduct && automotiveConfig && (
+              <div className="space-y-4" dir="rtl">
+                <p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p>
+
+                {/* حجم السيارة */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium">حجم السيارة</label>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3"
+                    value={automotiveVehicleSize}
+                    onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}
+                  >
+                    <option value="small">{automotiveSizeLabel('small')}</option>
+                    <option value="large">{automotiveSizeLabel('large')}</option>
+                  </select>
+                </div>
+
+                {/* ✅ بدون سعر ثابت => الكاشير يدخل السعر */}
+                {automotiveIsManual ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">
+                      سعر الخدمة الذي يحدده الكاشير *
+                    </label>
+                    <Input
+                      autoFocus
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={automotiveServicePrice}
+                      onChange={(e) => setAutomotiveServicePrice(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') confirmAutomotiveProduct(); }}
+                      placeholder="اكتب السعر"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      هذه الخدمة بلا سعر ثابت، وسيُحفظ السعر مع الفاتورة والوردية والتقارير.
+                    </p>
+                  </div>
+                ) : (
+                  /* ✅ سعر ثابت => يظهر تلقائياً ولا يُطلب من الكاشير */
+                  <div className="rounded-lg bg-blue-500/10 p-3">
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      💰 السعر: {automotiveFixedPrice.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium">عدد السيارات</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={automotiveMeterQuantity}
+                    onChange={(e) => setAutomotiveMeterQuantity(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.
+                  </p>
+                </div>
+
+                <Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
         {/* Modals */}
@@ -1448,20 +1622,20 @@ const handlePaymentComplete = async (payments: { method: string; amount: number 
             console.log('📄 Invoice Number from modal:', invoiceNum);
             handlePaymentComplete(payments, invoiceNum, complimentary);
           }}
-          customer={selectedCustomer ? { 
-            id: selectedCustomer.id, 
-            name: selectedCustomer.name, 
+          customer={selectedCustomer ? {
+            id: selectedCustomer.id,
+            name: selectedCustomer.name,
             name_ar: selectedCustomer.name_ar || undefined,
-            loyalty_points: selectedCustomer.loyalty_points 
+            loyalty_points: selectedCustomer.loyalty_points
           } : null}
-          deliveryPerson={selectedDelivery ? { 
-            id: selectedDelivery.id, 
-            name: selectedDelivery.name 
+          deliveryPerson={selectedDelivery ? {
+            id: selectedDelivery.id,
+            name: selectedDelivery.name
           } : null}
-          salesRepresentative={selectedSalesRep ? { 
-            id: selectedSalesRep.id, 
+          salesRepresentative={selectedSalesRep ? {
+            id: selectedSalesRep.id,
             name: selectedSalesRep.name,
-            commission_rate: selectedSalesRep.commission_rate 
+            commission_rate: selectedSalesRep.commission_rate
           } : null}
           shiftId={currentShift?.id || null}
           branchId={branchData?.id || null}

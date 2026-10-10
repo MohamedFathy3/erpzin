@@ -18,19 +18,31 @@ export interface AutomotiveServiceItem {
   code: string;
   name: string;
   name_ar?: string | null;
-  selling_price: number;
-  estimated_cost: number;
-  item_type?: 'service' | 'product';
+  description?: string | null;
+  item_type: 'service' | 'product';
   unit?: string | null;
+
+  // ✅ حقول التسعير
+  has_fixed_price: boolean;
+  is_custom_priced?: boolean;
+  selling_price: number;
+  estimated_cost?: number | null;
+
+  // ✅ حجم السيارة
   small_vehicle_quantity?: number | null;
   large_vehicle_quantity?: number | null;
   small_vehicle_price?: number | null;
   large_vehicle_price?: number | null;
+
+  // ✅ المخزون
   stock_quantity?: number | null;
-  product?: { id: number; sku: string; stock: number } | null;
+
+  // ✅ إضافية
   estimated_minutes?: number | null;
-  warranty_eligible: boolean;
-  active: boolean;
+  warranty_eligible?: boolean;
+  active?: boolean;
+  product_id?: number | null;
+  product?: any | null;
 }
 
 export interface AutomotiveServiceOrder {
@@ -100,5 +112,16 @@ export const AutomotiveService = {
   async technicianPerformanceReport() {
     const response = await api.get('/automotive/reports/technician-performance');
     return response.data?.data;
+  },
+  // ✅ تعديل
+  updateService: async (id: number, data: Partial<AutomotiveServiceItem>) => {
+    const response = await api.patch(`/automotive/services/${id}`, data);
+    return response.data.data;
+  },
+
+  // ✅ حذف
+  deleteService: async (id: number) => {
+    const response = await api.delete(`/automotive/services/${id}`);
+    return response.data;
   },
 };
