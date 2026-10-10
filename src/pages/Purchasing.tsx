@@ -299,7 +299,10 @@ const Purchasing = () => {
   const purchaseReturnsCount = purchaseReturnsResponse?.meta?.total || purchaseReturnsResponse?.data?.length || 0;
 
   // ========== حساب الإحصائيات ==========
-  const totalBalance = suppliers.reduce((sum: number, s: Supplier) => sum + Number(s.credit_limit || 0), 0);
+  const totalBalance = suppliers.reduce(
+    (sum: number, s: Supplier) => sum + Number(s.financial_summary?.remaining || 0),
+    0
+  );
   const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.total_amount || 0), 0);
 
   const stats = [

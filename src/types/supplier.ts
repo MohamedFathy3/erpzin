@@ -12,6 +12,11 @@ export interface Supplier {
   is_active?: boolean;
   active?: number;
   note?: string;
+  financial_summary?: {
+    total_purchases: number;
+    total_paid: number;
+    remaining: number;
+  };
 }
 export type SupplierFilters = {
   search?: string;
@@ -52,4 +57,3 @@ interface SupplierResponse {
   message: string;
   status: number;
 }
-
