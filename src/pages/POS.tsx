@@ -1,1762 +1,1762 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// POS.tsx - النسخة الكاملة المعدلة مع الخصومات
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  // POS.tsx - النسخة الكاملة المعدلة مع الخصومات
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Cookies from 'js-cookie';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useApp } from '@/contexts/AppContext';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
-import { useCurrencyTax } from '@/hooks/useCurrencyTax';
-import { cn } from '@/lib/utils';
-import {
-  Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User,
-  Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
-  ShoppingBag, AlertCircle, CheckCircle2,
-  UserCheck, Share2
-} from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from '@/hooks/use-toast';
-import { useCategories, useProducts, useProductByBarcode, Product } from '@/hooks/usePOSData';
-import { useNavigate } from 'react-router-dom';
-import POSProductGrid from '@/components/pos/POSProductGrid';
-import POSCart from '@/components/pos/POSCart';
-import POSPaymentModal from '@/components/pos/POSPaymentModal';
-import POSHeldOrders from '@/components/pos/POSHeldOrders';
-import POSCategories from '@/components/pos/POSCategories';
-import POSVariantSelector from '@/components/pos/POSVariantSelector';
-import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
-import POSShiftManagement from '@/components/pos/POSShiftManagement';
-import POSReturns from '@/components/pos/POSReturns';
-import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
-import BranchTransferDialog from '@/components/pos/BranchTransferDialog';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Link } from 'react-router-dom';
-import {
-  saveOrderOffline,
-  getUnsyncedOrders,
-  markOrderSynced,
-  getOfflineStats
-} from '@/lib/offlineDB';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { format } from 'date-fns';
-import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
-import POSSalesRepSelector from '@/components/pos/POSSalesRepSelector';
-import api from '@/lib/api';
+  import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+  import Cookies from 'js-cookie';
+  import { useLanguage } from '@/contexts/LanguageContext';
+  import { useApp } from '@/contexts/AppContext';
+  import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+  import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+  import { cn } from '@/lib/utils';
+  import {
+    Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User,
+    Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
+    ShoppingBag, AlertCircle, CheckCircle2,
+    UserCheck, Share2
+  } from 'lucide-react';
+  import { Input } from '@/components/ui/input';
+  import { Button } from '@/components/ui/button';
+  import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+  import { toast } from '@/hooks/use-toast';
+  import { useCategories, useProducts, useProductByBarcode, Product } from '@/hooks/usePOSData';
+  import { useNavigate } from 'react-router-dom';
+  import POSProductGrid from '@/components/pos/POSProductGrid';
+  import POSCart from '@/components/pos/POSCart';
+  import POSPaymentModal from '@/components/pos/POSPaymentModal';
+  import POSHeldOrders from '@/components/pos/POSHeldOrders';
+  import POSCategories from '@/components/pos/POSCategories';
+  import POSVariantSelector from '@/components/pos/POSVariantSelector';
+  import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
+  import POSShiftManagement from '@/components/pos/POSShiftManagement';
+  import POSReturns from '@/components/pos/POSReturns';
+  import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
+  import BranchTransferDialog from '@/components/pos/BranchTransferDialog';
+  import { useAuth } from '@/contexts/AuthContext';
+  import { usePOSKeyboardShortcuts, getPOSShortcuts } from '@/hooks/usePOSKeyboardShortcuts';
+  import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+  import { Link } from 'react-router-dom';
+  import {
+    saveOrderOffline,
+    getUnsyncedOrders,
+    markOrderSynced,
+    getOfflineStats
+  } from '@/lib/offlineDB';
+  import { Badge } from '@/components/ui/badge';
+  import { Card, CardContent } from '@/components/ui/card';
+  import { format } from 'date-fns';
+  import POSDeliverySelector from '@/components/pos/POSDeliverySelector';
+  import POSSalesRepSelector from '@/components/pos/POSSalesRepSelector';
+  import api from '@/lib/api';
 
-// ==================== Interfaces ====================
-interface DeliveryMan {
-  id: number;
-  name: string;
-  nameAr?: string;
-  phone: string;
-  vehicle_type: string;
-  vehicle_number?: string;
-  created_at?: string;
-}
+  // ==================== Interfaces ====================
+  interface DeliveryMan {
+    id: number;
+    name: string;
+    nameAr?: string;
+    phone: string;
+    vehicle_type: string;
+    vehicle_number?: string;
+    created_at?: string;
+  }
 
-interface CartItem {
-  id: string;
-  variantId?: string;
-  name: string;
-  nameAr: string;
-  price: number;
-  quantity: number;
-  sku: string;
-  sizeName?: string;
-  colorName?: string;
-  unitId?: number;
-  colorId?: number;
-  stock?: number;
-  discount_percentage?: number;  // ✅ خصم المنتج %
-  automotive_service_id?: number;
-  itemType?: 'product' | 'service';
-  vehicle_size?: 'small' | 'large';
-  meter_quantity?: number;
-}
+  interface CartItem {
+    id: string;
+    variantId?: string;
+    name: string;
+    nameAr: string;
+    price: number;
+    quantity: number;
+    sku: string;
+    sizeName?: string;
+    colorName?: string;
+    unitId?: number;
+    colorId?: number;
+    stock?: number;
+    discount_percentage?: number;  // ✅ خصم المنتج %
+    automotive_service_id?: number;
+    itemType?: 'product' | 'service';
+    vehicle_size?: 'small' | 'large';
+    meter_quantity?: number;
+  }
 
-interface SalesRepresentative {
-  id: number;
-  name: string;
-  phone: string;
-  email: string;
-  commission_rate: string;
-  active: boolean;
-  branch_id: number;
-  branch_name: string;
-  employee_id: number;
-  employee_name: string;
-}
+  interface SalesRepresentative {
+    id: number;
+    name: string;
+    phone: string;
+    email: string;
+    commission_rate: string;
+    active: boolean;
+    branch_id: number;
+    branch_name: string;
+    employee_id: number;
+    employee_name: string;
+  }
 
-interface HeldOrder {
-  id: string;
-  items: CartItem[];
-  total: number;
-  heldAt: Date;
-  note?: string;
-}
+  interface HeldOrder {
+    id: string;
+    items: CartItem[];
+    total: number;
+    heldAt: Date;
+    note?: string;
+  }
 
-interface Customer {
-  id: string;
-  name: string;
-  name_ar: string | null;
-  phone: string | null;
-  address: string | null;
-  loyalty_points: number | null;
-}
+  interface Customer {
+    id: string;
+    name: string;
+    name_ar: string | null;
+    phone: string | null;
+    address: string | null;
+    loyalty_points: number | null;
+  }
 
-interface DeliveryPerson {
-  id: string;
-  name: string;
-  nameAr: string;
-  phone: string;
-}
+  interface DeliveryPerson {
+    id: string;
+    name: string;
+    nameAr: string;
+    phone: string;
+  }
 
-interface OfflineStats {
-  products: number;
-  customers: number;
-  orders: number;
-  categories: number;
-  unsyncedOrders: number;
-  lastUpdated: string;
-}
+  interface OfflineStats {
+    products: number;
+    customers: number;
+    orders: number;
+    categories: number;
+    unsyncedOrders: number;
+    lastUpdated: string;
+  }
 
-// ==================== Automotive pricing helpers ====================
-const toPositive = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
+  // ==================== Automotive pricing helpers ====================
+  const toPositive = (value: unknown): number => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
 
-// السعر الثابت للخدمة حسب حجم السيارة (مع الرجوع لسعر البيع ثم سعر المنتج)
-const getFixedServicePrice = (config: any, size: 'small' | 'large', productPrice?: unknown): number => {
-  const sizePrice = size === 'large' ? config?.large_vehicle_price : config?.small_vehicle_price;
-  return toPositive(sizePrice) || toPositive(config?.selling_price) || toPositive(productPrice);
-};
+  // السعر الثابت للخدمة حسب حجم السيارة (مع الرجوع لسعر البيع ثم سعر المنتج)
+  const getFixedServicePrice = (config: any, size: 'small' | 'large', productPrice?: unknown): number => {
+    const sizePrice = size === 'large' ? config?.large_vehicle_price : config?.small_vehicle_price;
+    return toPositive(sizePrice) || toPositive(config?.selling_price) || toPositive(productPrice);
+  };
 
-// خدمة بدون سعر ثابت => الكاشير يدخل السعر يدوياً
-const isManualPriceService = (config: any, productPrice?: unknown): boolean => {
-  if (config?.has_fixed_price === false || config?.is_custom_priced === true) return true;
-  return getFixedServicePrice(config, 'small', productPrice) <= 0
-    && getFixedServicePrice(config, 'large', productPrice) <= 0;
-};
+  // خدمة بدون سعر ثابت => الكاشير يدخل السعر يدوياً
+  const isManualPriceService = (config: any, productPrice?: unknown): boolean => {
+    if (config?.has_fixed_price === false || config?.is_custom_priced === true) return true;
+    return getFixedServicePrice(config, 'small', productPrice) <= 0
+      && getFixedServicePrice(config, 'large', productPrice) <= 0;
+  };
 
-// ==================== Main Component ====================
-const POS: React.FC = () => {
-  const { language } = useLanguage();
-  const { userBranch, currentBranch, branches, loadingBranches, setCurrentBranch } = useApp();
-  const { formatCurrency } = useRegionalSettings();
-  const { taxRates } = useCurrencyTax();
-  const navigate = useNavigate();
+  // ==================== Main Component ====================
+  const POS: React.FC = () => {
+    const { language } = useLanguage();
+    const { userBranch, currentBranch, branches, loadingBranches, setCurrentBranch } = useApp();
+    const { formatCurrency } = useRegionalSettings();
+    const { taxRates } = useCurrencyTax();
+    const navigate = useNavigate();
 
-  // ==================== States ====================
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [servicesOnly, setServicesOnly] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
-  const [showPayment, setShowPayment] = useState(false);
-  const [showHeldOrders, setShowHeldOrders] = useState(false);
-  const [showVariantSelector, setShowVariantSelector] = useState(false);
-  const [showCustomerSelector, setShowCustomerSelector] = useState(false);
-  const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
-  const [showDeliverySelector, setShowDeliverySelector] = useState(false);
-  const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
-  const [selectedAutomotiveProduct, setSelectedAutomotiveProduct] = useState<Product | null>(null);
-  const [automotiveVehicleSize, setAutomotiveVehicleSize] = useState<'small' | 'large'>('small');
-  const [automotiveMeterQuantity, setAutomotiveMeterQuantity] = useState('1');
-  const [automotiveServicePrice, setAutomotiveServicePrice] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
-  const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
-  const [currentShift, setCurrentShift] = useState<any>(null);
-  const [showReturns, setShowReturns] = useState(false);
-  const [showBranchTransfers, setShowBranchTransfers] = useState(false);
-  const [showInvoiceTransfers, setShowInvoiceTransfers] = useState(false);
-  const [transferInvoices, setTransferInvoices] = useState<any[]>([]);
-  const [transferRequests, setTransferRequests] = useState<any[]>([]);
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [transferEmail, setTransferEmail] = useState('');
-  const [transferPassword, setTransferPassword] = useState('');
-  const [transferEmployee, setTransferEmployee] = useState<any>(null);
-  const [transferTargetId, setTransferTargetId] = useState('');
-  const [transferEmployees, setTransferEmployees] = useState<any[]>([]);
-  const [showShiftPanel, setShowShiftPanel] = useState(false);
-  const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [syncing, setSyncing] = useState(false);
-  const [unsyncedCount, setUnsyncedCount] = useState(0);
-  const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
-  const [showOfflineStats, setShowOfflineStats] = useState(false);
+    // ==================== States ====================
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all');
+    const [servicesOnly, setServicesOnly] = useState(false);
+    const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+    const [showPayment, setShowPayment] = useState(false);
+    const [showHeldOrders, setShowHeldOrders] = useState(false);
+    const [showVariantSelector, setShowVariantSelector] = useState(false);
+    const [showCustomerSelector, setShowCustomerSelector] = useState(false);
+    const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
+    const [showDeliverySelector, setShowDeliverySelector] = useState(false);
+    const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
+    const [selectedAutomotiveProduct, setSelectedAutomotiveProduct] = useState<Product | null>(null);
+    const [automotiveVehicleSize, setAutomotiveVehicleSize] = useState<'small' | 'large'>('small');
+    const [automotiveMeterQuantity, setAutomotiveMeterQuantity] = useState('1');
+    const [automotiveServicePrice, setAutomotiveServicePrice] = useState('');
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
+    const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
+    const [currentShift, setCurrentShift] = useState<any>(null);
+    const [showReturns, setShowReturns] = useState(false);
+    const [showBranchTransfers, setShowBranchTransfers] = useState(false);
+    const [showInvoiceTransfers, setShowInvoiceTransfers] = useState(false);
+    const [transferInvoices, setTransferInvoices] = useState<any[]>([]);
+    const [transferRequests, setTransferRequests] = useState<any[]>([]);
+    const [transferLoading, setTransferLoading] = useState(false);
+    const [transferEmail, setTransferEmail] = useState('');
+    const [transferPassword, setTransferPassword] = useState('');
+    const [transferEmployee, setTransferEmployee] = useState<any>(null);
+    const [transferTargetId, setTransferTargetId] = useState('');
+    const [transferEmployees, setTransferEmployees] = useState<any[]>([]);
+    const [showShiftPanel, setShowShiftPanel] = useState(false);
+    const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
+    const [syncing, setSyncing] = useState(false);
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+    const [offlineStats, setOfflineStats] = useState<OfflineStats | null>(null);
+    const [showOfflineStats, setShowOfflineStats] = useState(false);
 
-  useEffect(() => {
-    if (userBranch || currentBranch || loadingBranches || branches.length === 0) return;
-    const defaultBranch = branches.find(branch => branch.is_main || branch.main_branch) || branches[0];
-    if (defaultBranch) setCurrentBranch(defaultBranch);
-  }, [userBranch, currentBranch, branches, loadingBranches, setCurrentBranch]);
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+    useEffect(() => {
+      if (userBranch || currentBranch || loadingBranches || branches.length === 0) return;
+      const defaultBranch = branches.find(branch => branch.is_main || branch.main_branch) || branches[0];
+      if (defaultBranch) setCurrentBranch(defaultBranch);
+    }, [userBranch, currentBranch, branches, loadingBranches, setCurrentBranch]);
+    const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
-  // ✅ خصومات المنتجات والفاتورة
-  const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
-  const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
-  const [extraCharge, setExtraCharge] = useState(0);
+    // ✅ خصومات المنتجات والفاتورة
+    const [invoiceDiscountPercentage, setInvoiceDiscountPercentage] = useState(0);
+    const [invoiceDiscountAmount, setInvoiceDiscountAmount] = useState(0);
+    const [extraCharge, setExtraCharge] = useState(0);
 
-  // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
-  const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
-  const lastScannedBarcode = useRef<string>('');
-  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // ✅ متغيرات للتمييز بين مسح الباركود والبحث اليدوي
+    const [isBarcodeScanning, setIsBarcodeScanning] = useState(false);
+    const lastScannedBarcode = useRef<string>('');
+    const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const { signOut, user, enabledModules, permissions } = useAuth();
-  const canManagePosDiscounts = Boolean(user?.super_admin)
-    || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase())
-    || permissions.includes('*')
-    || permissions.includes('sales.pos_discount.apply');
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const { signOut, user, enabledModules, permissions } = useAuth();
+    const canManagePosDiscounts = Boolean(user?.super_admin)
+      || ['admin', 'administrator', 'tenant_admin', 'company_admin'].includes(String(user?.role || '').toLowerCase())
+      || permissions.includes('*')
+      || permissions.includes('sales.pos_discount.apply');
 
-  useEffect(() => {
-    if (!canManagePosDiscounts) {
-      setInvoiceDiscountPercentage(0);
-      setInvoiceDiscountAmount(0);
-      setCartItems(items => items.map(item => ({ ...item, discount_percentage: 0 })));
-    }
-  }, [canManagePosDiscounts]);
-
-  const [branchDetails, setBranchDetails] = useState<{
-    phone?: string | null;
-    address?: string | null;
-    address_ar?: string | null;
-  } | null>(null);
-
-  useEffect(() => {
-    const fetchBranchDetails = async () => {
-      const branch = userBranch || currentBranch;
-      if (!branch?.id) return;
-
-      try {
-        const response = await api.get(`/branch/${branch.id}`);
-        if (response.data?.data) {
-          setBranchDetails({
-            phone: response.data.data.phone,
-            address: response.data.data.address,
-            address_ar: response.data.data.address_ar
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching branch details:', error);
+    useEffect(() => {
+      if (!canManagePosDiscounts) {
+        setInvoiceDiscountPercentage(0);
+        setInvoiceDiscountAmount(0);
+        setCartItems(items => items.map(item => ({ ...item, discount_percentage: 0 })));
       }
-    };
+    }, [canManagePosDiscounts]);
 
-    fetchBranchDetails();
-  }, [userBranch, currentBranch]);
+    const [branchDetails, setBranchDetails] = useState<{
+      phone?: string | null;
+      address?: string | null;
+      address_ar?: string | null;
+    } | null>(null);
 
-  // ==================== Branch Data ====================
-  const branchData = useMemo(() => {
-    const branch = userBranch || currentBranch;
+    useEffect(() => {
+      const fetchBranchDetails = async () => {
+        const branch = userBranch || currentBranch;
+        if (!branch?.id) return;
 
-    if (!branch) return null;
-
-    return {
-      id: branch.id,
-      name: branch.name,
-      nameAr: branch.name_ar || branch.name,
-      phone: branchDetails?.phone || null,
-      address: branchDetails?.address || null,
-      addressAr: branchDetails?.address_ar || branchDetails?.address || null
-    };
-  }, [userBranch, currentBranch, branchDetails]);
-
-  // ==================== Tax Logic ====================
-  const getActiveTax = () => {
-    if (!taxRates || taxRates.length === 0) return null;
-    const activeTaxes = taxRates.filter(tax => tax.active === true);
-    if (activeTaxes.length === 0) return null;
-    return activeTaxes.find(tax => tax.default === true) || activeTaxes[0];
-  };
-
-  const activeTax = getActiveTax();
-  const taxRate = Number(activeTax?.rate ?? 0);
-
-  // ==================== Offline Mode Management ====================
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      toast({
-        title: language === 'ar' ? 'تم الاتصال بالإنترنت' : 'Back online',
-        description: language === 'ar' ? 'سيتم مزامنة البيانات تلقائياً' : 'Data will sync automatically',
-      });
-      checkUnsyncedOrders();
-      loadOfflineStats();
-      syncOfflineOrders();
-    };
-
-    const handleOffline = () => {
-      setIsOffline(true);
-      toast({
-        title: language === 'ar' ? 'أنت الآن في وضع عدم الاتصال' : 'You are offline',
-        description: language === 'ar'
-          ? 'سيتم حفظ الفواتير محلياً ومزامنتها لاحقاً'
-          : 'Invoices will be saved locally and synced later',
-        variant: 'destructive',
-      });
-      loadOfflineStats();
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    checkUnsyncedOrders();
-    loadOfflineStats();
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [language]);
-
-  const loadOfflineStats = async () => {
-    try {
-      const stats = await getOfflineStats();
-      setOfflineStats(stats);
-    } catch (error) {
-      console.error('Error loading offline stats:', error);
-    }
-  };
-
-  const checkUnsyncedOrders = async () => {
-    try {
-      const orders = await getUnsyncedOrders();
-      setUnsyncedCount(orders.length);
-    } catch (error) {
-      console.error('Error checking unsynced orders:', error);
-      setUnsyncedCount(0);
-    }
-  };
-
-  const syncOfflineOrders = async () => {
-    if (!navigator.onLine) {
-      toast({
-        title: language === 'ar' ? 'لا يوجد اتصال بالإنترنت' : 'No internet connection',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      const unsyncedOrders = await getUnsyncedOrders();
-
-      if (unsyncedOrders.length === 0) {
-        toast({
-          title: language === 'ar' ? 'لا توجد طلبات للمزامنة' : 'No orders to sync',
-        });
-        return;
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const order of unsyncedOrders) {
         try {
-          const response = await fetch('/api/invoice/store', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${Cookies.get('token') || ''}`,
-            },
-            body: JSON.stringify({
-              customer_id: parseInt(order.customer_id || '1'),
-              items: order.items.map((item: any) => {
-                const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
-
-                return {
-                  automotive_service_id: isService ? item.automotive_service_id : null,
-                  product_id: isService
-                    ? null
-                    : parseInt(String(item.id).replace(/\D/g, ''), 10),
-                  item_type: isService ? 'service' : 'product',
-                  product_name: item.nameAr || item.name,
-                  quantity: Number(item.quantity),
-                  price: Number(item.price),
-                  discount_percentage: Number(item.discount_percentage || 0),
-                  meter_quantity: item.meter_quantity ?? null,
-                  vehicle_size: item.vehicle_size ?? null,
-                };
-              }),
-              discount_percentage: order.discount_percentage || 0,
-              extra_charge: order.extra_charge || 0,
-              is_complimentary: order.is_complimentary || false,
-              sales_representative_id: order.sales_representative_id || null,
-              payments: order.payments || [],
-              subtotal: order.subtotal,
-              tax: order.tax,
-              total: order.total,
-            }),
-          });
-
-          if (response.ok) {
-            await markOrderSynced(order.id);
-            successCount++;
-          } else {
-            failCount++;
+          const response = await api.get(`/branch/${branch.id}`);
+          if (response.data?.data) {
+            setBranchDetails({
+              phone: response.data.data.phone,
+              address: response.data.data.address,
+              address_ar: response.data.data.address_ar
+            });
           }
         } catch (error) {
-          failCount++;
+          console.error('Error fetching branch details:', error);
         }
-      }
+      };
 
-      await checkUnsyncedOrders();
-      await loadOfflineStats();
+      fetchBranchDetails();
+    }, [userBranch, currentBranch]);
 
-      toast({
-        title: language === 'ar' ? 'تمت المزامنة' : 'Sync completed',
-        description: language === 'ar'
-          ? `تمت مزامنة ${successCount} طلب، فشل ${failCount}`
-          : `${successCount} orders synced, ${failCount} failed`,
-        variant: failCount > 0 ? 'destructive' : 'default',
-      });
-    } catch (error) {
-      toast({
-        title: language === 'ar' ? 'حدث خطأ في المزامنة' : 'Sync failed',
-        variant: 'destructive',
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
+    // ==================== Branch Data ====================
+    const branchData = useMemo(() => {
+      const branch = userBranch || currentBranch;
 
-  // ==================== Data Fetching ====================
-  const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
-  const productCategoryFilter = selectedCategory === 'automotive' ? 'all' : selectedCategory;
-  const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(productCategoryFilter);
+      if (!branch) return null;
 
-  const { data: barcodeProduct } = useProductByBarcode(searchQuery);
+      return {
+        id: branch.id,
+        name: branch.name,
+        nameAr: branch.name_ar || branch.name,
+        phone: branchDetails?.phone || null,
+        address: branchDetails?.address || null,
+        addressAr: branchDetails?.address_ar || branchDetails?.address || null
+      };
+    }, [userBranch, currentBranch, branchDetails]);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
+    // ==================== Tax Logic ====================
+    const getActiveTax = () => {
+      if (!taxRates || taxRates.length === 0) return null;
+      const activeTaxes = taxRates.filter(tax => tax.active === true);
+      if (activeTaxes.length === 0) return null;
+      return activeTaxes.find(tax => tax.default === true) || activeTaxes[0];
+    };
 
-    if (value.length >= 3) {
-      setIsBarcodeScanning(true);
+    const activeTax = getActiveTax();
+    const taxRate = Number(activeTax?.rate ?? 0);
 
-      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-      scanTimeoutRef.current = setTimeout(() => {
-        setIsBarcodeScanning(false);
-      }, 1000);
-    } else {
-      setIsBarcodeScanning(false);
-    }
-  };
-
-  useEffect(() => {
-    console.log('🔍 Barcode scan result:', {
-      barcodeProduct,
-      searchQuery,
-    });
-
-    if (barcodeProduct && barcodeProduct.id) {
-      console.log('✅ Adding product to cart:', barcodeProduct.name);
-
-      addToCart(barcodeProduct as Product);
-      setSearchQuery('');
-
-      toast({
-        title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
-        description: language === 'ar'
-          ? (barcodeProduct.name_ar || barcodeProduct.name)
-          : barcodeProduct.name,
-      });
-    }
-  }, [barcodeProduct]);
-
-  // ==================== Data Transformation ====================
-  const transformedCategories = useMemo(() => [
-    { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
-    { id: 'automotive', name: 'Automotive Services', nameAr: 'خدمات السيارات', icon: '🚗' },
-    ...(categories?.map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      nameAr: cat.name_ar || cat.name,
-      icon: getIconEmoji(cat.icon)
-    })) || [])
-  ], [categories]);
-
-  const transformedProducts = useMemo(() => {
-    if (!products) return [];
-
-    const mapped = products.map((prod: Product) => ({
-      id: prod.id.toString(),
-      name: prod.name,
-      nameAr: prod.name_ar || prod.name,
-      price: prod.price,
-      sku: prod.sku,
-      barcode: prod.barcode || '',
-      stock: prod.stock || 0,
-      category_id: prod.category_id,
-      image_url: prod.image_url,
-      imageUrl: prod.imageUrl,
-      image: prod.image,
-      hasVariants: prod.has_variants,
-      units: prod.units || [],
-      automotive_service: prod.automotive_service || null,
-    }));
-    return selectedCategory === 'automotive' ? mapped.filter((product) => Boolean(product.automotive_service)) : mapped;
-  }, [products, selectedCategory]);
-
-  useEffect(() => {
-    setSearchQuery('');
-    setIsBarcodeScanning(false);
-  }, [selectedCategory]);
-
-  // ==================== Cart Operations ====================
-  const addToCart = (product: Product) => {
-    if (product.automotive_service) {
-      const config = product.automotive_service;
-      setSelectedAutomotiveProduct(product);
-      setAutomotiveVehicleSize('small');
-      setAutomotiveMeterQuantity('1');
-      // ✅ سعر ثابت => يتحدد تلقائياً | بدون سعر => الكاشير يدخله
-      setAutomotiveServicePrice(
-        isManualPriceService(config, product.price)
-          ? ''
-          : String(getFixedServicePrice(config, 'small', product.price))
-      );
-      return;
-    }
-    // إذا كان المنتج عنده متغيرات، افتح نافذة اختيار المتغيرات
-    if (product.units && product.units.length > 0) {
-      setSelectedProductForVariant(product);
-      setShowVariantSelector(true);
-      return;
-    }
-
-    // إضافة منتج عادي (بدون متغيرات)
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id && !item.variantId);
-      if (existing) {
-        // التحقق من المخزون قبل الزيادة
-        if (existing.stock !== undefined && existing.quantity >= existing.stock) {
-          toast({
-            title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
-            description: language === 'ar'
-              ? `الحد الأقصى ${existing.stock} قطعة فقط`
-              : `Maximum ${existing.stock} items only`,
-            variant: 'destructive',
-          });
-          return prev;
-        }
-        return prev.map(item =>
-          item.id === product.id && !item.variantId
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prev, {
-        id: product.id,
-        name: product.name,
-        nameAr: product.name_ar || product.name,
-        price: product.price,
-        quantity: 1,
-        sku: product.sku,
-        stock: product.stock,
-        discount_percentage: 0, // ✅ initialize discount
-        itemType: 'product',
-      }];
-    });
-  };
-
-  const confirmAutomotiveProduct = () => {
-    if (!selectedAutomotiveProduct?.automotive_service) return;
-
-    const config = selectedAutomotiveProduct.automotive_service;
-    const isLarge = automotiveVehicleSize === 'large';
-    const metersPerCar = Number(isLarge ? config.large_vehicle_quantity : config.small_vehicle_quantity) || 1;
-
-    // ✅ تحديد السعر
-    let price: number;
-    if (isManualPriceService(config, selectedAutomotiveProduct.price)) {
-      // الكاشير يدخل السعر يدوياً
-      price = Number(automotiveServicePrice);
-      if (!Number.isFinite(price) || price <= 0) {
+    // ==================== Offline Mode Management ====================
+    useEffect(() => {
+      const handleOnline = () => {
+        setIsOffline(false);
         toast({
-          title: 'أدخل سعر الخدمة',
-          description: 'هذه الخدمة بلا سعر ثابت، أدخل السعر يدوياً.',
+          title: language === 'ar' ? 'تم الاتصال بالإنترنت' : 'Back online',
+          description: language === 'ar' ? 'سيتم مزامنة البيانات تلقائياً' : 'Data will sync automatically',
+        });
+        checkUnsyncedOrders();
+        loadOfflineStats();
+        syncOfflineOrders();
+      };
+
+      const handleOffline = () => {
+        setIsOffline(true);
+        toast({
+          title: language === 'ar' ? 'أنت الآن في وضع عدم الاتصال' : 'You are offline',
+          description: language === 'ar'
+            ? 'سيتم حفظ الفواتير محلياً ومزامنتها لاحقاً'
+            : 'Invoices will be saved locally and synced later',
+          variant: 'destructive',
+        });
+        loadOfflineStats();
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      checkUnsyncedOrders();
+      loadOfflineStats();
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }, [language]);
+
+    const loadOfflineStats = async () => {
+      try {
+        const stats = await getOfflineStats();
+        setOfflineStats(stats);
+      } catch (error) {
+        console.error('Error loading offline stats:', error);
+      }
+    };
+
+    const checkUnsyncedOrders = async () => {
+      try {
+        const orders = await getUnsyncedOrders();
+        setUnsyncedCount(orders.length);
+      } catch (error) {
+        console.error('Error checking unsynced orders:', error);
+        setUnsyncedCount(0);
+      }
+    };
+
+    const syncOfflineOrders = async () => {
+      if (!navigator.onLine) {
+        toast({
+          title: language === 'ar' ? 'لا يوجد اتصال بالإنترنت' : 'No internet connection',
           variant: 'destructive',
         });
         return;
       }
-    } else {
-      // سعر ثابت من إعدادات الخدمة
-      price = getFixedServicePrice(config, automotiveVehicleSize, selectedAutomotiveProduct.price);
-    }
 
-    const cars = Math.max(1, Number(automotiveMeterQuantity) || 1);
+      setSyncing(true);
+      try {
+        const unsyncedOrders = await getUnsyncedOrders();
 
-    setCartItems(prev => [...prev, {
-      id: `service-${config.id}`,
-      name: selectedAutomotiveProduct.name,
-      nameAr: selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name,
-      price,
-      quantity: cars,
-      sku: selectedAutomotiveProduct.sku || `AUTO-${config.code}`,
-      // الخدمات لا تستهلك مخزوناً؛ المنتجات فقط تُخصم أمتارها
-      stock: (config as any).item_type === 'product'
-        ? Math.floor(Number(config.stock_quantity ?? 0) / metersPerCar)
-        : 999999,
-      sizeName: `${isLarge ? 'سيارة كبيرة' : 'سيارة صغيرة'} · ${metersPerCar} متر`,
-      automotive_service_id: config.id,
-      itemType: 'service',
-      vehicle_size: automotiveVehicleSize,
-      meter_quantity: metersPerCar,
-      discount_percentage: 0,
-    }]);
-
-    setSelectedAutomotiveProduct(null);
-    setAutomotiveServicePrice('');
-  };
-  const addVariantToCart = (variant: {
-    productId: string;
-    unitId: number;
-    colorId: number;
-    size: string;
-    color: string;
-    price: number;
-    sku: string;
-    stock: number;
-  }) => {
-    if (!selectedProductForVariant) return;
-
-    const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
-
-    setCartItems(prev => {
-      const existing = prev.find(item => item.variantId === variantId);
-      if (existing) {
-        // التحقق من المخزون قبل الزيادة
-        if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+        if (unsyncedOrders.length === 0) {
           toast({
-            title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
-            variant: 'destructive',
+            title: language === 'ar' ? 'لا توجد طلبات للمزامنة' : 'No orders to sync',
           });
-          return prev;
+          return;
         }
-        return prev.map(item =>
-          item.variantId === variantId
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prev, {
-        id: selectedProductForVariant.id,
-        variantId: variantId,
-        name: selectedProductForVariant.name,
-        nameAr: selectedProductForVariant.name_ar || selectedProductForVariant.name,
-        price: variant.price,
-        quantity: 1,
-        sku: variant.sku,
-        sizeName: variant.size,
-        colorName: variant.color,
-        unitId: variant.unitId,
-        colorId: variant.colorId,
-        stock: variant.stock,
-        discount_percentage: 0, // ✅ initialize discount
-        itemType: 'product',
-      }];
-    });
 
-    setShowVariantSelector(false);
-    setSelectedProductForVariant(null);
-  };
+        let successCount = 0;
+        let failCount = 0;
 
-  const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
-    if (quantity < 1) {
-      removeItem(itemKey, variantId);
-    } else {
-      setCartItems(prev =>
-        prev.map(item => {
-          const match = variantId
-            ? item.variantId === variantId
-            : item.id === itemKey && !item.variantId;
-          if (match) {
-            // التحقق من المخزون
-            if (item.stock !== undefined && quantity > item.stock) {
-              toast({
-                title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
-                description: language === 'ar'
-                  ? `الحد الأقصى ${item.stock} قطعة فقط`
-                  : `Maximum ${item.stock} items only`,
-                variant: 'destructive',
-              });
-              return item;
+        for (const order of unsyncedOrders) {
+          try {
+            const response = await fetch('/api/invoice/store', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${Cookies.get('token') || ''}`,
+              },
+              body: JSON.stringify({
+                customer_id: parseInt(order.customer_id || '1'),
+                items: order.items.map((item: any) => {
+                  const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
+
+                  return {
+                    automotive_service_id: isService ? item.automotive_service_id : null,
+                    product_id: isService
+                      ? null
+                      : parseInt(String(item.id).replace(/\D/g, ''), 10),
+                    item_type: isService ? 'service' : 'product',
+                    product_name: item.nameAr || item.name,
+                    quantity: Number(item.quantity),
+                    price: Number(item.price),
+                    discount_percentage: Number(item.discount_percentage || 0),
+                    meter_quantity: item.meter_quantity ?? null,
+                    vehicle_size: item.vehicle_size ?? null,
+                  };
+                }),
+                discount_percentage: order.discount_percentage || 0,
+                extra_charge: order.extra_charge || 0,
+                is_complimentary: order.is_complimentary || false,
+                sales_representative_id: order.sales_representative_id || null,
+                payments: order.payments || [],
+                subtotal: order.subtotal,
+                tax: order.tax,
+                total: order.total,
+              }),
+            });
+
+            if (response.ok) {
+              await markOrderSynced(order.id);
+              successCount++;
+            } else {
+              failCount++;
             }
-            return { ...item, quantity };
+          } catch (error) {
+            failCount++;
           }
-          return item;
-        })
-      );
-    }
-  };
+        }
 
-  const removeItem = (itemKey: string, variantId?: string) => {
-    setCartItems(prev => prev.filter(item => {
-      if (variantId) {
-        return item.variantId !== variantId;
+        await checkUnsyncedOrders();
+        await loadOfflineStats();
+
+        toast({
+          title: language === 'ar' ? 'تمت المزامنة' : 'Sync completed',
+          description: language === 'ar'
+            ? `تمت مزامنة ${successCount} طلب، فشل ${failCount}`
+            : `${successCount} orders synced, ${failCount} failed`,
+          variant: failCount > 0 ? 'destructive' : 'default',
+        });
+      } catch (error) {
+        toast({
+          title: language === 'ar' ? 'حدث خطأ في المزامنة' : 'Sync failed',
+          variant: 'destructive',
+        });
+      } finally {
+        setSyncing(false);
       }
-      return !(item.id === itemKey && !item.variantId);
-    }));
-  };
-
-  const clearCart = () => setCartItems([]);
-
-  const holdOrder = () => {
-    if (cartItems.length === 0) return;
-
-    const subtotal = calculateSubtotalAfterItemDiscounts();
-    const tax = (subtotal * taxRate) / 100;
-    const total = subtotal + tax;
-
-    const newHeldOrder: HeldOrder = {
-      id: `HOLD-${Date.now()}`,
-      items: [...cartItems],
-      total,
-      heldAt: new Date()
     };
 
-    setHeldOrders(prev => [...prev, newHeldOrder]);
-    setCartItems([]);
+    // ==================== Data Fetching ====================
+    const { data: categories, isLoading: categoriesLoading, isOffline: categoriesOffline } = useCategories();
+    const productCategoryFilter = selectedCategory === 'automotive' ? 'all' : selectedCategory;
+    const { data: products, isLoading: productsLoading, isOffline: productsOffline } = useProducts(productCategoryFilter);
 
-    toast({
-      title: language === 'ar' ? 'تم تعليق الطلب' : 'Order held',
-      description: language === 'ar' ? `رقم الطلب: ${newHeldOrder.id.slice(-4)}` : `Order #${newHeldOrder.id.slice(-4)}`
-    });
-  };
+    const { data: barcodeProduct } = useProductByBarcode(searchQuery);
 
-  const restoreOrder = (order: HeldOrder) => {
-    setCartItems(order.items);
-    setHeldOrders(prev => prev.filter(o => o.id !== order.id));
-  };
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSearchQuery(value);
 
-  const deleteHeldOrder = (orderId: string) => {
-    setHeldOrders(prev => prev.filter(o => o.id !== orderId));
-  };
+      if (value.length >= 3) {
+        setIsBarcodeScanning(true);
 
-  // ✅ دالة خصم المنتج
-  const handleItemDiscountChange = (itemId: string, percentage: number, variantId?: string) => {
-    setCartItems(prev => prev.map(item => {
-      const match = variantId
-        ? item.variantId === variantId
-        : item.id === itemId && !item.variantId;
-      if (match) {
-        return { ...item, discount_percentage: percentage };
+        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = setTimeout(() => {
+          setIsBarcodeScanning(false);
+        }, 1000);
+      } else {
+        setIsBarcodeScanning(false);
       }
-      return item;
-    }));
-  };
+    };
 
-  // ✅ دالة خصم الفاتورة
-  const handleInvoiceDiscountChange = (percentage: number, amount: number) => {
-    setInvoiceDiscountPercentage(percentage);
-    setInvoiceDiscountAmount(amount);
-  };
-
-  // ==================== Calculations ====================
-  const calculateSubtotalAfterItemDiscounts = () => {
-    return cartItems.reduce((sum, item) => {
-      const itemTotal = item.price * item.quantity;
-      const discountRate = (item.discount_percentage || 0) / 100;
-      return sum + (itemTotal * (1 - discountRate));
-    }, 0);
-  };
-
-  const calculateSubtotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const calculateItemDiscountsTotal = () => {
-    return cartItems.reduce((sum, item) => {
-      const itemTotal = item.price * item.quantity;
-      const discountRate = (item.discount_percentage || 0) / 100;
-      return sum + (itemTotal * discountRate);
-    }, 0);
-  };
-
-  const calculateSubtotalAfterAllDiscounts = () => {
-    const afterItemDiscounts = calculateSubtotalAfterItemDiscounts();
-    const invoiceDiscount = (afterItemDiscounts * invoiceDiscountPercentage) / 100;
-    return afterItemDiscounts - invoiceDiscount;
-  };
-
-  const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
-  const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax() + extraCharge;
-
-  // ==================== Payment Handlers ====================
-  const handlePaymentComplete = async (
-    payments: { method: string; amount: number }[],
-    invoiceNum?: string,
-    isComplimentary = false
-  ) => {
-    const finalInvoiceNumber = invoiceNum || invoiceNumber ||
-      `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
-
-    if (invoiceNum) setInvoiceNumber(invoiceNum);
-
-    // ✅ تحويل بنود السلة للـ API payload الصح
-    const cleanItems = cartItems.map(item => {
-      const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
-
-      // ✅ أضف console.log هنا عشان تشوف القيم
-      console.log('🔍 Cart item being processed:', {
-        id: item.id,
-        name: item.name,
-        itemType: item.itemType,
-        automotive_service_id: item.automotive_service_id,
-        vehicle_size: item.vehicle_size,
-        meter_quantity: item.meter_quantity,
-        isService,
+    useEffect(() => {
+      console.log('🔍 Barcode scan result:', {
+        barcodeProduct,
+        searchQuery,
       });
 
-      // ✅ استخرج automotive_service_id من الـ id لو مش موجود
-      let serviceId = item.automotive_service_id;
+      if (barcodeProduct && barcodeProduct.id) {
+        console.log('✅ Adding product to cart:', barcodeProduct.name);
 
-      // لو مش موجود، حاول تستخرجه من الـ id (لأنه بيبدأ بـ "service-")
-      if (!serviceId && typeof item.id === 'string' && item.id.startsWith('service-')) {
-        serviceId = parseInt(item.id.replace('service-', ''), 10);
+        addToCart(barcodeProduct as Product);
+        setSearchQuery('');
+
+        toast({
+          title: language === 'ar' ? 'تمت الإضافة' : 'Added to cart',
+          description: language === 'ar'
+            ? (barcodeProduct.name_ar || barcodeProduct.name)
+            : barcodeProduct.name,
+        });
+      }
+    }, [barcodeProduct]);
+
+    // ==================== Data Transformation ====================
+    const transformedCategories = useMemo(() => [
+      { id: 'all', name: 'All', nameAr: 'الكل', icon: '🏷️' },
+      { id: 'automotive', name: 'Automotive Services', nameAr: 'خدمات السيارات', icon: '🚗' },
+      ...(categories?.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        nameAr: cat.name_ar || cat.name,
+        icon: getIconEmoji(cat.icon)
+      })) || [])
+    ], [categories]);
+
+    const transformedProducts = useMemo(() => {
+      if (!products) return [];
+
+      const mapped = products.map((prod: Product) => ({
+        id: prod.id.toString(),
+        name: prod.name,
+        nameAr: prod.name_ar || prod.name,
+        price: prod.price,
+        sku: prod.sku,
+        barcode: prod.barcode || '',
+        stock: prod.stock || 0,
+        category_id: prod.category_id,
+        image_url: prod.image_url,
+        imageUrl: prod.imageUrl,
+        image: prod.image,
+        hasVariants: prod.has_variants,
+        units: prod.units || [],
+        automotive_service: prod.automotive_service || null,
+      }));
+      return selectedCategory === 'automotive' ? mapped.filter((product) => Boolean(product.automotive_service)) : mapped;
+    }, [products, selectedCategory]);
+
+    useEffect(() => {
+      setSearchQuery('');
+      setIsBarcodeScanning(false);
+    }, [selectedCategory]);
+
+    // ==================== Cart Operations ====================
+    const addToCart = (product: Product) => {
+      if (product.automotive_service) {
+        const config = product.automotive_service;
+        setSelectedAutomotiveProduct(product);
+        setAutomotiveVehicleSize('small');
+        setAutomotiveMeterQuantity('1');
+        // ✅ سعر ثابت => يتحدد تلقائياً | بدون سعر => الكاشير يدخله
+        setAutomotiveServicePrice(
+          isManualPriceService(config, product.price)
+            ? ''
+            : String(getFixedServicePrice(config, 'small', product.price))
+        );
+        return;
+      }
+      // إذا كان المنتج عنده متغيرات، افتح نافذة اختيار المتغيرات
+      if (product.units && product.units.length > 0) {
+        setSelectedProductForVariant(product);
+        setShowVariantSelector(true);
+        return;
       }
 
-      return {
-        automotive_service_id: isService ? serviceId : null,
-        product_id: isService
-          ? null
-          : (typeof item.id === 'string'
-            ? parseInt(item.id.replace(/\D/g, ''), 10)
-            : item.id),
-
-        item_type: isService ? 'service' : 'product',
-        product_name: item.nameAr || item.name,  // ← ✅ ضيف ده عشان ما يحصلش Undefined
-        quantity: Number(item.quantity),
-        price: Number(item.price),
-        discount_percentage: Number(item.discount_percentage || 0),
-        meter_quantity: item.meter_quantity ?? null,
-        vehicle_size: item.vehicle_size ?? null,
-        product_unit_id: item.unitId ?? null,
-        color_id: item.colorId ?? null,
-      };
-    });
-
-    const orderData = {
-      items: cleanItems,
-      invoice_number: finalInvoiceNumber,
-      subtotal: calculateSubtotal(),
-      item_discounts_total: calculateItemDiscountsTotal(),
-      invoice_discount_percentage: isComplimentary ? 100 : invoiceDiscountPercentage,
-      invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
-      subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
-      tax: isComplimentary ? 0 : calculateTax(),
-      extra_charge: isComplimentary ? 0 : extraCharge,
-      total: isComplimentary ? 0 : calculateTotal(),
-      customer_id: selectedCustomer?.id ? parseInt(selectedCustomer.id, 10) : undefined,
-      delivery_id: selectedDelivery?.id,
-      sales_rep_id: selectedSalesRep?.id,
-      shift_id: currentShift?.id,
-      payments,
+      // إضافة منتج عادي (بدون متغيرات)
+      setCartItems(prev => {
+        const existing = prev.find(item => item.id === product.id && !item.variantId);
+        if (existing) {
+          // التحقق من المخزون قبل الزيادة
+          if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+            toast({
+              title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
+              description: language === 'ar'
+                ? `الحد الأقصى ${existing.stock} قطعة فقط`
+                : `Maximum ${existing.stock} items only`,
+              variant: 'destructive',
+            });
+            return prev;
+          }
+          return prev.map(item =>
+            item.id === product.id && !item.variantId
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        }
+        return [...prev, {
+          id: product.id,
+          name: product.name,
+          nameAr: product.name_ar || product.name,
+          price: product.price,
+          quantity: 1,
+          sku: product.sku,
+          stock: product.stock,
+          discount_percentage: 0, // ✅ initialize discount
+          itemType: 'product',
+        }];
+      });
     };
 
+    const confirmAutomotiveProduct = () => {
+      if (!selectedAutomotiveProduct?.automotive_service) return;
 
+      const config = selectedAutomotiveProduct.automotive_service;
+      const isLarge = automotiveVehicleSize === 'large';
+      const metersPerCar = Number(isLarge ? config.large_vehicle_quantity : config.small_vehicle_quantity) || 1;
 
-    console.log('📦 Order Data:', orderData);
-
-    if (!navigator.onLine || isOffline) {
-      try {
-        if (invoiceNum) {
-          // POSPaymentModal already persisted this invoice locally before invoking this callback.
-          await checkUnsyncedOrders();
-          await loadOfflineStats();
+      // ✅ تحديد السعر
+      let price: number;
+      if (isManualPriceService(config, selectedAutomotiveProduct.price)) {
+        // الكاشير يدخل السعر يدوياً
+        price = Number(automotiveServicePrice);
+        if (!Number.isFinite(price) || price <= 0) {
           toast({
-            title: language === 'ar' ? 'تم حفظ الطلب محلياً' : 'Order saved locally',
-            description: language === 'ar' ? `رقم الفاتورة: ${invoiceNum}` : `Invoice #: ${invoiceNum}`,
+            title: 'أدخل سعر الخدمة',
+            description: 'هذه الخدمة بلا سعر ثابت، أدخل السعر يدوياً.',
+            variant: 'destructive',
           });
-        } else {
-          const orderId = await saveOrderOffline({
-            ...orderData,
-            subtotal: calculateSubtotal(),
-            tax: calculateTax(),
-            total: calculateTotal(),
-            customer_id: selectedCustomer?.id,
-            delivery_id: selectedDelivery?.id,
-            payment_method: payments[0]?.method,
-            payments
-          });
-          if (orderId) {
+          return;
+        }
+      } else {
+        // سعر ثابت من إعدادات الخدمة
+        price = getFixedServicePrice(config, automotiveVehicleSize, selectedAutomotiveProduct.price);
+      }
+
+      const cars = Math.max(1, Number(automotiveMeterQuantity) || 1);
+
+      setCartItems(prev => [...prev, {
+        id: `service-${config.id}`,
+        name: selectedAutomotiveProduct.name,
+        nameAr: selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name,
+        price,
+        quantity: cars,
+        sku: selectedAutomotiveProduct.sku || `AUTO-${config.code}`,
+        // الخدمات لا تستهلك مخزوناً؛ المنتجات فقط تُخصم أمتارها
+        stock: ((config as any).item_type === 'product' || Number(config.stock_quantity) > 0)
+          ? Math.floor(Number(config.stock_quantity ?? 0) / metersPerCar)
+          : 999999,
+        sizeName: `${isLarge ? 'سيارة كبيرة' : 'سيارة صغيرة'} · ${metersPerCar} متر`,
+        automotive_service_id: config.id,
+        itemType: 'service',
+        vehicle_size: automotiveVehicleSize,
+        meter_quantity: metersPerCar,
+        discount_percentage: 0,
+      }]);
+
+      setSelectedAutomotiveProduct(null);
+      setAutomotiveServicePrice('');
+    };
+    const addVariantToCart = (variant: {
+      productId: string;
+      unitId: number;
+      colorId: number;
+      size: string;
+      color: string;
+      price: number;
+      sku: string;
+      stock: number;
+    }) => {
+      if (!selectedProductForVariant) return;
+
+      const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
+
+      setCartItems(prev => {
+        const existing = prev.find(item => item.variantId === variantId);
+        if (existing) {
+          // التحقق من المخزون قبل الزيادة
+          if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+            toast({
+              title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
+              variant: 'destructive',
+            });
+            return prev;
+          }
+          return prev.map(item =>
+            item.variantId === variantId
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        }
+        return [...prev, {
+          id: selectedProductForVariant.id,
+          variantId: variantId,
+          name: selectedProductForVariant.name,
+          nameAr: selectedProductForVariant.name_ar || selectedProductForVariant.name,
+          price: variant.price,
+          quantity: 1,
+          sku: variant.sku,
+          sizeName: variant.size,
+          colorName: variant.color,
+          unitId: variant.unitId,
+          colorId: variant.colorId,
+          stock: variant.stock,
+          discount_percentage: 0, // ✅ initialize discount
+          itemType: 'product',
+        }];
+      });
+
+      setShowVariantSelector(false);
+      setSelectedProductForVariant(null);
+    };
+
+    const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
+      if (quantity < 1) {
+        removeItem(itemKey, variantId);
+      } else {
+        setCartItems(prev =>
+          prev.map(item => {
+            const match = variantId
+              ? item.variantId === variantId
+              : item.id === itemKey && !item.variantId;
+            if (match) {
+              // التحقق من المخزون
+              if (item.stock !== undefined && quantity > item.stock) {
+                toast({
+                  title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
+                  description: language === 'ar'
+                    ? `الحد الأقصى ${item.stock} قطعة فقط`
+                    : `Maximum ${item.stock} items only`,
+                  variant: 'destructive',
+                });
+                return item;
+              }
+              return { ...item, quantity };
+            }
+            return item;
+          })
+        );
+      }
+    };
+
+    const removeItem = (itemKey: string, variantId?: string) => {
+      setCartItems(prev => prev.filter(item => {
+        if (variantId) {
+          return item.variantId !== variantId;
+        }
+        return !(item.id === itemKey && !item.variantId);
+      }));
+    };
+
+    const clearCart = () => setCartItems([]);
+
+    const holdOrder = () => {
+      if (cartItems.length === 0) return;
+
+      const subtotal = calculateSubtotalAfterItemDiscounts();
+      const tax = (subtotal * taxRate) / 100;
+      const total = subtotal + tax;
+
+      const newHeldOrder: HeldOrder = {
+        id: `HOLD-${Date.now()}`,
+        items: [...cartItems],
+        total,
+        heldAt: new Date()
+      };
+
+      setHeldOrders(prev => [...prev, newHeldOrder]);
+      setCartItems([]);
+
+      toast({
+        title: language === 'ar' ? 'تم تعليق الطلب' : 'Order held',
+        description: language === 'ar' ? `رقم الطلب: ${newHeldOrder.id.slice(-4)}` : `Order #${newHeldOrder.id.slice(-4)}`
+      });
+    };
+
+    const restoreOrder = (order: HeldOrder) => {
+      setCartItems(order.items);
+      setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+    };
+
+    const deleteHeldOrder = (orderId: string) => {
+      setHeldOrders(prev => prev.filter(o => o.id !== orderId));
+    };
+
+    // ✅ دالة خصم المنتج
+    const handleItemDiscountChange = (itemId: string, percentage: number, variantId?: string) => {
+      setCartItems(prev => prev.map(item => {
+        const match = variantId
+          ? item.variantId === variantId
+          : item.id === itemId && !item.variantId;
+        if (match) {
+          return { ...item, discount_percentage: percentage };
+        }
+        return item;
+      }));
+    };
+
+    // ✅ دالة خصم الفاتورة
+    const handleInvoiceDiscountChange = (percentage: number, amount: number) => {
+      setInvoiceDiscountPercentage(percentage);
+      setInvoiceDiscountAmount(amount);
+    };
+
+    // ==================== Calculations ====================
+    const calculateSubtotalAfterItemDiscounts = () => {
+      return cartItems.reduce((sum, item) => {
+        const itemTotal = item.price * item.quantity;
+        const discountRate = (item.discount_percentage || 0) / 100;
+        return sum + (itemTotal * (1 - discountRate));
+      }, 0);
+    };
+
+    const calculateSubtotal = () => cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const calculateItemDiscountsTotal = () => {
+      return cartItems.reduce((sum, item) => {
+        const itemTotal = item.price * item.quantity;
+        const discountRate = (item.discount_percentage || 0) / 100;
+        return sum + (itemTotal * discountRate);
+      }, 0);
+    };
+
+    const calculateSubtotalAfterAllDiscounts = () => {
+      const afterItemDiscounts = calculateSubtotalAfterItemDiscounts();
+      const invoiceDiscount = (afterItemDiscounts * invoiceDiscountPercentage) / 100;
+      return afterItemDiscounts - invoiceDiscount;
+    };
+
+    const calculateTax = () => (calculateSubtotalAfterAllDiscounts() * taxRate) / 100;
+    const calculateTotal = () => calculateSubtotalAfterAllDiscounts() + calculateTax() + extraCharge;
+
+    // ==================== Payment Handlers ====================
+    const handlePaymentComplete = async (
+      payments: { method: string; amount: number }[],
+      invoiceNum?: string,
+      isComplimentary = false
+    ) => {
+      const finalInvoiceNumber = invoiceNum || invoiceNumber ||
+        `INV-${format(new Date(), 'yyyyMMdd')}-${Math.floor(Math.random() * 10000)}`;
+
+      if (invoiceNum) setInvoiceNumber(invoiceNum);
+
+      // ✅ تحويل بنود السلة للـ API payload الصح
+      const cleanItems = cartItems.map(item => {
+        const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
+
+        // ✅ أضف console.log هنا عشان تشوف القيم
+        console.log('🔍 Cart item being processed:', {
+          id: item.id,
+          name: item.name,
+          itemType: item.itemType,
+          automotive_service_id: item.automotive_service_id,
+          vehicle_size: item.vehicle_size,
+          meter_quantity: item.meter_quantity,
+          isService,
+        });
+
+        // ✅ استخرج automotive_service_id من الـ id لو مش موجود
+        let serviceId = item.automotive_service_id;
+
+        // لو مش موجود، حاول تستخرجه من الـ id (لأنه بيبدأ بـ "service-")
+        if (!serviceId && typeof item.id === 'string' && item.id.startsWith('service-')) {
+          serviceId = parseInt(item.id.replace('service-', ''), 10);
+        }
+
+        return {
+          automotive_service_id: isService ? serviceId : null,
+          product_id: isService
+            ? null
+            : (typeof item.id === 'string'
+              ? parseInt(item.id.replace(/\D/g, ''), 10)
+              : item.id),
+
+          item_type: isService ? 'service' : 'product',
+          product_name: item.nameAr || item.name,  // ← ✅ ضيف ده عشان ما يحصلش Undefined
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          discount_percentage: Number(item.discount_percentage || 0),
+          meter_quantity: item.meter_quantity ?? null,
+          vehicle_size: item.vehicle_size ?? null,
+          product_unit_id: item.unitId ?? null,
+          color_id: item.colorId ?? null,
+        };
+      });
+
+      const orderData = {
+        items: cleanItems,
+        invoice_number: finalInvoiceNumber,
+        subtotal: calculateSubtotal(),
+        item_discounts_total: calculateItemDiscountsTotal(),
+        invoice_discount_percentage: isComplimentary ? 100 : invoiceDiscountPercentage,
+        invoice_discount_amount: isComplimentary ? calculateSubtotal() : invoiceDiscountAmount,
+        subtotal_after_discounts: isComplimentary ? 0 : calculateSubtotalAfterAllDiscounts(),
+        tax: isComplimentary ? 0 : calculateTax(),
+        extra_charge: isComplimentary ? 0 : extraCharge,
+        total: isComplimentary ? 0 : calculateTotal(),
+        customer_id: selectedCustomer?.id ? parseInt(selectedCustomer.id, 10) : undefined,
+        delivery_id: selectedDelivery?.id,
+        sales_rep_id: selectedSalesRep?.id,
+        shift_id: currentShift?.id,
+        payments,
+      };
+
+
+
+      console.log('📦 Order Data:', orderData);
+
+      if (!navigator.onLine || isOffline) {
+        try {
+          if (invoiceNum) {
+            // POSPaymentModal already persisted this invoice locally before invoking this callback.
             await checkUnsyncedOrders();
             await loadOfflineStats();
             toast({
               title: language === 'ar' ? 'تم حفظ الطلب محلياً' : 'Order saved locally',
-              description: language === 'ar' ? `رقم الطلب: ${orderId.slice(-8)}` : `Order #: ${orderId.slice(-8)}`,
+              description: language === 'ar' ? `رقم الفاتورة: ${invoiceNum}` : `Invoice #: ${invoiceNum}`,
             });
+          } else {
+            const orderId = await saveOrderOffline({
+              ...orderData,
+              subtotal: calculateSubtotal(),
+              tax: calculateTax(),
+              total: calculateTotal(),
+              customer_id: selectedCustomer?.id,
+              delivery_id: selectedDelivery?.id,
+              payment_method: payments[0]?.method,
+              payments
+            });
+            if (orderId) {
+              await checkUnsyncedOrders();
+              await loadOfflineStats();
+              toast({
+                title: language === 'ar' ? 'تم حفظ الطلب محلياً' : 'Order saved locally',
+                description: language === 'ar' ? `رقم الطلب: ${orderId.slice(-8)}` : `Order #: ${orderId.slice(-8)}`,
+              });
+            }
           }
+        } catch (error) {
+          toast({
+            title: language === 'ar' ? 'حدث خطأ في حفظ الطلب' : 'Error saving order',
+            variant: 'destructive',
+          });
         }
-      } catch (error) {
+      } else {
+        // TODO: إرسال الطلب للـ API
         toast({
-          title: language === 'ar' ? 'حدث خطأ في حفظ الطلب' : 'Error saving order',
-          variant: 'destructive',
+          title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
+          description: language === 'ar'
+            ? `المبلغ: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
+            : `Amount: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
         });
       }
-    } else {
-      // TODO: إرسال الطلب للـ API
-      toast({
-        title: language === 'ar' ? 'تمت العملية بنجاح' : 'Payment successful',
-        description: language === 'ar'
-          ? `المبلغ: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
-          : `Amount: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
-      });
-    }
 
-    setShowPayment(false);
-    setCartItems([]);
-    setSelectedCustomer(null);
-    setSelectedDelivery(null);
-    setInvoiceDiscountPercentage(0);
-    setInvoiceDiscountAmount(0);
-    setExtraCharge(0);
-  };
-
-  // ==================== Delivery Selection Handler ====================
-  const handleSelectDelivery = (delivery: DeliveryMan | null) => {
-    if (delivery) {
-      setSelectedDelivery({
-        id: String(delivery.id),
-        name: delivery.name,
-        nameAr: delivery.nameAr || delivery.name,
-        phone: delivery.phone || ''
-      });
-    } else {
+      setShowPayment(false);
+      setCartItems([]);
+      setSelectedCustomer(null);
       setSelectedDelivery(null);
-    }
-  };
+      setInvoiceDiscountPercentage(0);
+      setInvoiceDiscountAmount(0);
+      setExtraCharge(0);
+    };
 
-  // ==================== UI Handlers ====================
-  const handleLogout = async () => {
-    await signOut(); // الدالة هتتعامل مع كل حاجة (كوكيز، تخزين محلي، توجيه)
-  };
-
-
-  const handleFocusSearch = useCallback(() => {
-    searchInputRef.current?.focus();
-  }, []);
-
-  const handleCloseAllModals = useCallback(() => {
-    if (showPayment) setShowPayment(false);
-    else if (showHeldOrders) setShowHeldOrders(false);
-    else if (showCustomerSelector) setShowCustomerSelector(false);
-    else if (showDeliverySelector) setShowDeliverySelector(false);
-    else if (showReturns) setShowReturns(false);
-    else if (showShiftPanel) setShowShiftPanel(false);
-    else if (showVariantSelector) setShowVariantSelector(false);
-  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector]);
-
-  const handleIncreaseQuantity = useCallback(() => {
-    if (cartItems.length > 0) {
-      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
-      const item = cartItems[index];
-      if (item) {
-        updateQuantity(item.id, item.quantity + 1, item.variantId);
+    // ==================== Delivery Selection Handler ====================
+    const handleSelectDelivery = (delivery: DeliveryMan | null) => {
+      if (delivery) {
+        setSelectedDelivery({
+          id: String(delivery.id),
+          name: delivery.name,
+          nameAr: delivery.nameAr || delivery.name,
+          phone: delivery.phone || ''
+        });
+      } else {
+        setSelectedDelivery(null);
       }
-    }
-  }, [cartItems, selectedCartItemIndex]);
+    };
 
-  const handleDecreaseQuantity = useCallback(() => {
-    if (cartItems.length > 0) {
-      const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
-      const item = cartItems[index];
-      if (item) {
-        updateQuantity(item.id, item.quantity - 1, item.variantId);
+    // ==================== UI Handlers ====================
+    const handleLogout = async () => {
+      await signOut(); // الدالة هتتعامل مع كل حاجة (كوكيز، تخزين محلي، توجيه)
+    };
+
+
+    const handleFocusSearch = useCallback(() => {
+      searchInputRef.current?.focus();
+    }, []);
+
+    const handleCloseAllModals = useCallback(() => {
+      if (showPayment) setShowPayment(false);
+      else if (showHeldOrders) setShowHeldOrders(false);
+      else if (showCustomerSelector) setShowCustomerSelector(false);
+      else if (showDeliverySelector) setShowDeliverySelector(false);
+      else if (showReturns) setShowReturns(false);
+      else if (showShiftPanel) setShowShiftPanel(false);
+      else if (showVariantSelector) setShowVariantSelector(false);
+    }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector]);
+
+    const handleIncreaseQuantity = useCallback(() => {
+      if (cartItems.length > 0) {
+        const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+        const item = cartItems[index];
+        if (item) {
+          updateQuantity(item.id, item.quantity + 1, item.variantId);
+        }
       }
-    }
-  }, [cartItems, selectedCartItemIndex]);
+    }, [cartItems, selectedCartItemIndex]);
 
-  const openInvoiceTransfers = async () => {
-    setShowInvoiceTransfers(true);
-    setTransferLoading(false);
-    setTransferInvoices([]);
-    setTransferEmployee(null);
-    setTransferEmail('');
-    setTransferPassword('');
-    setTransferTargetId('');
-    try {
-      const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
-      setTransferRequests(requestsResponse.data?.data?.data || []);
-    } catch (error) {
-      console.error('Invoice transfer requests loading failed', error);
-    }
-  };
-  const loginSalesRepForTransfer = async () => {
-    if (!transferEmail || !transferPassword) return;
-    setTransferLoading(true);
-    try {
-      const response = await api.post('/invoices/sales-rep-access', { email: transferEmail, password: transferPassword });
-      setTransferEmployee(response.data?.data?.employee || null);
-      setTransferInvoices(response.data?.data?.invoices || []);
-      const employeesResponse = await api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false });
-      const employees = employeesResponse.data?.data;
-      setTransferEmployees(Array.isArray(employees) ? employees : (employees?.data || []));
-      setTransferPassword('');
-    } catch (error: any) {
-      toast({ title: error?.response?.data?.message || (language === 'ar' ? 'بيانات المندوب غير صحيحة' : 'Invalid sales representative credentials'), variant: 'destructive' });
-    } finally {
+    const handleDecreaseQuantity = useCallback(() => {
+      if (cartItems.length > 0) {
+        const index = selectedCartItemIndex >= 0 ? selectedCartItemIndex : cartItems.length - 1;
+        const item = cartItems[index];
+        if (item) {
+          updateQuantity(item.id, item.quantity - 1, item.variantId);
+        }
+      }
+    }, [cartItems, selectedCartItemIndex]);
+
+    const openInvoiceTransfers = async () => {
+      setShowInvoiceTransfers(true);
       setTransferLoading(false);
-    }
-  };
-  const handleInvoiceTransferDecision = async (requestId: number, action: 'approve' | 'reject') => {
-    try {
-      await api.post(`/invoice-transfer-requests/${requestId}/${action}`);
-      toast({ title: action === 'approve' ? (language === 'ar' ? 'تم اعتماد تحويل الفاتورة' : 'Invoice transfer approved') : (language === 'ar' ? 'تم رفض طلب التحويل' : 'Transfer request rejected') });
-      const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
-      setTransferRequests(requestsResponse.data?.data?.data || []);
-    } catch (error: any) {
-      toast({ title: error?.response?.data?.message || (language === 'ar' ? 'لا يمكن تنفيذ الطلب إلا بواسطة الأدمن' : 'Only an admin can perform this action'), variant: 'destructive' });
-    }
-  };
-  const requestInvoiceTransferFromPos = async (invoice: any) => {
-    const employeeId = Number(transferTargetId);
-    if (!transferEmployee || !employeeId || employeeId < 1) {
-      toast({ title: language === 'ar' ? 'اختر الموظف المستلم أولاً' : 'Choose the receiving employee first', variant: 'destructive' });
-      return;
-    }
-    try {
-      await api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoice.id, from_employee_id: transferEmployee.id, to_employee_id: employeeId });
-      toast({ title: language === 'ar' ? 'تم إرسال الطلب للمدير' : 'Request sent to admin' });
-      const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
-      setTransferRequests(requestsResponse.data?.data?.data || []);
-    } catch (error: any) {
-      toast({ title: error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال الطلب' : 'Could not send request'), variant: 'destructive' });
-    }
-  };
-  // ==================== Keyboard Shortcuts ====================
-  const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showVariantSelector;
+      setTransferInvoices([]);
+      setTransferEmployee(null);
+      setTransferEmail('');
+      setTransferPassword('');
+      setTransferTargetId('');
+      try {
+        const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
+        setTransferRequests(requestsResponse.data?.data?.data || []);
+      } catch (error) {
+        console.error('Invoice transfer requests loading failed', error);
+      }
+    };
+    const loginSalesRepForTransfer = async () => {
+      if (!transferEmail || !transferPassword) return;
+      setTransferLoading(true);
+      try {
+        const response = await api.post('/invoices/sales-rep-access', { email: transferEmail, password: transferPassword });
+        setTransferEmployee(response.data?.data?.employee || null);
+        setTransferInvoices(response.data?.data?.invoices || []);
+        const employeesResponse = await api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false });
+        const employees = employeesResponse.data?.data;
+        setTransferEmployees(Array.isArray(employees) ? employees : (employees?.data || []));
+        setTransferPassword('');
+      } catch (error: any) {
+        toast({ title: error?.response?.data?.message || (language === 'ar' ? 'بيانات المندوب غير صحيحة' : 'Invalid sales representative credentials'), variant: 'destructive' });
+      } finally {
+        setTransferLoading(false);
+      }
+    };
+    const handleInvoiceTransferDecision = async (requestId: number, action: 'approve' | 'reject') => {
+      try {
+        await api.post(`/invoice-transfer-requests/${requestId}/${action}`);
+        toast({ title: action === 'approve' ? (language === 'ar' ? 'تم اعتماد تحويل الفاتورة' : 'Invoice transfer approved') : (language === 'ar' ? 'تم رفض طلب التحويل' : 'Transfer request rejected') });
+        const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
+        setTransferRequests(requestsResponse.data?.data?.data || []);
+      } catch (error: any) {
+        toast({ title: error?.response?.data?.message || (language === 'ar' ? 'لا يمكن تنفيذ الطلب إلا بواسطة الأدمن' : 'Only an admin can perform this action'), variant: 'destructive' });
+      }
+    };
+    const requestInvoiceTransferFromPos = async (invoice: any) => {
+      const employeeId = Number(transferTargetId);
+      if (!transferEmployee || !employeeId || employeeId < 1) {
+        toast({ title: language === 'ar' ? 'اختر الموظف المستلم أولاً' : 'Choose the receiving employee first', variant: 'destructive' });
+        return;
+      }
+      try {
+        await api.post('/invoice-transfer-requests', { invoice_type: 'pos', invoice_id: invoice.id, from_employee_id: transferEmployee.id, to_employee_id: employeeId });
+        toast({ title: language === 'ar' ? 'تم إرسال الطلب للمدير' : 'Request sent to admin' });
+        const requestsResponse = await api.get('/invoice-transfer-requests', { params: { per_page: 100 } });
+        setTransferRequests(requestsResponse.data?.data?.data || []);
+      } catch (error: any) {
+        toast({ title: error?.response?.data?.message || (language === 'ar' ? 'تعذر إرسال الطلب' : 'Could not send request'), variant: 'destructive' });
+      }
+    };
+    // ==================== Keyboard Shortcuts ====================
+    const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showVariantSelector;
 
-  const posShortcuts = getPOSShortcuts({
-    onPay: () => cartItems.length > 0 && setShowPayment(true),
-    onHold: holdOrder,
-    onClearCart: clearCart,
-    onFocusSearch: handleFocusSearch,
-    onShowHeldOrders: () => setShowHeldOrders(true),
-    onShowCustomer: () => setShowCustomerSelector(true),
-    onShowDelivery: () => setShowDeliverySelector(true),
-    onShowReturns: () => setShowReturns(true),
-    onShowShift: () => setShowShiftPanel(true),
-    onGoHome: () => navigate('/dashboard'),
-    onEscape: handleCloseAllModals,
-    onIncreaseQuantity: handleIncreaseQuantity,
-    onDecreaseQuantity: handleDecreaseQuantity,
-  });
+    const posShortcuts = getPOSShortcuts({
+      onPay: () => cartItems.length > 0 && setShowPayment(true),
+      onHold: holdOrder,
+      onClearCart: clearCart,
+      onFocusSearch: handleFocusSearch,
+      onShowHeldOrders: () => setShowHeldOrders(true),
+      onShowCustomer: () => setShowCustomerSelector(true),
+      onShowDelivery: () => setShowDeliverySelector(true),
+      onShowReturns: () => setShowReturns(true),
+      onShowShift: () => setShowShiftPanel(true),
+      onGoHome: () => navigate('/dashboard'),
+      onEscape: handleCloseAllModals,
+      onIncreaseQuantity: handleIncreaseQuantity,
+      onDecreaseQuantity: handleDecreaseQuantity,
+    });
 
-  usePOSKeyboardShortcuts(posShortcuts, !isAnyModalOpen);
+    usePOSKeyboardShortcuts(posShortcuts, !isAnyModalOpen);
 
-  const isLoading = categoriesLoading || productsLoading;
+    const isLoading = categoriesLoading || productsLoading;
 
-  // ==================== Automotive pricing (derived) ====================
-  const automotiveConfig: any = selectedAutomotiveProduct?.automotive_service || null;
-  const automotiveProductPrice = Number(selectedAutomotiveProduct?.price) || 0;
-  const automotiveIsManual = automotiveConfig ? isManualPriceService(automotiveConfig, automotiveProductPrice) : false;
-  const automotiveFixedPrice = automotiveConfig && !automotiveIsManual
-    ? getFixedServicePrice(automotiveConfig, automotiveVehicleSize, automotiveProductPrice)
-    : 0;
-  const automotiveSizeLabel = (size: 'small' | 'large') => {
-    if (!automotiveConfig) return '';
-    const meters = Number(size === 'large' ? automotiveConfig.large_vehicle_quantity : automotiveConfig.small_vehicle_quantity) || 0;
-    const parts = [size === 'large' ? 'كبيرة' : 'صغيرة'];
-    if (meters > 0) parts.push(`${meters} متر`);
-    if (!automotiveIsManual) parts.push(getFixedServicePrice(automotiveConfig, size, automotiveProductPrice).toLocaleString());
-    return parts.join(' — ');
-  };
+    // ==================== Automotive pricing (derived) ====================
+    const automotiveConfig: any = selectedAutomotiveProduct?.automotive_service || null;
+    const automotiveProductPrice = Number(selectedAutomotiveProduct?.price) || 0;
+    const automotiveIsManual = automotiveConfig ? isManualPriceService(automotiveConfig, automotiveProductPrice) : false;
+    const automotiveFixedPrice = automotiveConfig && !automotiveIsManual
+      ? getFixedServicePrice(automotiveConfig, automotiveVehicleSize, automotiveProductPrice)
+      : 0;
+    const automotiveSizeLabel = (size: 'small' | 'large') => {
+      if (!automotiveConfig) return '';
+      const meters = Number(size === 'large' ? automotiveConfig.large_vehicle_quantity : automotiveConfig.small_vehicle_quantity) || 0;
+      const parts = [size === 'large' ? 'كبيرة' : 'صغيرة'];
+      if (meters > 0) parts.push(`${meters} متر`);
+      if (!automotiveIsManual) parts.push(getFixedServicePrice(automotiveConfig, size, automotiveProductPrice).toLocaleString());
+      return parts.join(' — ');
+    };
 
-  // ==================== Render ====================
-  return (
-    <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex flex-col bg-background overflow-hidden">
-        {/* POS Header */}
-        <header className="h-14 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5 text-white" />
-              <h1 className="text-xl font-bold text-white">
-                {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
-              </h1>
-            </div>
+    // ==================== Render ====================
+    return (
+      <TooltipProvider delayDuration={300}>
+        <div className="h-screen flex flex-col bg-background overflow-hidden">
+          {/* POS Header */}
+          <header className="h-14 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5 text-white" />
+                <h1 className="text-xl font-bold text-white">
+                  {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
+                </h1>
+              </div>
 
-            {/* Offline/Online Status */}
-            <div className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
-              isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
-            )}>
-              {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
-              <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
-            </div>
+              {/* Offline/Online Status */}
+              <div className={cn(
+                "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
+                isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+              )}>
+                {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
+                <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
+              </div>
 
-            {/* Branch Info */}
-            {(userBranch || currentBranch) && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
-                <Building2 size={14} />
-                <span>
-                  {userBranch
-                    ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
-                    : currentBranch
-                      ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
-                      : null
-                  }
+              {/* Branch Info */}
+              {(userBranch || currentBranch) && (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
+                  <Building2 size={14} />
+                  <span>
+                    {userBranch
+                      ? (language === 'ar' && userBranch.name_ar ? userBranch.name_ar : userBranch.name)
+                      : currentBranch
+                        ? (language === 'ar' && currentBranch.name_ar ? currentBranch.name_ar : currentBranch.name)
+                        : null
+                    }
+                  </span>
+                </div>
+              )}
+
+              {/* User Info */}
+              <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-xl shadow-sm">
+                <div className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white">
+                  <User size={18} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-gray-800">{user?.name}</span>
+                </div>
+              </div>
+
+              {currentShift && (
+                <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">
+                  {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
                 </span>
-              </div>
-            )}
-
-            {/* User Info */}
-            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-xl shadow-sm">
-              <div className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white">
-                <User size={18} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gray-800">{user?.name}</span>
-              </div>
+              )}
             </div>
 
-            {currentShift && (
-              <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">
-                {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
-              </span>
-            )}
-          </div>
+            <div className="flex items-center gap-1">
+              {/* Quick Action Buttons */}
+              <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
+                {/* Sync Button */}
+                {unsyncedCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={syncOfflineOrders}
+                    disabled={syncing || isOffline}
+                    className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 relative gap-1.5 px-2"
+                  >
+                    <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+                    <span className="text-xs font-medium">{language === 'ar' ? 'مزامنة' : 'Sync'}</span>
+                    <span className="absolute -top-1 -end-1 w-4 h-4 bg-blue-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                      {unsyncedCount}
+                    </span>
+                  </Button>
+                )}
 
-          <div className="flex items-center gap-1">
-            {/* Quick Action Buttons */}
-            <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
-              {/* Sync Button */}
-              {unsyncedCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={syncOfflineOrders}
-                  disabled={syncing || isOffline}
-                  className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 relative gap-1.5 px-2"
+                  onClick={openInvoiceTransfers}
+                  className="text-fuchsia-400 hover:text-fuchsia-300 hover:bg-fuchsia-500/20 relative gap-1.5 px-2"
                 >
-                  <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-                  <span className="text-xs font-medium">{language === 'ar' ? 'مزامنة' : 'Sync'}</span>
-                  <span className="absolute -top-1 -end-1 w-4 h-4 bg-blue-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                    {unsyncedCount}
-                  </span>
+                  <Share2 size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'طلبات تحويل' : 'Transfer requests'}</span>
+                  {transferRequests.filter((request) => request.status === 'pending').length > 0 && <span className="absolute -top-1 -end-1 w-4 h-4 bg-fuchsia-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{transferRequests.filter((request) => request.status === 'pending').length}</span>}
                 </Button>
+                {/* Held Orders */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowHeldOrders(true)}
+                  className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 relative gap-1.5 px-2"
+                >
+                  <Clock size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'المعلقة' : 'Held'}</span>
+                  {heldOrders.length > 0 && (
+                    <span className="absolute -top-1 -end-1 w-4 h-4 bg-warning text-warning-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
+                      {heldOrders.length}
+                    </span>
+                  )}
+                </Button>
+
+                {/* Customer */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCustomerSelector(true)}
+                  className={cn(
+                    "gap-1.5 px-2",
+                    selectedCustomer
+                      ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
+                      : "text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/20"
+                  )}
+                >
+                  <User size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'العميل' : 'Customer'}</span>
+                </Button>
+
+                {/* Delivery Man Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDeliverySelector(true)}
+                  className={cn(
+                    "gap-1.5 px-2",
+                    selectedDelivery
+                      ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20"
+                      : "text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/20"
+                  )}
+                >
+                  <Truck size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
+                  {selectedDelivery && (
+                    <span className="absolute -top-1 -end-1 w-2 h-2 bg-orange-500 rounded-full" />
+                  )}
+                </Button>
+
+                {/* Sales Rep */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSalesRepSelector(true)}
+                  className={cn(
+                    "gap-1.5 px-2",
+                    selectedSalesRep
+                      ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                      : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
+                  )}
+                >
+                  <UserCheck size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'مندوب المبيعات' : 'Sales Rep'}</span>
+                  {selectedSalesRep && (
+                    <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
+                  )}
+                </Button>
+
+                {/* Returns */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowReturns(true)}
+                  className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 gap-1.5 px-2"
+                >
+                  <RotateCcw size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'مرتجع' : 'Returns'}</span>
+                </Button>
+
+                {/* Shift */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowShiftPanel(true)}
+                  className={cn(
+                    "gap-1.5 px-2",
+                    currentShift
+                      ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20"
+                      : "text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
+                  )}
+                >
+                  <DollarSign size={16} />
+                  <span className="text-xs font-medium">{language === 'ar' ? 'الوردية' : 'Shift'}</span>
+                </Button>
+              </div>
+
+              {/* Selected Customer Display */}
+              {selectedCustomer && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
+                  <span className="text-white/90 text-sm">
+                    {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Crown size={14} className="text-warning" />
+                    <span className="text-warning font-semibold text-xs">
+                      {selectedCustomer.loyalty_points || 0}
+                    </span>
+                  </div>
+                </div>
               )}
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={openInvoiceTransfers}
-                className="text-fuchsia-400 hover:text-fuchsia-300 hover:bg-fuchsia-500/20 relative gap-1.5 px-2"
-              >
-                <Share2 size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'طلبات تحويل' : 'Transfer requests'}</span>
-                {transferRequests.filter((request) => request.status === 'pending').length > 0 && <span className="absolute -top-1 -end-1 w-4 h-4 bg-fuchsia-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{transferRequests.filter((request) => request.status === 'pending').length}</span>}
-              </Button>
-              {/* Held Orders */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHeldOrders(true)}
-                className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 relative gap-1.5 px-2"
-              >
-                <Clock size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'المعلقة' : 'Held'}</span>
-                {heldOrders.length > 0 && (
-                  <span className="absolute -top-1 -end-1 w-4 h-4 bg-warning text-warning-foreground text-[10px] rounded-full flex items-center justify-center font-bold">
-                    {heldOrders.length}
-                  </span>
-                )}
-              </Button>
-
-              {/* Customer */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCustomerSelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedCustomer
-                    ? "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
-                    : "text-cyan-400/70 hover:text-cyan-300 hover:bg-cyan-500/20"
-                )}
-              >
-                <User size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'العميل' : 'Customer'}</span>
-              </Button>
-
-              {/* Delivery Man Button */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowDeliverySelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedDelivery
-                    ? "text-orange-400 hover:text-orange-300 hover:bg-orange-500/20"
-                    : "text-orange-400/70 hover:text-orange-300 hover:bg-orange-500/20"
-                )}
-              >
-                <Truck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'التوصيل' : 'Delivery'}</span>
-                {selectedDelivery && (
-                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-orange-500 rounded-full" />
-                )}
-              </Button>
-
-              {/* Sales Rep */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSalesRepSelector(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  selectedSalesRep
-                    ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
-                    : "text-emerald-400/70 hover:text-emerald-300 hover:bg-emerald-500/20"
-                )}
-              >
-                <UserCheck size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'مندوب المبيعات' : 'Sales Rep'}</span>
-                {selectedSalesRep && (
-                  <span className="absolute -top-1 -end-1 w-2 h-2 bg-emerald-500 rounded-full" />
-                )}
-              </Button>
-
-              {/* Returns */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowReturns(true)}
-                className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 gap-1.5 px-2"
-              >
-                <RotateCcw size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'مرتجع' : 'Returns'}</span>
-              </Button>
-
-              {/* Shift */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowShiftPanel(true)}
-                className={cn(
-                  "gap-1.5 px-2",
-                  currentShift
-                    ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/20"
-                    : "text-violet-400/70 hover:text-violet-300 hover:bg-violet-500/20"
-                )}
-              >
-                <DollarSign size={16} />
-                <span className="text-xs font-medium">{language === 'ar' ? 'الوردية' : 'Shift'}</span>
-              </Button>
-            </div>
-
-            {/* Selected Customer Display */}
-            {selectedCustomer && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">
-                  {language === 'ar' ? selectedCustomer.name_ar || selectedCustomer.name : selectedCustomer.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Crown size={14} className="text-warning" />
-                  <span className="text-warning font-semibold text-xs">
-                    {selectedCustomer.loyalty_points || 0}
+              {/* Selected Delivery Display */}
+              {selectedDelivery && (
+                <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+                  <span className="text-white/90 text-sm">
+                    {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
                   </span>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Selected Delivery Display */}
-            {selectedDelivery && (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">
-                  {language === 'ar' ? selectedDelivery.nameAr : selectedDelivery.name}
-                </span>
-              </div>
-            )}
+              {/* Selected Sales Rep Display */}
+              {selectedSalesRep && (
+                <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
+                  <span className="text-white/90 text-sm">{selectedSalesRep.name}</span>
+                  {selectedSalesRep.commission_rate && (
+                    <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
+                      {selectedSalesRep.commission_rate}%
+                    </span>
+                  )}
+                </div>
+              )}
 
-            {/* Selected Sales Rep Display */}
-            {selectedSalesRep && (
-              <div className="flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg">
-                <span className="text-white/90 text-sm">{selectedSalesRep.name}</span>
-                {selectedSalesRep.commission_rate && (
-                  <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">
-                    {selectedSalesRep.commission_rate}%
-                  </span>
-                )}
-              </div>
-            )}
+              {/* Offline Stats Button */}
+              {isOffline && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowOfflineStats(!showOfflineStats)}
+                      className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
+                    >
+                      <AlertCircle size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span>{language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}</span>
+                  </TooltipContent>
+                </Tooltip>
+              )}
 
-            {/* Offline Stats Button */}
-            {isOffline && (
+              <div className="flex items-center gap-1 border-s border-white/20 ps-2"><Button variant="ghost" size="sm" onClick={() => navigate('/automotive')} className="text-cyan-300 hover:bg-cyan-500/20">Automotive</Button><Button variant="ghost" size="sm" onClick={() => navigate('/POSRetrun')} className="text-rose-300 hover:bg-rose-500/20">مرتجعات POS</Button></div>
+
+              {/* Home */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link to="/dashboard">
+                    <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
+                      <Home size={20} />
+                    </Button>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="bg-card border border-border">
+                  <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Logout */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowOfflineStats(!showOfflineStats)}
-                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
+                    onClick={handleLogout}
+                    className="text-white/80 hover:text-white hover:bg-white/10"
                   >
-                    <AlertCircle size={18} />
+                    <LogOut size={20} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <span>{language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}</span>
+                <TooltipContent side="bottom" className="bg-card border border-border">
+                  <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
                 </TooltipContent>
               </Tooltip>
-            )}
-
-            <div className="flex items-center gap-1 border-s border-white/20 ps-2"><Button variant="ghost" size="sm" onClick={() => navigate('/automotive')} className="text-cyan-300 hover:bg-cyan-500/20">Automotive</Button><Button variant="ghost" size="sm" onClick={() => navigate('/POSRetrun')} className="text-rose-300 hover:bg-rose-500/20">مرتجعات POS</Button></div>
-
-            {/* Home */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link to="/dashboard">
-                  <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10">
-                    <Home size={20} />
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-card border border-border">
-                <span>{language === 'ar' ? 'الرئيسية' : 'Home'} (F12)</span>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Logout */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="text-white/80 hover:text-white hover:bg-white/10"
-                >
-                  <LogOut size={20} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-card border border-border">
-                <span>{language === 'ar' ? 'خروج' : 'Logout'}</span>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Products Section */}
-          <div className="flex-1 flex flex-col p-4 overflow-hidden">
-            <div className="space-y-3 mb-4 flex-shrink-0">
-              <div className="relative flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                  <Input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchQuery.length >= 3) {
-                        setIsBarcodeScanning(true);
-                      }
-                    }}
-                    className="ps-10 pe-10 h-12 text-base"
-                  />
-                  <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                </div>
-
-                {searchQuery.length >= 3 && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsBarcodeScanning(true)}
-                    className="h-12 px-4"
-                  >
-                    <Barcode size={18} className="me-1" />
-                    {language === 'ar' ? 'إضافة' : 'Add'}
-                  </Button>
-                )}
-                {enabledModules.includes('inventory') && (
-                  <Button type="button" variant="outline" className="h-12 px-3" onClick={() => setShowBranchTransfers(true)}>
-                    <Building2 size={18} className="me-1" />
-                    {language === 'ar' ? 'منتجات الفروع' : 'Branch products'}
-                  </Button>
-                )}
-              </div>
-
-              {isBarcodeScanning && (
-                <div className="flex items-center gap-1 text-xs text-green-500">
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>{language === 'ar' ? 'جاري معالجة الباركود...' : 'Processing barcode...'}</span>
-                </div>
-              )}
-
-              {categoriesOffline && (
-                <div className="flex items-center gap-1 text-xs text-amber-500">
-                  <WifiOff size={12} />
-                  <span>{language === 'ar' ? 'الفئات من الذاكرة المحلية' : 'Categories from offline storage'}</span>
-                </div>
-              )}
-
-              <POSCategories
-                categories={transformedCategories}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant={servicesOnly ? 'default' : 'outline'}
-                onClick={() => setServicesOnly(value => !value)}
-                className="mt-2 h-9"
-              >
-                {servicesOnly ? (language === 'ar' ? 'عرض كل الأصناف' : 'Show all items') : (language === 'ar' ? 'الخدمات فقط' : 'Services only')}
-              </Button>
             </div>
+          </header>
 
-            {/* Offline Stats Panel */}
-            {showOfflineStats && offlineStats && (
-              <Card className="mb-4 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-sm flex items-center gap-1">
-                      <AlertCircle size={14} className="text-amber-600" />
-                      {language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}
-                    </h4>
-                    <Badge variant="outline" className="text-xs">
-                      {format(new Date(offlineStats.lastUpdated), 'HH:mm')}
-                    </Badge>
+          {/* Main Content */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Products Section */}
+            <div className="flex-1 flex flex-col p-4 overflow-hidden">
+              <div className="space-y-3 mb-4 flex-shrink-0">
+                <div className="relative flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                    <Input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder={language === 'ar' ? 'بحث بالاسم، الباركود، أو SKU...' : 'Search by name, barcode, or SKU...'}
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchQuery.length >= 3) {
+                          setIsBarcodeScanning(true);
+                        }
+                      }}
+                      className="ps-10 pe-10 h-12 text-base"
+                    />
+                    <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'منتجات' : 'Products'}:</span>
-                      <span className="font-medium">{offlineStats.products}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'عملاء' : 'Customers'}:</span>
-                      <span className="font-medium">{offlineStats.customers}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'فئات' : 'Categories'}:</span>
-                      <span className="font-medium">{offlineStats.categories}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{language === 'ar' ? 'غير متزامنة' : 'Unsynced'}:</span>
-                      <span className="font-medium text-amber-600">{offlineStats.unsyncedOrders}</span>
-                    </div>
-                  </div>
-                  {unsyncedCount > 0 && (
+
+                  {searchQuery.length >= 3 && (
                     <Button
-                      variant="ghost"
+                      type="button"
                       size="sm"
-                      onClick={syncOfflineOrders}
-                      disabled={syncing}
-                      className="w-full mt-2 h-7 text-xs"
+                      variant="outline"
+                      onClick={() => setIsBarcodeScanning(true)}
+                      className="h-12 px-4"
                     >
-                      {syncing ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      ) : (
-                        <RefreshCw className="h-3 w-3 mr-1" />
-                      )}
-                      {language === 'ar' ? 'مزامنة' : 'Sync Now'}
+                      <Barcode size={18} className="me-1" />
+                      {language === 'ar' ? 'إضافة' : 'Add'}
                     </Button>
                   )}
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="flex-1 overflow-y-auto">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <>
-                  {productsOffline && (
-                    <div className="mb-2 flex items-center gap-1 text-xs text-amber-500">
-                      <WifiOff size={12} />
-                      <span>{language === 'ar' ? 'المنتجات من الذاكرة المحلية' : 'Products from offline storage'}</span>
-                    </div>
+                  {enabledModules.includes('inventory') && (
+                    <Button type="button" variant="outline" className="h-12 px-3" onClick={() => setShowBranchTransfers(true)}>
+                      <Building2 size={18} className="me-1" />
+                      {language === 'ar' ? 'منتجات الفروع' : 'Branch products'}
+                    </Button>
                   )}
-                  <POSProductGrid
-                    products={transformedProducts}
-                    onAddToCart={addToCart}
-                    searchQuery={searchQuery}
-                    selectedCategory={selectedCategory}
-                    servicesOnly={servicesOnly}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Cart Section */}
-          <div className="w-[380px] p-4 ps-0 flex-shrink-0">
-            <POSCart
-              items={cartItems}
-              onUpdateQuantity={updateQuantity}
-              onRemoveItem={removeItem}
-              onClearCart={clearCart}
-              onHoldOrder={holdOrder}
-              onPay={() => setShowPayment(true)}
-              heldOrdersCount={heldOrders.length}
-              invoiceDiscountPercentage={invoiceDiscountPercentage}
-              invoiceDiscountAmount={invoiceDiscountAmount}
-              onInvoiceDiscountChange={handleInvoiceDiscountChange}
-              onItemDiscountChange={handleItemDiscountChange}
-              canManageDiscounts={canManagePosDiscounts}
-              extraCharge={extraCharge}
-              onExtraChargeChange={setExtraCharge}
-            />
-          </div>
-        </div>
-
-        {/* Shortcuts Bar */}
-        <POSShortcutsBar
-          onPay={() => cartItems.length > 0 && setShowPayment(true)}
-          onHold={holdOrder}
-          onClearCart={clearCart}
-          onShowHeldOrders={() => setShowHeldOrders(true)}
-          onShowCustomer={() => setShowCustomerSelector(true)}
-          onShowDelivery={() => setShowDeliverySelector(true)}
-          onShowReturns={() => setShowReturns(true)}
-          onShowShift={() => setShowShiftPanel(true)}
-          onFocusSearch={handleFocusSearch}
-          onGoHome={() => navigate('/dashboard')}
-          cartItemsCount={cartItems.length}
-          heldOrdersCount={heldOrders.length}
-          hasShift={!!currentShift}
-        />
-
-        <Dialog open={showInvoiceTransfers} onOpenChange={setShowInvoiceTransfers}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>{language === 'ar' ? 'طلبات تحويل فواتير المندوبين' : 'Sales representative transfer requests'}</DialogTitle></DialogHeader>
-            <div className="rounded-lg border p-3">
-              <p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات التحويل المعلقة' : 'Pending transfer requests'}</p>
-              {transferRequests.filter((request: any) => request.status === 'pending').length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p> : transferRequests.filter((request: any) => request.status === 'pending').map((request: any) => <div key={`admin-${request.id}`} className="border-t py-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold">{request.invoice_details?.invoice_number || `#${request.invoice_id}`} · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'}</span><span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span></div>{request.invoice_details && <div className="mt-2 rounded bg-muted/40 p-2 text-xs"><div className="grid gap-1 sm:grid-cols-4"><span>{language === 'ar' ? 'العميل' : 'Customer'}: {request.invoice_details.customer?.name || '-'}</span><span>{language === 'ar' ? 'الإجمالي' : 'Total'}: {request.invoice_details.total}</span><span>{language === 'ar' ? 'التكلفة' : 'Cost'}: {request.invoice_details.cost}</span><span className="font-semibold text-emerald-600">{language === 'ar' ? 'الربح' : 'Profit'}: {request.invoice_details.profit}</span></div><div className="mt-2">{language === 'ar' ? 'الأصناف' : 'Items'}: {(request.invoice_details.items || []).map((item: any, index: number) => <span key={index} className="me-3">{item.product_name || '-'} × {item.quantity} ({item.price})</span>)}</div></div>}</div>)}
-            </div>
-            {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : !transferEmployee ? <div className="space-y-3"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'أدخل إيميل وباسورد مندوب المبيعات لعرض فواتيره اليوم فقط.' : 'Enter the sales representative email and password to show only today invoices.'}</p><Input type="email" value={transferEmail} onChange={(event) => setTransferEmail(event.target.value)} placeholder={language === 'ar' ? 'إيميل المندوب' : 'Representative email'} /><Input type="password" value={transferPassword} onChange={(event) => setTransferPassword(event.target.value)} placeholder={language === 'ar' ? 'الباسورد' : 'Password'} /><Button onClick={loginSalesRepForTransfer} disabled={!transferEmail || !transferPassword}>{language === 'ar' ? 'دخول وعرض فواتير اليوم' : 'Login and show today invoices'}</Button></div> : <div className="space-y-3 max-h-[60vh] overflow-auto"><div className="rounded-lg border p-3"><p className="font-semibold">{transferEmployee.name} · {language === 'ar' ? 'فواتير اليوم' : "Today's invoices"}</p><select className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={transferTargetId} onChange={(event) => setTransferTargetId(event.target.value)}><option value="">{language === 'ar' ? 'اختر الموظف المستلم' : 'Choose receiving employee'}</option>{transferEmployees.filter((employee) => employee.id !== transferEmployee.id).map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select>{transferInvoices.length === 0 ? <p className="py-5 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد فواتير لهذا المندوب اليوم' : 'No invoices for this representative today'}</p> : transferInvoices.map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><Button size="sm" variant="outline" disabled={!transferTargetId} onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div><div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات اليوم' : "Today's requests"}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm"><span><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</span>{request.status === 'pending' && <span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span>}</div>)}</div></div>}
-          </DialogContent>
-        </Dialog>
-        <Dialog open={!!selectedAutomotiveProduct} onOpenChange={(open) => !open && setSelectedAutomotiveProduct(null)}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>تفاصيل خدمة السيارات</DialogTitle></DialogHeader>
-            {selectedAutomotiveProduct && automotiveConfig && (
-              <div className="space-y-4" dir="rtl">
-                <p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p>
-
-                {/* حجم السيارة */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium">حجم السيارة</label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3"
-                    value={automotiveVehicleSize}
-                    onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}
-                  >
-                    <option value="small">{automotiveSizeLabel('small')}</option>
-                    <option value="large">{automotiveSizeLabel('large')}</option>
-                  </select>
                 </div>
 
-                {/* ✅ بدون سعر ثابت => الكاشير يدخل السعر */}
-                {automotiveIsManual ? (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">
-                      سعر الخدمة الذي يحدده الكاشير *
-                    </label>
-                    <Input
-                      autoFocus
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={automotiveServicePrice}
-                      onChange={(e) => setAutomotiveServicePrice(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') confirmAutomotiveProduct(); }}
-                      placeholder="اكتب السعر"
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      هذه الخدمة بلا سعر ثابت، وسيُحفظ السعر مع الفاتورة والوردية والتقارير.
-                    </p>
-                  </div>
-                ) : (
-                  /* ✅ سعر ثابت => يظهر تلقائياً ولا يُطلب من الكاشير */
-                  <div className="rounded-lg bg-blue-500/10 p-3">
-                    <p className="text-sm text-blue-700 dark:text-blue-400">
-                      💰 السعر: {automotiveFixedPrice.toLocaleString()}
-                    </p>
+                {isBarcodeScanning && (
+                  <div className="flex items-center gap-1 text-xs text-green-500">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>{language === 'ar' ? 'جاري معالجة الباركود...' : 'Processing barcode...'}</span>
                   </div>
                 )}
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium">عدد السيارات</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={automotiveMeterQuantity}
-                    onChange={(e) => setAutomotiveMeterQuantity(e.target.value)}
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.
-                  </p>
-                </div>
+                {categoriesOffline && (
+                  <div className="flex items-center gap-1 text-xs text-amber-500">
+                    <WifiOff size={12} />
+                    <span>{language === 'ar' ? 'الفئات من الذاكرة المحلية' : 'Categories from offline storage'}</span>
+                  </div>
+                )}
 
-                <Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button>
+                <POSCategories
+                  categories={transformedCategories}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={servicesOnly ? 'default' : 'outline'}
+                  onClick={() => setServicesOnly(value => !value)}
+                  className="mt-2 h-9"
+                >
+                  {servicesOnly ? (language === 'ar' ? 'عرض كل الأصناف' : 'Show all items') : (language === 'ar' ? 'الخدمات فقط' : 'Services only')}
+                </Button>
               </div>
-            )}
-          </DialogContent>
-        </Dialog>
-        {/* Modals */}
-        <POSPaymentModal
-          isOpen={showPayment}
-          onClose={() => setShowPayment(false)}
-          total={calculateTotal()}
-          subtotal={calculateSubtotalAfterAllDiscounts()}
-          tax={calculateTax()}
-          extraCharge={extraCharge}
-          cartItems={cartItems}
-          canManageDiscounts={canManagePosDiscounts}
-          onRequestCustomer={() => setShowCustomerSelector(true)}
-          onComplete={(payments, invoiceNum, complimentary) => {
-            console.log('📄 Invoice Number from modal:', invoiceNum);
-            handlePaymentComplete(payments, invoiceNum, complimentary);
-          }}
-          customer={selectedCustomer ? {
-            id: selectedCustomer.id,
-            name: selectedCustomer.name,
-            name_ar: selectedCustomer.name_ar || undefined,
-            loyalty_points: selectedCustomer.loyalty_points
-          } : null}
-          deliveryPerson={selectedDelivery ? {
-            id: selectedDelivery.id,
-            name: selectedDelivery.name
-          } : null}
-          salesRepresentative={selectedSalesRep ? {
-            id: selectedSalesRep.id,
-            name: selectedSalesRep.name,
-            commission_rate: selectedSalesRep.commission_rate
-          } : null}
-          shiftId={currentShift?.id || null}
-          branchId={branchData?.id || null}
-          branchName={branchData?.name}
-          branchNameAr={branchData?.nameAr}
-          branchPhone={branchData?.phone}
-          branchAddress={branchData?.address}
-          branchAddressAr={branchData?.addressAr}
-          companyInfo={{
-            name: user?.name || 'متجرك',
-            nameAr: user?.name_ar || user?.name,
-            logo: user?.logoUrl || user?.logo_url || user?.company_logo || user?.logo_icon_url || user?.logo_icon || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
-            address: user?.address,
-            addressAr: user?.address,
-            phone: user?.phone,
-            email: user?.email,
-            tax_id: user?.tax_id,
-            commercial_register: user?.commercial_register,
-            website: user?.website,
-            currency: user?.currency || 'YER'
-          }}
-          invoiceDiscountPercentage={invoiceDiscountPercentage}
-          invoiceDiscountAmount={invoiceDiscountAmount}
-          itemDiscountsTotal={calculateItemDiscountsTotal()}
-        />
 
-        <POSHeldOrders
-          isOpen={showHeldOrders}
-          onClose={() => setShowHeldOrders(false)}
-          orders={heldOrders}
-          onRestoreOrder={restoreOrder}
-          onDeleteOrder={deleteHeldOrder}
-        />
+              {/* Offline Stats Panel */}
+              {showOfflineStats && offlineStats && (
+                <Card className="mb-4 border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-sm flex items-center gap-1">
+                        <AlertCircle size={14} className="text-amber-600" />
+                        {language === 'ar' ? 'إحصائيات محلية' : 'Offline Stats'}
+                      </h4>
+                      <Badge variant="outline" className="text-xs">
+                        {format(new Date(offlineStats.lastUpdated), 'HH:mm')}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'منتجات' : 'Products'}:</span>
+                        <span className="font-medium">{offlineStats.products}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'عملاء' : 'Customers'}:</span>
+                        <span className="font-medium">{offlineStats.customers}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'فئات' : 'Categories'}:</span>
+                        <span className="font-medium">{offlineStats.categories}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">{language === 'ar' ? 'غير متزامنة' : 'Unsynced'}:</span>
+                        <span className="font-medium text-amber-600">{offlineStats.unsyncedOrders}</span>
+                      </div>
+                    </div>
+                    {unsyncedCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={syncOfflineOrders}
+                        disabled={syncing}
+                        className="w-full mt-2 h-7 text-xs"
+                      >
+                        {syncing ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3 mr-1" />
+                        )}
+                        {language === 'ar' ? 'مزامنة' : 'Sync Now'}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
-        {selectedProductForVariant && (
-          <POSVariantSelector
-            isOpen={showVariantSelector}
-            onClose={() => {
-              setShowVariantSelector(false);
-              setSelectedProductForVariant(null);
-            }}
-            product={selectedProductForVariant}
-            onSelectVariant={addVariantToCart}
+              <div className="flex-1 overflow-y-auto">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <>
+                    {productsOffline && (
+                      <div className="mb-2 flex items-center gap-1 text-xs text-amber-500">
+                        <WifiOff size={12} />
+                        <span>{language === 'ar' ? 'المنتجات من الذاكرة المحلية' : 'Products from offline storage'}</span>
+                      </div>
+                    )}
+                    <POSProductGrid
+                      products={transformedProducts}
+                      onAddToCart={addToCart}
+                      searchQuery={searchQuery}
+                      selectedCategory={selectedCategory}
+                      servicesOnly={servicesOnly}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Cart Section */}
+            <div className="w-[380px] p-4 ps-0 flex-shrink-0">
+              <POSCart
+                items={cartItems}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeItem}
+                onClearCart={clearCart}
+                onHoldOrder={holdOrder}
+                onPay={() => setShowPayment(true)}
+                heldOrdersCount={heldOrders.length}
+                invoiceDiscountPercentage={invoiceDiscountPercentage}
+                invoiceDiscountAmount={invoiceDiscountAmount}
+                onInvoiceDiscountChange={handleInvoiceDiscountChange}
+                onItemDiscountChange={handleItemDiscountChange}
+                canManageDiscounts={canManagePosDiscounts}
+                extraCharge={extraCharge}
+                onExtraChargeChange={setExtraCharge}
+              />
+            </div>
+          </div>
+
+          {/* Shortcuts Bar */}
+          <POSShortcutsBar
+            onPay={() => cartItems.length > 0 && setShowPayment(true)}
+            onHold={holdOrder}
+            onClearCart={clearCart}
+            onShowHeldOrders={() => setShowHeldOrders(true)}
+            onShowCustomer={() => setShowCustomerSelector(true)}
+            onShowDelivery={() => setShowDeliverySelector(true)}
+            onShowReturns={() => setShowReturns(true)}
+            onShowShift={() => setShowShiftPanel(true)}
+            onFocusSearch={handleFocusSearch}
+            onGoHome={() => navigate('/dashboard')}
+            cartItemsCount={cartItems.length}
+            heldOrdersCount={heldOrders.length}
+            hasShift={!!currentShift}
           />
-        )}
 
-        <POSCustomerSelector
-          isOpen={showCustomerSelector}
-          onClose={() => setShowCustomerSelector(false)}
-          onSelectCustomer={setSelectedCustomer}
-          selectedCustomer={selectedCustomer}
-          branchId={userBranch?.id || currentBranch?.id}
-        />
+          <Dialog open={showInvoiceTransfers} onOpenChange={setShowInvoiceTransfers}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader><DialogTitle>{language === 'ar' ? 'طلبات تحويل فواتير المندوبين' : 'Sales representative transfer requests'}</DialogTitle></DialogHeader>
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات التحويل المعلقة' : 'Pending transfer requests'}</p>
+                {transferRequests.filter((request: any) => request.status === 'pending').length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending requests'}</p> : transferRequests.filter((request: any) => request.status === 'pending').map((request: any) => <div key={`admin-${request.id}`} className="border-t py-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold">{request.invoice_details?.invoice_number || `#${request.invoice_id}`} · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'}</span><span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span></div>{request.invoice_details && <div className="mt-2 rounded bg-muted/40 p-2 text-xs"><div className="grid gap-1 sm:grid-cols-4"><span>{language === 'ar' ? 'العميل' : 'Customer'}: {request.invoice_details.customer?.name || '-'}</span><span>{language === 'ar' ? 'الإجمالي' : 'Total'}: {request.invoice_details.total}</span><span>{language === 'ar' ? 'التكلفة' : 'Cost'}: {request.invoice_details.cost}</span><span className="font-semibold text-emerald-600">{language === 'ar' ? 'الربح' : 'Profit'}: {request.invoice_details.profit}</span></div><div className="mt-2">{language === 'ar' ? 'الأصناف' : 'Items'}: {(request.invoice_details.items || []).map((item: any, index: number) => <span key={index} className="me-3">{item.product_name || '-'} × {item.quantity} ({item.price})</span>)}</div></div>}</div>)}
+              </div>
+              {transferLoading ? <div className="py-8 text-center"><Loader2 className="mx-auto animate-spin" /></div> : !transferEmployee ? <div className="space-y-3"><p className="text-sm text-muted-foreground">{language === 'ar' ? 'أدخل إيميل وباسورد مندوب المبيعات لعرض فواتيره اليوم فقط.' : 'Enter the sales representative email and password to show only today invoices.'}</p><Input type="email" value={transferEmail} onChange={(event) => setTransferEmail(event.target.value)} placeholder={language === 'ar' ? 'إيميل المندوب' : 'Representative email'} /><Input type="password" value={transferPassword} onChange={(event) => setTransferPassword(event.target.value)} placeholder={language === 'ar' ? 'الباسورد' : 'Password'} /><Button onClick={loginSalesRepForTransfer} disabled={!transferEmail || !transferPassword}>{language === 'ar' ? 'دخول وعرض فواتير اليوم' : 'Login and show today invoices'}</Button></div> : <div className="space-y-3 max-h-[60vh] overflow-auto"><div className="rounded-lg border p-3"><p className="font-semibold">{transferEmployee.name} · {language === 'ar' ? 'فواتير اليوم' : "Today's invoices"}</p><select className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm" value={transferTargetId} onChange={(event) => setTransferTargetId(event.target.value)}><option value="">{language === 'ar' ? 'اختر الموظف المستلم' : 'Choose receiving employee'}</option>{transferEmployees.filter((employee) => employee.id !== transferEmployee.id).map((employee) => <option key={employee.id} value={employee.id}>{employee.name || employee.email}</option>)}</select>{transferInvoices.length === 0 ? <p className="py-5 text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد فواتير لهذا المندوب اليوم' : 'No invoices for this representative today'}</p> : transferInvoices.map((invoice: any) => <div key={invoice.id} className="flex items-center justify-between gap-2 border-t py-2 text-sm"><span className="font-mono">{invoice.invoice_number || `#${invoice.id}`}</span><Button size="sm" variant="outline" disabled={!transferTargetId} onClick={() => requestInvoiceTransferFromPos(invoice)}>{language === 'ar' ? 'طلب تحويل' : 'Request transfer'}</Button></div>)}</div><div className="rounded-lg border p-3"><p className="mb-2 font-semibold">{language === 'ar' ? 'طلبات اليوم' : "Today's requests"}</p>{transferRequests.length === 0 ? <p className="text-sm text-muted-foreground">{language === 'ar' ? 'لا توجد طلبات' : 'No requests'}</p> : transferRequests.map((request: any) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm"><span><span className="font-mono">#{request.invoice_id}</span> · {request.from_employee?.name || '-'} → {request.to_employee?.name || '-'} · {request.status}</span>{request.status === 'pending' && <span className="flex gap-2"><Button size="sm" onClick={() => handleInvoiceTransferDecision(request.id, 'approve')}>{language === 'ar' ? 'موافقة' : 'Approve'}</Button><Button size="sm" variant="outline" onClick={() => handleInvoiceTransferDecision(request.id, 'reject')}>{language === 'ar' ? 'رفض' : 'Reject'}</Button></span>}</div>)}</div></div>}
+            </DialogContent>
+          </Dialog>
+          <Dialog open={!!selectedAutomotiveProduct} onOpenChange={(open) => !open && setSelectedAutomotiveProduct(null)}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>تفاصيل خدمة السيارات</DialogTitle></DialogHeader>
+              {selectedAutomotiveProduct && automotiveConfig && (
+                <div className="space-y-4" dir="rtl">
+                  <p className="font-semibold">{selectedAutomotiveProduct.name_ar || selectedAutomotiveProduct.name}</p>
 
-        {showSalesRepSelector && (
-          <POSSalesRepSelector
-            isOpen={showSalesRepSelector}
-            onClose={() => setShowSalesRepSelector(false)}
-            onSelectRep={setSelectedSalesRep}
-            selectedRep={selectedSalesRep}
+                  {/* حجم السيارة */}
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">حجم السيارة</label>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-3"
+                      value={automotiveVehicleSize}
+                      onChange={(e) => setAutomotiveVehicleSize(e.target.value as 'small' | 'large')}
+                    >
+                      <option value="small">{automotiveSizeLabel('small')}</option>
+                      <option value="large">{automotiveSizeLabel('large')}</option>
+                    </select>
+                  </div>
+
+                  {/* ✅ بدون سعر ثابت => الكاشير يدخل السعر */}
+                  {automotiveIsManual ? (
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">
+                        سعر الخدمة الذي يحدده الكاشير *
+                      </label>
+                      <Input
+                        autoFocus
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={automotiveServicePrice}
+                        onChange={(e) => setAutomotiveServicePrice(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') confirmAutomotiveProduct(); }}
+                        placeholder="اكتب السعر"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        هذه الخدمة بلا سعر ثابت، وسيُحفظ السعر مع الفاتورة والوردية والتقارير.
+                      </p>
+                    </div>
+                  ) : (
+                    /* ✅ سعر ثابت => يظهر تلقائياً ولا يُطلب من الكاشير */
+                    <div className="rounded-lg bg-blue-500/10 p-3">
+                      <p className="text-sm text-blue-700 dark:text-blue-400">
+                        💰 السعر: {automotiveFixedPrice.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">عدد السيارات</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={automotiveMeterQuantity}
+                      onChange={(e) => setAutomotiveMeterQuantity(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      يتم خصم الأمتار تلقائياً من مخزون المنتج وتظهر تفاصيل الحجم في الفاتورة.
+                    </p>
+                  </div>
+
+                  <Button onClick={confirmAutomotiveProduct}>إضافة للفاتورة</Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          {/* Modals */}
+          <POSPaymentModal
+            isOpen={showPayment}
+            onClose={() => setShowPayment(false)}
+            total={calculateTotal()}
+            subtotal={calculateSubtotalAfterAllDiscounts()}
+            tax={calculateTax()}
+            extraCharge={extraCharge}
+            cartItems={cartItems}
+            canManageDiscounts={canManagePosDiscounts}
+            onRequestCustomer={() => setShowCustomerSelector(true)}
+            onComplete={(payments, invoiceNum, complimentary) => {
+              console.log('📄 Invoice Number from modal:', invoiceNum);
+              handlePaymentComplete(payments, invoiceNum, complimentary);
+            }}
+            customer={selectedCustomer ? {
+              id: selectedCustomer.id,
+              name: selectedCustomer.name,
+              name_ar: selectedCustomer.name_ar || undefined,
+              loyalty_points: selectedCustomer.loyalty_points
+            } : null}
+            deliveryPerson={selectedDelivery ? {
+              id: selectedDelivery.id,
+              name: selectedDelivery.name
+            } : null}
+            salesRepresentative={selectedSalesRep ? {
+              id: selectedSalesRep.id,
+              name: selectedSalesRep.name,
+              commission_rate: selectedSalesRep.commission_rate
+            } : null}
+            shiftId={currentShift?.id || null}
+            branchId={branchData?.id || null}
+            branchName={branchData?.name}
+            branchNameAr={branchData?.nameAr}
+            branchPhone={branchData?.phone}
+            branchAddress={branchData?.address}
+            branchAddressAr={branchData?.addressAr}
+            companyInfo={{
+              name: user?.name || 'متجرك',
+              nameAr: user?.name_ar || user?.name,
+              logo: user?.logoUrl || user?.logo_url || user?.company_logo || user?.logo_icon_url || user?.logo_icon || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
+              address: user?.address,
+              addressAr: user?.address,
+              phone: user?.phone,
+              email: user?.email,
+              tax_id: user?.tax_id,
+              commercial_register: user?.commercial_register,
+              website: user?.website,
+              currency: user?.currency || 'YER'
+            }}
+            invoiceDiscountPercentage={invoiceDiscountPercentage}
+            invoiceDiscountAmount={invoiceDiscountAmount}
+            itemDiscountsTotal={calculateItemDiscountsTotal()}
+          />
+
+          <POSHeldOrders
+            isOpen={showHeldOrders}
+            onClose={() => setShowHeldOrders(false)}
+            orders={heldOrders}
+            onRestoreOrder={restoreOrder}
+            onDeleteOrder={deleteHeldOrder}
+          />
+
+          {selectedProductForVariant && (
+            <POSVariantSelector
+              isOpen={showVariantSelector}
+              onClose={() => {
+                setShowVariantSelector(false);
+                setSelectedProductForVariant(null);
+              }}
+              product={selectedProductForVariant}
+              onSelectVariant={addVariantToCart}
+            />
+          )}
+
+          <POSCustomerSelector
+            isOpen={showCustomerSelector}
+            onClose={() => setShowCustomerSelector(false)}
+            onSelectCustomer={setSelectedCustomer}
+            selectedCustomer={selectedCustomer}
             branchId={userBranch?.id || currentBranch?.id}
           />
-        )}
 
-        <POSDeliverySelector
-          isOpen={showDeliverySelector}
-          onClose={() => setShowDeliverySelector(false)}
-          onSelectDelivery={handleSelectDelivery}
-          selectedDelivery={selectedDelivery ? {
-            id: Number(selectedDelivery.id),
-            name: selectedDelivery.name,
-            nameAr: selectedDelivery.nameAr,
-            phone: selectedDelivery.phone,
-            vehicle_type: ''
-          } : null}
-        />
-
-        <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
-          <DialogContent className="sm:max-w-md">
-            <POSShiftManagement
-              currentShift={currentShift}
-              onShiftChange={setCurrentShift}
+          {showSalesRepSelector && (
+            <POSSalesRepSelector
+              isOpen={showSalesRepSelector}
+              onClose={() => setShowSalesRepSelector(false)}
+              onSelectRep={setSelectedSalesRep}
+              selectedRep={selectedSalesRep}
+              branchId={userBranch?.id || currentBranch?.id}
             />
-          </DialogContent>
-        </Dialog>
+          )}
 
-        <POSReturns
-          isOpen={showReturns}
-          onClose={() => setShowReturns(false)}
-          currentShiftId={currentShift?.id}
-          onReturnComplete={(amount) => {
-            toast({
-              title: language === 'ar' ? 'تم الإرجاع' : 'Return completed',
-              description: `${amount.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}`
-            });
-          }}
-        />
-        {enabledModules.includes('inventory') && (
-          <BranchTransferDialog
-            open={showBranchTransfers}
-            onOpenChange={setShowBranchTransfers}
-            currentBranchId={userBranch?.id || currentBranch?.id}
-            language={language}
+          <POSDeliverySelector
+            isOpen={showDeliverySelector}
+            onClose={() => setShowDeliverySelector(false)}
+            onSelectDelivery={handleSelectDelivery}
+            selectedDelivery={selectedDelivery ? {
+              id: Number(selectedDelivery.id),
+              name: selectedDelivery.name,
+              nameAr: selectedDelivery.nameAr,
+              phone: selectedDelivery.phone,
+              vehicle_type: ''
+            } : null}
           />
-        )}
-      </div>
-    </TooltipProvider>
-  );
-};
 
-// ==================== Helper Functions ====================
-function getIconEmoji(iconName: string | null): string {
-  const iconMap: Record<string, string> = {
-    'Smartphone': '📱',
-    'Shirt': '👔',
-    'Coffee': '☕',
-    'Home': '🏠',
-    'Dumbbell': '🏋️',
-    'Package': '📦',
+          <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
+            <DialogContent className="sm:max-w-md">
+              <POSShiftManagement
+                currentShift={currentShift}
+                onShiftChange={setCurrentShift}
+              />
+            </DialogContent>
+          </Dialog>
+
+          <POSReturns
+            isOpen={showReturns}
+            onClose={() => setShowReturns(false)}
+            currentShiftId={currentShift?.id}
+            onReturnComplete={(amount) => {
+              toast({
+                title: language === 'ar' ? 'تم الإرجاع' : 'Return completed',
+                description: `${amount.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}`
+              });
+            }}
+          />
+          {enabledModules.includes('inventory') && (
+            <BranchTransferDialog
+              open={showBranchTransfers}
+              onOpenChange={setShowBranchTransfers}
+              currentBranchId={userBranch?.id || currentBranch?.id}
+              language={language}
+            />
+          )}
+        </div>
+      </TooltipProvider>
+    );
   };
-  return iconMap[iconName || ''] || '📦';
-}
 
-export default POS;
+  // ==================== Helper Functions ====================
+  function getIconEmoji(iconName: string | null): string {
+    const iconMap: Record<string, string> = {
+      'Smartphone': '📱',
+      'Shirt': '👔',
+      'Coffee': '☕',
+      'Home': '🏠',
+      'Dumbbell': '🏋️',
+      'Package': '📦',
+    };
+    return iconMap[iconName || ''] || '📦';
+  }
+
+  export default POS;

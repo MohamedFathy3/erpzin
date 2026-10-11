@@ -453,6 +453,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             nameAr: item.nameAr || item.name,
             itemType: item.itemType || (item.automotive_service_id ? 'service' : 'product'),
             quantity: item.quantity,
+            automotive_service_id: item.automotive_service_id,  // ← لازم تكون موجودة
+            meter_quantity: item.meter_quantity,
             price: item.price,
             total_price: Number((item.price * item.quantity * (1 - (item.discount_percentage || 0) / 100)).toFixed(2)),
             sizeName: item.sizeName,
