@@ -712,7 +712,7 @@ const POS: React.FC = () => {
       price,
       quantity: cars,
       sku: selectedAutomotiveProduct.sku || `AUTO-${config.code}`,
-      stock: ((config as any).item_type === 'product' || Number(config.stock_quantity) > 0)
+      stock: (config as any).item_type === 'product'
         ? Math.floor(Number(config.stock_quantity ?? 0) / metersPerCar)
         : 999999,
       sizeName: `${size} · ${metersPerCar} متر`,
