@@ -102,8 +102,8 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const { data: currencies = [], isLoading: loadingCurrencies } = useCurrencies(isOpen);
   const { data: taxes = [], isLoading: loadingTaxes } = useTaxes(isOpen);
   const { data: treasuries = [], isLoading: treasuryLoading } = useTreasuries(formData.branch_id, isOpen);
-  const { data: products = [], isLoading: loadingProducts } = useProducts(isOpen);
-
+  // ✅ نجيب المنتجات القابلة للشراء فقط (بدون الخدمات)
+  const { data: products = [], isLoading: loadingProducts } = useProducts(isOpen, true);
   // ========== Fetch Full Invoice Data from API when editing ==========
   useEffect(() => {
     if (isEditMode && invoiceToEdit?.id) {
@@ -351,14 +351,14 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
     if (formData.invoice_date && formData.due_date) {
       const invoiceDate = new Date(formData.invoice_date);
       const dueDate = new Date(formData.due_date);
-      
+
       // تجاهل الوقت والمقارنة باليوم فقط
       invoiceDate.setHours(0, 0, 0, 0);
       dueDate.setHours(0, 0, 0, 0);
-      
+
       if (invoiceDate > dueDate) {
-        newErrors.invoice_date = language === 'ar' 
-          ? 'تاريخ الفاتورة لا يمكن أن يكون بعد تاريخ الاستحقاق' 
+        newErrors.invoice_date = language === 'ar'
+          ? 'تاريخ الفاتورة لا يمكن أن يكون بعد تاريخ الاستحقاق'
           : 'Invoice date cannot be after due date';
       }
     }
@@ -572,101 +572,101 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
                             <TableHead className="w-8 py-2"></TableHead>
                           </TableRow>
                         </TableHeader>
-                  <TableBody>
-  {items.length === 0 ? (
-    <TableRow>
-      <TableCell colSpan={9} className="text-center py-6 text-muted-foreground text-sm">
-        {language === 'ar' ? 'لم يتم إضافة منتجات' : 'No products added'}
-      </TableCell>
-    </TableRow>
-  ) : (
-    items.map((item, idx) => (  // ✅ أضف idx هنا
-      <TableRow key={item.id}>
-        <TableCell className="py-1.5 text-xs text-center">{idx + 1}</TableCell>  {/* ✅ رقم السطر */}
-        <TableCell className="py-1.5">
-          <div>
-            <p className="font-medium text-xs">{item.product_name}</p>
-            <p className="text-[10px] text-muted-foreground">{item.product_sku}</p>
-            {(item.size_name || item.color_name) && (
-              <p className="text-[10px] text-muted-foreground">
-                {item.size_name && `📏 ${item.size_name}`}
-                {item.color_name && ` 🎨 ${item.color_name}`}
-              </p>
-            )}
-          </div>
-        </TableCell>
-        <TableCell className="py-1.5 text-center">
-          <div className={cn(
-            "text-xs font-mono px-1 py-0.5 rounded",
-            item.stock === 0 ? "bg-destructive text-destructive" :
-              item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
-                "bg-emerald-100 text-emerald-900 border border-emerald-300"
-          )}>
-            {item.stock}
-          </div>
-        </TableCell>
-        <TableCell className="py-2 text-center">
-          <Input
-            className="w-20"
-            type="number"
-            min="1"
-            max={99999}
-            value={item.quantity}
-            onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}  // ✅ استخدم idx
-            disabled={disabled || loadingInvoice}
-          />
-        </TableCell>
-        <TableCell className="py-1.5 text-center">
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={item.unit_cost}
-            onChange={(e) => updateItem(idx, 'unit_cost', Number(e.target.value))}  // ✅ استخدم idx
-            className="w-18 h-7 text-xs text-center mx-auto"
-            disabled={disabled || loadingInvoice}
-          />
-        </TableCell>
-        <TableCell className="py-1.5 text-center">
-          <Input
-            type="number"
-            min="0"
-            max="100"
-            value={item.discount_percent}
-            onChange={(e) => updateItem(idx, 'discount_percent', Number(e.target.value))}  // ✅ استخدم idx
-            className="w-12 h-7 text-xs text-center mx-auto"
-            disabled={disabled || loadingInvoice}
-          />
-        </TableCell>
-        <TableCell className="py-1.5 text-center">
-          <Input
-            type="number"
-            min="0"
-            max="100"
-            value={item.tax_percent}
-            onChange={(e) => updateItem(idx, 'tax_percent', Number(e.target.value))}  // ✅ استخدم idx
-            className="w-12 h-7 text-xs text-center mx-auto"
-            disabled={disabled || loadingInvoice}
-          />
-        </TableCell>
-        <TableCell className="py-1.5 text-end font-semibold text-xs">
-          {formatCurrency(item.total_cost)}
-        </TableCell>
-        <TableCell className="py-1.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-destructive hover:text-destructive"
-            onClick={() => removeItem(idx)}  // ✅ استخدم idx
-            disabled={disabled || loadingInvoice}
-          >
-            <Trash2 size={12} />
-          </Button>
-        </TableCell>
-      </TableRow>
-    ))
-  )}
-</TableBody>
+                        <TableBody>
+                          {items.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-center py-6 text-muted-foreground text-sm">
+                                {language === 'ar' ? 'لم يتم إضافة منتجات' : 'No products added'}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            items.map((item, idx) => (  // ✅ أضف idx هنا
+                              <TableRow key={item.id}>
+                                <TableCell className="py-1.5 text-xs text-center">{idx + 1}</TableCell>  {/* ✅ رقم السطر */}
+                                <TableCell className="py-1.5">
+                                  <div>
+                                    <p className="font-medium text-xs">{item.product_name}</p>
+                                    <p className="text-[10px] text-muted-foreground">{item.product_sku}</p>
+                                    {(item.size_name || item.color_name) && (
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {item.size_name && `📏 ${item.size_name}`}
+                                        {item.color_name && ` 🎨 ${item.color_name}`}
+                                      </p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <div className={cn(
+                                    "text-xs font-mono px-1 py-0.5 rounded",
+                                    item.stock === 0 ? "bg-destructive text-destructive" :
+                                      item.stock <= 10 ? "bg-amber-100 text-amber-900 border border-amber-300" :
+                                        "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                  )}>
+                                    {item.stock}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-2 text-center">
+                                  <Input
+                                    className="w-20"
+                                    type="number"
+                                    min="1"
+                                    max={99999}
+                                    value={item.quantity}
+                                    onChange={(e) => updateItem(idx, 'quantity', Number(e.target.value))}  // ✅ استخدم idx
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.unit_cost}
+                                    onChange={(e) => updateItem(idx, 'unit_cost', Number(e.target.value))}  // ✅ استخدم idx
+                                    className="w-18 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={item.discount_percent}
+                                    onChange={(e) => updateItem(idx, 'discount_percent', Number(e.target.value))}  // ✅ استخدم idx
+                                    className="w-12 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={item.tax_percent}
+                                    onChange={(e) => updateItem(idx, 'tax_percent', Number(e.target.value))}  // ✅ استخدم idx
+                                    className="w-12 h-7 text-xs text-center mx-auto"
+                                    disabled={disabled || loadingInvoice}
+                                  />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-end font-semibold text-xs">
+                                  {formatCurrency(item.total_cost)}
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                    onClick={() => removeItem(idx)}  // ✅ استخدم idx
+                                    disabled={disabled || loadingInvoice}
+                                  >
+                                    <Trash2 size={12} />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
                       </Table>
                     </div>
                     {errors.items && (

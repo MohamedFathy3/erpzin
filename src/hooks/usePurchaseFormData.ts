@@ -20,7 +20,7 @@ export const useSuppliers = (enabled: boolean = true) => {
   });
 };
 
-export const useBranches = (isOpen : boolean = true) => {
+export const useBranches = (isOpen: boolean = true) => {
   return useQuery({
     queryKey: ['branches-active'],
     queryFn: async () => {
@@ -33,18 +33,18 @@ export const useBranches = (isOpen : boolean = true) => {
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-     enabled: isOpen,
+    enabled: isOpen,
   });
 };
 
-export const useWarehouses = (branchId: string | null, isOpen : boolean = true) => {
+export const useWarehouses = (branchId: string | null, isOpen: boolean = true) => {
   return useQuery({
     queryKey: ['warehouses-active', branchId],
     queryFn: async () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filters: any = { active: true };
       if (branchId) filters.branch_id = Number(branchId);
-      
+
       const response = await api.post('/warehouse/index', {
         filters,
         orderBy: 'name',
@@ -54,7 +54,7 @@ export const useWarehouses = (branchId: string | null, isOpen : boolean = true) 
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-    enabled: isOpen  && !!branchId
+    enabled: isOpen && !!branchId
   });
 };
 
@@ -92,14 +92,14 @@ export const useTaxes = (enabled: boolean = true) => {
   });
 };
 
-export const useTreasuries = (branchId: string | null, isOpen : boolean = true) => {
+export const useTreasuries = (branchId: string | null, isOpen: boolean = true) => {
   return useQuery({
     queryKey: ['treasury', branchId],
     queryFn: async () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filters: any = {};
       if (branchId) filters.branch_id = Number(branchId);
-      
+
       const response = await api.post('/treasury/index', {
         filters,
         orderBy: 'name',
@@ -109,21 +109,32 @@ export const useTreasuries = (branchId: string | null, isOpen : boolean = true) 
       });
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
-    enabled: isOpen  && !!branchId
+    enabled: isOpen && !!branchId
   });
 };
 
-export const useProducts = (enabled: boolean = true) => {
-  return useQuery({
-    queryKey: ['products-for-purchase'],
+/**
+ * يجلب المنتجات.
+ * @param enabled - هل الـ query شغالة
+ * @param purchasableOnly - لو true، يجيب المنتجات القابلة للشراء فقط (بدون الخدمات)
+ *                          يُستخدم في شاشة فاتورة المشتريات.
+ */
+export const useProducts = (enabled: boolean = true, purchasableOnly: boolean = false) => {
+  return useQuery<Product[]>({
+    queryKey: ['products-for-purchase', purchasableOnly],
     queryFn: async () => {
-      const response = await api.post('/product/index', {
+      // ✅ لو purchasableOnly → استخدم endpoint /product/purchasable
+      //    اللي بيستبعد الخدمات (automotive services)
+      const endpoint = purchasableOnly ? '/product/purchasable' : '/product/index';
+
+      const response = await api.post(endpoint, {
         filters: {},
         orderBy: 'name',
         orderByDirection: 'asc',
         perPage: 1000,
         paginate: false
       });
+
       return response.data.result === 'Success' ? (response.data.data || []) : [];
     },
     enabled
