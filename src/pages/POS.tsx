@@ -233,6 +233,25 @@ const POS: React.FC = () => {
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryPerson | null>(null);
   const [selectedSalesRep, setSelectedSalesRep] = useState<SalesRepresentative | null>(null);
   const [currentShift, setCurrentShift] = useState<any>(null);
+  // ✅ تحميل الوردية الحالية عند فتح POS
+  useEffect(() => {
+    const loadCurrentShift = async () => {
+      try {
+        const response = await api.get('/shifts/current');
+        if (response.data?.status && response.data?.data) {
+          setCurrentShift(response.data.data);
+        } else {
+          setCurrentShift(null);
+        }
+      } catch (error: any) {
+        if (error?.response?.status !== 404) {
+          console.error('❌ Error loading current shift:', error);
+        }
+        setCurrentShift(null);
+      }
+    };
+    loadCurrentShift();
+  }, []);
   const [showReturns, setShowReturns] = useState(false);
   const [showBranchTransfers, setShowBranchTransfers] = useState(false);
   const [showInvoiceTransfers, setShowInvoiceTransfers] = useState(false);
@@ -1013,7 +1032,18 @@ const POS: React.FC = () => {
           : `Amount: ${formatCurrency(isComplimentary ? 0 : calculateTotal())}`
       });
     }
-
+    // ✅ بعد كل فاتورة، حدّث الوردية من السيرفر عشان الكاش يتحدث
+    if (navigator.onLine && !isOffline && currentShift?.id) {
+      try {
+        const shiftResponse = await api.get('/shifts/current');
+        if (shiftResponse.data?.status && shiftResponse.data?.data) {
+          setCurrentShift(shiftResponse.data.data);
+          console.log('✅ Shift refreshed after invoice:', shiftResponse.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to refresh shift after invoice:', err);
+      }
+    }
     setShowPayment(false);
     setCartItems([]);
     setSelectedCustomer(null);
@@ -1950,11 +1980,44 @@ const POS: React.FC = () => {
           } : null}
         />
 
-        <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
+        <Dialog
+          open={showShiftPanel}
+          onOpenChange={async (open) => {
+            setShowShiftPanel(open);
+            // ✅ لما تفتح البانل، حمّل الوردية من السيرفر
+            if (open) {
+              try {
+                const response = await api.get('/shifts/current');
+                if (response.data?.status && response.data?.data) {
+                  setCurrentShift(response.data.data);
+                } else {
+                  setCurrentShift(null);
+                }
+              } catch (error: any) {
+                if (error?.response?.status !== 404) {
+                  console.error('Error refreshing shift:', error);
+                }
+                setCurrentShift(null);
+              }
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-md">
             <POSShiftManagement
               currentShift={currentShift}
               onShiftChange={setCurrentShift}
+              onRefresh={async () => {
+                try {
+                  const response = await api.get('/shifts/current');
+                  if (response.data?.status && response.data?.data) {
+                    setCurrentShift(response.data.data);
+                  } else {
+                    setCurrentShift(null);
+                  }
+                } catch {
+                  setCurrentShift(null);
+                }
+              }}
             />
           </DialogContent>
         </Dialog>

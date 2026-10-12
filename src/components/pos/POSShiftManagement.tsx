@@ -11,10 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  DollarSign, 
-  Clock, 
-  TrendingUp, 
+import {
+  DollarSign,
+  Clock,
+  TrendingUp,
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
@@ -35,7 +35,7 @@ import api from '@/lib/api';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 
 // ========== أنواع البيانات ==========
-interface POSShift {
+export interface POSShift {
   id: number;
   employee_id: number | null;
   admin_id: number | null;
@@ -66,19 +66,24 @@ interface CloseShiftPayload {
   notes?: string;
 }
 
+// ✅ تم تحديث الـ Props لتقبل currentShift و onRefresh
 interface POSShiftManagementProps {
+  currentShift?: POSShift | null;
   onShiftChange?: (shift: POSShift | null) => void;
+  onRefresh?: () => Promise<void>;
   autoRefresh?: boolean;
 }
 
-const POSShiftManagement: React.FC<POSShiftManagementProps> = ({ 
-  onShiftChange, 
-  autoRefresh = true 
+const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
+  currentShift: externalShift,
+  onShiftChange,
+  onRefresh,
+  autoRefresh = true
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
   const queryClient = useQueryClient();
-  
+
   // ========== State ==========
   const [openShiftModal, setOpenShiftModal] = useState(false);
   const [closeShiftModal, setCloseShiftModal] = useState(false);
@@ -87,11 +92,11 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
   const [openingNotes, setOpeningNotes] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
   const [showSummary, setShowSummary] = useState(false);
-  
+
   // ========== جلب الوردية الحالية ==========
-  const { 
-    data: currentShift, 
-    isLoading, 
+  const {
+    data: fetchedShift,
+    isLoading,
     refetch,
     error
   } = useQuery({
@@ -103,13 +108,19 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           return response.data.data as POSShift;
         }
         return null;
-      } catch (error) {
-        console.error('Error fetching current shift:', error);
+      } catch (error: any) {
+        if (error?.response?.status !== 404) {
+          console.error('Error fetching current shift:', error);
+        }
         return null;
       }
     },
-    refetchInterval: autoRefresh ? 30000 : false,
+    refetchInterval: autoRefresh ? 15000 : false, // ✅ قللنا الوقت لـ 15 ثانية
+    staleTime: 0,
   });
+
+  // ✅ استخدام externalShift إذا تم تمريره، وإلا use fetchedShift
+  const currentShift = externalShift !== undefined ? externalShift : fetchedShift;
 
   // ========== فتح وردية جديدة ==========
   const openShiftMutation = useMutation({
@@ -127,11 +138,16 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
         toast.success(language === 'ar' ? 'تم فتح الوردية بنجاح' : 'Shift opened successfully', {
           icon: <CheckCircle2 className="h-4 w-4" />,
         });
-        
-        if (onShiftChange) {
-          refetch().then(result => {
-            onShiftChange(result.data || null);
-          });
+
+        // ✅ إشعار المكون الأب
+        if (onShiftChange && data.data) {
+          onShiftChange(data.data);
+        }
+        // ✅ إعادة جلب البيانات
+        if (onRefresh) {
+          onRefresh();
+        } else {
+          refetch();
         }
       } else {
         toast.error(data.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
@@ -159,9 +175,19 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
         toast.success(language === 'ar' ? 'تم إغلاق الوردية بنجاح' : 'Shift closed successfully', {
           icon: <CheckCircle2 className="h-4 w-4" />,
         });
-        
+
+        // ✅ إشعار المكون الأب
         if (onShiftChange) {
           onShiftChange(null);
+        }
+        // ✅ إعادة جلب البيانات
+        if (onRefresh) {
+          onRefresh();
+        }
+
+        // ✅ طباعة التقرير بعد الإغلاق
+        if (data.data) {
+          setTimeout(() => printShift(data.data), 500);
         }
       } else {
         toast.error(data.message || (language === 'ar' ? 'حدث خطأ' : 'An error occurred'));
@@ -173,66 +199,71 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     }
   });
 
-  // ========== إشعار المكون الأب ==========
-  useEffect(() => {
-    if (onShiftChange) {
-      onShiftChange(currentShift || null);
-    }
-  }, [currentShift, onShiftChange]);
-
   // ========== حساب المبلغ المتوقع ==========
+  // ✅ نفس المعادلة الموجودة في الباك إند بالضبط
   const expectedAmount = useMemo(() => {
     if (!currentShift) return 0;
-    const opening = parseFloat(currentShift.opening_balance || '0');
-    const cash = parseFloat(currentShift.cash_sales || '0');
-    const card = parseFloat(currentShift.card_sales || '0');
-    const wallet = parseFloat(currentShift.wallet_sales || '0');
-    const returns = parseFloat(currentShift.returns_amount || '0');
-    
-    return opening + cash + card + wallet - returns;
+
+    const opening = parseFloat(currentShift.opening_balance || '0') || 0;
+    const cash = parseFloat(currentShift.cash_sales || '0') || 0;
+    const card = parseFloat(currentShift.card_sales || '0') || 0;
+    const wallet = parseFloat(currentShift.wallet_sales || '0') || 0;
+    const returns = parseFloat(currentShift.returns_amount || '0') || 0;
+
+    // ✅ المتوقع = رصيد البداية + النقدي + البطاقة + المحفظة - المرتجعات
+    return Math.round((opening + cash + card + wallet - returns) * 100) / 100;
   }, [currentShift]);
+
+  // ✅ إذا الباك إند رجّع expected_amount، استخدمه (لأنه محسوب live)
+  const displayExpectedAmount = useMemo(() => {
+    if (currentShift?.expected_amount !== null && currentShift?.expected_amount !== undefined) {
+      return parseFloat(currentShift.expected_amount) || expectedAmount;
+    }
+    return expectedAmount;
+  }, [currentShift, expectedAmount]);
 
   // ========== حساب الفرق ==========
   const currentVariance = useMemo(() => {
     if (!currentShift || !closingAmount) return 0;
-    const actual = parseFloat(closingAmount);
-    return actual - expectedAmount;
-  }, [currentShift, closingAmount, expectedAmount]);
+    const actual = parseFloat(closingAmount) || 0;
+    return Math.round((actual - displayExpectedAmount) * 100) / 100;
+  }, [currentShift, closingAmount, displayExpectedAmount]);
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
-  return format(date, 'yyyy-MM-dd HH:mm:ss');
-};
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return format(date, 'yyyy-MM-dd HH:mm:ss');
+  };
 
-const getShiftDuration = (shift) => {
-  if (!shift.opened_at) return '-';
-  const start = new Date(shift.opened_at);
-  const end = shift.closed_at ? new Date(shift.closed_at) : new Date();
-  const diffMs = end.getTime() - start.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  
-  if (language === 'ar') {
-    return `${diffHours} ساعة و ${diffMinutes} دقيقة`;
-  }
-  return `${diffHours}h ${diffMinutes}m`;
-};
+  const getShiftDuration = (shift: POSShift) => {
+    if (!shift.opened_at) return '-';
+    const start = new Date(shift.opened_at);
+    const end = shift.closed_at ? new Date(shift.closed_at) : new Date();
+    const diffMs = end.getTime() - start.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
-const formatNumber = (value) => {
-  if (value === null || value === undefined) return '0.00';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num)) return '0.00';
-  return num.toFixed(2);
-};
+    if (language === 'ar') {
+      return `${diffHours} ساعة و ${diffMinutes} دقيقة`;
+    }
+    return `${diffHours}h ${diffMinutes}m`;
+  };
 
-const printShift = (shift) => {
-  const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
-  if (printWindow) {
-    const diffNum = parseFloat(shift.difference || '0');
-    const now = new Date();
-    
-    printWindow.document.write(`
+  const formatNumber = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return '0.00';
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '0.00';
+    return num.toFixed(2);
+  };
+
+  // ========== طباعة تقرير الوردية ==========
+  const printShift = (shift: POSShift) => {
+    const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
+    if (printWindow) {
+      const diffNum = parseFloat(shift.difference || '0');
+      const now = new Date();
+
+      printWindow.document.write(`
       <!DOCTYPE html>
       <html dir="${language === 'ar' ? 'rtl' : 'ltr'}">
       <head>
@@ -265,12 +296,11 @@ const printShift = (shift) => {
         <div class="print-header">
           <div style="font-size: 16px; font-weight: bold;">${language === 'ar' ? 'تقرير إغلاق وردية' : 'Shift Closing Report'}</div>
           <div style="font-size: 10px; margin-top: 3px;">${language === 'ar' ? 'نقاط البيع' : 'POS System'}</div>
-          <div style="font-size: 9px; margin-top: 2px;">${formatDateTime(now)}</div>
+          <div style="font-size: 9px; margin-top: 2px;">${formatDateTime(now.toISOString())}</div>
         </div>
 
         <div class="print-section">
           <div class="print-row"><span class="print-label">${language === 'ar' ? 'رقم الوردية:' : 'Shift #:'}</span><span>${shift.id}</span></div>
-          <div class="print-row"><span class="print-label">${language === 'ar' ? 'الموظف:' : 'Employee:'}</span><span>${shift.employee}</span></div>
           <div class="print-row"><span class="print-label">${language === 'ar' ? 'الحالة:' : 'Status:'}</span><span>${shift.status === 'open' ? (language === 'ar' ? 'مفتوحة' : 'Open') : (language === 'ar' ? 'مغلقة' : 'Closed')}</span></div>
         </div>
 
@@ -320,7 +350,7 @@ const printShift = (shift) => {
 
         <div style="text-align: center; margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; font-size: 8px;">
           ${language === 'ar' ? 'شكراً لاستخدامكم نظام نقاط البيع' : 'Thank you for using POS System'}
-          <div>${formatDateTime(now)}</div>
+          <div>${formatDateTime(now.toISOString())}</div>
         </div>
 
         <div class="no-print" style="text-align: center; margin-top: 20px; position: fixed; bottom: 10px; left: 0; right: 0; background: white; padding: 10px;">
@@ -331,9 +361,10 @@ const printShift = (shift) => {
       </body>
       </html>
     `);
-    printWindow.document.close();
-  }
-};
+      printWindow.document.close();
+    }
+  };
+
   // ========== Translations ==========
   const t = {
     en: {
@@ -458,32 +489,24 @@ const printShift = (shift) => {
     });
   };
 
-const handleCloseShift = () => {
-  const amount = parseFloat(closingAmount);
-  if (isNaN(amount) || amount < 0) {
-    toast.error(t.validAmount);
-    return;
-  }
-
-  if (!window.confirm(t.confirmClose)) return;
-
-  closeShiftMutation.mutate({
-    actual_amount: amount,
-    notes: closingNotes || undefined
-  }, {
-    onSuccess: (data) => {
-      if (data.status && currentShift) {
-        setTimeout(() => {
-          printShift(currentShift);
-        }, 500);
-      }
+  const handleCloseShift = () => {
+    const amount = parseFloat(closingAmount);
+    if (isNaN(amount) || amount < 0) {
+      toast.error(t.validAmount);
+      return;
     }
-  });
-};
+
+    if (!window.confirm(t.confirmClose)) return;
+
+    closeShiftMutation.mutate({
+      actual_amount: amount,
+      notes: closingNotes || undefined
+    });
+  };
 
   const getVarianceBadge = () => {
     if (!currentShift || !currentShift.difference) return null;
-    
+
     const diff = parseFloat(currentShift.difference);
     if (diff === 0) {
       return <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="h-3 w-3" />{t.exact}</Badge>;
@@ -550,7 +573,7 @@ const handleCloseShift = () => {
                 <div className="font-bold text-primary">{formatAmount(currentShift.opening_balance)}</div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-4 gap-2">
               <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Banknote className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
@@ -576,7 +599,7 @@ const handleCloseShift = () => {
 
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20">
               <span className="text-sm font-medium flex items-center gap-2"><Info className="h-4 w-4 text-primary" />{t.expectedAmount}:</span>
-              <span className="text-xl font-bold text-primary">{formatAmount(expectedAmount)}</span>
+              <span className="text-xl font-bold text-primary">{formatAmount(displayExpectedAmount)}</span>
             </div>
 
             {currentShift.difference && <div className="flex justify-center">{getVarianceBadge()}</div>}
@@ -661,7 +684,7 @@ const handleCloseShift = () => {
                 <div className="flex justify-between text-purple-600"><span>+ {t.walletsales}:</span><span>+ {formatAmount(currentShift.wallet_sales)}</span></div>
                 <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
                 <Separator />
-                <div className="flex justify-between font-bold text-lg"><span>{t.expectedAmount}:</span><span className="text-primary">{formatAmount(expectedAmount)}</span></div>
+                <div className="flex justify-between font-bold text-lg"><span>{t.expectedAmount}:</span><span className="text-primary">{formatAmount(displayExpectedAmount)}</span></div>
               </div>
 
               <div className="space-y-2">
@@ -689,7 +712,7 @@ const handleCloseShift = () => {
             </div>
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => printShift(currentShift)} disabled={!closingAmount} className="gap-2">
+            <Button variant="outline" onClick={() => currentShift && printShift(currentShift)} disabled={!closingAmount} className="gap-2">
               <Printer className="h-4 w-4" />
               {t.printZ}
             </Button>
