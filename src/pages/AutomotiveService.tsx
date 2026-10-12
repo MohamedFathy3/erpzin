@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Box, CarFront, CheckCircle2, ClipboardList, Clock3, DollarSign, Edit, Package,
   Plus, RefreshCw, Search as SearchIcon, Tag, TrendingUp, UserCog, Users, Wrench, X, ChevronLeft,
-  Sparkles, Activity, CircleDot, Gauge, ShieldCheck, ArrowLeft,
+  Sparkles, Activity, CircleDot, Gauge, ShieldCheck, Trash2, RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,14 +76,21 @@ const commonModels = ['Corolla', 'Camry', 'Yaris', 'Land Cruiser', 'Elantra', 'T
 
 const selectCls = 'h-10 w-full rounded-xl border bg-background px-3 text-sm outline-none transition-all focus:border-primary/40 focus:ring-4 focus:ring-primary/10';
 
+/** حجم/باقة سيارة داخل المنتج (مسودة في الفورم: كل القيم نصوص). */
+type VehicleSizeDraft = { name: string; meters: string; price: string };
+/** الحجم كما يُحفظ ويرجع من الباك إند. */
+type VehicleSize = { name: string; meters: number; price: number };
+type ServiceWithSizes = AutomotiveServiceItem & { vehicle_sizes?: VehicleSize[] | null };
+
+const emptySize = (): VehicleSizeDraft => ({ name: '', meters: '', price: '' });
+
 const emptyServiceForm = {
   code: '', name: '', name_ar: '',
   item_type: 'service' as 'service' | 'product',
   unit: '',
   selling_price: '', estimated_cost: '',
-  small_vehicle_quantity: '', large_vehicle_quantity: '',
-  small_vehicle_price: '', large_vehicle_price: '',
   stock_quantity: '',
+  vehicle_sizes: [] as VehicleSizeDraft[],
 };
 const emptyCustomerForm = { name: '', phone: '', email: '', address: '' };
 const emptyVehicleForm = { customer_id: '', make: '', model: '', model_year: '', plate_number: '', vin: '', current_mileage: '' };
@@ -102,6 +109,12 @@ const fmt = (n: unknown) => Number(n || 0).toLocaleString('en-US');
 const str = (n: unknown) => (n === null || n === undefined || n === '' ? '' : String(n));
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 const isManualPriced = (s: AutomotiveServiceItem) => s.has_fixed_price === false || !(Number(s.selling_price) > 0);
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const round3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
+const getSizes = (s: AutomotiveServiceItem): VehicleSize[] => {
+  const raw = (s as ServiceWithSizes).vehicle_sizes;
+  return Array.isArray(raw) ? raw : [];
+};
 
 /* ───────────────────────── مكونات مساعدة ───────────────────────── */
 
@@ -351,14 +364,34 @@ const AutomotiveServicePage = () => {
     return sum + price * Number(item.quantity || 1);
   }, 0), [orderItems, services]);
 
-  const margin = Number(serviceForm.selling_price || 0) - Number(serviceForm.estimated_cost || 0);
-  const priceFilled = Number(serviceForm.selling_price) > 0;
+  /* ── حسابات فورم الخدمة / المنتج ── */
+  const isProductForm = serviceForm.item_type === 'product';
+  const pricePerMeter = Number(serviceForm.selling_price || 0);
+  const costPerMeter = Number(serviceForm.estimated_cost || 0);
+  const priceFilled = pricePerMeter > 0;
+  const marginPerMeter = round2(pricePerMeter - costPerMeter);
+
+  /** حساب سطر حجم السيارة: السعر التلقائي = الأمتار × سعر بيع المتر، والتكلفة = الأمتار × تكلفة المتر. */
+  const calcSize = (size: VehicleSizeDraft) => {
+    const meters = Number(size.meters || 0);
+    const autoPrice = round2(meters * pricePerMeter);
+    const price = size.price !== '' ? Number(size.price) : autoPrice;
+    const cost = round2(meters * costPerMeter);
+    return { meters, autoPrice, price, cost, profit: round2(price - cost), isAuto: size.price === '' };
+  };
+
+  const addSize = () => setServiceForm((f) => ({ ...f, vehicle_sizes: [...f.vehicle_sizes, emptySize()] }));
+  const removeSize = (index: number) => setServiceForm((f) => ({ ...f, vehicle_sizes: f.vehicle_sizes.filter((_, i) => i !== index) }));
+  const updateSize = (index: number, patch: Partial<VehicleSizeDraft>) =>
+    setServiceForm((f) => ({ ...f, vehicle_sizes: f.vehicle_sizes.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
+  const resetSizePrices = () =>
+    setServiceForm((f) => ({ ...f, vehicle_sizes: f.vehicle_sizes.map((s) => ({ ...s, price: '' })) }));
 
   /* ── الخدمات ── */
   const resetServiceForm = () => {
     setShowServiceForm(false);
     setEditingServiceId(null);
-    setServiceForm({ ...emptyServiceForm });
+    setServiceForm({ ...emptyServiceForm, vehicle_sizes: [] });
   };
 
   const openServiceForm = (service?: AutomotiveServiceItem) => {
@@ -367,35 +400,52 @@ const AutomotiveServicePage = () => {
       setServiceForm({
         code: service.code || '', name: service.name || '', name_ar: service.name_ar || '',
         item_type: service.item_type || 'service', unit: service.unit || '',
-        selling_price: str(service.selling_price), estimated_cost: str(service.estimated_cost),
-        small_vehicle_quantity: str(service.small_vehicle_quantity), large_vehicle_quantity: str(service.large_vehicle_quantity),
-        small_vehicle_price: str(service.small_vehicle_price), large_vehicle_price: str(service.large_vehicle_price),
+        selling_price: str(service.selling_price),
+        estimated_cost: service.item_type === 'product' ? str(service.estimated_cost) : '',
         stock_quantity: str(service.stock_quantity),
+        vehicle_sizes: getSizes(service).map((s) => ({ name: s.name || '', meters: str(s.meters), price: str(s.price) })),
       });
     } else {
       setEditingServiceId(null);
-      setServiceForm({ ...emptyServiceForm });
+      setServiceForm({ ...emptyServiceForm, vehicle_sizes: [] });
     }
     setShowServiceForm(true);
   };
 
   const saveService = async () => {
     if (!serviceForm.code.trim() || !serviceForm.name.trim()) return toast.error('أدخل كود واسم الخدمة');
-    if (serviceForm.item_type === 'product' && !priceFilled) return toast.error('المنتج يتطلب سعر بيع');
+    if (isProductForm && !priceFilled) return toast.error('المنتج يتطلب سعر بيع المتر');
     if (serviceForm.selling_price !== '' && !priceFilled) return toast.error('سعر البيع يجب أن يكون أكبر من صفر، أو اتركه فارغاً ليحدده الكاشير في POS');
+
+    if (isProductForm) {
+      for (let i = 0; i < serviceForm.vehicle_sizes.length; i++) {
+        const s = serviceForm.vehicle_sizes[i];
+        const n = i + 1;
+        if (!s.name.trim()) return toast.error(`أدخل اسم الحجم في السطر ${n}`);
+        if (!(Number(s.meters) > 0)) return toast.error(`عدد الأمتار في السطر ${n} يجب أن يكون أكبر من صفر`);
+        if (s.price !== '' && !(Number(s.price) >= 0)) return toast.error(`السعر في السطر ${n} غير صحيح`);
+      }
+      const names = serviceForm.vehicle_sizes.map((s) => s.name.trim().toLowerCase());
+      if (new Set(names).size !== names.length) return toast.error('أسماء الأحجام يجب ألا تتكرر');
+    }
+
     const optNum = (v: string) => (v !== '' ? Number(v) : undefined);
     try {
+      const { vehicle_sizes, ...rest } = serviceForm;
       const payload = {
-        ...serviceForm,
-        selling_price: priceFilled ? Number(serviceForm.selling_price) : 0,
-        has_fixed_price: serviceForm.item_type === 'product' || priceFilled,
-        unit: serviceForm.item_type === 'product' ? 'متر' : serviceForm.unit,
-        estimated_cost: Number(serviceForm.estimated_cost || 0),
-        small_vehicle_quantity: optNum(serviceForm.small_vehicle_quantity),
-        large_vehicle_quantity: optNum(serviceForm.large_vehicle_quantity),
-        small_vehicle_price: optNum(serviceForm.small_vehicle_price),
-        large_vehicle_price: optNum(serviceForm.large_vehicle_price),
-        stock_quantity: optNum(serviceForm.stock_quantity),
+        ...rest,
+        selling_price: priceFilled ? pricePerMeter : 0,
+        has_fixed_price: isProductForm || priceFilled,
+        unit: isProductForm ? 'متر' : serviceForm.unit,
+        // التكلفة موجودة للمنتج فقط (تكلفة المتر)، الخدمة بدون تكلفة
+        estimated_cost: isProductForm ? costPerMeter : 0,
+        stock_quantity: isProductForm ? optNum(serviceForm.stock_quantity) : undefined,
+        vehicle_sizes: isProductForm
+          ? vehicle_sizes.map((s) => {
+            const c = calcSize(s);
+            return { name: s.name.trim(), meters: round3(c.meters), price: round2(c.price) };
+          })
+          : [],
       };
       if (editingServiceId) {
         await automotiveApi.updateService(editingServiceId, payload);
@@ -1129,7 +1179,6 @@ const AutomotiveServicePage = () => {
                             <span className="text-muted-foreground">عدد السيارات:</span>
                             <b className="tabular-nums">{vehicles.filter((v) => v.customer_id === customer.id).length}</b>
                           </div>
-
                           <div className="mt-3 space-y-2 border-t pt-3">
                             <p className="flex items-center gap-1.5 text-xs font-semibold">
                               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
@@ -1297,17 +1346,19 @@ const AutomotiveServicePage = () => {
 
                       <div className="grid gap-4 md:grid-cols-4">
                         <Field
-                          label={serviceForm.item_type === 'product' ? 'سعر البيع' : 'سعر البيع (اختياري)'}
-                          required={serviceForm.item_type === 'product'}
-                          hint={serviceForm.item_type === 'product' ? 'يظهر في POS تلقائياً' : 'اتركه فارغاً ليدخله الكاشير في POS'}
+                          label={isProductForm ? 'سعر بيع المتر' : 'سعر البيع (اختياري)'}
+                          required={isProductForm}
+                          hint={isProductForm ? 'يُحسب منه سعر كل حجم سيارة تلقائياً' : 'اتركه فارغاً ليدخله الكاشير في POS'}
                         >
-                          <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.selling_price} onChange={(e) => setServiceForm({ ...serviceForm, selling_price: e.target.value })} placeholder={serviceForm.item_type === 'product' ? '100' : 'بدون سعر'} />
+                          <Input className="h-10 rounded-xl" type="number" min="0" step="0.01" value={serviceForm.selling_price} onChange={(e) => setServiceForm({ ...serviceForm, selling_price: e.target.value })} placeholder={isProductForm ? '100' : 'بدون سعر'} />
                         </Field>
-                        <Field label={serviceForm.item_type === 'product' ? 'تكلفة المتر' : 'التكلفة'} hint={priceFilled ? `هامش الربح: ${fmt(margin)}` : undefined}>
-                          <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.estimated_cost} onChange={(e) => setServiceForm({ ...serviceForm, estimated_cost: e.target.value })} />
-                        </Field>
-                        {serviceForm.item_type === 'product' && (
+
+                        {/* التكلفة للمنتج فقط */}
+                        {isProductForm && (
                           <>
+                            <Field label="تكلفة المتر" hint={priceFilled ? `هامش الربح للمتر: ${fmt(marginPerMeter)}` : undefined}>
+                              <Input className="h-10 rounded-xl" type="number" min="0" step="0.01" value={serviceForm.estimated_cost} onChange={(e) => setServiceForm({ ...serviceForm, estimated_cost: e.target.value })} />
+                            </Field>
                             <Field label="الوحدة" hint="المنتجات تُدخل وتُباع بالمتر">
                               <Input className="h-10 rounded-xl" value="متر" disabled readOnly />
                             </Field>
@@ -1330,37 +1381,83 @@ const AutomotiveServicePage = () => {
                         {priceFilled ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />}
                         <div>
                           <p className="text-sm font-semibold">
-                            {priceFilled ? 'سعر ثابت' : serviceForm.item_type === 'product' ? 'المنتج يتطلب سعر بيع' : 'سعر يدوي'}
+                            {priceFilled ? 'سعر ثابت' : isProductForm ? 'المنتج يتطلب سعر بيع المتر' : 'سعر يدوي'}
                           </p>
                           <p className="text-xs">
                             {priceFilled
                               ? 'السعر يظهر تلقائياً في POS ولن يُطلب من الكاشير.'
-                              : serviceForm.item_type === 'product'
-                                ? 'أدخل سعر البيع ليُحفظ المنتج.'
+                              : isProductForm
+                                ? 'أدخل سعر بيع المتر ليُحفظ المنتج.'
                                 : 'بدون سعر: الكاشير سيدخل السعر يدوياً في POS عند البيع.'}
                           </p>
                         </div>
                       </div>
 
-                      {serviceForm.item_type === 'product' && (
+                      {/* ═══ أحجام / باقات السيارات (Array ديناميكي) ═══ */}
+                      {isProductForm && (
                         <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
-                          <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
-                            <CarFront className="h-4 w-4" /> الأمتار حسب حجم السيارة
-                          </p>
-                          <div className="grid gap-3 md:grid-cols-4">
-                            <Field label="الصغير: عدد الأمتار">
-                              <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.small_vehicle_quantity} onChange={(e) => setServiceForm({ ...serviceForm, small_vehicle_quantity: e.target.value })} placeholder="12" />
-                            </Field>
-                            <Field label="سعر الصغير">
-                              <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.small_vehicle_price} onChange={(e) => setServiceForm({ ...serviceForm, small_vehicle_price: e.target.value })} />
-                            </Field>
-                            <Field label="الكبير: عدد الأمتار">
-                              <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.large_vehicle_quantity} onChange={(e) => setServiceForm({ ...serviceForm, large_vehicle_quantity: e.target.value })} placeholder="15" />
-                            </Field>
-                            <Field label="سعر الكبير">
-                              <Input className="h-10 rounded-xl" type="number" min="0" value={serviceForm.large_vehicle_price} onChange={(e) => setServiceForm({ ...serviceForm, large_vehicle_price: e.target.value })} />
-                            </Field>
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+                              <CarFront className="h-4 w-4" /> الأمتار والسعر حسب حجم السيارة
+                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold">{serviceForm.vehicle_sizes.length}</span>
+                            </p>
+                            <div className="flex gap-2">
+                              {serviceForm.vehicle_sizes.some((s) => s.price !== '') && (
+                                <Button type="button" size="sm" variant="ghost" className="rounded-lg" onClick={resetSizePrices}>
+                                  <RotateCcw className="ml-1 h-3.5 w-3.5" /> إعادة حساب الأسعار
+                                </Button>
+                              )}
+                              <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={addSize}>
+                                <Plus className="ml-1 h-3.5 w-3.5" /> إضافة حجم
+                              </Button>
+                            </div>
                           </div>
+
+                          {serviceForm.vehicle_sizes.length === 0 ? (
+                            <p className="rounded-lg border border-dashed bg-background/60 p-4 text-center text-xs text-muted-foreground">
+                              لا توجد أحجام. اضغط «إضافة حجم» لإضافة (اسم + عدد أمتار + سعر)، مثال: صغير · 12 م، كبير · 15 م.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {serviceForm.vehicle_sizes.map((size, index) => {
+                                const c = calcSize(size);
+                                return (
+                                  <div key={index} className="rounded-xl border bg-background p-3">
+                                    <div className="grid items-end gap-3 md:grid-cols-12">
+                                      <Field className="md:col-span-4" label={`الحجم ${index + 1}`} required>
+                                        <Input className="h-10 rounded-xl" value={size.name} onChange={(e) => updateSize(index, { name: e.target.value })} placeholder="صغير / كبير / دفع رباعي..." />
+                                      </Field>
+                                      <Field className="md:col-span-3" label="عدد الأمتار" required>
+                                        <Input className="h-10 rounded-xl" type="number" min="0" step="0.001" value={size.meters} onChange={(e) => updateSize(index, { meters: e.target.value })} placeholder="12" />
+                                      </Field>
+                                      <Field
+                                        className="md:col-span-4"
+                                        label="السعر"
+                                        hint={c.isAuto ? (c.meters > 0 && priceFilled ? `تلقائي: ${fmt(c.autoPrice)} (${fmt(c.meters)} × ${fmt(pricePerMeter)})` : 'يُحسب تلقائياً من الأمتار × سعر المتر') : 'سعر يدوي'}
+                                      >
+                                        <Input className="h-10 rounded-xl" type="number" min="0" step="0.01" value={size.price} onChange={(e) => updateSize(index, { price: e.target.value })} placeholder={c.meters > 0 && priceFilled ? String(c.autoPrice) : 'تلقائي'} />
+                                      </Field>
+                                      <div className="flex md:col-span-1 md:justify-end">
+                                        <Button type="button" size="icon" variant="ghost" className="rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => removeSize(index)} aria-label="حذف الحجم">
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    {c.meters > 0 && (
+                                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-xs text-muted-foreground">
+                                        <span>السعر النهائي: <b className="tabular-nums text-foreground">{fmt(c.price)}</b></span>
+                                        <span>التكلفة: <b className="tabular-nums text-foreground">{fmt(c.cost)}</b></span>
+                                        <span>
+                                          الربح:{' '}
+                                          <b className={cn('tabular-nums', c.profit < 0 ? 'text-rose-600' : 'text-emerald-600')}>{fmt(c.profit)}</b>
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1394,6 +1491,7 @@ const AutomotiveServicePage = () => {
                       const lowStock = isProduct && Number(service.stock_quantity || 0) <= 5;
                       const barColor = isCustom ? 'bg-amber-500' : isProduct ? 'bg-emerald-500' : 'bg-blue-500';
                       const Icon = isProduct ? Package : Wrench;
+                      const sizes = isProduct ? getSizes(service) : [];
                       return (
                         <Card key={service.id} className={cn(
                           'group relative overflow-hidden rounded-2xl border-border/60 transition-all hover:-translate-y-1 hover:shadow-xl',
@@ -1422,12 +1520,16 @@ const AutomotiveServicePage = () => {
                                   <Tag className="h-3 w-3" /> سعر يدوي
                                 </span>
                               ) : (
-                                <span className="whitespace-nowrap text-lg font-bold tabular-nums">{fmt(service.selling_price)}</span>
+                                <span className="whitespace-nowrap text-lg font-bold tabular-nums">
+                                  {fmt(service.selling_price)}
+                                  {isProduct && <small className="mr-0.5 text-[10px] font-normal text-muted-foreground">/م</small>}
+                                </span>
                               )}
                             </div>
 
-                            <div className="mt-3 space-y-1.5 border-t pt-3 text-xs">
-                              {isProduct && (
+                            {/* المخزون والتكلفة والهامش للمنتجات فقط */}
+                            {isProduct && (
+                              <div className="mt-3 space-y-1.5 border-t pt-3 text-xs">
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">المخزون</span>
                                   <span className={cn(
@@ -1438,20 +1540,37 @@ const AutomotiveServicePage = () => {
                                     {fmt(service.stock_quantity)} م
                                   </span>
                                 </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">{isProduct ? 'تكلفة المتر' : 'التكلفة'}</span>
-                                <span className="font-medium tabular-nums">{fmt(service.estimated_cost)}</span>
-                              </div>
-                              {!isCustom && Number(service.selling_price) > 0 && (
                                 <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">هامش الربح</span>
-                                  <span className="font-medium tabular-nums text-emerald-600">
-                                    {fmt(Number(service.selling_price) - Number(service.estimated_cost || 0))}
-                                  </span>
+                                  <span className="text-muted-foreground">تكلفة المتر</span>
+                                  <span className="font-medium tabular-nums">{fmt(service.estimated_cost)}</span>
                                 </div>
-                              )}
-                            </div>
+                                {!isCustom && Number(service.selling_price) > 0 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">هامش ربح المتر</span>
+                                    <span className="font-medium tabular-nums text-emerald-600">
+                                      {fmt(round2(Number(service.selling_price) - Number(service.estimated_cost || 0)))}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* أحجام السيارات */}
+                            {sizes.length > 0 && (
+                              <div className="mt-3 space-y-1 border-t pt-3">
+                                <p className="mb-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                                  <CarFront className="h-3 w-3" /> الأحجام
+                                </p>
+                                {sizes.map((s, i) => (
+                                  <div key={`${s.name}-${i}`} className="flex items-center justify-between rounded-lg bg-emerald-500/[0.06] px-2 py-1 text-xs">
+                                    <span className="truncate font-medium">{s.name}</span>
+                                    <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+                                      {fmt(s.meters)} م · <b className="text-foreground">{fmt(s.price)}</b>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
                             <div className="mt-3 flex gap-2 border-t pt-3">
                               <Button size="sm" variant="outline" className="flex-1 rounded-lg" onClick={() => openServiceForm(service)}>

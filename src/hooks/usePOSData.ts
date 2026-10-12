@@ -93,9 +93,15 @@ export interface Product {
   created_at?: string;
   updated_at?: string;
   automotive_service?: {
-    id: number; item_type: 'service' | 'product'; unit?: string | null;
-    small_vehicle_quantity?: number | null; large_vehicle_quantity?: number | null;
-    small_vehicle_price?: number | null; large_vehicle_price?: number | null; stock_quantity?: number | null;
+    id: number;
+    item_type: 'service' | 'product';
+    unit?: string | null;
+    small_vehicle_quantity?: number | null;
+    large_vehicle_quantity?: number | null;
+    small_vehicle_price?: number | null;
+    large_vehicle_price?: number | null;
+    stock_quantity?: number | null;
+    vehicle_sizes?: Array<{ name: string; meters: number; price: number }> | null;
   } | null;
 }
 
@@ -263,7 +269,14 @@ export const useProducts = (categoryId?: string | null) => {
           units: prod.units || [],
           image: prod.image || null,
           category: prod.category || null,
-          automotive_service: prod.automotive_service || null,
+          automotive_service: prod.automotive_service
+            ? {
+              ...prod.automotive_service,
+              vehicle_sizes: prod.automotive_service.vehicle_sizes
+                || prod.vehicle_sizes
+                || [],
+            }
+            : null,
           created_at: prod.created_at || null,
           updated_at: prod.updated_at || null
         }));
