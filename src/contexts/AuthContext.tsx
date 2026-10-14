@@ -13,7 +13,10 @@ interface User {
   email: string;
   fullUrl?: string | null;
   logoUrl?: string;
-  logo?: number | null;
+  logo_url?: string;
+  company_logo?: string;
+  logo_icon_url?: string;
+  logo?: number | { fullUrl?: string; previewUrl?: string; url?: string } | null;
   logo_icon?: string;
   logo_icon_image?: number | null;
   address?: string | null;

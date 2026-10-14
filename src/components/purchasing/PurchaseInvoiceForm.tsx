@@ -411,6 +411,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['treasury'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
 
       // Handle print
       if (action === 'save_and_print') {

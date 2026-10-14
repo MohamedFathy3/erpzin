@@ -251,7 +251,11 @@ const FormFields: React.FC<FormFieldsProps> = ({
         </Label>
         <Select
           value={formData.payment_method || 'cash'}
-          onValueChange={(v) => setFormData((prev: any) => ({ ...prev, payment_method: v }))}
+          onValueChange={(v) => setFormData((prev: any) => ({
+            ...prev,
+            payment_method: v,
+            ...(v === 'credit' ? { paid_amount: 0 } : {}),
+          }))}
           disabled={disabled}
         >
           <SelectTrigger className="h-8 text-sm">

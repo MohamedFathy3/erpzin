@@ -244,7 +244,7 @@ const ReadyReports = () => {
     }
   });
 
-  const { data: finances = [] } = useQuery<Finance[]>({
+  const { data: finances = [] } = useQuery<Array<Finance & { is_tracking_only?: boolean }>>({
     queryKey: ['finances', dateFrom, dateTo],
     queryFn: async () => {
       const response = await api.post('/finance/index', {
@@ -858,7 +858,7 @@ checkOut: 'تسجيل الخروج',
 
       // ==================== Finance Reports ====================
       case 'expenseReport': {
-        const expenses = finances.filter(f => f.category === 'expense' || f.amount.startsWith('-'));
+        const expenses = finances.filter(f => !f.is_tracking_only && (f.category === 'expense' || f.amount.startsWith('-')));
         return {
           headers: [t.date, t.category, t.description, t.amount, t.method],
           rows: expenses.map((f) => [
@@ -892,12 +892,12 @@ checkOut: 'تسجيل الخروج',
           rows: finances.map((f) => [
             f.date,
             f.category,
-            f.description,
+            f.is_tracking_only ? `${f.description} (${language === 'ar' ? 'للتقرير فقط' : 'Report only'})` : f.description,
             f.formatted_amount,
             f.payment_method_arabic,
             f.reference_number
           ]),
-          total: finances.reduce((sum, f) => sum + Number(f.amount), 0)
+          total: finances.reduce((sum, f) => sum + (f.is_tracking_only ? 0 : Number(f.amount)), 0)
         };
       }
 

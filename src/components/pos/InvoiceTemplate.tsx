@@ -225,13 +225,14 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             </div>
           )}
 
-          <h1 className="text-sm font-bold text-black">
-            {isRTL && effectiveCompanyInfo.nameAr ? effectiveCompanyInfo.nameAr : effectiveCompanyInfo.name}
-          </h1>
+          {safeInvoiceData.branchName && (
+            <h1 className="text-sm font-bold text-black">
+              {isRTL ? invoiceData.branchNameAr || safeInvoiceData.branchName : safeInvoiceData.branchName}
+            </h1>
+          )}
 
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
             <div className="text-[9px] text-gray-700 mt-1">
-              {safeInvoiceData.branchName && <p>{texts.branch}: {isRTL ? (invoiceData as any).branchNameAr || safeInvoiceData.branchName : safeInvoiceData.branchName}</p>}
               {safeInvoiceData.branchAddress && <p>{safeInvoiceData.branchAddress}</p>}
               {safeInvoiceData.branchPhone && <p>{texts.phone}: {safeInvoiceData.branchPhone}</p>}
             </div>

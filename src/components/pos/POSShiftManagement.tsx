@@ -327,8 +327,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
 
           <div class="print-section">
           <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
-          <div class="print-row"><span>${language === 'ar' ? 'المبلغ المتوقع:' : 'Expected Amount:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'النقدي المتوقع:' : 'Expected Cash:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'النقدي الموجود فعليًا:' : 'Cash Counted:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
           <hr/>
           <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'الفرق:' : 'Difference:'}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(shift.difference)}</span></div>
         </div>
@@ -383,8 +383,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       card: 'Card',
       wallet: 'Wallet',
       returns: 'Returns',
-      expectedAmount: 'Expected Amount',
-      actualAmount: 'Actual Amount',
+      expectedAmount: 'Expected Cash',
+      actualAmount: 'Cash Counted in Drawer',
+      expenses: 'Shift Expenses',
+      nonCashSalesNote: 'Card and wallet sales are not included in the cash drawer total.',
       variance: 'Difference',
       surplus: 'Surplus',
       shortage: 'Shortage',
@@ -436,8 +438,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       card: 'بطاقة',
       wallet: 'محفظة',
       returns: 'مرتجعات',
-      expectedAmount: 'المتوقع',
-      actualAmount: 'الفعلي',
+      expectedAmount: 'النقدي المتوقع',
+      actualAmount: 'النقدي الموجود فعليًا في الدرج',
+      expenses: 'مصروفات الوردية',
+      nonCashSalesNote: 'مبيعات البطاقة والمحفظة لا تدخل ضمن النقدي الموجود في الدرج.',
       variance: 'الفرق',
       surplus: 'زيادة',
       shortage: 'عجز',
@@ -600,7 +604,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
               </div>
               <div className="p-3 rounded-lg bg-amber-100/50 dark:bg-amber-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Wallet className="h-5 w-5 mx-auto mb-1 text-amber-600" />
-                <div className="text-xs text-muted-foreground mb-1">مصروفات اليوم</div>
+                <div className="text-xs text-muted-foreground mb-1">{t.expenses}</div>
                 <div className="font-bold text-amber-700">{formatAmount(currentShift.expenses_amount || 0)}</div>
               </div>
             </div>
@@ -688,17 +692,19 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                 <h4 className="font-medium text-sm flex items-center gap-2"><Receipt className="h-4 w-4" />{t.summary}</h4>
                 <div className="flex justify-between"><span>{t.openingBalance}:</span><span>{formatAmount(currentShift.opening_balance)}</span></div>
                 <div className="flex justify-between text-emerald-600"><span>+ {t.cashSales}:</span><span>+ {formatAmount(currentShift.cash_sales)}</span></div>
-                <div className="flex justify-between text-blue-600"><span>+ {t.cardSales}:</span><span>+ {formatAmount(currentShift.card_sales)}</span></div>
-                <div className="flex justify-between text-purple-600"><span>+ {t.walletsales}:</span><span>+ {formatAmount(currentShift.wallet_sales)}</span></div>
+                <div className="flex justify-between text-blue-600"><span>{t.cardSales}:</span><span>{formatAmount(currentShift.card_sales)}</span></div>
+                <div className="flex justify-between text-purple-600"><span>{t.walletsales}:</span><span>{formatAmount(currentShift.wallet_sales)}</span></div>
                 <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
+                <div className="flex justify-between text-amber-700"><span>- {t.expenses}:</span><span>- {formatAmount(currentShift.expenses_amount || 0)}</span></div>
                 <Separator />
                 <div className="flex justify-between font-bold text-lg"><span>{t.expectedAmount}:</span><span className="text-primary">{formatAmount(displayExpectedAmount)}</span></div>
+                <p className="text-xs text-muted-foreground">{t.nonCashSalesNote}</p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="closing-amount">{t.actualAmount} <span className="text-destructive">*</span></Label>
                 <div className="relative">
-                  <Input id="closing-amount" type="text" placeholder="0" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="text-left text-lg pl-16 h-12" dir="ltr" autoFocus />
+                  <Input id="closing-amount" type="number" min="0" step="0.01" placeholder="0" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="text-left text-lg pl-16 h-12" dir="ltr" autoFocus />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">ر.ي</span>
                 </div>
               </div>

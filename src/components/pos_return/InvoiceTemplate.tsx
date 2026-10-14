@@ -26,6 +26,7 @@ interface InvoiceTemplateProps {
     customer?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
     branchName?: string;
+    branchNameAr?: string;
     branchPhone?: string;
         invoice_number?: string;
     branchAddress?: string;
@@ -102,6 +103,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       customer: invoiceData.customer || null,
       cashierName: invoiceData.cashierName || '---',
       branchName: invoiceData.branchName,
+      branchNameAr: invoiceData.branchNameAr,
       branchPhone: invoiceData.branchPhone,
       branchAddress: invoiceData.branchAddress,
       items: invoiceData.items || [],
@@ -178,17 +180,19 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 src={companyInfo.logo} 
                 alt={companyInfo.name}
                 className="h-10 w-auto object-contain"
+                crossOrigin="anonymous"
               />
             </div>
           )}
           
-          <h1 className="text-sm font-bold text-black">
-            {isRTL && companyInfo.nameAr ? companyInfo.nameAr : companyInfo.name}
-          </h1>
+          {safeInvoiceData.branchName && (
+            <h1 className="text-sm font-bold text-black">
+              {isRTL ? safeInvoiceData.branchNameAr || safeInvoiceData.branchName : safeInvoiceData.branchName}
+            </h1>
+          )}
           
           {(safeInvoiceData.branchName || safeInvoiceData.branchAddress || safeInvoiceData.branchPhone) && (
             <div className="text-[9px] text-gray-700 mt-1">
-              {safeInvoiceData.branchName && <p>{texts.branch}: {safeInvoiceData.branchName}</p>}
               {safeInvoiceData.branchAddress && <p>{safeInvoiceData.branchAddress}</p>}
               {safeInvoiceData.branchPhone && <p>{texts.phone}: {safeInvoiceData.branchPhone}</p>}
             </div>

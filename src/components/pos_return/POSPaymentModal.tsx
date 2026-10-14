@@ -416,7 +416,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           invoice_number: invoiceNumberFromServer,
           date: new Date().toISOString(),
           cashierName: user?.name,
-          branchName: branchName || companyInfo?.name,
+          branchName: branchName || undefined,
+          branchNameAr: branchNameAr || undefined,
           branchPhone: branchPhone || companyInfo?.phone,
           branchAddress: isRTL
             ? branchAddressAr || branchAddress || companyInfo?.addressAr || companyInfo?.address

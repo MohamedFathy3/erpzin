@@ -17,6 +17,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supplierService } from '@/services/supplierservice';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import api from '@/lib/api';
 interface SupplierPaymentFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -32,6 +34,13 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
 }) => {
   const { language } = useLanguage();
   const [loading, setLoading] = useState(false);
+  const [pendingExpenseSync, setPendingExpenseSync] = useState<{
+    payment_number: string;
+    supplier_name: string;
+    amount: number;
+    date: string;
+    payment_method: string;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     supplier_id: '',
@@ -57,7 +66,36 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
   const selectedSupplier = suppliers.find(s => s.id === formData.supplier_id);
   const currentBalance = Number(selectedSupplier?.balance) || 0;
 
+  const retryExpenseSync = async () => {
+    if (!pendingExpenseSync) return;
+
+    setLoading(true);
+    try {
+      await api.post('/finance/supplier-payment', pendingExpenseSync);
+      toast({
+        title: language === 'ar' ? 'تمت المزامنة' : 'Synchronized',
+        description: language === 'ar' ? 'تم تسجيل الدفعة في المصروفات' : 'Payment recorded in expenses'
+      });
+      setPendingExpenseSync(null);
+      onSave();
+      onClose();
+    } catch (error: any) {
+      toast({
+        title: language === 'ar' ? 'تعذرت المزامنة' : 'Sync failed',
+        description: error.response?.data?.message || error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (pendingExpenseSync) {
+      await retryExpenseSync();
+      return;
+    }
+
     if (!formData.supplier_id) {
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
@@ -90,7 +128,9 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
     setLoading(true);
     try {
       // Generate payment number
-      const { data: paymentNumber } = await supabase.rpc('generate_payment_number');
+      const { data: paymentNumber, error: numberError } = await supabase.rpc('generate_payment_number');
+      if (numberError) throw numberError;
+      if (!paymentNumber) throw new Error(language === 'ar' ? 'تعذر إنشاء رقم الدفعة' : 'Could not generate payment number');
 
       // Create payment
       const { data: payment, error: paymentError } = await supabase
@@ -111,13 +151,14 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
 
       // Update supplier balance
       const newBalance = currentBalance - formData.amount;
-      await supabase
+      const { error: supplierError } = await supabase
         .from('suppliers')
         .update({ balance: newBalance })
         .eq('id', formData.supplier_id);
+      if (supplierError) throw supplierError;
 
       // Create supplier transaction
-      await supabase
+      const { error: transactionError } = await supabase
         .from('supplier_transactions')
         .insert({
           supplier_id: formData.supplier_id,
@@ -129,6 +170,29 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
           balance_after: newBalance,
           description: `دفعة للمورد رقم ${paymentNumber}`
         });
+      if (transactionError) throw transactionError;
+
+      const expenseSync = {
+        payment_number: String(paymentNumber),
+        supplier_name: language === 'ar' ? selectedSupplier?.name_ar || selectedSupplier?.name : selectedSupplier?.name,
+        amount: formData.amount,
+        date: formData.payment_date,
+        payment_method: formData.payment_method
+      };
+      try {
+        await api.post('/finance/supplier-payment', expenseSync);
+      } catch (error: any) {
+        setPendingExpenseSync(expenseSync);
+        onSave();
+        toast({
+          title: language === 'ar' ? 'الدفعة محفوظة وتحتاج مزامنة' : 'Payment saved; sync required',
+          description: error.response?.data?.message || (language === 'ar'
+            ? 'تم تسجيل الدفعة للمورد، لكن تعذر تسجيلها في المصروفات. اضغط إعادة المحاولة للمزامنة.'
+            : 'The supplier payment was saved, but expense sync failed. Retry to synchronize it.'),
+          variant: 'destructive'
+        });
+        return;
+      }
 
       toast({
         title: language === 'ar' ? 'تم الحفظ' : 'Saved',
@@ -282,7 +346,9 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
                 {language === 'ar' ? 'جاري الحفظ...' : 'Saving...'}
               </>
             ) : (
-              language === 'ar' ? 'تسجيل الدفعة' : 'Record Payment'
+              pendingExpenseSync
+                ? (language === 'ar' ? 'إعادة مزامنة المصروف' : 'Retry expense sync')
+                : (language === 'ar' ? 'تسجيل الدفعة' : 'Record Payment')
             )}
           </Button>
         </DialogFooter>

@@ -47,6 +47,8 @@ interface Expense {
   payment_method: string;
   payment_method_arabic: string;
   reference_number: string | null;
+  is_automatic?: boolean;
+  is_tracking_only?: boolean;
   treasury_id?: number | null;
   currency_id?: number | null;
   branch_id?: number | null;
@@ -133,6 +135,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     { value: 'utilities', label: language === 'ar' ? 'مرافق' : 'Utilities', color: 'bg-green-500' },
     { value: 'salaries', label: language === 'ar' ? 'رواتب' : 'Salaries', color: 'bg-yellow-500' },
     { value: 'bonus', label: language === 'ar' ? 'بونص موظفين' : 'Employee bonuses', color: 'bg-emerald-500' },
+    { value: 'supplier_payment', label: language === 'ar' ? 'دفعات موردين' : 'Supplier payments', color: 'bg-amber-500' },
     { value: 'supplies', label: language === 'ar' ? 'مستلزمات' : 'Supplies', color: 'bg-purple-500' },
     { value: 'marketing', label: language === 'ar' ? 'تسويق' : 'Marketing', color: 'bg-pink-500' },
     { value: 'maintenance', label: language === 'ar' ? 'صيانة' : 'Maintenance', color: 'bg-cyan-500' },
@@ -310,10 +313,10 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   };
 
   const handleSelectAll = () => {
-    if (selectedItems.length === expenses.length) {
+    if (selectedItems.length === selectableExpenses.length) {
       setSelectedItems([]);
     } else {
-      setSelectedItems(expenses.map((exp: any) => exp.id));
+      setSelectedItems(selectableExpenses.map((expense: Expense) => expense.id));
     }
   };
 
@@ -343,7 +346,11 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     );
   };
 
-  const totalAmount = expenses.reduce((sum: number, exp: any) => sum + Number(exp.amount), 0);
+  const totalAmount = expenses.reduce(
+    (sum: number, expense: Expense) => sum + (expense.is_tracking_only ? 0 : Number(expense.amount)),
+    0
+  );
+  const selectableExpenses = expenses.filter((expense: Expense) => !expense.is_automatic && !expense.is_tracking_only);
 
   return (
     <div className="space-y-4">
@@ -476,15 +483,23 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
                           type="checkbox" 
                           checked={selectedItems.includes(expense.id)}
                           onChange={() => handleSelectItem(expense.id)}
+                          disabled={expense.is_automatic || expense.is_tracking_only}
                           className="rounded border-gray-300"
                         />
                       </TableCell>
                       <TableCell>{getCategoryBadge(expense.category)}</TableCell>
-                      <TableCell className="font-medium text-red-600">
+                      <TableCell className={`font-medium ${expense.is_tracking_only ? 'text-muted-foreground line-through' : 'text-red-600'}`}>
                         {formatCurrency(Number(expense.amount))}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {expense.description || '-'}
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{expense.description || '-'}</span>
+                          {expense.is_tracking_only && (
+                            <Badge variant="outline" className="shrink-0">
+                              {language === 'ar' ? 'للتقرير فقط' : 'Report only'}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{expense.date_formatted}</TableCell>
                       <TableCell>
@@ -492,12 +507,20 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(expense.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {expense.is_tracking_only ? (
+                            <Badge variant="outline">{language === 'ar' ? 'للتقرير فقط' : 'Report only'}</Badge>
+                          ) : expense.is_automatic ? (
+                            <Badge variant="outline">{language === 'ar' ? 'تلقائي' : 'Automatic'}</Badge>
+                          ) : (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(expense)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(expense.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

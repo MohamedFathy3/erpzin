@@ -1149,10 +1149,10 @@ const POS: React.FC = () => {
           branchAddressAr={branchData?.addressAr}
           companyInfo={{
             name: user?.name || 'متجرك',
-            nameAr: user?.name,
-            logo: user?.logoUrl || (typeof user?.logo === 'object' && user.logo ? (user.logo as any).fullUrl || (user.logo as any).url : undefined),
+            nameAr: user?.name_ar || user?.name,
+            logo: user?.logoUrl || user?.logo_url || user?.company_logo || user?.logo_icon_url || user?.logo_icon || (typeof user?.logo === 'object' && user.logo ? user.logo.fullUrl || user.logo.previewUrl || user.logo.url : undefined),
             address: user?.address,
-            addressAr: user?.address,
+            addressAr: user?.address_ar || user?.address,
             phone: user?.phone,
             email: user?.email,
             tax_id: user?.tax_id,
