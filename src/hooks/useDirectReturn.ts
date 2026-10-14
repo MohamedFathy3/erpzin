@@ -122,25 +122,20 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     enabled: searchMode === 'product' && !!searchQuery,
   });
 
-  // تعديل: بنحضر المنتجات من الفاتورة وبنغير السعر لـ total_amount
-  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any, index: number, array: any[]) => {
-    const totalAmount = invoiceTotalAmount || 0;
-    const totalQuantity = array.reduce((sum: number, i: any) => sum + i.quantity, 0);
-    
-    // حساب سعر المنتج = total_amount / عدد المنتجات
-    let unitPrice = item.price;
-    if (totalAmount > 0 && totalQuantity > 0) {
-      unitPrice = (totalAmount / totalQuantity).toFixed(2);
-    }
+  // Keep the historical unit price stored on each invoice item. Different
+  // products in one invoice can have different prices (for example 500 and
+  // 400), so the invoice total must not be distributed across all items.
+  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any) => {
+    const unitPrice = String(item.price ?? 0);
     
     return {
       id: item.product_id,
       name: item.product_name,
       name_ar: item.product_name,
       sku: item.sku || '',
-      price: unitPrice, // السعر المعدل 8100
-      quantity_sold: item.quantity,
-      invoice_price: unitPrice, // السعر المعدل
+      price: unitPrice,
+      quantity_sold: Number(item.quantity) || 0,
+      invoice_price: unitPrice,
       image_url: null,
       stock: item.stock,
     };
@@ -151,7 +146,6 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
 
   // ========== Item Management ==========
   const addItem = (product: InvoiceProduct) => {
-    // السعر اللي هياخده هو 8100
     const unitPrice = searchMode === 'invoice'
       ? parseFloat(product.invoice_price || product.price || '0')
       : parseFloat(product.price || '0');
@@ -178,7 +172,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
         product_name: product.name_ar || product.name,
         sku: product.sku || 'N/A',
         quantity: 1,
-        unit_price: unitPrice, // ده هيكون 8100
+        unit_price: unitPrice,
         reason: '',
         quantity_sold: quantitySold,
         product: {
@@ -249,7 +243,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
         items: items.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
-          price: item.unit_price  // السعر اللي هيتسجل 8100
+          price: item.unit_price
         })),
         payments: [{
           method: refundMethod,
