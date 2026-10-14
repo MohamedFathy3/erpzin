@@ -45,6 +45,7 @@ export interface POSShift {
   card_sales: string;
   wallet_sales: string;
   returns_amount: string;
+  expenses_amount?: string | number;
   expected_amount: string | null;
   actual_amount: string | null;
   difference: string | null;
@@ -209,9 +210,10 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
     const card = parseFloat(currentShift.card_sales || '0') || 0;
     const wallet = parseFloat(currentShift.wallet_sales || '0') || 0;
     const returns = parseFloat(currentShift.returns_amount || '0') || 0;
+    const expenses = parseFloat(String(currentShift.expenses_amount || '0')) || 0;
 
-    // ✅ المتوقع = رصيد البداية + النقدي + البطاقة + المحفظة - المرتجعات
-    return Math.round((opening + cash + card + wallet - returns) * 100) / 100;
+    // ✅ المتوقع النقدي = البداية + مبيعات النقدي - المرتجعات - مصروفات اليوم
+    return Math.round((opening + cash - returns - expenses) * 100) / 100;
   }, [currentShift]);
 
   // ✅ إذا الباك إند رجّع expected_amount، استخدمه (لأنه محسوب live)
@@ -318,11 +320,12 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           <div class="print-row"><span>📱 ${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.wallet_sales)}</span></div>
           <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
           <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
+          <div class="print-row"><span>💸 ${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span style="font-weight: bold; color: #b45309;">-${formatNumber(shift.expenses_amount || 0)}</span></div>
           <hr/>
           <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
         </div>
 
-        <div class="print-section">
+          <div class="print-section">
           <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
           <div class="print-row"><span>${language === 'ar' ? 'المبلغ المتوقع:' : 'Expected Amount:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
           <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
@@ -594,6 +597,11 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                 <Receipt className="h-5 w-5 mx-auto mb-1 text-red-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.returns}</div>
                 <div className="font-bold text-red-700">{formatAmount(currentShift.returns_amount)}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-amber-100/50 dark:bg-amber-900/20 text-center hover:scale-105 transition-all cursor-default">
+                <Wallet className="h-5 w-5 mx-auto mb-1 text-amber-600" />
+                <div className="text-xs text-muted-foreground mb-1">مصروفات اليوم</div>
+                <div className="font-bold text-amber-700">{formatAmount(currentShift.expenses_amount || 0)}</div>
               </div>
             </div>
 

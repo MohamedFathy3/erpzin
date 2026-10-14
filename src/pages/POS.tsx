@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import {
   Search, Barcode, Home, LogOut, Loader2, Crown, Clock, User,
   Truck, RotateCcw, DollarSign, Building2, Wifi, WifiOff, RefreshCw,
-  ShoppingBag, AlertCircle, CheckCircle2,
+  ShoppingBag, AlertCircle, CheckCircle2, Wallet,
   UserCheck, Share2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import POSCategories from '@/components/pos/POSCategories';
 import POSVariantSelector from '@/components/pos/POSVariantSelector';
 import POSCustomerSelector from '@/components/pos/POSCustomerSelector';
 import POSShiftManagement from '@/components/pos/POSShiftManagement';
+import POSExpenseDialog from '@/components/pos/POSExpenseDialog';
 import POSReturns from '@/components/pos/POSReturns';
 import POSShortcutsBar from '@/components/pos/POSShortcutsBar';
 import BranchTransferDialog from '@/components/pos/BranchTransferDialog';
@@ -264,6 +265,7 @@ const POS: React.FC = () => {
   const [transferTargetId, setTransferTargetId] = useState('');
   const [transferEmployees, setTransferEmployees] = useState<any[]>([]);
   const [showShiftPanel, setShowShiftPanel] = useState(false);
+  const [showExpenseDialog, setShowExpenseDialog] = useState(false);
   const [selectedCartItemIndex, setSelectedCartItemIndex] = useState<number>(-1);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [syncing, setSyncing] = useState(false);
@@ -1082,7 +1084,7 @@ const POS: React.FC = () => {
     else if (showReturns) setShowReturns(false);
     else if (showShiftPanel) setShowShiftPanel(false);
     else if (showVariantSelector) setShowVariantSelector(false);
-  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showVariantSelector]);
+  }, [showPayment, showHeldOrders, showCustomerSelector, showDeliverySelector, showReturns, showShiftPanel, showExpenseDialog, showVariantSelector]);
 
   const handleIncreaseQuantity = useCallback(() => {
     if (cartItems.length > 0) {
@@ -1166,7 +1168,7 @@ const POS: React.FC = () => {
   };
 
   // ==================== Keyboard Shortcuts ====================
-  const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showVariantSelector;
+  const isAnyModalOpen = showPayment || showHeldOrders || showCustomerSelector || showDeliverySelector || showReturns || showShiftPanel || showExpenseDialog || showVariantSelector;
 
   const posShortcuts = getPOSShortcuts({
     onPay: () => cartItems.length > 0 && setShowPayment(true),
@@ -1416,6 +1418,17 @@ const POS: React.FC = () => {
               >
                 <RotateCcw size={16} />
                 <span className="text-xs font-medium">{language === 'ar' ? 'مرتجع' : 'Returns'}</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowExpenseDialog(true)}
+                disabled={!currentShift}
+                className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 gap-1.5 px-2"
+              >
+                <Wallet size={16} />
+                <span className="text-xs font-medium">{language === 'ar' ? 'مصروف' : 'Expense'}</span>
               </Button>
 
               <Button
@@ -2021,6 +2034,20 @@ const POS: React.FC = () => {
             />
           </DialogContent>
         </Dialog>
+
+        <POSExpenseDialog
+          open={showExpenseDialog}
+          onOpenChange={setShowExpenseDialog}
+          shiftId={currentShift?.id || null}
+          onSaved={async () => {
+            try {
+              const response = await api.get('/shifts/current');
+              if (response.data?.status && response.data?.data) setCurrentShift(response.data.data);
+            } catch {
+              setCurrentShift(null);
+            }
+          }}
+        />
 
         <POSReturns
           isOpen={showReturns}
