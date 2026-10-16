@@ -26,7 +26,8 @@ import {
   CreditCard,
   Receipt,
   Info,
-  Wallet
+  Wallet,
+  Gift
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -122,6 +123,29 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
 
   // ✅ استخدام externalShift إذا تم تمريره، وإلا use fetchedShift
   const currentShift = externalShift !== undefined ? externalShift : fetchedShift;
+
+  const {
+    data: closeShiftReport,
+    isLoading: isLoadingCloseShiftReport,
+    isError: isCloseShiftReportError,
+    error: closeShiftReportError,
+    refetch: refetchCloseShiftReport
+  } = useQuery({
+    queryKey: ['shift-report', 'close-summary', currentShift?.id],
+    enabled: closeShiftModal && currentShift !== null && currentShift !== undefined,
+    queryFn: async () => {
+      if (!currentShift) {
+        throw new Error('No shift selected');
+      }
+
+      const response = await api.get(`/shifts/${currentShift.id}/report`);
+      if (response.data?.status !== true || !response.data?.data) {
+        throw new Error(response.data?.message || 'Failed to load shift report');
+      }
+      return response.data.data;
+    },
+    staleTime: 30_000
+  });
 
   // ========== فتح وردية جديدة ==========
   const openShiftMutation = useMutation({
@@ -259,9 +283,28 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
   };
 
   // ========== طباعة تقرير الوردية ==========
-  const printShift = (shift: POSShift) => {
+  const printShift = async (shift: POSShift) => {
     const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
-    if (printWindow) {
+    if (!printWindow) {
+      toast.error(language === 'ar' ? 'تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم أعد المحاولة.' : 'Could not open the print window. Allow pop-ups and try again.');
+      return;
+    }
+
+    try {
+      const report = closeShiftReport?.shift?.id === shift.id
+        ? closeShiftReport
+        : await queryClient.fetchQuery({
+            queryKey: ['shift-report', 'close-summary', shift.id],
+            queryFn: async () => {
+              const response = await api.get(`/shifts/${shift.id}/report`);
+              if (response.data?.status !== true || !response.data?.data) {
+                throw new Error(response.data?.message || 'Failed to load shift report');
+              }
+              return response.data.data;
+            },
+            staleTime: 30_000
+          });
+      const complimentary = report?.summary?.complimentary;
       const diffNum = parseFloat(shift.difference || '0');
       const now = new Date();
 
@@ -272,26 +315,35 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
         <title>${language === 'ar' ? 'فاتورة الوردية #' + shift.id : 'Shift Invoice #' + shift.id}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
+          @page { size: 80mm auto; margin: 2mm; }
           body {
-            font-family: 'Courier New', 'Traditional Arabic', monospace;
-            font-size: 12px;
-            width: 80mm;
+            font-family: Tahoma, Arial, sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.45;
+            width: 100%;
+            max-width: 76mm;
             margin: 0 auto;
-            padding: 3mm;
+            padding: 1mm;
             background: white;
-            color: black;
+            color: #000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           @media print {
-            body { margin: 0; padding: 2mm; }
+            html, body { width: 100%; height: auto; }
+            body { margin: 0; padding: 0; color: #000 !important; }
             .no-print { display: none; }
+            .print-section, .print-header { break-inside: avoid; page-break-inside: avoid; }
           }
           .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed #000; }
-          .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dotted #ccc; }
-          .print-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-          .print-label { font-weight: bold; }
+          .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dashed #000; }
+          .print-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; break-inside: avoid; }
+          .print-label { font-weight: 700; }
           .print-value { font-family: monospace; }
-          hr { margin: 4px 0; border: none; border-top: 1px dotted #ccc; }
+          hr { margin: 5px 0; border: none; border-top: 1px dashed #000; }
           .text-center { text-align: center; }
+          .section-title { font-weight: 700; margin-bottom: 5px; padding: 2px; border-bottom: 1px solid #000; }
         </style>
       </head>
       <body>
@@ -313,20 +365,26 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
         </div>
 
         <div class="print-section">
-          <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
+          <div class="text-center section-title">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
           <div class="print-row"><span>${language === 'ar' ? 'رصيد البداية:' : 'Opening Balance:'}</span><span>${formatNumber(shift.opening_balance)}</span></div>
           <hr/>
-          <div class="print-row"><span>💰 ${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.cash_sales)}</span></div>
-          <div class="print-row"><span>📱 ${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.wallet_sales)}</span></div>
-          <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
-          <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
-          <div class="print-row"><span>💸 ${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span style="font-weight: bold; color: #b45309;">-${formatNumber(shift.expenses_amount || 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span>${formatNumber(shift.cash_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span>${formatNumber(shift.wallet_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span>${formatNumber(shift.card_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span>-${formatNumber(shift.returns_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span>-${formatNumber(shift.expenses_amount || 0)}</span></div>
           <hr/>
-          <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span>${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
+        </div>
+
+        <div class="print-section">
+          <div class="text-center section-title">${language === 'ar' ? 'المجاملات' : 'Complimentary'}</div>
+          <div class="print-row"><span>${language === 'ar' ? 'عدد فواتير المجاملات:' : 'Complimentary invoices:'}</span><span>${Number(complimentary?.count ?? 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'القيمة السوقية:' : 'Market value:'}</span><span>${formatNumber(Number(complimentary?.market_value ?? 0))}</span></div>
         </div>
 
           <div class="print-section">
-          <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
+          <div class="text-center section-title">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
           <div class="print-row"><span>${language === 'ar' ? 'النقدي المتوقع:' : 'Expected Cash:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
           <div class="print-row"><span>${language === 'ar' ? 'النقدي الموجود فعليًا:' : 'Cash Counted:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
           <hr/>
@@ -342,8 +400,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
 
         <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-            <div style="font-size: 9px;">${language === 'ar' ? 'توقيع الموظف:' : 'Employee Signature:'}</div>
-            <div style="font-size: 9px;">${language === 'ar' ? 'توقيع المدير:' : 'Manager Signature:'}</div>
+            <div style="font-size: 10px;">${language === 'ar' ? 'توقيع الموظف:' : 'Employee Signature:'}</div>
+            <div style="font-size: 10px;">${language === 'ar' ? 'توقيع المدير:' : 'Manager Signature:'}</div>
           </div>
           <div style="display: flex; justify-content: space-between;">
             <div style="border-bottom: 1px dotted #000; width: 70px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
@@ -351,7 +409,7 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           </div>
         </div>
 
-        <div style="text-align: center; margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; font-size: 8px;">
+        <div style="text-align: center; margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; font-size: 10px;">
           ${language === 'ar' ? 'شكراً لاستخدامكم نظام نقاط البيع' : 'Thank you for using POS System'}
           <div>${formatDateTime(now.toISOString())}</div>
         </div>
@@ -360,11 +418,15 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           <button onclick="window.print();return false;" style="padding: 8px 16px; margin: 3px; cursor: pointer;">🖨️ ${language === 'ar' ? 'طباعة' : 'Print'}</button>
           <button onclick="window.close();return false;" style="padding: 8px 16px; margin: 3px; cursor: pointer;">❌ ${language === 'ar' ? 'إغلاق' : 'Close'}</button>
         </div>
-        <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
+        <script>window.addEventListener('load', async function() { if (document.fonts && document.fonts.ready) await document.fonts.ready; setTimeout(() => window.print(), 800); }, { once: true });</script>
       </body>
       </html>
     `);
       printWindow.document.close();
+    } catch (error) {
+    console.error('Error preparing shift print report:', error);
+    printWindow.close();
+    toast.error(error instanceof Error ? error.message : (language === 'ar' ? 'تعذر تجهيز تقرير الطباعة' : 'Could not prepare the print report'));
     }
   };
 
@@ -386,6 +448,9 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       expectedAmount: 'Expected Cash',
       actualAmount: 'Cash Counted in Drawer',
       expenses: 'Shift Expenses',
+      complimentary: 'Complimentary',
+      complimentaryInvoices: 'Complimentary invoices',
+      complimentaryValue: 'Complimentary market value',
       nonCashSalesNote: 'Card and wallet sales are not included in the cash drawer total.',
       variance: 'Difference',
       surplus: 'Surplus',
@@ -441,6 +506,9 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
       expectedAmount: 'النقدي المتوقع',
       actualAmount: 'النقدي الموجود فعليًا في الدرج',
       expenses: 'مصروفات الوردية',
+      complimentary: 'المجاملات',
+      complimentaryInvoices: 'عدد فواتير المجاملات',
+      complimentaryValue: 'القيمة السوقية للمجاملات',
       nonCashSalesNote: 'مبيعات البطاقة والمحفظة لا تدخل ضمن النقدي الموجود في الدرج.',
       variance: 'الفرق',
       surplus: 'زيادة',
@@ -696,6 +764,45 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                 <div className="flex justify-between text-purple-600"><span>{t.walletsales}:</span><span>{formatAmount(currentShift.wallet_sales)}</span></div>
                 <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
                 <div className="flex justify-between text-amber-700"><span>- {t.expenses}:</span><span>- {formatAmount(currentShift.expenses_amount || 0)}</span></div>
+                <Separator />
+                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                  <div className="mb-2 flex items-center gap-2 font-medium text-purple-700">
+                    <Gift className="h-4 w-4" />
+                    <span>{t.complimentary}</span>
+                  </div>
+                  {isLoadingCloseShiftReport ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      {language === 'ar' ? 'جاري تحميل بيانات المجاملات...' : 'Loading complimentary details...'}
+                    </div>
+                  ) : isCloseShiftReportError ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
+                      <span>
+                        {closeShiftReportError instanceof Error
+                          ? closeShiftReportError.message
+                          : (language === 'ar' ? 'تعذر تحميل المجاملات' : 'Could not load complimentary details')}
+                      </span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => refetchCloseShiftReport()}>
+                        {t.retry}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span>{t.complimentaryInvoices}:</span>
+                        <span className="font-semibold">
+                          {Number(closeShiftReport?.summary?.complimentary?.count ?? 0)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex justify-between text-sm">
+                        <span>{t.complimentaryValue}:</span>
+                        <span className="font-semibold">
+                          {formatCurrency(Number(closeShiftReport?.summary?.complimentary?.market_value ?? 0))}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <Separator />
                 <div className="flex justify-between font-bold text-lg"><span>{t.expectedAmount}:</span><span className="text-primary">{formatAmount(displayExpectedAmount)}</span></div>
                 <p className="text-xs text-muted-foreground">{t.nonCashSalesNote}</p>

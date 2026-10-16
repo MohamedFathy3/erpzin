@@ -179,6 +179,12 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
 
   const expenses = expensesData?.data || [];
   const meta = expensesData?.meta || {};
+  const expenseTotals = expensesData?.totals || {
+    actual_amount: 0,
+    actual_count: 0,
+    tracking_only_amount: 0,
+    tracking_only_count: 0
+  };
 
   // Create mutation
   const createMutation = useMutation({
@@ -346,10 +352,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
     );
   };
 
-  const totalAmount = expenses.reduce(
-    (sum: number, expense: Expense) => sum + (expense.is_tracking_only ? 0 : Number(expense.amount)),
-    0
-  );
   const selectableExpenses = expenses.filter((expense: Expense) => !expense.is_automatic && !expense.is_tracking_only);
 
   return (
@@ -438,6 +440,46 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Expense totals for all filtered results, not only the current page */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card className="border-red-500/20 bg-gradient-to-br from-red-500/10 to-red-500/5">
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="rounded-lg bg-red-500/15 p-2">
+              <DollarSign className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'إجمالي المصروفات الفعلية' : 'Total Actual Expenses'}
+              </p>
+              <p className="text-xl font-bold text-red-600">
+                {formatCurrency(Number(expenseTotals.actual_amount))}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {Number(expenseTotals.actual_count || 0)} {language === 'ar' ? 'مصروف' : 'expenses'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-500/5">
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="rounded-lg bg-amber-500/15 p-2">
+              <Landmark className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'إجمالي سجلات التقرير فقط' : 'Total Tracking-Only Records'}
+              </p>
+              <p className="text-xl font-bold text-amber-600">
+                {formatCurrency(Number(expenseTotals.tracking_only_amount))}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {Number(expenseTotals.tracking_only_count || 0)} {language === 'ar' ? 'سجل' : 'records'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Table */}
       <Card>
@@ -533,7 +575,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
           {/* Pagination & Summary Footer */}
           <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-muted-foreground">
-              {language === 'ar' ? 'الإجمالي' : 'Total'}: <span className="font-bold text-red-600">{formatCurrency(totalAmount)}</span>
+              {language === 'ar' ? 'إجمالي المصروفات الفعلية' : 'Total Actual Expenses'}: <span className="font-bold text-red-600">{formatCurrency(Number(expenseTotals.actual_amount))}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button 

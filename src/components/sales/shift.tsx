@@ -56,6 +56,7 @@
     card_sales: string;
     wallet_sales: string;
     returns_amount: string;
+    expenses_amount: string | number;
     expected_amount: string | null;
     actual_amount: string | null;
     difference: string | null;
@@ -179,7 +180,8 @@
         shift.id?.toString(), shift.employee, shift.notes, shift.status,
         formatNumber(shift.opening_balance), formatNumber(shift.cash_sales),
         formatNumber(shift.card_sales), formatNumber(shift.wallet_sales),
-        formatNumber(shift.returns_amount), formatNumber(shift.expected_amount),
+        formatNumber(shift.returns_amount), formatNumber(shift.expenses_amount),
+        formatNumber(shift.expected_amount),
         formatNumber(shift.actual_amount), formatNumber(shift.difference),
         formatDateTime(shift.opened_at), formatDateTime(shift.closed_at),
         getShiftDuration(shift), formatTime(shift.opened_at), formatTime(shift.closed_at)
@@ -248,7 +250,7 @@
       const sorted = [...filteredShifts].sort((a: any, b: any) => {
         let aValue = a[sortField];
         let bValue = b[sortField];
-        if (['opening_balance', 'cash_sales', 'card_sales', 'wallet_sales', 'returns_amount', 'expected_amount', 'actual_amount', 'difference'].includes(sortField)) {
+        if (['opening_balance', 'cash_sales', 'card_sales', 'wallet_sales', 'returns_amount', 'expenses_amount', 'expected_amount', 'actual_amount', 'difference'].includes(sortField)) {
           aValue = parseFloat(aValue || '0');
           bValue = parseFloat(bValue || '0');
         }
@@ -271,10 +273,12 @@
       totalCardSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
       totalWalletSales: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.wallet_sales || '0'), 0),
       totalReturns: shifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.returns_amount || '0'), 0),
+      totalExpenses: shifts.reduce((sum: number, s: Shift) => sum + Number(s.expenses_amount || 0), 0),
       filteredTotalCashSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.cash_sales || '0'), 0),
       filteredTotalCardSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.card_sales || '0'), 0),
       filteredTotalWalletSales: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.wallet_sales || '0'), 0),
       filteredTotalReturns: filteredShifts.reduce((sum: number, s: Shift) => sum + parseFloat(s.returns_amount || '0'), 0),
+      filteredTotalExpenses: filteredShifts.reduce((sum: number, s: Shift) => sum + Number(s.expenses_amount || 0), 0),
     }), [shifts, filteredShifts]);
 
     useEffect(() => {
@@ -450,6 +454,8 @@
       totalCard: language === 'ar' ? 'إجمالي البطاقة' : 'Total Card',
       totalWallet: language === 'ar' ? 'إجمالي المحفظة' : 'Total Wallet',
       totalReturns: language === 'ar' ? 'إجمالي المرتجعات' : 'Total Returns',
+      totalExpenses: language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses',
+      expenses: language === 'ar' ? 'المصروفات' : 'Expenses',
       employee: language === 'ar' ? 'الموظف' : 'Employee',
       openedAt: language === 'ar' ? 'وقت الفتح' : 'Opened At',
       closedAt: language === 'ar' ? 'وقت الإغلاق' : 'Closed At',
@@ -502,6 +508,7 @@
       { value: 'wallet_sales', label: language === 'ar' ? 'مبيعات المحفظة' : 'Wallet Sales' },
       { value: 'card_sales', label: language === 'ar' ? 'مبيعات البطاقة' : 'Card Sales' },
       { value: 'returns_amount', label: language === 'ar' ? 'المرتجعات' : 'Returns' },
+      { value: 'expenses_amount', label: language === 'ar' ? 'المصروفات' : 'Expenses' },
       { value: 'difference', label: language === 'ar' ? 'الفرق' : 'Difference' },
     ];
 
@@ -532,7 +539,7 @@
         </div>
 
         {/* Stats Cards - 7 Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
           <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5">
             <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-blue-500/20"><Clock className="h-5 w-5 text-blue-600" /></div><div><p className="text-xs text-muted-foreground">{t.title}</p><p className="text-xl font-bold">{stats.totalShifts}</p></div></div></CardContent>
           </Card>
@@ -553,6 +560,9 @@
           </Card>
           <Card className="bg-gradient-to-br from-red-500/10 to-red-500/5">
             <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-red-500/20"><Receipt className="h-5 w-5 text-red-600" /></div><div><p className="text-xs text-muted-foreground">{t.totalReturns}</p><p className="text-xl font-bold text-red-600">{formatNumber(stats.totalReturns)}</p></div></div></CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-orange-500/10 to-orange-500/5">
+            <CardContent className="p-4"><div className="flex items-center gap-3"><div className="p-2 rounded-lg bg-orange-500/20"><Wallet className="h-5 w-5 text-orange-600" /></div><div><p className="text-xs text-muted-foreground">{t.totalExpenses}</p><p className="text-xl font-bold text-orange-600">{formatNumber(stats.totalExpenses)}</p></div></div></CardContent>
           </Card>
         </div>
 
@@ -647,6 +657,11 @@
                         <Receipt size={14} />{t.returns}{sortField === 'returns_amount' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </TableHead>
+                    <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'expenses_amount') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('expenses_amount'); setSortDirection('desc'); } }}>
+                      <div className="flex items-center justify-end gap-1 text-orange-600">
+                        <Wallet size={14} />{t.expenses}{sortField === 'expenses_amount' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
+                    </TableHead>
                     <TableHead className="text-right">{t.actual}</TableHead>
                     <TableHead className="text-right cursor-pointer" onClick={() => { if (sortField === 'difference') setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); else { setSortField('difference'); setSortDirection('desc'); } }}>
                       <div className="flex items-center justify-end gap-1">{t.difference}{sortField === 'difference' && (sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}</div>
@@ -672,6 +687,7 @@
                         <TableCell className="text-right text-purple-600">{formatNumber(shift.wallet_sales)}</TableCell>
                         <TableCell className="text-right text-blue-600">{formatNumber(shift.card_sales)}</TableCell>
                         <TableCell className="text-right text-red-600">-{formatNumber(shift.returns_amount)}</TableCell>
+                        <TableCell className="text-right text-orange-600">{formatNumber(shift.expenses_amount)}</TableCell>
                         <TableCell className="text-right">{formatNumber(shift.actual_amount)}</TableCell>
                         <TableCell className="text-right">{getDifferenceBadge(shift.difference)}</TableCell>
                         <TableCell>{getStatusBadge(shift.status)}</TableCell>
@@ -699,6 +715,7 @@
                     <div className="flex items-center gap-2"><Wallet size={14} className="text-purple-600" /><span className="text-muted-foreground">{t.walletSales}:</span><span className="font-medium text-purple-600">{formatNumber(stats.filteredTotalWalletSales)}</span></div>
                     <div className="flex items-center gap-2"><CreditCard size={14} className="text-blue-600" /><span className="text-muted-foreground">{t.cardSales}:</span><span className="font-medium text-blue-600">{formatNumber(stats.filteredTotalCardSales)}</span></div>
                     <div className="flex items-center gap-2"><Receipt size={14} className="text-red-600" /><span className="text-muted-foreground">{t.returns}:</span><span className="font-medium text-red-600">{formatNumber(stats.filteredTotalReturns)}</span></div>
+                    <div className="flex items-center gap-2"><Wallet size={14} className="text-orange-600" /><span className="text-muted-foreground">{t.expenses}:</span><span className="font-medium text-orange-600">{formatNumber(stats.filteredTotalExpenses)}</span></div>
                     <div className="flex items-center gap-2"><TrendingUp size={14} className="text-amber-600" /><span className="text-muted-foreground">{t.difference}:</span><span className="font-medium">{formatNumber(sortedAndFilteredShifts.reduce((sum, s) => sum + parseFloat(s.difference || '0'), 0))}</span></div>
                   </div>
                 </div>
@@ -790,7 +807,7 @@
               ) : shiftReport ? (
                 <Tabs defaultValue="summary" className="space-y-5">
                   {/* ========================= TABS NAV ========================= */}
-                  <TabsList className="grid w-full grid-cols-3 gap-1 sm:grid-cols-7">
+                  <TabsList className="grid w-full grid-cols-4 gap-1 sm:grid-cols-8">
                     <TabsTrigger value="summary" className="gap-1.5">
                       <Receipt className="h-4 w-4" />
                       {language === "ar" ? "الملخص" : "Summary"}
@@ -844,6 +861,16 @@
                       {Number(shiftReport.summary?.returns?.count ?? 0) > 0 && (
                         <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                           {shiftReport.summary.returns.count}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+
+                    <TabsTrigger value="expenses" className="gap-1.5">
+                      <Wallet className="h-4 w-4" />
+                      {language === "ar" ? "المصروفات" : "Expenses"}
+                      {Number(shiftReport.summary?.expenses?.count ?? 0) > 0 && (
+                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                          {shiftReport.summary.expenses.count}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -3188,7 +3215,68 @@
                     )}
                   </TabsContent>
 
-                  {/* ===================== TAB 7: RECONCILIATION ===================== */}
+                  {/* ===================== TAB 7: EXPENSES ===================== */}
+                  <TabsContent value="expenses" className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-base font-bold">
+                        {language === "ar" ? "مصروفات الوردية" : "Shift Expenses"}
+                      </h3>
+                      <Badge variant="secondary">
+                        {formatNumber(shiftReport.summary?.expenses?.count)}{" "}
+                        {language === "ar" ? "مصروف" : "expenses"}
+                      </Badge>
+                    </div>
+
+                    <Card className="rounded-xl border-amber-500/30 bg-amber-500/5 shadow-none">
+                      <CardContent className="p-4">
+                        <p className="text-sm text-muted-foreground">
+                          {language === "ar" ? "إجمالي مصروفات الوردية" : "Total shift expenses"}
+                        </p>
+                        <p className="mt-1 text-2xl font-bold text-amber-700">
+                          {formatNumber(shiftReport.summary?.expenses?.total_amount)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {Array.isArray(shiftReport.expenses) && shiftReport.expenses.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{language === "ar" ? "بيان المصروف" : "Description"}</TableHead>
+                              <TableHead>{language === "ar" ? "المبلغ" : "Amount"}</TableHead>
+                              <TableHead>{language === "ar" ? "التاريخ" : "Date"}</TableHead>
+                              <TableHead>{language === "ar" ? "طريقة الدفع" : "Payment method"}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {shiftReport.expenses.map((expense: any) => (
+                              <TableRow key={expense.id}>
+                                <TableCell className="font-medium">
+                                  {expense.description || (language === "ar" ? "مصروف بدون بيان" : "Expense")}
+                                </TableCell>
+                                <TableCell className="font-semibold text-amber-700">
+                                  {formatNumber(expense.amount)}
+                                </TableCell>
+                                <TableCell>{expense.date || "-"}</TableCell>
+                                <TableCell>
+                                  {language === "ar" && expense.payment_method === "cash"
+                                    ? "نقدي"
+                                    : expense.payment_method || "-"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed py-6 text-center text-sm text-muted-foreground">
+                        {language === "ar" ? "لا توجد مصروفات مسجلة على هذه الوردية" : "No expenses recorded for this shift"}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  {/* ===================== TAB 8: RECONCILIATION ===================== */}
                   <TabsContent value="reconciliation" className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-base font-bold">
@@ -3238,6 +3326,11 @@
                           {
                             label: language === "ar" ? "المرتجعات النقدية" : "Cash Returns",
                             value: shiftReport.reconciliation?.cash_returns,
+                            negative: true,
+                          },
+                          {
+                            label: language === "ar" ? "مصروفات الوردية" : "Shift Expenses",
+                            value: shiftReport.reconciliation?.expenses,
                             negative: true,
                           },
                           {
