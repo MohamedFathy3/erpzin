@@ -55,6 +55,8 @@
     cash_sales: string;
     card_sales: string;
     wallet_sales: string;
+    accessories_sales?: string | number;
+    services_sales?: string | number;
     returns_amount: string;
     expenses_amount: string | number;
     expected_amount: string | null;
@@ -558,6 +560,8 @@
           <section class="print-section summary">
             <div class="print-row"><span>${language === 'ar' ? 'عدد الفواتير:' : 'Invoices:'}</span><span>${Number(sales.invoices_count ?? invoices.length)}</span></div>
             <div class="print-row"><span>${language === 'ar' ? 'إجمالي المبيعات:' : 'Gross Sales:'}</span><span>${formatNumber(sales.gross_sales ?? 0)}</span></div>
+            <div class="print-row"><span>${language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory Sales:'}</span><span>${formatNumber(sales.accessories_sales ?? sales.by_type?.accessories ?? 0)}</span></div>
+            <div class="print-row"><span>${language === 'ar' ? 'مبيعات الخدمات:' : 'Service Sales:'}</span><span>${formatNumber(sales.services_sales ?? sales.by_type?.services ?? 0)}</span></div>
             <div class="print-row"><span>${language === 'ar' ? 'بند الزيادات بالفواتير:' : 'Invoice Increases:'}</span><span>${formatNumber(sales.extra_charge_total ?? 0)}</span></div>
             <div class="print-row"><strong>${language === 'ar' ? 'إجمالي المبيعات شامل الزيادات:' : 'Total Sales Including Increases:'}</strong><strong>${formatNumber(sales.sales_including_extra_charge ?? (Number(sales.gross_sales || 0) + Number(sales.extra_charge_total || 0)))}</strong></div>
             <div class="print-row"><span>${language === 'ar' ? 'التكلفة:' : 'Cost:'}</span><span>${formatNumber(sales.total_cost ?? 0)}</span></div>
@@ -1065,6 +1069,36 @@
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="relative overflow-hidden rounded-xl border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 shadow-none">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 text-xs font-medium text-indigo-700">
+                              <Package className="h-4 w-4" />
+                              {language === "ar" ? "مبيعات الإكسسوارات" : "Accessory Sales"}
+                            </div>
+                            <p className="mt-3 text-2xl font-bold text-indigo-600">
+                              {formatNumber(shiftReport.summary?.sales?.accessories_sales ?? shiftReport.summary?.sales?.by_type?.accessories)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {language === "ar" ? "إجمالي بنود المنتجات" : "Total product items"}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="relative overflow-hidden rounded-xl border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 shadow-none">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 text-xs font-medium text-cyan-700">
+                              <Wrench className="h-4 w-4" />
+                              {language === "ar" ? "مبيعات الخدمات" : "Service Sales"}
+                            </div>
+                            <p className="mt-3 text-2xl font-bold text-cyan-700">
+                              {formatNumber(shiftReport.summary?.sales?.services_sales ?? shiftReport.summary?.sales?.by_type?.services)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {language === "ar" ? "إجمالي بنود الخدمات" : "Total service items"}
                             </p>
                           </CardContent>
                         </Card>

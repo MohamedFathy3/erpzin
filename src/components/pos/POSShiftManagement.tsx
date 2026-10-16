@@ -45,6 +45,8 @@ export interface POSShift {
   cash_sales: string;
   card_sales: string;
   wallet_sales: string;
+  accessories_sales?: string | number;
+  services_sales?: string | number;
   returns_amount: string;
   expenses_amount?: string | number;
   expected_amount: string | null;
@@ -391,8 +393,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           <div class="print-row"><span>${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span class="sales-amount">${formatNumber(shift.cash_sales)}</span></div>
           <div class="print-row"><span>${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span class="sales-amount">${formatNumber(shift.wallet_sales)}</span></div>
           <div class="print-row"><span>${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span class="sales-amount">${formatNumber(shift.card_sales)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory Sales:'}</span><span class="sales-amount">${formatNumber(report?.summary?.sales?.by_type?.accessories ?? 0)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'مبيعات الخدمات:' : 'Service Sales:'}</span><span class="sales-amount">${formatNumber(report?.summary?.sales?.by_type?.services ?? 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory Sales:'}</span><span class="sales-amount">${formatNumber(report?.summary?.sales?.accessories_sales ?? report?.summary?.sales?.by_type?.accessories ?? shift.accessories_sales ?? 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات الخدمات:' : 'Service Sales:'}</span><span class="sales-amount">${formatNumber(report?.summary?.sales?.services_sales ?? report?.summary?.sales?.by_type?.services ?? shift.services_sales ?? 0)}</span></div>
           <div style="font-size: 9px; color: #64748b; margin-bottom: 4px;">${language === 'ar' ? 'الإجماليات حسب نوع البند قبل المرتجعات؛ المرتجعات موضحة منفصلة.' : 'Item-type sales are before returns; returns are shown separately.'}</div>
           <div class="print-row"><span>${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span class="return-amount">-${formatNumber(shift.returns_amount)}</span></div>
           <div class="print-row"><span>${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span class="expense-amount">-${formatNumber(shift.expenses_amount || 0)}</span></div>
@@ -787,8 +789,8 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                 <div className="flex justify-between text-emerald-600"><span>+ {t.cashSales}:</span><span>+ {formatAmount(currentShift.cash_sales)}</span></div>
                 <div className="flex justify-between text-blue-600"><span>{t.cardSales}:</span><span>{formatAmount(currentShift.card_sales)}</span></div>
                 <div className="flex justify-between text-purple-600"><span>{t.walletsales}:</span><span>{formatAmount(currentShift.wallet_sales)}</span></div>
-                <div className="flex justify-between text-indigo-600"><span>{language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.by_type?.accessories ?? 0))}</span></div>
-                <div className="flex justify-between text-cyan-700"><span>{language === 'ar' ? 'مبيعات الخدمات:' : 'Service sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.by_type?.services ?? 0))}</span></div>
+                <div className="flex justify-between text-indigo-600"><span>{language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.accessories_sales ?? currentShift.accessories_sales ?? closeShiftReport?.summary?.sales?.by_type?.accessories ?? 0))}</span></div>
+                <div className="flex justify-between text-cyan-700"><span>{language === 'ar' ? 'مبيعات الخدمات:' : 'Service sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.services_sales ?? currentShift.services_sales ?? closeShiftReport?.summary?.sales?.by_type?.services ?? 0))}</span></div>
                 <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجماليات حسب نوع البند قبل المرتجعات؛ المرتجعات معروضة بشكل مستقل.' : 'Item-type sales are before returns; returns are shown separately.'}</p>
                 <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
                 <div className="flex justify-between text-amber-700"><span>- {t.expenses}:</span><span>- {formatAmount(currentShift.expenses_amount || 0)}</span></div>
