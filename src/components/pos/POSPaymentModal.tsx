@@ -16,6 +16,7 @@ import { Button } from '../ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import api from '@/lib/api';
 
 type PaymentMethodType = 'cash' | 'card' | 'wallet' | 'split';
 
@@ -131,6 +132,9 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
     wallet: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [technicians, setTechnicians] = useState<Array<{ id: number; name: string; name_ar?: string | null }>>([]);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
+  const [techniciansLoading, setTechniciansLoading] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [completedInvoice, setCompletedInvoice] = useState<any>(null);
@@ -155,6 +159,48 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   };
   const defaultTax = activeTaxRates?.find(t => t.default === true) || activeTaxRates?.[0];
   const amountDue = isComplimentary ? 0 : total;
+  const hasServiceItems = cartItems.some(item => item.itemType === 'service' || Boolean(item.automotive_service_id));
+
+  useEffect(() => {
+    if (!isOpen || !hasServiceItems) {
+      if (!hasServiceItems) setSelectedTechnicianId('');
+      return;
+    }
+    const cacheKey = `pos-technicians:${String((user as any)?.tenant_id || user?.id || 'default')}`;
+    if (isOffline) {
+      try {
+        const cachedTechnicians = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+        setTechnicians(Array.isArray(cachedTechnicians) ? cachedTechnicians : []);
+      } catch {
+        setTechnicians([]);
+      }
+      setTechniciansLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTechniciansLoading(true);
+    api.post('/employee/index', { filters: {}, orderBy: 'name', orderByDirection: 'asc', perPage: 500, paginate: false })
+      .then(response => {
+        const rows = response.data?.data;
+        const employees = Array.isArray(rows) ? rows : (Array.isArray(rows?.data) ? rows.data : []);
+        const activeTechnicians = employees.filter((employee: any) =>
+          String(employee.role || employee.role?.name || '').trim().toLowerCase() === 'technician' && employee.is_active !== false
+        );
+        if (!cancelled) {
+          setTechnicians(activeTechnicians);
+          localStorage.setItem(cacheKey, JSON.stringify(activeTechnicians));
+          setSelectedTechnicianId(current => activeTechnicians.some((employee: any) => String(employee.id) === current) ? current : '');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTechnicians([]);
+          toast({ title: language === 'ar' ? 'تعذر تحميل الفنيين' : 'Could not load technicians', variant: 'destructive' });
+        }
+      })
+      .finally(() => { if (!cancelled) setTechniciansLoading(false); });
+    return () => { cancelled = true; };
+  }, [isOpen, hasServiceItems, language, isOffline, user]);
 
   const handlePrint = useReactToPrint({
     contentRef: invoiceRef,
@@ -219,6 +265,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const canComplete = () => {
+    if (hasServiceItems && !selectedTechnicianId) return false;
     if (isComplimentary) {
       return !!customer?.id && Number.isSafeInteger(Number(customer.id)) && Number(customer.id) > 0 && !!customer.name?.trim();
     }
@@ -257,6 +304,14 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   const handleSaveAndPrint = async (type: 'save' | 'print' | 'both') => {
+    if (hasServiceItems && !selectedTechnicianId) {
+      toast({
+        title: language === 'ar' ? 'اختر الفني أولاً' : 'Select a technician first',
+        description: language === 'ar' ? 'فواتير الخدمات تتطلب اختيار فني.' : 'Service invoices require a technician.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (isComplimentary && (!customer?.id || !Number.isSafeInteger(Number(customer.id)) || !customer.name?.trim())) {
       toast({
         title: language === 'ar' ? 'اختر العميل أولاً' : 'Select a customer first',
@@ -295,6 +350,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       const invoiceData = {
         customer_id: customer ? parseInt(String(customer.id), 10) || null : null,
         sales_representative_id: salesRepresentative ? parseInt(String(salesRepresentative.id)) : null,
+        technician_id: hasServiceItems ? Number(selectedTechnicianId) : null,
         items: cartItems.map(item => {
           // ✅ تحديد نوع البند
           const isService = item.itemType === 'service' || Boolean(item.automotive_service_id);
@@ -366,7 +422,8 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
           discount_percentage: invoiceDiscountToSave,
           extra_charge: isComplimentary ? 0 : extraCharge,
           is_complimentary: isComplimentary,
-          sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null
+          sales_representative_id: salesRepresentative ? Number(salesRepresentative.id) : null,
+          technician_id: hasServiceItems ? Number(selectedTechnicianId) : null,
         });
 
         if (offlineId) {
@@ -420,6 +477,7 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
       }
 
       if (success) {
+        const selectedTechnician = technicians.find(technician => String(technician.id) === selectedTechnicianId);
         const printData = {
           id: String(invoiceId),
           invoice_number: invoiceNumberFromServer,  // ✅ استخدام رقم الفاتورة من السيرفر
@@ -441,6 +499,10 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
             name: salesRepresentative.name,
             nameAr: salesRepresentative.name,
             commission_rate: salesRepresentative.commission_rate
+          } : null,
+          technician: selectedTechnician ? {
+            name: selectedTechnician.name,
+            nameAr: selectedTechnician.name_ar || selectedTechnician.name,
           } : null,
           extraCharge: isComplimentary ? 0 : extraCharge,
           deliveryPerson: deliveryPerson ? {
@@ -691,6 +753,38 @@ const POSPaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div className="p-6">
+          {hasServiceItems && (
+            <div className="mb-5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+              <label htmlFor="pos-service-technician" className="mb-2 block text-sm font-semibold text-foreground">
+                {language === 'ar' ? 'الفني المسؤول عن الخدمة' : 'Service technician'}
+                <span className="ms-1 text-destructive">*</span>
+              </label>
+              <select
+                id="pos-service-technician"
+                value={selectedTechnicianId}
+                onChange={event => setSelectedTechnicianId(event.target.value)}
+                disabled={techniciansLoading || technicians.length === 0}
+                className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+                required
+              >
+                <option value="">
+                  {techniciansLoading
+                    ? (language === 'ar' ? 'جاري تحميل الفنيين...' : 'Loading technicians...')
+                    : (language === 'ar' ? 'اختر فنيًا' : 'Choose a technician')}
+                </option>
+                {technicians.map(technician => (
+                  <option key={technician.id} value={technician.id}>
+                    {language === 'ar' ? (technician.name_ar || technician.name) : technician.name}
+                  </option>
+                ))}
+              </select>
+              {!techniciansLoading && technicians.length === 0 && (
+                <p className="mt-2 text-xs text-destructive">
+                  {language === 'ar' ? 'لا يوجد موظفون بدور فني (technician).' : 'No employees with the technician role were found.'}
+                </p>
+              )}
+            </div>
+          )}
           {(customer || deliveryPerson) && (
             <div className="flex gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
               {customer && (

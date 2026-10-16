@@ -466,6 +466,7 @@ const POS: React.FC = () => {
               extra_charge: order.extra_charge || 0,
               is_complimentary: order.is_complimentary || false,
               sales_representative_id: order.sales_representative_id || null,
+              technician_id: order.technician_id || null,
               payments: order.payments || [],
               subtotal: order.subtotal,
               tax: order.tax,

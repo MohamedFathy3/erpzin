@@ -48,6 +48,7 @@ export interface OfflineOrder {
   extra_charge?: number;
   is_complimentary?: boolean;
   sales_representative_id?: number | null;
+  technician_id?: number | null;
   invoice_number?: string;
   created_at: number;
   synced: boolean;

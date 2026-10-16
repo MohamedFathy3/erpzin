@@ -28,6 +28,7 @@ interface InvoiceTemplateProps {
     customer?: { name: string; nameAr?: string; phone?: string } | null;
     cashierName?: string;
     salesRep?: { name: string; nameAr?: string } | null;
+    technician?: { name: string; nameAr?: string } | null;
     branchName?: string;
     branchNameAr?: string;
     branchPhone?: string;
@@ -118,6 +119,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       customer: invoiceData.customer || null,
       cashierName: invoiceData.cashierName || '---',
       salesRep: invoiceData.salesRep || null,
+      technician: invoiceData.technician || null,
       branchName: invoiceData.branchName,
       branchNameAr: invoiceData.branchNameAr,
       branchPhone: invoiceData.branchPhone,
@@ -146,6 +148,7 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
       customer: isRTL ? 'العميل' : 'Customer',
       cashier: isRTL ? 'الكاشير' : 'Cashier',
       salesRep: isRTL ? 'مندوب المبيعات' : 'Sales Representative',
+      technician: isRTL ? 'الفني' : 'Technician',
       branch: isRTL ? 'الفرع' : 'Branch',
       phone: isRTL ? 'تليفون' : 'Phone',
       address: isRTL ? 'العنوان' : 'Address',
@@ -294,6 +297,12 @@ const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <div>
                 <span className="font-bold">{texts.salesRep}:</span>
                 <span className="ml-1">{isRTL ? (safeInvoiceData.salesRep.nameAr || safeInvoiceData.salesRep.name) : safeInvoiceData.salesRep.name}</span>
+              </div>
+            )}
+            {safeInvoiceData.technician?.name && (
+              <div>
+                <span className="font-bold">{texts.technician}:</span>
+                <span className="ml-1">{isRTL ? (safeInvoiceData.technician.nameAr || safeInvoiceData.technician.name) : safeInvoiceData.technician.name}</span>
               </div>
             )}
           </div>
