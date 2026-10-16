@@ -305,7 +305,22 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             staleTime: 30_000
           });
       const complimentary = report?.summary?.complimentary;
-      const diffNum = parseFloat(shift.difference || '0');
+      const shiftExpected = shift.expected_amount !== null && shift.expected_amount !== undefined
+        ? parseFloat(String(shift.expected_amount)) || 0
+        : Math.round((
+            (parseFloat(shift.opening_balance || '0') || 0) +
+            (parseFloat(shift.cash_sales || '0') || 0) -
+            (parseFloat(shift.returns_amount || '0') || 0) -
+            (parseFloat(String(shift.expenses_amount || '0')) || 0)
+          ) * 100) / 100;
+      const shiftActual = shift.actual_amount !== null && shift.actual_amount !== undefined
+        ? parseFloat(String(shift.actual_amount)) || 0
+        : shift.closing_balance !== null && shift.closing_balance !== undefined
+          ? parseFloat(String(shift.closing_balance)) || 0
+          : null;
+      const diffNum = shiftActual !== null
+        ? Math.round((shiftActual - shiftExpected) * 100) / 100
+        : parseFloat(shift.difference || '0') || 0;
       const now = new Date();
 
       printWindow.document.write(`
@@ -325,25 +340,30 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             max-width: 76mm;
             margin: 0 auto;
             padding: 1mm;
-            background: white;
-            color: #000;
+            background: #fff;
+            color: #172033;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
           @media print {
             html, body { width: 100%; height: auto; }
-            body { margin: 0; padding: 0; color: #000 !important; }
+            body { margin: 0; padding: 0; color: #172033 !important; }
             .no-print { display: none; }
             .print-section, .print-header { break-inside: avoid; page-break-inside: avoid; }
           }
-          .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed #000; }
-          .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dashed #000; }
+          .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid #2563eb; color: #1d4ed8; }
+          .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dashed #94a3b8; }
           .print-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; break-inside: avoid; }
           .print-label { font-weight: 700; }
           .print-value { font-family: monospace; }
-          hr { margin: 5px 0; border: none; border-top: 1px dashed #000; }
+          hr { margin: 5px 0; border: none; border-top: 1px dashed #94a3b8; }
           .text-center { text-align: center; }
-          .section-title { font-weight: 700; margin-bottom: 5px; padding: 2px; border-bottom: 1px solid #000; }
+          .section-title { font-weight: 700; margin-bottom: 5px; padding: 3px; border-bottom: 1px solid #93c5fd; background: #eff6ff; color: #1d4ed8; }
+          .sales-amount { color: #047857; font-weight: 700; }
+          .return-amount { color: #dc2626; font-weight: 700; }
+          .expense-amount { color: #b45309; font-weight: 700; }
+          .complimentary-amount { color: #7e22ce; font-weight: 700; }
+          .settlement-amount { color: #1d4ed8; font-weight: 700; }
         </style>
       </head>
       <body>
@@ -368,27 +388,29 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
           <div class="text-center section-title">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
           <div class="print-row"><span>${language === 'ar' ? 'رصيد البداية:' : 'Opening Balance:'}</span><span>${formatNumber(shift.opening_balance)}</span></div>
           <hr/>
-          <div class="print-row"><span>${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span>${formatNumber(shift.cash_sales)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span>${formatNumber(shift.wallet_sales)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span>${formatNumber(shift.card_sales)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span>-${formatNumber(shift.returns_amount)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span>-${formatNumber(shift.expenses_amount || 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span class="sales-amount">${formatNumber(shift.cash_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span class="sales-amount">${formatNumber(shift.wallet_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span class="sales-amount">${formatNumber(shift.card_sales)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span class="return-amount">-${formatNumber(shift.returns_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'مصروفات اليوم:' : 'Daily Expenses:'}</span><span class="expense-amount">-${formatNumber(shift.expenses_amount || 0)}</span></div>
           <hr/>
-          <div class="print-row"><span>${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span>${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'صافي التحصيلات بعد المرتجعات:' : 'Net Collections After Returns:'}</span><span>${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'بند الزيادات بالفواتير:' : 'Invoice Increases:'}</span><span>${formatNumber(report?.summary?.sales?.extra_charge_total ?? 0)}</span></div>
+          <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'إجمالي المبيعات شامل الزيادات:' : 'Total Sales Including Increases:'}</span><span style="font-weight: bold;">${formatNumber(report?.summary?.sales?.sales_including_extra_charge ?? ((Number(report?.summary?.sales?.gross_sales) || 0) + (Number(report?.summary?.sales?.extra_charge_total) || 0)))}</span></div>
         </div>
 
         <div class="print-section">
           <div class="text-center section-title">${language === 'ar' ? 'المجاملات' : 'Complimentary'}</div>
-          <div class="print-row"><span>${language === 'ar' ? 'عدد فواتير المجاملات:' : 'Complimentary invoices:'}</span><span>${Number(complimentary?.count ?? 0)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'القيمة السوقية:' : 'Market value:'}</span><span>${formatNumber(Number(complimentary?.market_value ?? 0))}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'عدد فواتير المجاملات:' : 'Complimentary invoices:'}</span><span class="complimentary-amount">${Number(complimentary?.count ?? 0)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'القيمة السوقية:' : 'Market value:'}</span><span class="complimentary-amount">${formatNumber(Number(complimentary?.market_value ?? 0))}</span></div>
         </div>
 
           <div class="print-section">
           <div class="text-center section-title">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
-          <div class="print-row"><span>${language === 'ar' ? 'النقدي المتوقع:' : 'Expected Cash:'}</span><span>${formatNumber(shift.expected_amount)}</span></div>
-          <div class="print-row"><span>${language === 'ar' ? 'النقدي الموجود فعليًا:' : 'Cash Counted:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'النقدي المتوقع:' : 'Expected Cash:'}</span><span class="settlement-amount">${formatNumber(shiftExpected)}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'النقدي الموجود فعليًا:' : 'Cash Counted:'}</span><span>${formatNumber(shiftActual)}</span></div>
           <hr/>
-          <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'الفرق:' : 'Difference:'}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(shift.difference)}</span></div>
+          <div class="print-row"><span style="font-weight: bold;">${diffNum > 0 ? (language === 'ar' ? 'الزيادة:' : 'Surplus:') : diffNum < 0 ? (language === 'ar' ? 'النقص:' : 'Shortage:') : (language === 'ar' ? 'الفرق:' : 'Difference:')}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(Math.abs(diffNum))}</span></div>
         </div>
 
         ${shift.notes ? `
@@ -764,6 +786,9 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
                 <div className="flex justify-between text-purple-600"><span>{t.walletsales}:</span><span>{formatAmount(currentShift.wallet_sales)}</span></div>
                 <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
                 <div className="flex justify-between text-amber-700"><span>- {t.expenses}:</span><span>- {formatAmount(currentShift.expenses_amount || 0)}</span></div>
+                <div className="flex justify-between text-indigo-600"><span>{language === 'ar' ? 'بند الزيادات بالفواتير:' : 'Invoice Increases:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.extra_charge_total ?? 0))}</span></div>
+                <div className="flex justify-between font-semibold text-indigo-700"><span>{language === 'ar' ? 'إجمالي المبيعات شامل الزيادات:' : 'Total Sales Including Increases:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.sales_including_extra_charge ?? 0))}</span></div>
+                <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الزيادات معروضة ضمن إجمالي المبيعات ولا تدخل في حساب النقدي المتوقع.' : 'Increases are included in reported sales, not in expected cash.'}</p>
                 <Separator />
                 <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
                   <div className="mb-2 flex items-center gap-2 font-medium text-purple-700">

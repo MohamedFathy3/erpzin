@@ -339,7 +339,22 @@
     const printShift = (shift: Shift) => {
       const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
       if (printWindow) {
-        const diffNum = parseFloat(shift.difference || '0');
+        const expectedAmount = shift.expected_amount !== null && shift.expected_amount !== undefined
+          ? parseFloat(String(shift.expected_amount)) || 0
+          : Math.round((
+              (parseFloat(shift.opening_balance || '0') || 0) +
+              (parseFloat(shift.cash_sales || '0') || 0) -
+              (parseFloat(shift.returns_amount || '0') || 0) -
+              (parseFloat(String(shift.expenses_amount || '0')) || 0)
+            ) * 100) / 100;
+        const actualAmount = shift.actual_amount !== null && shift.actual_amount !== undefined
+          ? parseFloat(String(shift.actual_amount)) || 0
+          : shift.closing_balance !== null && shift.closing_balance !== undefined
+            ? parseFloat(String(shift.closing_balance)) || 0
+            : null;
+        const diffNum = actualAmount !== null
+          ? Math.round((actualAmount - expectedAmount) * 100) / 100
+          : parseFloat(shift.difference || '0') || 0;
         const now = new Date();
 
         printWindow.document.write(`
@@ -350,25 +365,36 @@
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body {
-                font-family: 'Courier New', 'Traditional Arabic', monospace;
-                font-size: 12px;
-                width: 80mm;
+                font-family: Tahoma, Arial, sans-serif;
+                font-size: 13px;
+                font-weight: 600;
+                line-height: 1.45;
+                width: 100%;
+                max-width: 76mm;
                 margin: 0 auto;
-                padding: 3mm;
+                padding: 1mm;
                 background: white;
-                color: black;
+                color: #172033;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
               }
+              @page { size: 80mm auto; margin: 2mm; }
               @media print {
-                body { margin: 0; padding: 2mm; }
+                html, body { width: 100%; height: auto; }
+                body { margin: 0; padding: 0; color: #172033 !important; }
                 .no-print { display: none; }
+                .print-section, .print-header { break-inside: avoid; page-break-inside: avoid; }
               }
-              .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px dashed #000; }
-              .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dotted #ccc; }
-              .print-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+              .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid #2563eb; color: #1d4ed8; }
+              .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dashed #94a3b8; }
+              .print-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
               .print-label { font-weight: bold; }
               .print-value { font-family: monospace; }
-              hr { margin: 4px 0; border: none; border-top: 1px dotted #ccc; }
+              hr { margin: 5px 0; border: none; border-top: 1px dashed #94a3b8; }
               .text-center { text-align: center; }
+              .section-title { font-weight: 700; margin-bottom: 5px; padding: 3px; border-bottom: 1px solid #93c5fd; background: #eff6ff; color: #1d4ed8; }
+              .sales-amount { color: #047857; font-weight: 700; }
+              .return-amount { color: #dc2626; font-weight: 700; }
             </style>
           </head>
           <body>
@@ -391,22 +417,23 @@
             </div>
 
             <div class="print-section">
-              <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
+              <div class="text-center section-title">${language === 'ar' ? 'المبيعات' : 'Sales'}</div>
               <div class="print-row"><span>${language === 'ar' ? 'رصيد البداية:' : 'Opening Balance:'}</span><span>${formatNumber(shift.opening_balance)}</span></div>
               <hr/>
-              <div class="print-row"><span>💰 ${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.cash_sales)}</span></div>
-              <div class="print-row"><span>📱 ${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.wallet_sales)}</span></div>
-              <div class="print-row"><span>💳 ${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span style="font-weight: bold;">${formatNumber(shift.card_sales)}</span></div>
-              <div class="print-row"><span>↩️ ${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span style="font-weight: bold; color: #dc2626;">-${formatNumber(shift.returns_amount)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'مبيعات نقدي:' : 'Cash Sales:'}</span><span class="sales-amount">${formatNumber(shift.cash_sales)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'مبيعات محفظة:' : 'Wallet Sales:'}</span><span class="sales-amount">${formatNumber(shift.wallet_sales)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'مبيعات بطاقة:' : 'Card Sales:'}</span><span class="sales-amount">${formatNumber(shift.card_sales)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'المرتجعات:' : 'Returns:'}</span><span class="return-amount">-${formatNumber(shift.returns_amount)}</span></div>
               <hr/>
               <div class="print-row"><span style="font-weight: bold;">📦 ${language === 'ar' ? 'إجمالي المبيعات:' : 'Total Sales:'}</span><span style="font-weight: bold;">${formatNumber(parseFloat(shift.cash_sales || '0') + parseFloat(shift.wallet_sales || '0') + parseFloat(shift.card_sales || '0') - parseFloat(shift.returns_amount || '0'))}</span></div>
             </div>
 
             <div class="print-section">
               <div class="text-center" style="font-weight: bold; margin-bottom: 5px; background: #f0f0f0; padding: 2px;">${language === 'ar' ? 'التسوية' : 'Settlement'}</div>
-              <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(shift.actual_amount)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'المبلغ الفعلي:' : 'Actual Amount:'}</span><span>${formatNumber(actualAmount)}</span></div>
+              <div class="print-row"><span>${language === 'ar' ? 'المبلغ المتوقع:' : 'Expected Amount:'}</span><span>${formatNumber(expectedAmount)}</span></div>
               <hr/>
-              <div class="print-row"><span style="font-weight: bold;">${language === 'ar' ? 'الفرق:' : 'Difference:'}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(shift.difference)}</span></div>
+              <div class="print-row"><span style="font-weight: bold;">${diffNum > 0 ? (language === 'ar' ? 'الزيادة:' : 'Surplus:') : diffNum < 0 ? (language === 'ar' ? 'النقص:' : 'Shortage:') : (language === 'ar' ? 'الفرق:' : 'Difference:')}</span><span style="font-weight: bold; color: ${diffNum > 0 ? '#2d6a4f' : diffNum < 0 ? '#d62828' : '#333'};">${formatNumber(Math.abs(diffNum))}</span></div>
             </div>
 
             ${shift.notes ? `
@@ -442,6 +469,110 @@
         `);
         printWindow.document.close();
       }
+    };
+
+    const printShiftSales = (report: any) => {
+      const printWindow = window.open('', '_blank', 'width=450,height=650,scrollbars=yes');
+      if (!printWindow) {
+        console.error('Could not open the shift sales print window.');
+        return;
+      }
+
+      const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[character] || character);
+      const invoices = Array.isArray(report.sales_invoices) ? report.sales_invoices : [];
+      const sales = report.summary?.sales || {};
+      const now = new Date();
+      const invoiceSections = invoices.map((invoice: any) => `
+        <section class="print-section">
+          <div class="section-title">${language === 'ar' ? 'فاتورة' : 'Invoice'} #${escapeHtml(invoice.invoice_number || invoice.id)}</div>
+          <div class="print-row"><span>${language === 'ar' ? 'العميل:' : 'Customer:'}</span><span>${escapeHtml(invoice.customer || (language === 'ar' ? 'عميل نقدي' : 'Walk-in Customer'))}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'التاريخ:' : 'Date:'}</span><span>${escapeHtml(invoice.date || '-')}</span></div>
+          <div class="print-row"><span>${language === 'ar' ? 'عدد البنود:' : 'Items:'}</span><span>${Number(invoice.items_count ?? invoice.items?.length ?? 0)}</span></div>
+          ${(invoice.items || []).map((item: any) => `
+            <div class="item-row">
+              <span>${escapeHtml(item.product_name || item.name || (language === 'ar' ? 'صنف' : 'Item'))} × ${escapeHtml(item.quantity ?? 0)}</span>
+              <span>${formatNumber(item.selling_total ?? item.total ?? item.price ?? 0)}</span>
+            </div>
+          `).join('')}
+          ${Number(invoice.extra_charge ?? 0) > 0 ? `<div class="print-row"><span>${language === 'ar' ? 'بند الزيادات:' : 'Invoice Increases:'}</span><span>${formatNumber(invoice.extra_charge)}</span></div>` : ''}
+          <div class="print-row invoice-total"><span>${language === 'ar' ? 'إجمالي الفاتورة:' : 'Invoice Total:'}</span><span>${formatNumber(invoice.sales_including_extra_charge ?? (Number(invoice.total_sales || 0) + Number(invoice.extra_charge || 0)))}</span></div>
+          ${(invoice.payments || []).map((payment: any) => `
+            <div class="print-row payment-row"><span>${escapeHtml(payment.method_arabic || payment.method || (language === 'ar' ? 'الدفع' : 'Payment'))}</span><span>${formatNumber(payment.amount)}</span></div>
+          `).join('')}
+        </section>
+      `).join('');
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html dir="${language === 'ar' ? 'rtl' : 'ltr'}">
+        <head>
+          <meta charset="utf-8">
+          <title>${language === 'ar' ? 'مبيعات الوردية #' : 'Shift Sales #'}${escapeHtml(report.shift?.id || selectedShift?.id)}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            @page { size: 80mm auto; margin: 2mm; }
+            body {
+              font-family: Tahoma, Arial, sans-serif;
+              font-size: 13px;
+              font-weight: 600;
+              line-height: 1.45;
+              width: 100%;
+              max-width: 76mm;
+              margin: 0 auto;
+              padding: 1mm;
+              color: #172033;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @media print {
+              html, body { width: 100%; height: auto; }
+              body { margin: 0; padding: 0; }
+              .no-print { display: none; }
+              .print-header, .print-section { break-inside: avoid; page-break-inside: avoid; }
+            }
+            .print-header { text-align: center; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid #2563eb; color: #1d4ed8; }
+            .print-section { margin-bottom: 8px; padding: 4px 0; border-bottom: 1px dashed #94a3b8; }
+            .section-title { margin-bottom: 5px; padding: 3px; border-bottom: 1px solid #93c5fd; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+            .print-row, .item-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+            .item-row { padding-inline-start: 8px; color: #475569; font-size: 12px; }
+            .invoice-total { margin-top: 5px; color: #047857; font-weight: 700; }
+            .payment-row { color: #1d4ed8; font-size: 12px; }
+            .summary { border: 1px solid #bfdbfe; border-radius: 4px; padding: 6px; background: #eff6ff; }
+            .no-print { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px; text-align: center; background: #fff; }
+          </style>
+        </head>
+        <body>
+          <header class="print-header">
+            <div style="font-size:16px;font-weight:700">${language === 'ar' ? 'مبيعات الوردية' : 'Shift Sales Report'}</div>
+            <div>${language === 'ar' ? 'رقم الوردية:' : 'Shift #'} ${escapeHtml(report.shift?.id || selectedShift?.id)}</div>
+            <div>${escapeHtml(report.shift?.cashier || selectedShift?.employee || '')}</div>
+            <div style="font-size:11px">${formatDateTime(now.toISOString())}</div>
+          </header>
+          <section class="print-section summary">
+            <div class="print-row"><span>${language === 'ar' ? 'عدد الفواتير:' : 'Invoices:'}</span><span>${Number(sales.invoices_count ?? invoices.length)}</span></div>
+            <div class="print-row"><span>${language === 'ar' ? 'إجمالي المبيعات:' : 'Gross Sales:'}</span><span>${formatNumber(sales.gross_sales ?? 0)}</span></div>
+            <div class="print-row"><span>${language === 'ar' ? 'بند الزيادات بالفواتير:' : 'Invoice Increases:'}</span><span>${formatNumber(sales.extra_charge_total ?? 0)}</span></div>
+            <div class="print-row"><strong>${language === 'ar' ? 'إجمالي المبيعات شامل الزيادات:' : 'Total Sales Including Increases:'}</strong><strong>${formatNumber(sales.sales_including_extra_charge ?? (Number(sales.gross_sales || 0) + Number(sales.extra_charge_total || 0)))}</strong></div>
+            <div class="print-row"><span>${language === 'ar' ? 'التكلفة:' : 'Cost:'}</span><span>${formatNumber(sales.total_cost ?? 0)}</span></div>
+            <div class="print-row"><span>${language === 'ar' ? 'إجمالي الربح:' : 'Gross Profit:'}</span><span>${formatNumber(sales.gross_profit ?? 0)}</span></div>
+          </section>
+          ${invoiceSections || `<section class="print-section">${language === 'ar' ? 'لا توجد فواتير مبيعات في هذه الوردية.' : 'No sales invoices in this shift.'}</section>`}
+          <div class="no-print">
+            <button onclick="window.print();return false;">${language === 'ar' ? 'طباعة' : 'Print'}</button>
+            <button onclick="window.close();return false;">${language === 'ar' ? 'إغلاق' : 'Close'}</button>
+          </div>
+          <script>window.addEventListener('load', function() { setTimeout(() => window.print(), 700); }, { once: true });</script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
     };
 
     // ============ الترجمات ============
@@ -912,7 +1043,7 @@
                         {language === "ar" ? "المؤشرات الرئيسية" : "Key Metrics"}
                       </h3>
 
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                         {/* Gross Sales */}
                         <Card className="relative overflow-hidden rounded-xl border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 shadow-none">
                           <CardContent className="p-4">
@@ -934,6 +1065,36 @@
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               {language === "ar" ? "إجمالي المبيعات" : "Gross Sales"}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="relative overflow-hidden rounded-xl border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 shadow-none">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 text-xs font-medium text-indigo-700">
+                              <TrendingUp className="h-4 w-4" />
+                              {language === "ar" ? "بند الزيادات" : "Invoice Increases"}
+                            </div>
+                            <p className="mt-3 text-2xl font-bold text-indigo-600">
+                              {formatNumber(shiftReport.summary?.sales?.extra_charge_total)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {language === "ar" ? "إجمالي الزيادات المسجلة على الفواتير" : "Total invoice increases"}
+                            </p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="relative overflow-hidden rounded-xl border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-blue-500/5 shadow-none">
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 text-xs font-medium text-blue-700">
+                              <DollarSign className="h-4 w-4" />
+                              {language === "ar" ? "المبيعات شامل الزيادات" : "Sales Including Increases"}
+                            </div>
+                            <p className="mt-3 text-2xl font-bold text-blue-600">
+                              {formatNumber(shiftReport.summary?.sales?.sales_including_extra_charge)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {language === "ar" ? "المبيعات + بند الزيادات" : "Sales + invoice increases"}
                             </p>
                           </CardContent>
                         </Card>
@@ -2240,14 +2401,19 @@
                   {/* ========================= TAB 4: INVOICES ========================= */}
                   <TabsContent value="invoices" className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-base font-bold">
-                        {language === "ar" ? "الفواتير وتفاصيلها" : "Invoices & Details"}
-                      </h3>
-
-                      <Badge variant="secondary">
-                        {formatNumber(shiftReport.summary?.sales?.invoices_count)}{" "}
-                        {language === "ar" ? "فاتورة" : "invoices"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold">
+                          {language === "ar" ? "الفواتير وتفاصيلها" : "Invoices & Details"}
+                        </h3>
+                        <Badge variant="secondary">
+                          {formatNumber(shiftReport.summary?.sales?.invoices_count)}{" "}
+                          {language === "ar" ? "فاتورة" : "invoices"}
+                        </Badge>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => printShiftSales(shiftReport)}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        {language === "ar" ? "طباعة المبيعات" : "Print Sales"}
+                      </Button>
                     </div>
 
                     {(shiftReport.sales_invoices || []).length > 0 ? (
@@ -2312,6 +2478,14 @@
                                   {
                                     label: language === "ar" ? "إجمالي الفاتورة" : "Invoice Total",
                                     value: formatNumber(invoice.total_sales),
+                                  },
+                                  {
+                                    label: language === "ar" ? "بند الزيادات" : "Invoice Increases",
+                                    value: formatNumber(invoice.extra_charge),
+                                  },
+                                  {
+                                    label: language === "ar" ? "الإجمالي شامل الزيادات" : "Total Including Increases",
+                                    value: formatNumber(invoice.sales_including_extra_charge ?? (Number(invoice.total_sales || 0) + Number(invoice.extra_charge || 0))),
                                   },
                                   {
                                     label: language === "ar" ? "إجمالي التكلفة" : "Total Cost",
@@ -3371,7 +3545,11 @@
 
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 bg-muted/20 px-4 py-4">
                           <span className="font-bold">
-                            {language === "ar" ? "فرق التسوية" : "Difference"}
+                            {Number(shiftReport.reconciliation?.difference || 0) > 0
+                              ? (language === "ar" ? "الزيادة" : "Surplus")
+                              : Number(shiftReport.reconciliation?.difference || 0) < 0
+                                ? (language === "ar" ? "النقص" : "Shortage")
+                                : (language === "ar" ? "فرق التسوية" : "Difference")}
                           </span>
 
                           <span
@@ -3385,7 +3563,7 @@
                             {shiftReport.reconciliation?.difference === null ||
                               shiftReport.reconciliation?.difference === undefined
                               ? "-"
-                              : formatNumber(shiftReport.reconciliation.difference)}
+                              : formatNumber(Math.abs(Number(shiftReport.reconciliation.difference)))}
                           </span>
                         </div>
                       </CardContent>
@@ -3420,8 +3598,12 @@
                                   (language === "ar" ? "يوجد نقص في النقدية" : "Cash Short")}
                               </p>
                               <p className="mt-1 text-sm text-muted-foreground">
-                                {language === "ar" ? "الفرق: " : "Difference: "}
-                                {formatNumber(shiftReport.reconciliation?.difference)}
+                                {shiftReport.reconciliation?.status === "over"
+                                  ? (language === "ar" ? "الزيادة: " : "Surplus: ")
+                                  : shiftReport.reconciliation?.status === "short"
+                                    ? (language === "ar" ? "النقص: " : "Shortage: ")
+                                    : (language === "ar" ? "الفرق: " : "Difference: ")}
+                                {formatNumber(Math.abs(Number(shiftReport.reconciliation?.difference || 0)))}
                               </p>
                             </div>
                           </CardContent>
