@@ -96,6 +96,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       automotive: '/automotive',
       settings: '/settings',
       'access-control': '/access-control',
+      'my-access': '/my-access',
       'super-admin': '/super-admin',
       posreturn: '/POSRetrun',
     };

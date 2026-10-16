@@ -59,6 +59,7 @@ const getIcon = (iconName: string) => {
     CalendarDays: Icons.CalendarDays,
     CheckSquare: Icons.CheckSquare,
     BrainCircuit: Icons.BrainCircuit,
+    KeyRound: Icons.KeyRound,
   };
   
   const Icon = icons[iconName] || Icons.LayoutDashboard;

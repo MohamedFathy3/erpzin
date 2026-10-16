@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import PrintAuditTracker from "@/components/audit/PrintAuditTracker";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppProvider } from "@/contexts/AppContext";
@@ -40,6 +41,7 @@ import GoogleIntegrations from "./pages/GoogleIntegrations";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
 import AccessControl from "./pages/AccessControl";
+import MyAccess from "./pages/MyAccess";
 import AutomotiveService from "./pages/AutomotiveService";
 import { CustomerPortal, TechnicianPortal } from "./pages/AutomotivePortals";
 import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
@@ -57,6 +59,7 @@ const App = () => (
               <Toaster />
               <Sonner />
             <BrowserRouter>
+              <PrintAuditTracker />
               <Routes>
                 {/* Public marketing and trial onboarding */}
                 <Route path="/marketing" element={<MarketingHome />} />
@@ -89,6 +92,7 @@ const App = () => (
                 <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
                 <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
                 <Route path="/access-control" element={<ProtectedRoute><AccessControl /></ProtectedRoute>} />
+                <Route path="/my-access" element={<ProtectedRoute><MyAccess /></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
                 <Route path="/unified-financial-reports" element={<ProtectedRoute><UnifiedFinancialReports /></ProtectedRoute>} />
                 <Route path="/employee-financial-reports" element={<ProtectedRoute><EmployeeFinancialReports /></ProtectedRoute>} />

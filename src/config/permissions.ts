@@ -12,6 +12,14 @@ export interface PagePermission {
 
 export const PAGES: PagePermission[] = [
   {
+    id: 'my-access',
+    path: '/my-access',
+    label: 'My Branch & Permissions',
+    labelAr: 'فرعي وصلاحياتي',
+    icon: 'KeyRound',
+    allowedRoles: ['admin', 'Cashier', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
+  },
+  {
     id: 'access-control',
     path: '/access-control',
     label: 'Access Control',
