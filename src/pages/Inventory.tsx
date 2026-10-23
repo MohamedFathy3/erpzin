@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useApp } from '@/contexts/AppContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import CategoryManager from '@/components/inventory/CategoryManager';
@@ -186,6 +187,7 @@ api.interceptors.response.use(
 
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
+  const { currentBranch, currentWarehouse } = useApp();
   const [activeTab, setActiveTab] = useState('products');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -210,7 +212,7 @@ const Inventory: React.FC = () => {
 
   // ========== جلب المنتجات (الفلترة بتتم في الباك إند) ==========
   const { data: dbProducts = [], refetch, isLoading: productsLoading } = useQuery({
-    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter, searchQuery],
+    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter, currentBranch?.id, currentWarehouse?.id, searchQuery],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -236,10 +238,10 @@ const Inventory: React.FC = () => {
           payload.filters.active = statusFilter === 'active';
         }
 
-        // ✅ فلترة حسب المخزن
-        if (warehouseFilter !== 'all') {
-          payload.filters.warehouse_id = parseInt(warehouseFilter);
-        }
+        // Product.stock is the tenant aggregate. Inventory must show the
+        // balance for the active warehouse only.
+        const activeWarehouseId = currentWarehouse?.id || (warehouseFilter !== 'all' ? warehouseFilter : null);
+        if (activeWarehouseId) payload.filters.warehouse_id = parseInt(String(activeWarehouseId));
         if (searchQuery.trim()) {
           payload.filters.name = searchQuery.trim();
         }
