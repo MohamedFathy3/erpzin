@@ -587,6 +587,7 @@ const Inventory: React.FC = () => {
         warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0
           ? formData.warehouseIds.map(id => parseInt(id))
           : [],
+        warehouse_stocks: Object.fromEntries((formData.warehouseIds || []).map(id => [id, Number(formData.warehouseStocks?.[id] || 0)])),
         valuation_method: formData.valuationMethod || 'fifo',
         units: []
       };

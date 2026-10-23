@@ -65,6 +65,7 @@ export interface ProductFormData {
   imageUrl?: string;
   branchIds: string[];
   warehouseIds: string[];
+  warehouseStocks?: Record<string, number>;
   valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
 }
 
@@ -128,7 +129,8 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
       : [],
     warehouseIds: Array.isArray(apiProduct.warehouse_ids)
       ? apiProduct.warehouse_ids.map((id: any) => id.toString())
-      : [],
+      : (apiProduct.warehouses || []).map((warehouse: any) => String(warehouse.id)),
+    warehouseStocks: Object.fromEntries((apiProduct.warehouses || []).map((warehouse: any) => [String(warehouse.id), Number(warehouse.stock) || 0])),
     valuationMethod: apiProduct.valuation_method || 'fifo'
   };
 
@@ -273,6 +275,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
       imageUrl: '',
       branchIds: [],
       warehouseIds: [],
+      warehouseStocks: {},
       valuationMethod: 'fifo' as const
     };
 
@@ -668,9 +671,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
 
           {/* Branches & Warehouses */}
-
-
-
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <div>
+              <p className="font-medium text-foreground">{language === 'ar' ? 'المخازن والكميات' : 'Warehouses & quantities'}</p>
+              <p className="text-sm text-muted-foreground">{language === 'ar' ? 'اختر أكثر من مخزن، وحدد كمية افتتاحية مستقلة لكل مخزن.' : 'Select multiple warehouses and set an independent opening quantity for each one.'}</p>
+            </div>
+            {isLoadingWarehouses ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {language === 'ar' ? 'جاري تحميل المخازن...' : 'Loading warehouses...'}</div> : warehouses.length === 0 ? <p className="text-sm text-destructive">{language === 'ar' ? 'لا توجد مخازن متاحة لهذا الحساب.' : 'No warehouses available for this workspace.'}</p> : <div className="grid gap-3 md:grid-cols-2">{warehouses.map((warehouse: any) => { const id = String(warehouse.id); const selected = formData.warehouseIds.includes(id); return <div key={id} className={cn('flex items-center gap-3 rounded-md border p-3', selected && 'border-primary bg-primary/5')}><Checkbox checked={selected} onCheckedChange={(checked) => { const ids = checked ? [...formData.warehouseIds, id] : formData.warehouseIds.filter((item) => item !== id); handleChange('warehouseIds', ids); if (!checked) handleChange('warehouseStocks', { ...(formData.warehouseStocks || {}), [id]: 0 }); }} /><div className="min-w-0 flex-1"><p className="font-medium">{warehouse.name}</p><p className="text-xs text-muted-foreground">{warehouse.branch?.name || warehouse.branch_name || (warehouse.branch_id ? `Branch #${warehouse.branch_id}` : '')}</p></div><Input className="w-28" type="number" min="0" step="0.001" disabled={!selected} value={formData.warehouseStocks?.[id] ?? ''} onChange={(event) => handleChange('warehouseStocks', { ...(formData.warehouseStocks || {}), [id]: Number(event.target.value) || 0 })} placeholder="0" /></div>; })}</div>}
+          </div>
 
           {/* Variants Toggle */}
           <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
