@@ -265,7 +265,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           is_active: warehouse.is_active ?? warehouse.active ?? true,
         }));
         setWarehouses(normalized);
-        setCurrentWarehouse((previous) => normalized.find((warehouse: Warehouse) => warehouse.id === previous?.id) || normalized[0] || null);
+        const assignedWarehouseId = (user as any)?.warehouse_id ?? (user as any)?.warehouse?.id;
+        setCurrentWarehouse((previous) =>
+          normalized.find((warehouse: Warehouse) => warehouse.id === String(assignedWarehouseId))
+          || normalized.find((warehouse: Warehouse) => warehouse.id === previous?.id)
+          || null
+        );
       } catch (error) {
         console.error('Error loading warehouses:', error);
         setWarehouses([]);
@@ -274,7 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     
     loadWarehouses();
-  }, [currentBranch]);
+  }, [currentBranch, (user as any)?.warehouse_id, (user as any)?.warehouse?.id]);
 
   // Load user permissions for UI display
   // SECURITY NOTE: These permissions control UI visibility only.

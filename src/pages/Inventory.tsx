@@ -240,7 +240,9 @@ const Inventory: React.FC = () => {
 
         // Product.stock is the tenant aggregate. Inventory must show the
         // balance for the active warehouse only.
-        const activeWarehouseId = currentWarehouse?.id || (warehouseFilter !== 'all' ? warehouseFilter : null);
+        const activeWarehouseId = warehouseFilter !== 'all'
+          ? warehouseFilter
+          : currentWarehouse?.id || null;
         if (activeWarehouseId) payload.filters.warehouse_id = parseInt(String(activeWarehouseId));
         if (searchQuery.trim()) {
           payload.filters.name = searchQuery.trim();
