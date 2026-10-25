@@ -25,6 +25,7 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
     searchMode,
     searchQuery,
     invoiceNumber,
+    isComplimentaryInvoice,
     items,
     returnReason,
     refundMethod,
@@ -301,18 +302,26 @@ export const DirectReturnForm: React.FC<DirectReturnFormProps> = ({ onComplete, 
           />
         </div>
         <div>
-          <Label className="text-sm mb-2 block">{t.refundMethod}</Label>
-          <Select value={refundMethod} onValueChange={setRefundMethod}>
-            <SelectTrigger className="rounded-lg">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cash">💵 {t.cash}</SelectItem>
-              <SelectItem value="card">💳 {t.card}</SelectItem>
-              <SelectItem value="wallet">📱 {t.wallet}</SelectItem>
-              <SelectItem value="credit">👤 {t.credit}</SelectItem>
-            </SelectContent>
-          </Select>
+          {isComplimentaryInvoice ? (
+            <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+              {language === 'ar' ? 'فاتورة مجاملة: قيمة المرتجع 0 ولا يوجد رد أموال.' : 'Complimentary invoice: refund amount is 0 and no money is returned.'}
+            </div>
+          ) : (
+            <>
+              <Label className="text-sm mb-2 block">{t.refundMethod}</Label>
+              <Select value={refundMethod} onValueChange={setRefundMethod}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">💵 {t.cash}</SelectItem>
+                  <SelectItem value="card">💳 {t.card}</SelectItem>
+                  <SelectItem value="wallet">📱 {t.wallet}</SelectItem>
+                  <SelectItem value="credit">👤 {t.credit}</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
       </div>
 

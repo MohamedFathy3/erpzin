@@ -125,6 +125,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   // Keep the historical unit price stored on each invoice item. Different
   // products in one invoice can have different prices (for example 500 and
   // 400), so the invoice total must not be distributed across all items.
+  const isComplimentaryInvoice = Boolean(invoiceData?.data?.is_complimentary);
   const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any) => {
     const unitPrice = String(item.price ?? 0);
     
@@ -228,7 +229,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   const selectedTaxRate = taxRates.find(t => t.id === Number(taxRateId));
   const taxPercent = selectedTaxRate?.rate ?? 0;
   const taxAmount = (subtotal * (taxPercent ?? 0)) / 100;
-  const total = subtotal + taxAmount;
+  const total = isComplimentaryInvoice ? 0 : subtotal + taxAmount;
 
   const selectedCurrency = currencies.find(c => c.id === currencyId);
 
@@ -238,14 +239,14 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       if (items.length === 0) throw new Error('لم يتم إضافة أي صنف');
 
       const payload: any = {
-        refund_method: refundMethod,
+        refund_method: isComplimentaryInvoice ? 'none' : refundMethod,
         reason: returnReason || 'مرتجع بدون سبب',
         items: items.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
           price: item.unit_price
         })),
-        payments: [{
+        payments: isComplimentaryInvoice ? [] : [{
           method: refundMethod,
           amount: total
         }]
@@ -313,6 +314,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     searchMode,
     searchQuery,
     invoiceNumber,
+    isComplimentaryInvoice,
     items,
     returnReason,
     refundMethod,
