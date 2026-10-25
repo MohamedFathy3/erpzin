@@ -127,7 +127,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   // 400), so the invoice total must not be distributed across all items.
   const isComplimentaryInvoice = Boolean(invoiceData?.data?.is_complimentary);
   const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any) => {
-    const unitPrice = String(item.price ?? 0);
+    const unitPrice = String(isComplimentaryInvoice ? 0 : (item.price ?? 0));
     
     return {
       id: item.product_id,
