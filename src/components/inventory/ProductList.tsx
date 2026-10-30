@@ -36,6 +36,7 @@ export interface Product {
   description?: string;
   active?: boolean;
   warehouseIds?: string[];
+  warehouseStocks?: Record<number, number>;
   // ✅ إضافة units من API
   units?: Array<{
     id: number;
@@ -82,20 +83,20 @@ const mapProductStatus = (product: any): Product['status'] => {
     console.log('↪️ Status: inactive (active is false)');
     return 'inactive';
   }
-  
+
   const stock = Number(product.stock);
   if (stock === 0 || product.stock === '0') {
     console.log('↪️ Status: out_of_stock (stock is 0)');
     return 'out_of_stock';
   }
-  
+
   const reorderLevel = Number(product.reorder_level) || 5;
-  
+
   if (stock <= reorderLevel) {
     console.log('↪️ Status: low_stock (stock <= reorder level)');
     return 'low_stock';
   }
-  
+
   console.log('↪️ Status: active');
   return 'active';
 };
@@ -112,15 +113,23 @@ export const transformApiProduct = (apiProduct: any): Product => {
     active: apiProduct.active,
     units: apiProduct.units // ✅ إضافة log للـ units
   });
+  const warehouseStocks: Record<number, number> = {};
+  if (Array.isArray(apiProduct.warehouses)) {
+    apiProduct.warehouses.forEach((w: any) => {
+      if (w?.id !== undefined) {
+        warehouseStocks[Number(w.id)] = Number(w.stock) || 0;
+      }
+    });
+  }
 
   // Ensure cost is a number (handle null/undefined)
-  const cost = apiProduct.cost !== null && apiProduct.cost !== undefined 
-    ? Number(apiProduct.cost) 
+  const cost = apiProduct.cost !== null && apiProduct.cost !== undefined
+    ? Number(apiProduct.cost)
     : 0;
 
   // Handle image URL - use the correct field name
   let imageUrl = '';
-  
+
   // جرب كل الاحتمالات بالترتيب
   if (apiProduct.imageUrl && typeof apiProduct.imageUrl === 'string') {
     imageUrl = apiProduct.imageUrl; // مع حرف U كبير
@@ -166,7 +175,8 @@ export const transformApiProduct = (apiProduct: any): Product => {
     hasVariants: (apiProduct.units && apiProduct.units.length > 0) || false, // ✅ true إذا في units
     active: apiProduct.active || false,
     units: apiProduct.units || [], // ✅ تمرير units كاملة
-    warehouseIds: Array.isArray(apiProduct.warehouse_ids) ? apiProduct.warehouse_ids.map((id: number | string) => String(id)) : []
+    warehouseIds: Array.isArray(apiProduct.warehouse_ids) ? apiProduct.warehouse_ids.map((id: number | string) => String(id)) : [],
+    warehouseStocks: warehouseStocks  
   };
 
   console.log('✅ Transformed product:', {
@@ -175,14 +185,14 @@ export const transformApiProduct = (apiProduct: any): Product => {
     hasVariants: transformedProduct.hasVariants,
     unitsCount: transformedProduct.units?.length
   });
-  
+
   return transformedProduct;
 };
 
 // ✅ دالة لحساب عدد المتغيرات
 const getVariantsCount = (product: Product): number => {
   if (!product.units || product.units.length === 0) return 0;
-  
+
   return product.units.reduce((total, unit) => {
     return total + (unit.colors?.length || 0);
   }, 0);
@@ -209,25 +219,25 @@ const ProductList: React.FC<ProductListProps> = ({
 
   const getStatusBadge = (status: Product['status']) => {
     const config = {
-      active: { 
-        label: language === 'ar' ? 'نشط' : 'Active', 
-        variant: 'default' as const, 
-        className: 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
+      active: {
+        label: language === 'ar' ? 'نشط' : 'Active',
+        variant: 'default' as const,
+        className: 'bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
       },
-      inactive: { 
-        label: language === 'ar' ? 'غير نشط' : 'Inactive', 
-        variant: 'secondary' as const, 
-        className: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700' 
+      inactive: {
+        label: language === 'ar' ? 'غير نشط' : 'Inactive',
+        variant: 'secondary' as const,
+        className: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700'
       },
-      low_stock: { 
-        label: language === 'ar' ? 'مخزون منخفض' : 'Low Stock', 
-        variant: 'outline' as const, 
-        className: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' 
+      low_stock: {
+        label: language === 'ar' ? 'مخزون منخفض' : 'Low Stock',
+        variant: 'outline' as const,
+        className: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
       },
-      out_of_stock: { 
-        label: language === 'ar' ? 'نفذ المخزون' : 'Out of Stock', 
-        variant: 'destructive' as const, 
-        className: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' 
+      out_of_stock: {
+        label: language === 'ar' ? 'نفذ المخزون' : 'Out of Stock',
+        variant: 'destructive' as const,
+        className: 'bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800'
       }
     };
 
@@ -240,7 +250,7 @@ const ProductList: React.FC<ProductListProps> = ({
   const PaginationControls = () => (
     <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
       <p className="text-sm text-muted-foreground">
-        {language === 'ar' 
+        {language === 'ar'
           ? `عرض ${startItem} - ${endItem} من ${totalProducts} منتج`
           : `Showing ${startItem} - ${endItem} of ${totalProducts} products`
         }
@@ -351,7 +361,7 @@ const ProductList: React.FC<ProductListProps> = ({
               const stock = Number(product.stock);
               const minStock = Number(product.minStock) || 5;
               const variantsCount = getVariantsCount(product); // ✅ استخدام الدالة
-              
+
               console.log('🎯 Rendering product:', {
                 id: product.id,
                 name: product.name,
@@ -362,7 +372,7 @@ const ProductList: React.FC<ProductListProps> = ({
               });
 
               return (
-                <tr 
+                <tr
                   key={product.id}
                   className={cn(
                     'border-b border-border hover:bg-muted/30 transition-colors',
@@ -373,9 +383,9 @@ const ProductList: React.FC<ProductListProps> = ({
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
                         {product.imageUrl || product.image ? (
-                          <img 
-                            src={product.imageUrl || product.image} 
-                            alt={product.name} 
+                          <img
+                            src={product.imageUrl || product.image}
+                            alt={product.name}
                             className="w-full h-full object-cover"
                             onLoad={() => console.log('✅ Image loaded:', product.imageUrl || product.image)}
                             onError={(e) => {
@@ -389,9 +399,9 @@ const ProductList: React.FC<ProductListProps> = ({
                           />
                         ) : null}
                         <div className={cn("fallback-icon text-2xl", (product.imageUrl || product.image) ? "hidden" : "block")}>
-                          {product.category?.toLowerCase().includes('shirt') ? '👕' : 
-                           product.category?.toLowerCase().includes('shoes') ? '👟' :
-                           product.category?.toLowerCase().includes('electronic') ? '📱' : '📦'}
+                          {product.category?.toLowerCase().includes('shirt') ? '👕' :
+                            product.category?.toLowerCase().includes('shoes') ? '👟' :
+                              product.category?.toLowerCase().includes('electronic') ? '📱' : '📦'}
                         </div>
                       </div>
                       <div className="min-w-0">
@@ -425,7 +435,7 @@ const ProductList: React.FC<ProductListProps> = ({
                     {product.active !== undefined && (
                       <div className="mt-1">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${product.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {product.active 
+                          {product.active
                             ? (language === 'ar' ? 'فعال' : 'Active')
                             : (language === 'ar' ? 'غير فعال' : 'Inactive')
                           }
@@ -447,9 +457,9 @@ const ProductList: React.FC<ProductListProps> = ({
                     <div className="space-y-1">
                       <span className={cn(
                         'font-semibold inline-block',
-                        stock === 0 ? 'text-red-600 dark:text-red-400' : 
-                        stock <= minStock ? 'text-amber-600 dark:text-amber-400' : 
-                        'text-foreground'
+                        stock === 0 ? 'text-red-600 dark:text-red-400' :
+                          stock <= minStock ? 'text-amber-600 dark:text-amber-400' :
+                            'text-foreground'
                       )}>
                         {stock}
                       </span>
@@ -466,17 +476,17 @@ const ProductList: React.FC<ProductListProps> = ({
                       disabled={!product.hasVariants}
                       className={cn(
                         "transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background rounded-md",
-                        product.hasVariants 
-                          ? "cursor-pointer hover:scale-105 active:scale-95" 
+                        product.hasVariants
+                          ? "cursor-pointer hover:scale-105 active:scale-95"
                           : "cursor-default opacity-60"
                       )}
                     >
-                      <Badge 
-                        variant="outline" 
+                      <Badge
+                        variant="outline"
                         className={cn(
                           "whitespace-nowrap",
-                          product.hasVariants 
-                            ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20" 
+                          product.hasVariants
+                            ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20"
                             : "bg-muted text-muted-foreground border-muted"
                         )}
                       >
@@ -491,8 +501,8 @@ const ProductList: React.FC<ProductListProps> = ({
                     </button>
                   </td>
                   <td className="p-4">
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className={cn(
                         "whitespace-nowrap font-medium",
                         statusConfig.className
@@ -537,21 +547,21 @@ const ProductList: React.FC<ProductListProps> = ({
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="h-8 w-8 p-0 hover:bg-muted"
                             title={language === 'ar' ? 'المزيد' : 'More'}
                           >
                             <MoreVertical size={16} />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent 
-                          align="end" 
+                        <DropdownMenuContent
+                          align="end"
                           className="bg-popover border border-border shadow-lg min-w-[180px] z-50"
                         >
-                          
-                          <DropdownMenuItem 
+
+                          <DropdownMenuItem
                             onClick={() => onDelete(product.id)}
                             className="text-destructive focus:text-destructive cursor-pointer hover:bg-destructive/10"
                           >

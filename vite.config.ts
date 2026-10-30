@@ -11,11 +11,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
-      host: "::",
+      host: "0.0.0.0",
       port: 7000,
 
       allowedHosts: [
         "asca.professionalacademyedu.com",
+        "localhost",
+        "127.0.0.1",
+        "192.168.0.132",
+        ".professionalacademyedu.com",
       ],
 
       proxy: {
@@ -61,7 +65,7 @@ export default defineConfig(({ mode }) => {
     },
 
     preview: {
-      host: "::",
+      host: "0.0.0.0",
       port: 7000,
 
       allowedHosts: [
@@ -69,7 +73,6 @@ export default defineConfig(({ mode }) => {
         "test.injazyemen.cloud",
         "localhost",
         "127.0.0.1",
-        "::1",
         ".professionalacademyedu.com",
         "injazyemen.cloud",
         ".injazyemen.cloud",

@@ -20,96 +20,117 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, SortAsc, CarFront, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Package, ArrowRightLeft, Bell, ClipboardList, Palette, Filter, X, Tag, Gift, CarFront, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { ProductVariant } from '@/hooks/useVariantData';
 import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 10;
 
+/* =========================================================
+   تحويل بيانات المنتج من API إلى بيانات الفورم
+   ========================================================= */
 export const transformApiProductToFormData = (apiProduct: any): ProductFormData => {
-  console.log('🔧 [TRANSFORM] Input to transform function:', apiProduct);
-
   let imageUrl = '';
   let imageId: number | undefined;
 
-  // معالجة الصورة
   if (apiProduct.image) {
     if (typeof apiProduct.image === 'object') {
       imageId = apiProduct.image.id;
-      imageUrl = apiProduct.image.fullUrl || apiProduct.image.previewUrl || apiProduct.image.url || '';
+      imageUrl =
+        apiProduct.image.fullUrl ||
+        apiProduct.image.previewUrl ||
+        apiProduct.image.url ||
+        '';
     } else if (typeof apiProduct.image === 'number') {
       imageId = apiProduct.image;
     }
-  } else if (apiProduct.image_url) {
-    imageUrl = apiProduct.image_url;
+  } else if (apiProduct.image_url || apiProduct.imageUrl) {
+    imageUrl = apiProduct.image_url || apiProduct.imageUrl;
   }
 
-  // تحويل active (boolean) إلى status (string)
-  const status = apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
+  const status =
+    apiProduct.active === true || apiProduct.status === 'active' ? 'active' : 'inactive';
+  const categoryId =
+    apiProduct.category?.id?.toString() || apiProduct.category_id?.toString() || '';
 
-  // تأكد من أن category_id معالج بشكل صحيح
-  const categoryId = apiProduct.category?.id?.toString() ||
-    apiProduct.category_id?.toString() ||
-    '';
-
-  // معالجة المتغيرات من الـ units
   const variants: ProductVariant[] = [];
   const selectedSizes: string[] = [];
   const selectedColors: string[] = [];
 
   if (apiProduct.units && Array.isArray(apiProduct.units)) {
-    console.log('🔧 [TRANSFORM] Processing units:', apiProduct.units.length);
-
     apiProduct.units.forEach((unit: any, index: number) => {
-      if (unit.unit_id) {
-        selectedSizes.push(unit.unit_id.toString());
-      }
+      if (unit.unit_id) selectedSizes.push(unit.unit_id.toString());
 
-      // إذا كان هناك ألوان في الـ unit
-      if (unit.colors && Array.isArray(unit.colors)) {
+      if (unit.colors && Array.isArray(unit.colors) && unit.colors.length > 0) {
         unit.colors.forEach((color: any) => {
-          if (color.color_id) {
-            selectedColors.push(color.color_id.toString());
-          }
-
-          const variant: ProductVariant = {
+          if (color.color_id) selectedColors.push(color.color_id.toString());
+          variants.push({
             id: `${unit.unit_id || index}-${color.color_id || index}`,
             colorId: color.color_id?.toString() || '',
             unitId: unit.unit_id?.toString() || '',
-            sku: unit.sku || `${apiProduct.sku}-${unit.unit_id || index}-${color.color_id || index}`,
+            sku:
+              unit.sku ||
+              `${apiProduct.sku}-${unit.unit_id || index}-${color.color_id || index}`,
             barcode: unit.barcode || '',
             customBarcode: false,
-            stock: color.stock || unit.stock || apiProduct.stock || 0,
+            stock: color.stock ?? 0,
             cost: unit.cost_price || apiProduct.cost || 0,
             price: unit.sell_price || apiProduct.price || 0,
-            enabled: true
-          };
-          variants.push(variant);
+            enabled: true,
+          });
         });
       } else {
-        // إذا لم يكن هناك ألوان، ننشئ variant واحد فقط
-        const variant: ProductVariant = {
+        variants.push({
           id: `${unit.unit_id || index}`,
           colorId: '',
           unitId: unit.unit_id?.toString() || '',
           sku: unit.sku || `${apiProduct.sku}-${unit.unit_id || index}`,
           barcode: unit.barcode || '',
           customBarcode: false,
-          stock: unit.stock || apiProduct.stock || 0,
+          stock: unit.stock ?? 0,
           cost: unit.cost_price || apiProduct.cost || 0,
           price: unit.sell_price || apiProduct.price || 0,
-          enabled: true
-        };
-        variants.push(variant);
+          enabled: true,
+        });
       }
     });
   }
 
-  const result = {
+  // ✅ الأهم: قراءة warehouse_stocks من الباك إند
+  const rawStocks =
+    apiProduct.warehouse_stocks &&
+      typeof apiProduct.warehouse_stocks === 'object' &&
+      !Array.isArray(apiProduct.warehouse_stocks)
+      ? apiProduct.warehouse_stocks
+      : {};
+
+  const warehouseStocks: Record<string, number> = {};
+  Object.entries(rawStocks).forEach(([id, stock]) => {
+    warehouseStocks[String(id)] = Number(stock) || 0;
+  });
+
+  const apiWarehouseIds = Array.isArray(apiProduct.warehouse_ids)
+    ? apiProduct.warehouse_ids
+    : [];
+
+  const warehouseIds: string[] = Array.from(
+    new Set([
+      ...apiWarehouseIds.map((id: any) => String(id)),
+      ...Object.keys(warehouseStocks).map(String),
+    ])
+  ).filter((id) => /^\d+$/.test(id) && Number(id) > 0);
+
+  // تأكد أن كل مخزن محدد له قيمة مخزون
+  warehouseIds.forEach((id) => {
+    if (warehouseStocks[id] === undefined) {
+      warehouseStocks[id] = 0;
+    }
+  });
+  return {
     id: apiProduct.id?.toString(),
     name: apiProduct.name || '',
     nameAr: apiProduct.name_ar || apiProduct.name || '',
@@ -117,45 +138,38 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     descriptionAr: apiProduct.description_ar || '',
     sku: apiProduct.sku || '',
     barcode: apiProduct.barcode || '',
-    categoryId: categoryId,
+    categoryId,
+    main_unit_id: apiProduct.main_unit_id?.toString() || '',
     price: Number(apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
-    variants: variants,
-    selectedSizes: selectedSizes,
-    selectedColors: selectedColors,
+    variants,
+    selectedSizes,
+    selectedColors,
     stock: Number(apiProduct.stock) || 0,
     reorderPoint: Number(apiProduct.reorder_level) || 5,
-    status: status,
+    status,
     imageId,
     imageUrl,
     branchIds: Array.isArray(apiProduct.branch_ids)
       ? apiProduct.branch_ids.map((id: any) => id.toString())
       : [],
-    warehouseIds: Array.isArray(apiProduct.warehouse_ids)
-      ? apiProduct.warehouse_ids.map((id: any) => id.toString())
-      : [],
-    valuationMethod: apiProduct.valuation_method || 'fifo'
+    warehouseIds,
+    warehouseStocks,
+    valuationMethod: apiProduct.valuation_method || 'fifo',
   };
-
-  console.log('✅ Transformed form data:', {
-    ...result,
-    variantsCount: result.variants.length,
-    selectedSizes: result.selectedSizes,
-    selectedColors: result.selectedColors
-  });
-
-  return result;
 };
 
-// إعداد اعتراض الطلبات للتصحيح
+/* =========================================================
+   Interceptors (Logging)
+   ========================================================= */
 api.interceptors.request.use(
   (config) => {
     console.log('📤 API Request:', {
       url: config.url,
       method: config.method,
       data: config.data,
-      params: config.params
+      params: config.params,
     });
     return config;
   },
@@ -170,7 +184,7 @@ api.interceptors.response.use(
     console.log('📥 API Response:', {
       url: response.config.url,
       status: response.status,
-      data: response.data
+      data: response.data,
     });
     return response;
   },
@@ -179,12 +193,15 @@ api.interceptors.response.use(
       url: error.config?.url,
       status: error.response?.status,
       data: error.response?.data,
-      message: error.message
+      message: error.message,
     });
     return Promise.reject(error);
   }
 );
 
+/* =========================================================
+   Inventory Component
+   ========================================================= */
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
   const { currentBranch, currentWarehouse } = useApp();
@@ -210,9 +227,29 @@ const Inventory: React.FC = () => {
 
   const queryClient = useQueryClient();
 
-  // ========== جلب المنتجات (الفلترة بتتم في الباك إند) ==========
-  const { data: dbProducts = [], refetch, isLoading: productsLoading } = useQuery({
-    queryKey: ['inventory-products', selectedCategory, categoryFilter, statusFilter, warehouseFilter, currentBranch?.id, currentWarehouse?.id, searchQuery],
+  // المستودع النشط
+  const activeWarehouseId = useMemo<number | null>(() => {
+    if (warehouseFilter !== 'all') return Number(warehouseFilter);
+    // if (currentWarehouse?.id) return Number(currentWarehouse.id);
+    return null;
+  }, [warehouseFilter, currentWarehouse?.id]);
+
+  /* ========== جلب المنتجات ========== */
+  const {
+    data: dbProducts = [],
+    refetch,
+    isLoading: productsLoading,
+  } = useQuery({
+    queryKey: [
+      'inventory-products',
+      selectedCategory,
+      categoryFilter,
+      statusFilter,
+      warehouseFilter,
+      currentBranch?.id,
+      currentWarehouse?.id,
+      searchQuery,
+    ],
     queryFn: async () => {
       try {
         const payload: any = {
@@ -221,53 +258,43 @@ const Inventory: React.FC = () => {
           perPage: 100,
           paginate: false,
           delete: false,
-          filters: {}
+          filters: {},
         };
 
-        // ✅ الأولوية: selectedCategory من CategoryManager (القائمة الجانبية)
         if (selectedCategory && selectedCategory !== 'all') {
           payload.filters.category_id = parseInt(selectedCategory);
-        }
-        // ✅ الثاني: categoryFilter من Select الفئات
-        else if (categoryFilter && categoryFilter !== 'all') {
+        } else if (categoryFilter && categoryFilter !== 'all') {
           payload.filters.category_id = parseInt(categoryFilter);
         }
 
-        // ✅ فلترة حسب الحالة (active/inactive)
         if (statusFilter !== 'all') {
           payload.filters.active = statusFilter === 'active';
         }
 
-        // Product.stock is the tenant aggregate. Inventory must show the
-        // balance for the active warehouse only.
         if (currentBranch?.id) payload.filters.branch_id = parseInt(String(currentBranch.id));
 
-        const activeWarehouseId = warehouseFilter !== 'all'
-          ? warehouseFilter
-          : currentWarehouse?.id || null;
-        if (activeWarehouseId) payload.filters.stock_warehouse_id = parseInt(String(activeWarehouseId));
+        if (activeWarehouseId) {
+          payload.filters.stock_warehouse_id = activeWarehouseId;
+        }
+
         if (searchQuery.trim()) {
           payload.filters.name = searchQuery.trim();
         }
 
-        console.log('📦 Fetching products with payload:', payload);
-
         const response = await api.post('/product/index', payload);
-        const products = response.data.data || [];
-
-        return products;
+        return response.data.data || [];
       } catch (error) {
         console.error('❌ Error fetching products:', error);
         toast({
           title: language === 'ar' ? 'خطأ في جلب المنتجات' : 'Error fetching products',
-          variant: 'destructive'
+          variant: 'destructive',
         });
         return [];
       }
     },
   });
 
-  // ========== جلب التصنيفات ==========
+  /* ========== جلب التصنيفات ========== */
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories-filter'],
     queryFn: async () => {
@@ -277,21 +304,20 @@ const Inventory: React.FC = () => {
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 100,
-          paginate: false
+          paginate: false,
         });
         return response.data.data || [];
       } catch (error) {
-        console.error('❌ Error fetching categories:', error);
         toast({
           title: language === 'ar' ? 'خطأ في جلب التصنيفات' : 'Error fetching categories',
-          variant: 'destructive'
+          variant: 'destructive',
         });
         return [];
       }
     },
   });
 
-  // ========== جلب الفروع ==========
+  /* ========== جلب الفروع ========== */
   const { data: branches = [], isLoading: loadingBranches } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
@@ -301,17 +327,16 @@ const Inventory: React.FC = () => {
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 100,
-          paginate: false
+          paginate: false,
         });
         return response.data.data || [];
-      } catch (error) {
-        console.error('❌ Error fetching branches:', error);
+      } catch {
         return [];
       }
     },
   });
 
-  // ========== جلب المستودعات ==========
+  /* ========== جلب المستودعات ========== */
   const { data: warehouses = [], isLoading: loadingWarehouses } = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => {
@@ -321,11 +346,10 @@ const Inventory: React.FC = () => {
           orderBy: 'id',
           orderByDirection: 'asc',
           perPage: 100,
-          paginate: false
+          paginate: false,
         });
         return response.data.data || [];
-      } catch (error) {
-        console.error('❌ Error fetching warehouses:', error);
+      } catch {
         return [];
       }
     },
@@ -333,40 +357,56 @@ const Inventory: React.FC = () => {
 
   const dbCategories = categories;
 
-  // تحويل المنتجات من API إلى شكل Product
-  const products: Product[] = dbProducts.map((product: any) => {
-    const transformed = transformApiProduct(product);
-    return transformed;
-  });
+  /* ========== تحويل المنتجات + تعيين stock المستودع النشط ========== */
+  const products: Product[] = useMemo(() => {
+    return dbProducts.map((product: any) => {
+      const transformed: any = transformApiProduct(product);
 
-  // ========== فلترة المنتجات في الواجهة (بحث + مخزون + ترتيب فقط) ==========
+      // نحتفظ بكميات كل المخازن
+      transformed.warehouseStocks = product.warehouse_stocks || {};
+
+      if (activeWarehouseId) {
+        const ws = product.warehouse_stocks || {};
+        transformed.stock =
+          ws[activeWarehouseId] !== undefined ? Number(ws[activeWarehouseId]) || 0 : 0;
+      }
+
+      return transformed as Product;
+    });
+  }, [dbProducts, activeWarehouseId]);
+
+  /* ========== فلترة المنتجات ========== */
   const filteredProducts = useMemo(() => {
-    let filtered = products.filter(product => {
-      // ✅ البحث (الاسم - SKU - الباركود)
+    let filtered = products.filter((product) => {
       const query = searchQuery.trim().toLocaleLowerCase();
-      const matchesSearch = query === '' ||
+      const matchesSearch =
+        query === '' ||
         product.name.toLocaleLowerCase().includes(query) ||
         (product.nameAr || '').toLocaleLowerCase().includes(query) ||
         product.sku.toLocaleLowerCase().includes(query) ||
         (product.barcode && product.barcode.toLocaleLowerCase().includes(query));
 
-      // ✅ فلترة المخزون
       let matchesStock = true;
       if (stockFilter === 'in_stock') matchesStock = product.stock > 10;
-      else if (stockFilter === 'low_stock') matchesStock = product.stock > 0 && product.stock <= 10;
+      else if (stockFilter === 'low_stock')
+        matchesStock = product.stock > 0 && product.stock <= 10;
       else if (stockFilter === 'out_of_stock') matchesStock = product.stock === 0;
-      else if (stockFilter === 'minimum_stock') matchesStock = product.stock <= (product.minStock ?? 5);
+      else if (stockFilter === 'minimum_stock')
+        matchesStock = product.stock <= (product.minStock ?? 5);
 
       return matchesSearch && matchesStock;
     });
 
-    // ✅ ترتيب المنتجات
     filtered = [...filtered].sort((a, b) => {
       switch (sortBy) {
         case 'name_asc':
-          return (language === 'ar' ? a.nameAr : a.name).localeCompare(language === 'ar' ? b.nameAr : b.name);
+          return (language === 'ar' ? a.nameAr : a.name).localeCompare(
+            language === 'ar' ? b.nameAr : b.name
+          );
         case 'name_desc':
-          return (language === 'ar' ? b.nameAr : b.name).localeCompare(language === 'ar' ? a.nameAr : a.name);
+          return (language === 'ar' ? b.nameAr : b.name).localeCompare(
+            language === 'ar' ? a.nameAr : a.name
+          );
         case 'barcode_asc':
           return (a.barcode || '').localeCompare(b.barcode || '');
         case 'barcode_desc':
@@ -392,21 +432,18 @@ const Inventory: React.FC = () => {
     return filtered;
   }, [products, searchQuery, stockFilter, sortBy, language]);
 
-  // ========== Pagination ==========
+  /* ========== Pagination ========== */
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const paginatedProducts = filteredProducts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, stockFilter, categoryFilter, warehouseFilter, sortBy, selectedCategory]);
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
+  const handlePageChange = (page: number) => setCurrentPage(page);
 
   const clearFilters = () => {
     setStatusFilter('all');
@@ -418,41 +455,59 @@ const Inventory: React.FC = () => {
     setSortBy('created_desc');
   };
 
+  /* ========== تصدير الحد الأدنى Excel ========== */
   const exportMinimumStockToExcel = () => {
     const minimumStockProducts = filteredProducts.filter(
-      product => product.stock <= (product.minStock ?? 5)
+      (product) => product.stock <= (product.minStock ?? 5)
     );
     if (minimumStockProducts.length === 0) {
       toast({
         title: language === 'ar' ? 'لا توجد منتجات للتصدير' : 'No products to export',
-        description: language === 'ar' ? 'لا توجد منتجات وصلت إلى الحد الأدنى للمخزون.' : 'No products have reached their minimum stock level.',
-        variant: 'destructive'
+        description:
+          language === 'ar'
+            ? 'لا توجد منتجات وصلت إلى الحد الأدنى للمخزون.'
+            : 'No products have reached their minimum stock level.',
+        variant: 'destructive',
       });
       return;
     }
 
-    const rows = minimumStockProducts.map(product => language === 'ar' ? {
-      'اسم المنتج': product.nameAr || product.name,
-      'كود المنتج': product.sku,
-      'الباركود': product.barcode || '',
-      'التصنيف': product.categoryAr || product.category,
-      'الكمية الحالية': product.stock,
-      'الحد الأدنى للمخزون': product.minStock ?? 5,
-    } : {
-      'Product name': product.name,
-      'SKU': product.sku,
-      'Barcode': product.barcode || '',
-      'Category': product.category,
-      'Current stock': product.stock,
-      'Minimum stock': product.minStock ?? 5,
-    });
+    const rows = minimumStockProducts.map((product) =>
+      language === 'ar'
+        ? {
+          'اسم المنتج': product.nameAr || product.name,
+          'كود المنتج': product.sku,
+          الباركود: product.barcode || '',
+          التصنيف: product.categoryAr || product.category,
+          'الكمية الحالية': product.stock,
+          'الحد الأدنى للمخزون': product.minStock ?? 5,
+        }
+        : {
+          'Product name': product.name,
+          SKU: product.sku,
+          Barcode: product.barcode || '',
+          Category: product.category,
+          'Current stock': product.stock,
+          'Minimum stock': product.minStock ?? 5,
+        }
+    );
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, language === 'ar' ? 'الحد الأدنى' : 'Minimum Stock');
-    XLSX.writeFile(workbook, `minimum-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      language === 'ar' ? 'الحد الأدنى' : 'Minimum Stock'
+    );
+    XLSX.writeFile(
+      workbook,
+      `minimum-stock-${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
     toast({
       title: language === 'ar' ? 'تم تصدير ملف Excel' : 'Excel export complete',
-      description: language === 'ar' ? `تم تصدير ${minimumStockProducts.length} منتج.` : `Exported ${minimumStockProducts.length} products.`,
+      description:
+        language === 'ar'
+          ? `تم تصدير ${minimumStockProducts.length} منتج.`
+          : `Exported ${minimumStockProducts.length} products.`,
     });
   };
 
@@ -465,15 +520,15 @@ const Inventory: React.FC = () => {
     searchQuery !== '' ||
     sortBy !== 'created_desc';
 
+  /* ========== إضافة منتج ========== */
   const handleAddProduct = () => {
     setEditProduct(null);
     setShowProductForm(true);
   };
 
+  /* ========== تعديل منتج ========== */
   const handleEditProduct = async (product: Product) => {
     try {
-      setShowProductForm(true);
-
       const response = await api.get(`/product/${product.id}`);
       const dbProduct = response.data.data;
 
@@ -481,45 +536,51 @@ const Inventory: React.FC = () => {
         toast({
           title: language === 'ar' ? 'خطأ' : 'Error',
           description: language === 'ar' ? 'المنتج غير موجود' : 'Product not found',
-          variant: 'destructive'
+          variant: 'destructive',
         });
         return;
       }
 
       const formData = transformApiProductToFormData(dbProduct);
       formData.main_unit_id = dbProduct.main_unit_id?.toString() || '';
-      setEditProduct(formData);
 
+      console.log('✅ [EDIT] warehouse_stocks raw:', dbProduct.warehouse_stocks);
+      console.log('✅ [EDIT] warehouseIds:', formData.warehouseIds);
+      console.log('✅ [EDIT] warehouseStocks:', formData.warehouseStocks);
+      console.log('✅ [EDIT] stock total:', formData.stock);
+
+      setEditProduct(formData);
+      setShowProductForm(true);
     } catch (error) {
       console.error('❌ Error fetching product details:', error);
       toast({
-        title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar'
-          ? 'تم فتح النموذج ولكن بعض البيانات قد لا تكون محدثة'
-          : 'Form opened but some data may not be current',
-        variant: 'default'
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description:
+          language === 'ar'
+            ? 'تعذر جلب بيانات المنتج'
+            : 'Failed to fetch product details',
+        variant: 'destructive',
       });
     }
   };
 
+  /* ========== حذف منتج ========== */
   const handleDeleteProduct = async (productId: string) => {
     try {
-      await api.delete(`/product/delete`, {
-        data: { items: [productId] }
-      });
+      await api.delete(`/product/delete`, { data: { items: [productId] } });
       toast({
         title: language === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully',
-        variant: 'default'
       });
       refetch();
-    } catch (error) {
+    } catch {
       toast({
         title: language === 'ar' ? 'خطأ في الحذف' : 'Delete Error',
-        variant: 'destructive'
+        variant: 'destructive',
       });
     }
   };
 
+  /* ========== نسخ منتج ========== */
   const handleDuplicateProduct = (product: Product) => {
     setEditProduct({
       ...product,
@@ -531,14 +592,14 @@ const Inventory: React.FC = () => {
     setShowProductForm(true);
     toast({
       title: language === 'ar' ? 'تم تجهيز النسخة' : 'Ready to duplicate',
-      description: language === 'ar' ? 'قم بتعديل البيانات ثم احفظ' : 'Edit data then save'
+      description:
+        language === 'ar' ? 'قم بتعديل البيانات ثم احفظ' : 'Edit data then save',
     });
   };
 
-  const handleViewProduct = (product: Product) => {
-    handleEditProduct(product);
-  };
+  const handleViewProduct = (product: Product) => handleEditProduct(product);
 
+  /* ========== طباعة باركود ========== */
   const handlePrintBarcode = (product: Product) => {
     setSelectedProductForPrint({
       id: product.id,
@@ -547,11 +608,12 @@ const Inventory: React.FC = () => {
       sku: product.sku,
       barcode: product.barcode,
       price: product.price,
-      stock: product.stock
+      stock: product.stock,
     });
     setShowBarcodePrinter(true);
   };
 
+  /* ========== عرض المتغيرات ========== */
   const handleViewVariants = (product: Product) => {
     const dbProduct = dbProducts.find((p: any) => p.id.toString() === product.id);
     setSelectedProductForVariants({
@@ -566,14 +628,44 @@ const Inventory: React.FC = () => {
       imageUrl: product.imageUrl,
       image_url: product.image_url,
       minStock: product.minStock,
-      units: dbProduct?.units || []
+      units: dbProduct?.units || [],
     });
     setShowVariantsModal(true);
   };
 
+  /* =========================================================
+     ✅ handleSaveProduct — النسخة النهائية المصححة
+     ========================================================= */
   const handleSaveProduct = async (formData: ProductFormData) => {
     try {
-      // Prepare product data for API
+      const selectedWarehouseIds = [
+        ...new Set(
+          (formData.warehouseIds ?? [])
+            .map((id) => Number(id))
+            .filter((id) => Number.isSafeInteger(id) && id > 0)
+        ),
+      ];
+
+      const warehouseStocksPayload: Record<string, number> = {};
+
+      for (const warehouseId of selectedWarehouseIds) {
+        const key = String(warehouseId);
+        const rawStock = formData.warehouseStocks?.[key];
+        const quantity = Number(rawStock ?? 0);
+
+        if (!Number.isFinite(quantity) || quantity < 0) {
+          throw new Error(`Invalid stock for warehouse ${warehouseId}`);
+        }
+
+        warehouseStocksPayload[key] = quantity;
+      }
+      const totalStock = Object.values(warehouseStocksPayload).reduce(
+        (sum, quantity) => sum + quantity,
+        0
+      );
+
+
+
       const productData: any = {
         name: formData.name,
         description: formData.description || '',
@@ -584,166 +676,145 @@ const Inventory: React.FC = () => {
         reorder_level: formData.reorderPoint || 5,
         cost: formData.cost || 0,
         price: formData.price || 0,
-        stock: formData.stock || 0,
+        stock: totalStock, // ✅ دايماً مجموع المخازن
         active: formData.status === 'active',
         has_variants: formData.hasVariants || false,
-        branch_ids: formData.branchIds && formData.branchIds.length > 0
-          ? formData.branchIds.map(id => parseInt(id))
+        branch_ids: formData.branchIds?.length
+          ? formData.branchIds.map((id) => parseInt(id))
           : [],
-        warehouse_ids: formData.warehouseIds && formData.warehouseIds.length > 0
-          ? formData.warehouseIds.map(id => parseInt(id))
-          : [],
-        warehouse_stocks: Object.fromEntries((formData.warehouseIds || []).map(id => [id, Number(formData.warehouseStocks?.[id] || 0)])),
+        warehouse_ids: JSON.stringify(selectedWarehouseIds),
+        warehouse_stocks: JSON.stringify(warehouseStocksPayload),
         valuation_method: formData.valuationMethod || 'fifo',
-        units: []
+
+        units: [],
       };
 
-      // إضافة الاسم العربي والوصف العربي
-      if (formData.nameAr && formData.nameAr.trim() !== '') {
-        productData.name_ar = formData.nameAr;
-      }
-      if (formData.descriptionAr && formData.descriptionAr.trim() !== '') {
+      if (formData.nameAr?.trim()) productData.name_ar = formData.nameAr;
+      if (formData.descriptionAr?.trim())
         productData.description_ar = formData.descriptionAr;
-      }
 
-      // معالجة الصورة
       if (formData.imageId && formData.imageId > 0) {
         productData.image = formData.imageId;
-      } else if (formData.imageUrl && formData.imageUrl.trim() !== '') {
+      } else if (formData.imageUrl?.trim()) {
         productData.image_url = formData.imageUrl;
       }
-
-      // Handle variants if product has variants
-      if (formData.hasVariants && formData.variants && formData.variants.length > 0) {
-        const enabledVariants = formData.variants.filter(v => v.enabled);
-
+      if (formData.id) {
+        const originalIds = (editProduct?.warehouseIds ?? []).map(Number);
+        productData.removed_warehouse_ids = JSON.stringify(
+          originalIds.filter((id) => !selectedWarehouseIds.includes(id))
+        );
+      }
+      // ✅ معالجة الـ variants
+      if (formData.hasVariants && formData.variants?.length > 0) {
+        const enabledVariants = formData.variants.filter((v) => v.enabled);
         if (enabledVariants.length > 0) {
-          // ✅ تجميع المتغيرات حسب unit_id
           const unitsMap = new Map();
 
-          enabledVariants.forEach(variant => {
-            const unitId = variant.unitId && variant.unitId !== '' ? parseInt(variant.unitId) : null;
+          enabledVariants.forEach((variant) => {
+            const unitId =
+              variant.unitId && variant.unitId !== ''
+                ? parseInt(variant.unitId)
+                : null;
             if (!unitId) return;
 
             if (!unitsMap.has(unitId)) {
-              // إذا كانت الوحدة جديدة، أنشئها
               unitsMap.set(unitId, {
                 unit_id: unitId,
                 cost_price: variant.cost || formData.cost || 0,
                 sell_price: variant.price || formData.price || 0,
                 barcode: variant.barcode || `${formData.sku}-${unitId}`,
-                colors: []
+                colors: [],
               });
             }
 
-            // إذا كان فيه لون، أضفه - مع التأكد من عدم التكرار
             if (variant.colorId && variant.colorId !== '') {
               const colorId = parseInt(variant.colorId);
-
-              // ✅ الأهم: التأكد من عدم إضافة نفس اللون مرتين
               const existingColors = unitsMap.get(unitId).colors;
-              const colorExists = existingColors.some((c: any) => c.color_id === colorId);
-
-              if (!colorExists) {
+              if (!existingColors.some((c: any) => c.color_id === colorId)) {
                 unitsMap.get(unitId).colors.push({
                   color_id: colorId,
-                  stock: variant.stock || formData.stock || 0
-                });
-              } else {
-                console.warn(`⚠️ Skipping duplicate color ${colorId} for unit ${unitId}`);
-              }
-            } else if (variant.noColor) {
-              // حالة "بدون لون" - نضيفها كوحدة بدون ألوان
-              const unitData = unitsMap.get(unitId);
-              if (unitData && unitData.colors.length === 0) {
-                // موجودة بالفعل بدون ألوان
-              } else {
-                // أعد تعيين الوحدة بدون ألوان
-                unitsMap.set(unitId, {
-                  unit_id: unitId,
-                  cost_price: variant.cost || formData.cost || 0,
-                  sell_price: variant.price || formData.price || 0,
-                  barcode: variant.barcode || `${formData.sku}-${unitId}`,
-                  colors: []
+                  stock: variant.stock || 0,
                 });
               }
             }
           });
 
-          // ✅ تنظيف إضافي: إزالة أي تكرار متبقي
-          productData.units = Array.from(unitsMap.values()).map(unit => {
-            if (unit.colors && unit.colors.length > 0) {
-              // إزالة الألوان المكررة باستخدام Set
-              const uniqueColors = [];
-              const seenColorIds = new Set();
-
-              for (const color of unit.colors) {
-                if (!seenColorIds.has(color.color_id)) {
-                  seenColorIds.add(color.color_id);
-                  uniqueColors.push(color);
-                }
-              }
-
-              unit.colors = uniqueColors;
-            }
-            return unit;
-          });
+          productData.units = Array.from(unitsMap.values());
         }
       }
 
-      console.log('📦 Final product data units:', JSON.stringify(productData.units, null, 2));
+      // ✅ Log للتشخيص
+
 
       let productId = formData.id;
-      let response;
-
       if (productId) {
-        // Update existing product
-        response = await api.put(`/product/${productId}`, productData);
+        console.log('WAREHOUSE DEBUG', {
+          selectedWarehouseIds,
+          warehouseStocksPayload,
+          warehouseIdsTypes: selectedWarehouseIds.map((id) => typeof id),
+          stockKeys: Object.keys(warehouseStocksPayload),
+          stock: totalStock,
+        });
+        const res = await api.put(`/product/${productId}`, productData);
+        console.log('PUT result:', res.status, res.data);
+
+        // السيرفر ممكن يرجّع 200 والخطأ جوه الـ body
+        if (res.data?.result === 'Error' || res.data?.status === false) {
+          throw { response: { data: { message: res.data.message || 'Update failed' } } };
+        }
+
+        // اقرأ المنتج تاني وقارن اللي اتحفظ باللي اتبعت
+        const check = await api.get(`/product/${productId}`);
+        const saved = check.data?.data?.warehouse_stocks || {};
+        const mismatch = Object.entries(warehouseStocksPayload).filter(
+          ([id, qty]) => Number(saved[id] ?? 0) !== Number(qty)
+        );
+        console.log('VERIFY saved:', saved, 'sent:', warehouseStocksPayload, 'mismatch:', mismatch);
+        if (mismatch.length) {
+          throw {
+            response: {
+              data: {
+                message: `السيرفر لم يحفظ الكميات: ${JSON.stringify(mismatch)}`,
+              },
+            },
+          };
+        }
       } else {
-        // Create new product
-        response = await api.post('/product', productData);
+        const response = await api.post('/product', productData);
         productId = response.data.id;
       }
 
-      // تحديث البيانات
       queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      refetch();
+      await refetch();
 
-      // إغلاق النموذج
       setShowProductForm(false);
       setEditProduct(null);
 
       toast({
         title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully',
-        description: language === 'ar'
-          ? `تم حفظ المنتج "${formData.name}"`
-          : `Product "${formData.name}" saved`
+        description:
+          language === 'ar'
+            ? `تم حفظ المنتج "${formData.name}" — إجمالي المخزون: ${totalStock}`
+            : `Product "${formData.name}" saved — total stock: ${totalStock}`,
       });
-
     } catch (error: any) {
       let errorMessage = 'Unknown error';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors) {
+      if (error.response?.data?.message) errorMessage = error.response.data.message;
+      else if (error.response?.data?.errors)
         errorMessage = Object.values(error.response.data.errors).flat().join(', ');
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      console.error('❌ Save error:', errorMessage);
-      console.error('❌ Error details:', error.response?.data);
+      else if (error.message) errorMessage = error.message;
 
       toast({
         title: language === 'ar' ? 'خطأ في الحفظ' : 'Save Error',
         description: errorMessage,
-        variant: 'destructive'
+        variant: 'destructive',
       });
       throw error;
     }
   };
 
   const handleBarcodeProductFound = (product: any) => {
-    const found = products.find(p => p.id === product.id);
+    const found = products.find((p) => p.id === product.id);
     if (found) handleEditProduct(found);
   };
 
@@ -754,38 +825,48 @@ const Inventory: React.FC = () => {
     sku: p.sku,
     barcode: p.barcode,
     price: Number(p.price),
-    stock: p.stock
+    stock: p.stock,
   }));
 
   const isLoading = productsLoading || categoriesLoading;
 
-  // ========== Render ==========
   return (
     <MainLayout activeItem="inventory">
       <div className="h-full flex flex-col gap-4">
         <ModuleHeader
           eyebrow={language === 'ar' ? 'دورة المخزون' : 'Inventory cycle'}
           title={language === 'ar' ? 'المخزون والمنتجات' : 'Inventory & products'}
-          description={language === 'ar' ? 'المنتجات والتصنيفات والتحويلات والجرد في مساحة تشغيل واحدة.' : 'Products, categories, transfers and counts in one operating workspace.'}
+          description={
+            language === 'ar'
+              ? 'المنتجات والتصنيفات والتحويلات والجرد في مساحة تشغيل واحدة.'
+              : 'Products, categories, transfers and counts in one operating workspace.'
+          }
           icon={<Package className="h-5 w-5" />}
-          actions={<Button onClick={handleAddProduct} className="rounded-lg"><Plus size={16} className="me-2" />{language === 'ar' ? 'إضافة منتج' : 'Add product'}</Button>}
+          actions={
+            <Button onClick={handleAddProduct} className="rounded-lg">
+              <Plus size={16} className="me-2" />
+              {language === 'ar' ? 'إضافة منتج' : 'Add product'}
+            </Button>
+          }
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <ModuleTabs value={activeTab} onChange={setActiveTab} tabs={[
-            { value: 'products', label: language === 'ar' ? 'المنتجات' : 'Products', icon: <Package size={14} /> },
-            { value: 'transfers', label: language === 'ar' ? 'التحويلات' : 'Transfers', icon: <ArrowRightLeft size={14} /> },
-            { value: 'count', label: language === 'ar' ? 'الجرد' : 'Stock count', icon: <ClipboardList size={14} /> },
-            { value: 'alerts', label: language === 'ar' ? 'التنبيهات' : 'Alerts', icon: <Bell size={14} /> },
-            { value: 'variants', label: language === 'ar' ? 'الوحدات والمتغيرات' : 'Variants', icon: <Palette size={14} /> },
-            { value: 'barcode', label: language === 'ar' ? 'الباركود' : 'Barcode', icon: <Tag size={14} /> },
-            { value: 'promotions', label: language === 'ar' ? 'العروض' : 'Promotions', icon: <Gift size={14} /> },
-            { value: 'automotive-services', label: language === 'ar' ? 'خدمات السيارات' : 'Auto services', icon: <CarFront size={14} /> },
-          ]} />
+          <ModuleTabs
+            value={activeTab}
+            onChange={setActiveTab}
+            tabs={[
+              { value: 'products', label: language === 'ar' ? 'المنتجات' : 'Products', icon: <Package size={14} /> },
+              { value: 'transfers', label: language === 'ar' ? 'التحويلات' : 'Transfers', icon: <ArrowRightLeft size={14} /> },
+              { value: 'count', label: language === 'ar' ? 'الجرد' : 'Stock count', icon: <ClipboardList size={14} /> },
+              { value: 'alerts', label: language === 'ar' ? 'التنبيهات' : 'Alerts', icon: <Bell size={14} /> },
+              { value: 'variants', label: language === 'ar' ? 'الوحدات والمتغيرات' : 'Variants', icon: <Palette size={14} /> },
+              { value: 'barcode', label: language === 'ar' ? 'الباركود' : 'Barcode', icon: <Tag size={14} /> },
+              { value: 'promotions', label: language === 'ar' ? 'العروض' : 'Promotions', icon: <Gift size={14} /> },
+              { value: 'automotive-services', label: language === 'ar' ? 'خدمات السيارات' : 'Auto services', icon: <CarFront size={14} /> },
+            ]}
+          />
 
-          {/* Products Tab */}
           <TabsContent value="products" className="flex-1 flex flex-col mt-2">
-            {/* Filters Card */}
             <Card className="mb-4">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -794,7 +875,12 @@ const Inventory: React.FC = () => {
                     {language === 'ar' ? 'تصفية المنتجات' : 'Filter Products'}
                   </span>
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="ms-auto text-destructive hover:text-destructive">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="ms-auto text-destructive hover:text-destructive"
+                    >
                       <X size={14} className="me-1" />
                       {language === 'ar' ? 'مسح الفلاتر' : 'Clear Filters'}
                     </Button>
@@ -802,12 +888,18 @@ const Inventory: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {/* Search by barcode or name */}
                   <div className="col-span-2">
                     <div className="relative">
-                      <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                      <Search
+                        className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        size={16}
+                      />
                       <Input
-                        placeholder={language === 'ar' ? 'بحث بالباركود أو الاسم أو SKU...' : 'Search by barcode, name, or SKU...'}
+                        placeholder={
+                          language === 'ar'
+                            ? 'بحث بالباركود أو الاسم أو SKU...'
+                            : 'Search by barcode, name, or SKU...'
+                        }
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="ps-9 h-9"
@@ -815,7 +907,6 @@ const Inventory: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Category Filter - Select */}
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder={language === 'ar' ? 'التصنيف' : 'Category'} />
@@ -832,7 +923,6 @@ const Inventory: React.FC = () => {
                     </SelectContent>
                   </Select>
 
-                  {/* Status Filter */}
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder={language === 'ar' ? 'الحالة' : 'Status'} />
@@ -852,17 +942,28 @@ const Inventory: React.FC = () => {
                 </div>
 
                 <div className="mt-3 flex flex-col gap-3 md:flex-row">
-                  {/* Stock level and minimum threshold filter */}
                   <Select value={stockFilter} onValueChange={setStockFilter}>
                     <SelectTrigger className="h-9 w-full md:w-64">
-                      <SelectValue placeholder={language === 'ar' ? 'حالة المخزون' : 'Stock level'} />
+                      <SelectValue
+                        placeholder={language === 'ar' ? 'حالة المخزون' : 'Stock level'}
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">{language === 'ar' ? 'كل مستويات المخزون' : 'All stock levels'}</SelectItem>
-                      <SelectItem value="in_stock">{language === 'ar' ? 'متوفر' : 'In stock'}</SelectItem>
-                      <SelectItem value="low_stock">{language === 'ar' ? 'مخزون منخفض (10 أو أقل)' : 'Low stock (10 or less)'}</SelectItem>
-                      <SelectItem value="out_of_stock">{language === 'ar' ? 'نفد المخزون' : 'Out of stock'}</SelectItem>
-                      <SelectItem value="minimum_stock">{language === 'ar' ? 'الحد الأدنى للمخزون' : 'Minimum stock'}</SelectItem>
+                      <SelectItem value="all">
+                        {language === 'ar' ? 'كل مستويات المخزون' : 'All stock levels'}
+                      </SelectItem>
+                      <SelectItem value="in_stock">
+                        {language === 'ar' ? 'متوفر' : 'In stock'}
+                      </SelectItem>
+                      <SelectItem value="low_stock">
+                        {language === 'ar' ? 'مخزون منخفض (10 أو أقل)' : 'Low stock (10 or less)'}
+                      </SelectItem>
+                      <SelectItem value="out_of_stock">
+                        {language === 'ar' ? 'نفد المخزون' : 'Out of stock'}
+                      </SelectItem>
+                      <SelectItem value="minimum_stock">
+                        {language === 'ar' ? 'الحد الأدنى للمخزون' : 'Minimum stock'}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -874,7 +975,9 @@ const Inventory: React.FC = () => {
                     disabled={stockFilter !== 'minimum_stock' || filteredProducts.length === 0}
                   >
                     <FileSpreadsheet size={16} />
-                    {language === 'ar' ? 'تنزيل نتائج الحد الأدنى Excel' : 'Export minimum stock to Excel'}
+                    {language === 'ar'
+                      ? 'تنزيل نتائج الحد الأدنى Excel'
+                      : 'Export minimum stock to Excel'}
                   </Button>
                 </div>
 
@@ -882,30 +985,51 @@ const Inventory: React.FC = () => {
                 <div className="mt-3">
                   <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
                     <SelectTrigger className="h-9 w-full md:w-64">
-                      <SelectValue placeholder={language === 'ar' ? 'المستودع' : 'Warehouse'} />
+                      <SelectValue
+                        placeholder={language === 'ar' ? 'المستودع' : 'Warehouse'}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">
-                        {language === 'ar' ? 'جميع المخازن' : 'All Warehouses'}
+                        {language === 'ar'
+                          ? currentWarehouse?.id
+                            ? 'المستودع الحالي'
+                            : 'جميع المخازن'
+                          : currentWarehouse?.id
+                            ? 'Current warehouse'
+                            : 'All Warehouses'}
                       </SelectItem>
                       {warehouses.map((warehouse: any) => (
                         <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
-                          {language === 'ar' ? warehouse.name_ar || warehouse.name : warehouse.name}
+                          {language === 'ar'
+                            ? warehouse.name_ar || warehouse.name
+                            : warehouse.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {activeWarehouseId && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {language === 'ar'
+                        ? `عرض المخزون من: ${warehouses.find((w: any) => Number(w.id) === activeWarehouseId)
+                          ?.name || `#${activeWarehouseId}`
+                        }`
+                        : `Showing stock from: ${warehouses.find((w: any) => Number(w.id) === activeWarehouseId)
+                          ?.name || `#${activeWarehouseId}`
+                        }`}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Products Grid */}
             <div className="flex-1 flex gap-4 min-h-0">
-              {/* Category Manager Sidebar */}
-              <div className={cn(
-                "flex-shrink-0 hidden lg:block transition-all duration-300",
-                isCategoryCollapsed ? "w-12" : "w-66"
-              )}>
+              <div
+                className={cn(
+                  'flex-shrink-0 hidden lg:block transition-all duration-300',
+                  isCategoryCollapsed ? 'w-12' : 'w-66'
+                )}
+              >
                 <CategoryManager
                   selectedCategory={selectedCategory}
                   onSelectCategory={setSelectedCategory}
@@ -914,7 +1038,6 @@ const Inventory: React.FC = () => {
                 />
               </div>
 
-              {/* Product List */}
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex-1 bg-card rounded-xl border border-border overflow-hidden">
                   {isLoading ? (
@@ -942,7 +1065,6 @@ const Inventory: React.FC = () => {
             </div>
           </TabsContent>
 
-          {/* Other Tabs */}
           <TabsContent value="transfers" className="flex-1 mt-2">
             <Card className="shadow-md border-border">
               <CardContent className="p-4">
@@ -985,7 +1107,6 @@ const Inventory: React.FC = () => {
         </Tabs>
       </div>
 
-      {/* Modals */}
       <ProductForm
         isOpen={showProductForm}
         onClose={() => {
@@ -1029,7 +1150,9 @@ const Inventory: React.FC = () => {
         onEditProduct={() => {
           setShowVariantsModal(false);
           if (selectedProductForVariants) {
-            const found = products.find(p => p.id === selectedProductForVariants.id);
+            const found = products.find(
+              (p) => p.id === selectedProductForVariants.id
+            );
             if (found) handleEditProduct(found);
           }
         }}
