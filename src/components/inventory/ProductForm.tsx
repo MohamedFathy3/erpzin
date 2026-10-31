@@ -710,6 +710,15 @@
             </div>
           </form>
 
+
+
+
+
+
+
+
+
+
           <div className="flex items-center justify-end gap-3 p-4 border-t border-border bg-muted/30">
             <Button type="button" variant="outline" onClick={onClose}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}

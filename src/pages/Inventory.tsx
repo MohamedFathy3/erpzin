@@ -357,7 +357,12 @@ const Inventory: React.FC = () => {
 
   const dbCategories = categories;
 
-  /* ========== تحويل المنتجات + تعيين stock المستودع النشط ========== */
+
+
+
+
+
+  
   const products: Product[] = useMemo(() => {
     return dbProducts.map((product: any) => {
       const transformed: any = transformApiProduct(product);
