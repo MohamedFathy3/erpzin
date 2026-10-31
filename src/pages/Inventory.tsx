@@ -368,7 +368,9 @@ const Inventory: React.FC = () => {
       if (activeWarehouseId) {
         const ws = product.warehouse_stocks || {};
         transformed.stock =
-          ws[activeWarehouseId] !== undefined ? Number(ws[activeWarehouseId]) || 0 : 0;
+          product.display_stock !== undefined && product.display_stock !== null
+            ? Number(product.display_stock) || 0
+            : Number(ws[activeWarehouseId] ?? 0);
       }
 
       return transformed as Product;
