@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 
 // ==================== Types ====================
@@ -49,6 +50,47 @@ export interface PurchaseInvoice {
   invoice_date: string;
 }
 
+export interface DashboardTreasury {
+  id: number;
+  name: string;
+  balance: number;
+  currency?: string | null;
+  branch_id?: number | null;
+}
+
+export interface DashboardAttendance {
+  id: number;
+  employee?: { name?: string | null } | null;
+  date: string;
+  check_in?: string | null;
+  check_out?: string | null;
+  status?: string | null;
+  late_minutes?: number;
+  worked_minutes?: number;
+}
+
+export interface OpenCashierShift {
+  id: number;
+  employee?: string;
+  status: string;
+  opened_at?: string | null;
+  opening_balance?: number;
+  cash_sales?: number;
+  expected_amount?: number;
+}
+
+export interface UnifiedFinancialReport {
+  summary: {
+    sales: number;
+    sales_cost: number;
+    gross_profit: number;
+    purchases: number;
+    expenses: number;
+    revenues: number;
+    net_profit: number;
+  };
+}
+
 export interface PurchaseInvoiceResponse {
   data: PurchaseInvoice[];
 }
@@ -90,6 +132,7 @@ interface DashboardSummary {
   supplier_due?: number;
   customer_due?: number;
   top_customer?: { name?: string; total?: number } | null;
+  net_profit?: number;
   employees_count?: number;
   daily_expenses?: number;
   expenses?: number;
@@ -138,9 +181,11 @@ const normalizeTransactionDate = (value: unknown): string => {
 // ==================== Custom Hook ====================
 export const useDashboardData = (filters?: { from?: string; to?: string }) => {
   const { currentBranch } = useApp();
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id ?? null;
 
   const { data: dashboardSummary, isLoading: loadingSummary, error: summaryError } = useQuery<DashboardSummary>({
-    queryKey: ['dashboard-summary', currentBranch?.id, filters?.from, filters?.to],
+    queryKey: ['dashboard-summary', tenantId, currentBranch?.id, filters?.from, filters?.to],
     queryFn: async () => {
       const response = await api.get('/dashboard/summary', { params: { ...(currentBranch?.id ? { branch_id: currentBranch.id } : {}), from: filters?.from, to: filters?.to } });
       return response.data?.data;
@@ -154,7 +199,7 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
     isLoading: loadingRevenue,
     error: revenueError 
   } = useQuery<RevenueReport>({
-    queryKey: ['revenue-report', currentBranch?.id],
+    queryKey: ['revenue-report', tenantId, currentBranch?.id],
     queryFn: async () => {
       try {
         const params: Record<string, number> = {};
@@ -188,7 +233,7 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
 
   // Fetch Recent Sales
   const { data: recentSales = [] } = useQuery<SalesInvoice[]>({
-    queryKey: ['recent-sales'],
+    queryKey: ['recent-sales', tenantId, currentBranch?.id],
     queryFn: async () => {
       const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
         orderBy: 'id',
@@ -202,21 +247,63 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
 
   // Fetch Recent Purchases
   const { data: recentPurchases = [] } = useQuery<PurchaseInvoice[]>({
-    queryKey: ['recent-purchases'],
+    queryKey: ['recent-purchases', tenantId, currentBranch?.id],
     queryFn: async () => {
       const response = await api.post<PurchaseInvoiceResponse>('/purchases-invoices/index', {
         orderBy: 'id',
         orderByDirection: 'desc',
-        perPage: 3,
+        perPage: 5,
         paginate: false
       });
       return response.data?.data || [];
     },
+    refetchInterval: 60000,
+  });
+
+  const { data: treasuries = [] } = useQuery<DashboardTreasury[]>({
+    queryKey: ['dashboard-treasuries', tenantId, currentBranch?.id],
+    queryFn: async () => {
+      const response = await api.post('/treasury/index', { filters: {}, perPage: 100, paginate: false });
+      const rows = response.data?.data || [];
+      return currentBranch?.id ? rows.filter((row: DashboardTreasury) => !row.branch_id || row.branch_id === currentBranch.id) : rows;
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: attendanceRecords = [] } = useQuery<DashboardAttendance[]>({
+    queryKey: ['dashboard-attendance', tenantId, currentBranch?.id],
+    queryFn: async () => {
+      const response = await api.get('/attendance/dashboard-today', {
+        params: currentBranch?.id ? { branch_id: currentBranch.id } : {},
+      });
+      return response.data?.data || [];
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: openCashierShifts = [] } = useQuery<OpenCashierShift[]>({
+    queryKey: ['dashboard-open-cashier-shifts', tenantId],
+    queryFn: async () => {
+      const response = await api.get('/shifts', { params: { status: 'open' } });
+      return response.data?.data || [];
+    },
+    refetchInterval: 30000,
+  });
+
+  const { data: financialReport, isLoading: loadingFinancialReport } = useQuery<UnifiedFinancialReport>({
+    queryKey: ['dashboard-unified-financial', tenantId, currentBranch?.id, filters?.from, filters?.to],
+    queryFn: async () => {
+      const response = await api.get('/reports/unified-financial', {
+        params: { from: filters?.from, to: filters?.to, ...(currentBranch?.id ? { branch_id: currentBranch.id } : {}) },
+      });
+      return response.data?.data;
+    },
+    refetchInterval: 60000,
   });
 
   // Fetch Products for Low Stock
   const { data: products = [] } = useQuery<Product[]>({
-    queryKey: ['products'],
+    queryKey: ['dashboard-products', tenantId, currentBranch?.id],
     queryFn: async () => {
       const response = await api.post<ProductResponse>('/product/index', {
         paginate: false
@@ -232,8 +319,8 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
     const threeMonthsRevenue = revenueReport?.three_months_revenue || 0;
     
     // Low stock products - مع التأكد من وجود البيانات
-    const lowStockProducts = products.filter(p => 
-      p && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+    const lowStockProducts = products.filter(p =>
+      p && p.stock <= (p.reorder_level || 5)
     );
     const lowStockCount = lowStockProducts.length;
 
@@ -289,8 +376,8 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
 
   // Get low stock products for alerts
   const lowStockProducts = useMemo(() => {
-    return products.filter(p => 
-      p && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+    return products.filter(p =>
+      p && p.stock <= (p.reorder_level || 5)
     );
   }, [products]);
 
@@ -301,6 +388,10 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
     recentPurchases,
     products,
     dashboardSummary,
+    treasuries,
+    attendanceRecords,
+    openCashierShifts,
+    financialReport,
     
     // Computed
     dashboardMetrics,
@@ -308,7 +399,7 @@ export const useDashboardData = (filters?: { from?: string; to?: string }) => {
     lowStockProducts,
     
     // Loading states
-    isLoading: loadingRevenue || loadingSummary,
+    isLoading: loadingRevenue || loadingSummary || loadingFinancialReport,
     isSalesLoading: false,
     isPurchasesLoading: false,
     isProductsLoading: false,
