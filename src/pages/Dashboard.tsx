@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,10 +17,12 @@ import { ArrowUpRight, BarChart3, Boxes, Factory, FileText, Plus, Receipt, Shopp
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
-  const { user } = useAuth();
+  const { user, enabledModules } = useAuth();
   const { currentBranch } = useApp();
   const { formatCurrency } = useRegionalSettings();
-  const { revenueReport, dashboardMetrics, recentTransactions, isLoading, dashboardSummary } = useDashboardData();
+  const [from, setFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const { revenueReport, dashboardMetrics, recentTransactions, isLoading, dashboardSummary } = useDashboardData({ from, to });
   const ar = language === 'ar';
   const firstName = user?.email?.split('@')[0] || (ar ? 'المستخدم' : 'there');
 
@@ -59,13 +61,23 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
+        <section className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-sm">
+          <div><label className="mb-1 block text-xs text-muted-foreground">{ar ? 'من تاريخ' : 'From'}</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-md border bg-background px-3 text-sm" /></div>
+          <div><label className="mb-1 block text-xs text-muted-foreground">{ar ? 'إلى تاريخ' : 'To'}</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-md border bg-background px-3 text-sm" /></div>
+          <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => { const d = new Date(); setFrom(d.toISOString().slice(0, 10)); setTo(d.toISOString().slice(0, 10)); }}>{ar ? 'اليوم' : 'Today'}</Button><Button type="button" variant="outline" onClick={() => { const d = new Date(); setFrom(new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)); setTo(d.toISOString().slice(0, 10)); }}>{ar ? 'هذا الشهر' : 'This month'}</Button></div>
+        </section>
+
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {kpis.map((kpi, index) => <Card key={kpi.label} className="dashboard-kpi"><CardContent className="p-5"><div className="flex items-start justify-between"><p className="dashboard-label">{kpi.label}</p><span className="dashboard-kpi-index">0{index + 1}</span></div>{isLoading ? <div className="mt-4 h-8 w-32 animate-pulse rounded bg-muted" /> : <p className="dashboard-kpi-value">{kpi.value}</p>}<p className="mt-2 text-xs text-muted-foreground">{kpi.note}{kpi.change !== undefined && <span className={kpi.change >= 0 ? 'ms-2 text-emerald-600' : 'ms-2 text-red-500'}>{kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change).toFixed(1)}%</span>}</p></CardContent></Card>)}
         </section>
 
+        {dashboardSummary && <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[[ar ? 'المستحق للموردين' : 'Supplier due', formatCurrency(Number(dashboardSummary.supplier_due || 0))], [ar ? 'المستحق على العملاء' : 'Customer due', formatCurrency(Number(dashboardSummary.customer_due || 0))], [ar ? 'المصروفات اليومية' : 'Daily expenses', formatCurrency(Number(dashboardSummary.daily_expenses || 0))], [ar ? 'عدد الموظفين' : 'Employees', Number(dashboardSummary.employees_count || 0).toLocaleString()]].map(([label, value]) => <Card key={String(label)} className="dashboard-kpi"><CardContent className="p-4"><p className="dashboard-label">{label}</p><p className="dashboard-kpi-value text-2xl">{value}</p></CardContent></Card>)}
+        </section>}
+
         {dashboardSummary && <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark"><Factory className="h-4 w-4" /></span>{ar ? 'المشروعات والتكلفة' : 'Projects & cost'}<button onClick={() => navigate('/projects')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[['العقود', dashboardSummary.projects_finance.contract_value], ['التكلفة', dashboardSummary.projects_finance.actual_cost], ['المستخلصات', dashboardSummary.projects_finance.claims_outstanding], ['الربح التقديري', dashboardSummary.projects_finance.profit_estimate]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{formatCurrency(Number(value))}</strong></div>)}</div></CardContent></Card>
-          <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark cyan"><Factory className="h-4 w-4" /></span>{ar ? 'تشغيل المصنع' : 'Manufacturing flow'}<button onClick={() => navigate('/manufacturing')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[['قيد التشغيل', dashboardSummary.manufacturing_summary.orders_in_progress], ['مكتملة', dashboardSummary.manufacturing_summary.completed_orders], ['التكلفة المخططة', formatCurrency(dashboardSummary.manufacturing_summary.planned_cost)], ['التكلفة الفعلية', formatCurrency(dashboardSummary.manufacturing_summary.actual_cost)]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{value}</strong></div>)}</div></CardContent></Card>
+          {enabledModules.includes('projects') && <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark"><Factory className="h-4 w-4" /></span>{ar ? 'المشروعات والتكلفة' : 'Projects & cost'}<button onClick={() => navigate('/projects')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[['العقود', dashboardSummary.projects_finance.contract_value], ['التكلفة', dashboardSummary.projects_finance.actual_cost], ['المستخلصات', dashboardSummary.projects_finance.claims_outstanding], ['الربح التقديري', dashboardSummary.projects_finance.profit_estimate]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{formatCurrency(Number(value))}</strong></div>)}</div></CardContent></Card>}
+          {enabledModules.includes('manufacturing') && <Card className="dashboard-data-card"><CardHeader><CardTitle><span className="dashboard-card-mark cyan"><Factory className="h-4 w-4" /></span>{ar ? 'تشغيل المصنع' : 'Manufacturing flow'}<button onClick={() => navigate('/manufacturing')} className="ms-auto text-xs text-primary hover:underline">{ar ? 'فتح' : 'Open'} <ArrowUpRight className="inline h-3 w-3" /></button></CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[[ar ? 'قيد التشغيل' : 'In progress', dashboardSummary.manufacturing_summary.orders_in_progress], [ar ? 'مكتملة' : 'Completed', dashboardSummary.manufacturing_summary.completed_orders], [ar ? 'المخطط' : 'Planned', formatCurrency(dashboardSummary.manufacturing_summary.planned_cost)], [ar ? 'الفعلي' : 'Actual', formatCurrency(dashboardSummary.manufacturing_summary.actual_cost)], [ar ? 'الهالك' : 'Scrap', dashboardSummary.manufacturing_summary.scrapped_quantity || 0]].map(([label, value]) => <div key={String(label)} className="dashboard-mini-stat"><span>{label}</span><strong>{value}</strong></div>)}</div></CardContent></Card>}
         </section>}
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">

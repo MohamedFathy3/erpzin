@@ -87,6 +87,12 @@ interface DashboardSummary {
   customers_count: number;
   products_count: number;
   low_stock_count: number;
+  supplier_due?: number;
+  customer_due?: number;
+  top_customer?: { name?: string; total?: number } | null;
+  employees_count?: number;
+  daily_expenses?: number;
+  expenses?: number;
   credit_sales: number;
   projects_finance: {
     active_count: number;
@@ -105,6 +111,7 @@ interface DashboardSummary {
     completed_orders: number;
     planned_quantity: number;
     produced_quantity: number;
+    scrapped_quantity?: number;
     actual_cost: number;
     planned_cost: number;
   };
@@ -129,13 +136,13 @@ const normalizeTransactionDate = (value: unknown): string => {
 };
 
 // ==================== Custom Hook ====================
-export const useDashboardData = () => {
+export const useDashboardData = (filters?: { from?: string; to?: string }) => {
   const { currentBranch } = useApp();
 
   const { data: dashboardSummary, isLoading: loadingSummary, error: summaryError } = useQuery<DashboardSummary>({
-    queryKey: ['dashboard-summary', currentBranch?.id],
+    queryKey: ['dashboard-summary', currentBranch?.id, filters?.from, filters?.to],
     queryFn: async () => {
-      const response = await api.get('/dashboard/summary', { params: currentBranch?.id ? { branch_id: currentBranch.id } : {} });
+      const response = await api.get('/dashboard/summary', { params: { ...(currentBranch?.id ? { branch_id: currentBranch.id } : {}), from: filters?.from, to: filters?.to } });
       return response.data?.data;
     },
     refetchInterval: 60000,
