@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
 import { ModuleHeader, ModuleTabs } from '@/components/layout/ModuleHeader';
 import CategoryManager from '@/components/inventory/CategoryManager';
@@ -211,6 +212,8 @@ api.interceptors.response.use(
 const Inventory: React.FC = () => {
   const { language } = useLanguage();
   const { currentBranch, currentWarehouse } = useApp();
+  const { permissions } = useAuth();
+  const hasAllBranchAccess = permissions.includes('all_branch') || permissions.includes('*');
   const [activeTab, setActiveTab] = useState('products');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -248,6 +251,7 @@ const Inventory: React.FC = () => {
   } = useQuery({
     queryKey: [
       'inventory-products',
+      hasAllBranchAccess,
       selectedCategory,
       categoryFilter,
       statusFilter,
@@ -277,7 +281,7 @@ const Inventory: React.FC = () => {
           payload.filters.active = statusFilter === 'active';
         }
 
-        if (currentBranch?.id) payload.filters.branch_id = parseInt(String(currentBranch.id));
+        if (currentBranch?.id && !hasAllBranchAccess) payload.filters.branch_id = parseInt(String(currentBranch.id));
 
         if (activeWarehouseId) {
           payload.filters.stock_warehouse_id = activeWarehouseId;
