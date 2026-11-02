@@ -65,6 +65,12 @@
     warehouseIds: string[];
     warehouseStocks?: Record<string, number>;
     valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
+    product_type: 'good' | 'service' | 'material' | 'semi_finished' | 'finished';
+    stock_unit: string;
+    base_unit: string;
+    conversion_factor: number;
+    tracking: 'none' | 'lot' | 'serial';
+    dimensions: { width?: number; height?: number; depth?: number; unit: string };
   }
 
   const generateBarcode = (): string =>
@@ -179,6 +185,12 @@
       warehouseIds: [],
       warehouseStocks: {},
       valuationMethod: 'fifo',
+      product_type: 'good',
+      stock_unit: 'piece',
+      base_unit: 'piece',
+      conversion_factor: 1,
+      tracking: 'none',
+      dimensions: { unit: 'cm' },
     });
 
     const { data: unitsData = [] } = useUnitsForm();
@@ -216,6 +228,12 @@
           reorderPoint: Number(editProduct.reorderPoint) || 5,
           warehouseIds: safeIds,
           warehouseStocks: safeStocks,
+          product_type: editProduct.product_type || 'good',
+          stock_unit: editProduct.stock_unit || '',
+          base_unit: editProduct.base_unit || '',
+          conversion_factor: Number(editProduct.conversion_factor) || 1,
+          tracking: editProduct.tracking || 'none',
+          dimensions: editProduct.dimensions || { unit: 'cm' },
         });
       } else {
         setFormData(getInitialFormData());
@@ -295,19 +313,8 @@
         return;
       }
 
-      if (formData.warehouseIds.length === 0) {
-        toast({
-          title: language === 'ar' ? 'خطأ' : 'Error',
-          description: language === 'ar'
-            ? 'يجب اختيار مخزن واحد على الأقل'
-            : 'Please select at least one warehouse',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       // ✅ تنبيه بس (مش منع) لو كل الكميات 0
-      if (totalStock === 0) {
+      if (formData.warehouseIds.length > 0 && totalStock === 0) {
         const confirmed = window.confirm(
           language === 'ar'
             ? 'كل المخازن المختارة بكمية 0. هل تريد الحفظ على أي حال؟'
@@ -327,6 +334,12 @@
       try {
         const payload = {
           ...productFormData,
+          product_type: productFormData.product_type,
+          stock_unit: productFormData.stock_unit || null,
+          base_unit: productFormData.base_unit || null,
+          conversion_factor: Number(productFormData.conversion_factor) || 1,
+          tracking: productFormData.tracking,
+          dimensions: productFormData.dimensions,
 
           // Laravel expects snake_case
           warehouse_ids: productFormData.warehouseIds.map(Number),
@@ -522,6 +535,90 @@
               </div>
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <p className="font-medium text-foreground">
+                {language === 'ar' ? 'التصنيع والقياس' : 'Manufacturing & measurements'}
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <Label>{language === 'ar' ? 'نوع المنتج' : 'Product type'}</Label>
+                  <Select
+                    value={formData.product_type}
+                    onValueChange={(value) => handleChange('product_type', value)}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="good">{language === 'ar' ? 'منتج' : 'Good'}</SelectItem>
+                      <SelectItem value="material">{language === 'ar' ? 'خامة' : 'Material'}</SelectItem>
+                      <SelectItem value="semi_finished">{language === 'ar' ? 'نصف مصنع' : 'Semi-finished'}</SelectItem>
+                      <SelectItem value="finished">{language === 'ar' ? 'منتج تام' : 'Finished product'}</SelectItem>
+                      <SelectItem value="service">{language === 'ar' ? 'خدمة' : 'Service'}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{language === 'ar' ? 'وحدة المخزون' : 'Stock unit'}</Label>
+                  <Select value={formData.stock_unit || 'piece'} onValueChange={(value) => handleChange('stock_unit', value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="piece">{language === 'ar' ? 'قطعة' : 'Piece'}</SelectItem>
+                      <SelectItem value="service">{language === 'ar' ? 'خدمة' : 'Service'}</SelectItem>
+                      <SelectItem value="m">{language === 'ar' ? 'متر' : 'Meter'}</SelectItem>
+                      <SelectItem value="m2">{language === 'ar' ? 'متر مربع' : 'Square meter'}</SelectItem>
+                      <SelectItem value="m3">{language === 'ar' ? 'متر مكعب' : 'Cubic meter'}</SelectItem>
+                      {unitsData.map((unit: UnitOption) => (
+                        <SelectItem key={unit.id} value={unit.code}>
+                          {language === 'ar' ? unit.nameAr : unit.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{language === 'ar' ? 'وحدة البيع/القياس' : 'Sales / measure unit'}</Label>
+                  <Select value={formData.base_unit || formData.stock_unit || 'piece'} onValueChange={(value) => handleChange('base_unit', value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="piece">{language === 'ar' ? 'قطعة' : 'Piece'}</SelectItem>
+                      <SelectItem value="service">{language === 'ar' ? 'خدمة' : 'Service'}</SelectItem>
+                      <SelectItem value="m">{language === 'ar' ? 'متر' : 'Meter'}</SelectItem>
+                      <SelectItem value="m2">{language === 'ar' ? 'متر مربع' : 'Square meter'}</SelectItem>
+                      <SelectItem value="m3">{language === 'ar' ? 'متر مكعب' : 'Cubic meter'}</SelectItem>
+                      {unitsData.map((unit: UnitOption) => (
+                        <SelectItem key={unit.id} value={unit.code}>
+                          {language === 'ar' ? unit.nameAr : unit.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div>
+                  <Label>{language === 'ar' ? 'عدد وحدات المخزون في وحدة القياس' : 'Stock units per measure unit'}</Label>
+                  <Input type="number" min="0.000001" step="0.000001" value={formData.conversion_factor} onChange={(event) => handleNumberChange('conversion_factor', event.target.value)} />
+                </div>
+                {(['width', 'height', 'depth'] as const).map((dimension) => (
+                  <div key={dimension}>
+                    <Label>{language === 'ar' ? ({ width: 'العرض', height: 'الارتفاع', depth: 'العمق' }[dimension]) : dimension}</Label>
+                    <Input type="number" min="0" step="0.001" value={formData.dimensions[dimension] ?? ''} onChange={(event) => handleChange('dimensions', { ...formData.dimensions, [dimension]: event.target.value === '' ? undefined : Number(event.target.value) })} />
+                  </div>
+                ))}
+                <div>
+                  <Label>{language === 'ar' ? 'وحدة الأبعاد' : 'Dimension unit'}</Label>
+                  <Select value={formData.dimensions.unit || 'cm'} onValueChange={(value) => handleChange('dimensions', { ...formData.dimensions, unit: value })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mm">mm</SelectItem>
+                      <SelectItem value="cm">cm</SelectItem>
+                      <SelectItem value="m">m</SelectItem>
+                      <SelectItem value="in">in</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
             {/* Pricing */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -566,8 +663,8 @@
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {language === 'ar'
-                    ? 'اختر أكثر من مخزن، وحدد كمية افتتاحية مستقلة لكل مخزن.'
-                    : 'Select multiple warehouses and set an independent opening quantity for each one.'}
+                    ? 'اختيار المخزن اختياري؛ عند تركه فارغًا سيُربط المنتج تلقائيًا بمخزن الفرع الحالي.'
+                    : 'Warehouse selection is optional. If left empty, the product is linked to the current branch warehouse automatically.'}
                 </p>
               </div>
 

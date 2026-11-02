@@ -157,6 +157,12 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     warehouseIds,
     warehouseStocks,
     valuationMethod: apiProduct.valuation_method || 'fifo',
+    product_type: apiProduct.product_type || 'good',
+    stock_unit: apiProduct.stock_unit || '',
+    base_unit: apiProduct.base_unit || '',
+    conversion_factor: Number(apiProduct.conversion_factor) || 1,
+    tracking: apiProduct.tracking || 'none',
+    dimensions: apiProduct.dimensions || { unit: 'cm' },
   };
 };
 
@@ -677,6 +683,11 @@ const Inventory: React.FC = () => {
         name: formData.name,
         description: formData.description || '',
         category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
+        branch_id: currentBranch?.id
+          ? Number(currentBranch.id)
+          : currentWarehouse?.branch_id
+            ? Number(currentWarehouse.branch_id)
+            : null,
         sku: formData.sku,
         barcode: formData.barcode || null,
         main_unit_id: formData.main_unit_id ? parseInt(formData.main_unit_id) : null,
