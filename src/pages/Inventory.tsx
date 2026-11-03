@@ -131,6 +131,15 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
       warehouseStocks[id] = 0;
     }
   });
+  const branchPrices: Record<string, number> = {};
+  if (Array.isArray(apiProduct.branch_prices)) {
+    apiProduct.branch_prices.forEach((branchPrice: { branch_id?: string | number; price?: string | number }) => {
+      const branchId = Number(branchPrice.branch_id);
+      if (Number.isSafeInteger(branchId) && branchId > 0) {
+        branchPrices[String(branchId)] = Number(branchPrice.price) || 0;
+      }
+    });
+  }
   return {
     id: apiProduct.id?.toString(),
     name: apiProduct.name || '',
@@ -141,7 +150,7 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     barcode: apiProduct.barcode || '',
     categoryId,
     main_unit_id: apiProduct.main_unit_id?.toString() || '',
-    price: Number(apiProduct.price) || 0,
+    price: Number(apiProduct.base_price ?? apiProduct.price) || 0,
     cost: Number(apiProduct.cost) || 0,
     hasVariants: apiProduct.has_variants || false,
     variants,
@@ -155,6 +164,7 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     branchIds: Array.isArray(apiProduct.branch_ids)
       ? apiProduct.branch_ids.map((id: any) => id.toString())
       : [],
+    branchPrices,
     warehouseIds,
     warehouseStocks,
     valuationMethod: apiProduct.valuation_method || 'fifo',
@@ -681,23 +691,30 @@ const Inventory: React.FC = () => {
         0
       );
 
+      const rawWarehouseBranchId = typeof currentWarehouse?.branch_id === 'object'
+        ? currentWarehouse.branch_id?.id
+        : currentWarehouse?.branch_id;
+      const candidateBranchId = currentBranch?.id ?? currentWarehouse?.branch?.id ?? rawWarehouseBranchId;
+      const numericBranchId = Number(candidateBranchId);
+      const productBranchId = Number.isSafeInteger(numericBranchId) && numericBranchId > 0
+        ? numericBranchId
+        : null;
 
 
       const productData: any = {
         name: formData.name,
         description: formData.description || '',
         category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
-        branch_id: currentBranch?.id
-          ? Number(currentBranch.id)
-          : currentWarehouse?.branch_id
-            ? Number(currentWarehouse.branch_id)
-            : null,
+        branch_id: productBranchId,
         sku: formData.sku,
         barcode: formData.barcode || null,
         main_unit_id: formData.main_unit_id ? parseInt(formData.main_unit_id) : null,
         reorder_level: formData.reorderPoint || 5,
         cost: formData.cost || 0,
         price: formData.price || 0,
+        branch_prices: Object.entries(formData.branchPrices || {})
+          .filter(([branchId]) => Number.isSafeInteger(Number(branchId)) && Number(branchId) > 0)
+          .map(([branchId, price]) => ({ branch_id: Number(branchId), price: Number(price) || 0 })),
         stock: totalStock, // ✅ دايماً مجموع المخازن
         active: formData.status === 'active',
         has_variants: formData.hasVariants || false,

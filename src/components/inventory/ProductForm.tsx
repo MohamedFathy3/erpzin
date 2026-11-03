@@ -27,13 +27,28 @@
     code: string;
   }
 
+  interface BranchOption {
+    id: string | number;
+    name?: string;
+    name_ar?: string;
+  }
+
+  interface WarehouseOption {
+    id: string | number;
+    name?: string;
+    branch_id?: string | number | BranchOption | null;
+    branch?: BranchOption | null;
+    branch_name?: string;
+    branch_name_ar?: string;
+  }
+
   interface ProductFormProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (product: ProductFormData) => void | Promise<void>;
     editProduct?: ProductFormData | null;
-    branches?: any[];
-    warehouses?: any[];
+    branches?: BranchOption[];
+    warehouses?: WarehouseOption[];
     categories?: any[];
     isLoadingBranches?: boolean;
     isLoadingWarehouses?: boolean;
@@ -62,6 +77,7 @@
     imageId?: number;
     imageUrl?: string;
     branchIds: string[];
+    branchPrices?: Record<string, number>;
     warehouseIds: string[];
     warehouseStocks?: Record<string, number>;
     valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
@@ -151,6 +167,7 @@
     onClose,
     onSave,
     editProduct,
+    branches = [],
     warehouses = [],
     categories = [],
     isLoadingWarehouses = false,
@@ -182,6 +199,7 @@
       imageId: undefined,
       imageUrl: '',
       branchIds: [],
+      branchPrices: {},
       warehouseIds: [],
       warehouseStocks: {},
       valuationMethod: 'fifo',
@@ -211,9 +229,13 @@
       if (editProduct) {
         // ✅ Normalize warehouseStocks و warehouseIds
         const safeStocks: Record<string, number> = {};
+        const safeBranchPrices: Record<string, number> = {};
         const rawStocks = editProduct.warehouseStocks || {};
         Object.entries(rawStocks).forEach(([id, val]) => {
           safeStocks[String(id)] = Number(val) || 0;
+        });
+        Object.entries(editProduct.branchPrices || {}).forEach(([id, val]) => {
+          safeBranchPrices[String(id)] = Number(val) || 0;
         });
 
         const safeIds = Array.isArray(editProduct.warehouseIds)
@@ -226,6 +248,7 @@
           cost: Number(editProduct.cost) || 0,
           stock: Number(editProduct.stock) || 0,
           reorderPoint: Number(editProduct.reorderPoint) || 5,
+          branchPrices: safeBranchPrices,
           warehouseIds: safeIds,
           warehouseStocks: safeStocks,
           product_type: editProduct.product_type || 'good',
@@ -291,6 +314,37 @@
       (sum, id) => sum + Number(formData.warehouseStocks?.[id] || 0),
       0
     );
+
+    const getWarehouseBranchId = (warehouse: any): string => {
+      const branchObject = warehouse?.branch && typeof warehouse.branch === 'object' ? warehouse.branch : null;
+      const rawBranchId = warehouse?.branch_id;
+      const branchIdObject = rawBranchId && typeof rawBranchId === 'object' ? rawBranchId : null;
+      const candidate = branchObject?.id ?? branchIdObject?.id ?? rawBranchId;
+      const normalizedCandidate = candidate && typeof candidate === 'object' ? candidate.id : candidate;
+      const id = Number(normalizedCandidate);
+      return Number.isSafeInteger(id) && id > 0 ? String(id) : '';
+    };
+
+    const branchPriceBranchIds = Array.from(new Set([
+      ...warehouses.map(getWarehouseBranchId),
+      ...(formData.branchIds || []).map(String),
+      ...Object.keys(formData.branchPrices || {}),
+    ].filter((id) => /^\d+$/.test(id) && Number(id) > 0))).sort((a, b) => Number(a) - Number(b));
+
+    const getBranchLabel = (branchId: string): string => {
+      const branch = branches.find((item) => String(item.id) === branchId);
+      const warehouse = warehouses.find((item) => getWarehouseBranchId(item) === branchId);
+      const warehouseBranch = warehouse?.branch;
+      const rawWarehouseBranch = warehouse?.branch_id;
+      const warehouseBranchObject = rawWarehouseBranch && typeof rawWarehouseBranch === 'object'
+        ? rawWarehouseBranch
+        : null;
+      const name = branch?.name || warehouseBranch?.name || warehouseBranchObject?.name || warehouse?.branch_name;
+      const nameAr = branch?.name_ar || warehouseBranch?.name_ar || warehouseBranchObject?.name_ar || warehouse?.branch_name_ar;
+      return language === 'ar'
+        ? nameAr || name || `فرع #${branchId}`
+        : name || nameAr || `Branch #${branchId}`;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -681,9 +735,17 @@
                 </p>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
-                  {warehouses.map((warehouse: any) => {
+                  {warehouses.map((warehouse) => {
                     const id = String(warehouse.id);
                     const selected = formData.warehouseIds.includes(id);
+                    const branchObject = warehouse.branch && typeof warehouse.branch === 'object' ? warehouse.branch : null;
+                    const rawBranchId = warehouse.branch_id;
+                    const branchIdObject = rawBranchId && typeof rawBranchId === 'object' ? rawBranchId : null;
+                    const branchId = getWarehouseBranchId(warehouse);
+                    const branchFromList = branches.find((item) => String(item.id) === branchId);
+                    const branchName = language === 'ar'
+                      ? branchObject?.name_ar || branchIdObject?.name_ar || warehouse.branch_name_ar || branchFromList?.name_ar || branchObject?.name || branchIdObject?.name || warehouse.branch_name || branchFromList?.name || (branchId ? `فرع #${branchId}` : '')
+                      : branchObject?.name || branchIdObject?.name || warehouse.branch_name || branchFromList?.name || branchObject?.name_ar || branchIdObject?.name_ar || warehouse.branch_name_ar || branchFromList?.name_ar || (branchId ? `Branch #${branchId}` : '');
 
                     return (
                       <div
@@ -716,9 +778,7 @@
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{warehouse.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {warehouse.branch?.name ||
-                              warehouse.branch_name ||
-                              (warehouse.branch_id ? `Branch #${warehouse.branch_id}` : '')}
+                            {branchName}
                           </p>
                         </div>
 
@@ -744,6 +804,59 @@
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {branchPriceBranchIds.length > 0 && (
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {language === 'ar' ? 'سعر البيع حسب الفرع' : 'Selling price by branch'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'ar'
+                        ? 'السعر الفارغ أو 0 يستخدم سعر المنتج الأساسي. أدخل سعرًا خاصًا للفرع عند الحاجة.'
+                        : 'Blank or 0 uses the product base price. Enter a branch-specific price only when needed.'}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {branchPriceBranchIds.map((branchId) => {
+                      const branchPrice = Number(formData.branchPrices?.[branchId] ?? 0);
+                      const effectivePrice = branchPrice > 0 ? branchPrice : Number(formData.price || 0);
+                      return (
+                        <div key={branchId} className="flex items-center gap-3 rounded-md border p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{getBranchLabel(branchId)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {language === 'ar'
+                                ? `السعر الفعلي: ${effectivePrice.toLocaleString()}${branchPrice > 0 ? ' (سعر خاص)' : ' (سعر المنتج الأساسي)'}`
+                                : `Effective price: ${effectivePrice.toLocaleString()}${branchPrice > 0 ? ' (branch price)' : ' (base price)'}`}
+                            </p>
+                          </div>
+                          <div className="w-32">
+                            <Label className="text-xs">{language === 'ar' ? 'سعر خاص' : 'Override'}</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={branchPrice > 0 ? branchPrice : ''}
+                              placeholder={String(formData.price || 0)}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  branchPrices: {
+                                    ...(prev.branchPrices || {}),
+                                    [branchId]: rawValue === '' ? 0 : Math.max(0, Number(rawValue) || 0),
+                                  },
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
