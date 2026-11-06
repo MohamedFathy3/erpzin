@@ -204,6 +204,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'warehouse', 'purchasing', 'Accountant'],
   },
   {
+    id: 'recipe-production',
+    path: '/recipe-production',
+    label: 'Recipe & Production Management',
+    labelAr: 'إدارة التركيبات والإنتاج',
+    icon: 'FlaskConical',
+    allowedRoles: ['admin', 'Manager', 'warehouse', 'purchasing', 'Accountant'],
+  },
+  {
     id: 'projects',
     path: '/projects',
     label: 'Projects',

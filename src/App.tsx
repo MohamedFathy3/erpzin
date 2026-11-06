@@ -27,6 +27,7 @@ import Settings from "./pages/Settings";
 import Industries from "./pages/Industries";
 import Manufacturing from "./pages/Manufacturing";
 import ManufacturingSetup from "./pages/ManufacturingSetup";
+import RecipeProduction from "./pages/RecipeProduction";
 import ProductLedger from "./pages/ProductLedger";
 import WarehouseReports from "./pages/WarehouseReports";
 import RepresentativeDashboard from "./pages/RepresentativeDashboard";
@@ -102,6 +103,7 @@ const App = () => (
                 <Route path="/industries" element={<ProtectedRoute><Industries /></ProtectedRoute>} />
                 <Route path="/manufacturing" element={<ProtectedRoute><Manufacturing /></ProtectedRoute>} />
                 <Route path="/manufacturing/setup" element={<ProtectedRoute><ManufacturingSetup /></ProtectedRoute>} />
+                <Route path="/recipe-production" element={<ProtectedRoute><RecipeProduction /></ProtectedRoute>} />
                 <Route path="/product-ledger" element={<ProtectedRoute><ProductLedger /></ProtectedRoute>} />
                 <Route path="/representative" element={<ProtectedRoute><RepresentativeDashboard /></ProtectedRoute>} />
                 <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
