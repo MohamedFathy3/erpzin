@@ -50,6 +50,7 @@ type ManufacturingOrder = {
   quality_inspections?: Inspection[];
   costs?: Array<{ id: number; cost_type: string; amount: number; notes?: string }>;
   notes?: string;
+  dimensions?: { width?: number; height?: number; depth?: number; unit?: string };
 };
 type AvailabilityItem = {
   product_id: number;
@@ -73,6 +74,10 @@ const emptyOrder = {
   source_invoice_id: '',
   invoice_item_id: '',
   notes: '',
+  width: '',
+  height: '',
+  depth: '',
+  dimension_unit: 'cm',
 };
 const emptyOperation: OrderOperation = { name: '', equipment_id: '', planned_minutes: '' };
 const statusLabels: Record<string, string> = {
@@ -80,6 +85,7 @@ const statusLabels: Record<string, string> = {
   planned: 'مخطط',
   reserved: 'تم حجز الخامات',
   in_progress: 'قيد التنفيذ',
+  paused: 'متوقف',
   quality_hold: 'موقوف للجودة',
   completed: 'مكتمل',
   closed: 'مغلق',
@@ -193,6 +199,7 @@ export default function Manufacturing() {
         bom_version_id: orderForm.bom_version_id ? Number(orderForm.bom_version_id) : null,
         warehouse_id: Number(orderForm.warehouse_id),
         planned_quantity: Number(orderForm.planned_quantity),
+        dimensions: (orderForm.width || orderForm.height || orderForm.depth) ? { width: Number(orderForm.width) || null, height: Number(orderForm.height) || null, depth: Number(orderForm.depth) || null, unit: orderForm.dimension_unit || 'cm' } : undefined,
         planned_at: orderForm.planned_at || null,
         notes: orderForm.notes || null,
         operations,
@@ -349,6 +356,13 @@ export default function Manufacturing() {
                 </Select>
                 <Input type="number" min="0.000001" step="0.001" placeholder="الكمية المخططة" value={orderForm.planned_quantity} onChange={(event) => setOrderForm({ ...orderForm, planned_quantity: event.target.value })} />
               </div>
+              <div className="grid gap-3 md:grid-cols-4 rounded-lg border p-3">
+                <Input type="number" min="0.001" step="0.001" placeholder="العرض الخاص بهذا الأمر" value={orderForm.width} onChange={(event) => setOrderForm({ ...orderForm, width: event.target.value })} />
+                <Input type="number" min="0.001" step="0.001" placeholder="الارتفاع الخاص بهذا الأمر" value={orderForm.height} onChange={(event) => setOrderForm({ ...orderForm, height: event.target.value })} />
+                <Input type="number" min="0.001" step="0.001" placeholder="العمق الخاص بهذا الأمر" value={orderForm.depth} onChange={(event) => setOrderForm({ ...orderForm, depth: event.target.value })} />
+                <Select value={orderForm.dimension_unit} onValueChange={(value) => setOrderForm({ ...orderForm, dimension_unit: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="mm">mm</SelectItem><SelectItem value="cm">cm</SelectItem><SelectItem value="m">m</SelectItem><SelectItem value="in">in</SelectItem></SelectContent></Select>
+                <p className="text-xs text-muted-foreground md:col-span-4">اترك المقاسات فارغة لاستخدام مقاسات المنتج الافتراضية؛ القيم المدخلة تحفظ كلقطة خاصة بأمر التشغيل.</p>
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <Input type="date" value={orderForm.planned_at} onChange={(event) => setOrderForm({ ...orderForm, planned_at: event.target.value })} />
                 <Input type="number" min="1" placeholder="رقم فاتورة (اختياري)" value={orderForm.source_invoice_id} onChange={(event) => setOrderForm({ ...orderForm, source_invoice_id: event.target.value })} />
@@ -422,6 +436,7 @@ export default function Manufacturing() {
                     <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المخطط</p><p className="font-semibold">{order.planned_quantity} {order.product?.stock_unit}</p></div>
                     <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المستلم</p><p className="font-semibold">{order.produced_quantity}</p></div>
                     <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المتبقي</p><p className="font-semibold">{remainingProduction}</p></div>
+                    {order.dimensions && <div className="rounded-lg bg-muted p-3 md:col-span-2"><p className="text-xs text-muted-foreground">مقاسات أمر التشغيل (عرض × ارتفاع × عمق)</p><p className="font-semibold">{[order.dimensions.width, order.dimensions.height, order.dimensions.depth].map((value) => value ?? '—').join(' × ')} {order.dimensions.unit || ''}</p></div>}
                     <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">التكلفة الفعلية</p><p className="font-semibold">{Number(order.actual_cost || 0).toFixed(2)}</p></div>
                   </div>
 
@@ -551,8 +566,10 @@ export default function Manufacturing() {
                   ) : null}
 
                   <div className="flex flex-wrap gap-2 border-t pt-4">
+                    {['reserved', 'in_progress'].includes(order.status) && <Button variant="outline" disabled={actionMutation.isPending} onClick={() => { const reason = window.prompt('سبب إيقاف أمر التشغيل:'); if (reason && reason.trim().length >= 3) actionMutation.mutate({ orderId: order.id, action: 'pause', payload: { reason: reason.trim() } }); }}><X size={16} /> إيقاف الأمر</Button>}
+                    {order.status === 'paused' && <Button disabled={actionMutation.isPending} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'resume' })}><CheckCircle2 size={16} /> استئناف الأمر</Button>}
                     {order.status === 'completed' && <Button disabled={actionMutation.isPending} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'close' })}><CheckCircle2 size={16} /> إغلاق وتسوية الأمر</Button>}
-                    {['draft', 'planned', 'reserved', 'in_progress', 'quality_hold'].includes(order.status) && <Button variant="destructive" disabled={actionMutation.isPending} onClick={() => {
+                    {['draft', 'planned', 'reserved', 'in_progress', 'quality_hold', 'paused'].includes(order.status) && <Button variant="destructive" disabled={actionMutation.isPending} onClick={() => {
                       if (window.confirm('هل تريد إلغاء أمر الإنتاج وعكس الخامات المفتوحة؟')) actionMutation.mutate({ orderId: order.id, action: 'cancel' });
                     }}>إلغاء الأمر</Button>}
                   </div>

@@ -823,13 +823,13 @@
                     : formData.product_type === 'material' ? 'Usage-unit conversion factor' : 'Stock units per measure unit'}</Label>
                   <Input type="number" min="0.000001" step="0.000001" value={formData.conversion_factor} onChange={(event) => handleNumberChange('conversion_factor', event.target.value)} />
                 </div>
-                {formData.product_type !== 'material' && (['width', 'height', 'depth'] as const).map((dimension) => (
+                {(['width', 'height', 'depth'] as const).map((dimension) => (
                   <div key={dimension}>
                     <Label>{language === 'ar' ? ({ width: 'العرض', height: 'الارتفاع', depth: 'العمق' }[dimension]) : dimension}</Label>
                     <Input type="number" min="0" step="0.001" value={formData.dimensions[dimension] ?? ''} onChange={(event) => handleChange('dimensions', { ...formData.dimensions, [dimension]: event.target.value === '' ? undefined : Number(event.target.value) })} />
                   </div>
                 ))}
-                {formData.product_type !== 'material' && <div>
+                <div>
                   <Label>{language === 'ar' ? 'وحدة الأبعاد' : 'Dimension unit'}</Label>
                   <Select value={formData.dimensions.unit || 'cm'} onValueChange={(value) => handleChange('dimensions', { ...formData.dimensions, unit: value })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -840,7 +840,7 @@
                       <SelectItem value="in">in</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>}
+                </div>
               </div>
             </div>
 
