@@ -91,7 +91,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       industries: '/industries',
       manufacturing: '/manufacturing',
       manufacturingSetup: '/manufacturing/setup',
-      'recipe-production': '/recipe-production',
       projects: '/projects',
       workflow: '/workflow',
       automotive: '/automotive',

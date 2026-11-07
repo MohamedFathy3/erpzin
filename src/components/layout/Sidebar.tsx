@@ -127,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
     dashboard: ['dashboard.view'], automotive: ['automotive.view', 'automotive.reports.view'], inventory: ['inventory.view'], sales: ['sales.view'], pos: ['sales.view'], posreturn: ['sales.pos_return.view'],
     purchasing: ['purchasing.view'], finance: ['finance.view', 'currency.view', 'tax.view', 'treasury.view', 'bank.view'], hr: ['hr.view'], crm: ['crm.view'],
     reports: ['reports.view'], 'unified-financial-reports': ['reports.view'], 'employee-financial-reports': ['employee_financial_reports.view', 'reports.view', 'hr.view'], projects: ['projects.view'], manufacturing: ['manufacturing.view'],
-    'access-control': ['access_control.view'], aiAssistant: ['ai_assistant.view'], 'recipe-production': ['recipe_production.view'],
+    'access-control': ['access_control.view'], aiAssistant: ['ai_assistant.view'],
   };
   const permissionEnabled = (pageId: string) => {
     if (user?.super_admin || user?.role?.toLowerCase() === 'admin' || permissionsLoading || permissions.length === 0) return true;
@@ -179,7 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
 
   const navigationGroups = React.useMemo(() => {
     const groups = [
-      { key: 'operations', label: language === 'ar' ? 'التشغيل' : 'Operations', ids: ['pos', 'sales', 'purchasing', 'inventory', 'inventory-transfer-requests', 'productLedger', 'manufacturing', 'manufacturingSetup', 'recipe-production', 'automotive'] },
+      { key: 'operations', label: language === 'ar' ? 'التشغيل' : 'Operations', ids: ['pos', 'sales', 'purchasing', 'inventory', 'inventory-transfer-requests', 'productLedger', 'manufacturing', 'manufacturingSetup', 'automotive'] },
       { key: 'relationships', label: language === 'ar' ? 'العملاء والفريق' : 'Relationships', ids: ['crm', 'representative', 'projects', 'tasks', 'workflow', 'whatsapp'] },
       { key: 'insights', label: language === 'ar' ? 'المال والتقارير' : 'Finance & Insights', ids: ['finance', 'reports', 'unified-financial-reports', 'employee-financial-reports', 'warehouse-reports'] },
       { key: 'workspace', label: language === 'ar' ? 'مساحة العمل' : 'Workspace', ids: ['calendar', 'google-integrations', 'industries', 'aiAssistant'] },

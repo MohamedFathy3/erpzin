@@ -20,6 +20,7 @@ type BomItem = {
   unit: string;
   child_bom_version_id: string;
   is_optional: boolean;
+  specifications?: { width?: string | number; length?: string | number; thickness?: string | number; unit?: string; material_grade?: string; finish?: string };
   component?: Product;
 };
 type Bom = {
@@ -65,6 +66,7 @@ const newBomItem = (): BomItem => ({
   unit: '',
   child_bom_version_id: '',
   is_optional: false,
+  specifications: { unit: 'mm' },
 });
 const emptyBom: BomForm = {
   product_id: '',
@@ -99,6 +101,10 @@ export default function ManufacturingSetup() {
     queryKey: ['manufacturing-v2-boms'],
     queryFn: async () => (await api.get('/manufacturing/v2/boms', { params: { per_page: 200 } })).data.data,
   });
+  const reportsQuery = useQuery({
+    queryKey: ['manufacturing-v2-reports'],
+    queryFn: async () => (await api.get('/manufacturing/v2/reports')).data.data,
+  });
   const equipmentQuery = useQuery<Equipment[]>({
     queryKey: ['manufacturing-v2-equipment'],
     queryFn: async () => (await api.get('/manufacturing/v2/equipment', { params: { per_page: 200 } })).data.data,
@@ -126,6 +132,7 @@ export default function ManufacturingSetup() {
         unit: item.unit || null,
         child_bom_version_id: item.child_bom_version_id ? Number(item.child_bom_version_id) : null,
         is_optional: item.is_optional,
+        specifications: Object.fromEntries(Object.entries(item.specifications || {}).filter(([, value]) => value !== '' && value !== null && value !== undefined)),
       }));
       const common = {
         version: bomForm.version,
@@ -213,6 +220,7 @@ export default function ManufacturingSetup() {
         unit: item.unit || '',
         child_bom_version_id: item.child_bom_version_id ? String(item.child_bom_version_id) : '',
         is_optional: Boolean(item.is_optional),
+        specifications: item.specifications || { unit: 'mm' },
       })) : [newBomItem()],
     });
   };
@@ -240,6 +248,7 @@ export default function ManufacturingSetup() {
         unit: item.unit || '',
         child_bom_version_id: item.child_bom_version_id ? String(item.child_bom_version_id) : '',
         is_optional: Boolean(item.is_optional),
+        specifications: item.specifications || { unit: 'mm' },
       })),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -266,6 +275,22 @@ export default function ManufacturingSetup() {
             </div>
           </div>
         </section>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center justify-between"><span>تقارير التصنيع: الهالك والتوقف والجودة</span><Button variant="outline" size="sm" onClick={() => void reportsQuery.refetch()}>تحديث التقارير</Button></CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {reportsQuery.isLoading ? <p>جارٍ تحميل التقارير...</p> : reportsQuery.isError ? <p className="text-destructive">تعذر تحميل تقارير التصنيع.</p> : <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {[["كمية الهالك", reportsQuery.data?.summary?.scrap_quantity ?? 0], ["أوامر التوقف", reportsQuery.data?.summary?.stop_events ?? 0], ["دقائق التوقف", reportsQuery.data?.summary?.stop_minutes ?? 0], ["الفحوص", reportsQuery.data?.summary?.inspection_count ?? 0], ["مرفوض", reportsQuery.data?.summary?.rejected_inspections ?? 0], ["إعادة تشغيل", reportsQuery.data?.summary?.rework_inspections ?? 0]].map(([label, value]) => <div key={String(label)} className="rounded-lg border bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="text-xl font-bold">{value}</p></div>)}
+              </div>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="space-y-2"><h3 className="font-semibold">أحدث الهالك</h3>{reportsQuery.data?.scrap?.slice(0, 8).map((row: any) => <div key={row.id} className="rounded border p-2 text-sm"><b>{row.order?.order_number}</b> · {row.product?.name} · {row.quantity}<p className="text-xs text-muted-foreground">{row.operation?.name || 'بدون مرحلة'} · {row.reason || 'بدون سبب'}</p></div>)}{!reportsQuery.data?.scrap?.length && <p className="text-xs text-muted-foreground">لا توجد سجلات هالك بعد.</p>}</div>
+                <div className="space-y-2"><h3 className="font-semibold">أحدث التوقفات</h3>{reportsQuery.data?.stops?.slice(0, 8).map((row: any) => <div key={row.id} className="rounded border p-2 text-sm"><b>{row.order?.order_number}</b> · {row.created_at}<p className="text-xs text-muted-foreground">{row.reason || 'بدون سبب مسجل'} · {row.duration_minutes} دقيقة{row.still_stopped ? ' (ما زال متوقفًا)' : ''}</p></div>)}{!reportsQuery.data?.stops?.length && <p className="text-xs text-muted-foreground">لا توجد توقفات مسجلة.</p>}</div>
+                <div className="space-y-2"><h3 className="font-semibold">أحدث فحوص الجودة</h3>{reportsQuery.data?.quality?.slice(0, 8).map((row: any) => <div key={row.id} className="rounded border p-2 text-sm"><b>{row.order?.order_number}</b> · {row.operation?.name || 'فحص نهائي'} · {row.result} · {row.quantity}<p className="text-xs text-muted-foreground">{row.reason || '—'}</p></div>)}{!reportsQuery.data?.quality?.length && <p className="text-xs text-muted-foreground">لا توجد فحوص مسجلة.</p>}</div>
+              </div>
+            </>}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -312,6 +337,13 @@ export default function ManufacturingSetup() {
                     <Input type="number" min="0.000001" step="0.001" placeholder="الكمية *" value={item.quantity} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row) })} />
                     <Input type="number" min="0" max="100" step="0.01" placeholder="هالك %" value={item.scrap_percent} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, scrap_percent: event.target.value } : row) })} />
                     <Input placeholder="الوحدة" value={item.unit} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, unit: event.target.value } : row) })} />
+                    <div className="grid grid-cols-2 gap-2 md:col-span-4 rounded-md bg-muted/40 p-2">
+                      <Input type="number" min="0.001" step="0.1" placeholder="عرض اللوح (مم)" value={item.specifications?.width ?? ''} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, specifications: { ...row.specifications, width: event.target.value, unit: 'mm' } } : row) })} />
+                      <Input type="number" min="0.001" step="0.1" placeholder="طول اللوح (مم)" value={item.specifications?.length ?? ''} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, specifications: { ...row.specifications, length: event.target.value, unit: 'mm' } } : row) })} />
+                      <Input type="number" min="0.001" step="0.1" placeholder="السُمك (مم)" value={item.specifications?.thickness ?? ''} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, specifications: { ...row.specifications, thickness: event.target.value, unit: 'mm' } } : row) })} />
+                      <Input placeholder="درجة/نوع الخامة (MDF، HPL...)" value={item.specifications?.material_grade ?? ''} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, specifications: { ...row.specifications, material_grade: event.target.value } } : row) })} />
+                      <Input className="col-span-2" placeholder="التشطيب / اللون (اختياري)" value={item.specifications?.finish ?? ''} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, specifications: { ...row.specifications, finish: event.target.value } } : row) })} />
+                    </div>
                     <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.child_bom_version_id || 'none'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, child_bom_version_id: event.target.value === 'none' ? '' : event.target.value } : row) })}>
                       <option value="none">بدون BOM فرعي</option>{childVersions.map((child) => <option key={child.id} value={child.id}>{child.product?.name || 'نصف مصنع'} · {child.version}</option>)}
                     </select>

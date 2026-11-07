@@ -116,7 +116,7 @@ export default function Manufacturing() {
   const [operationsForm, setOperationsForm] = useState<OrderOperation[]>([]);
   const [actualMinutes, setActualMinutes] = useState<Record<number, string>>({});
   const [operationLogs, setOperationLogs] = useState<Record<number, { minutes: string; cost: string }>>({});
-  const [qualityForm, setQualityForm] = useState({ result: 'pass', quantity: '', reason: '' });
+  const [qualityForm, setQualityForm] = useState({ result: 'pass', quantity: '', reason: '', manufacturing_operation_id: '' });
   const [receiptForm, setReceiptForm] = useState({
     quantity: '',
     inventory_account_id: '',
@@ -253,10 +253,13 @@ export default function Manufacturing() {
       toast.error('أدخل كمية صحيحة');
       return;
     }
+    const reason = action === 'scrap' ? window.prompt('سبب الهالك:') : null;
+    if (action === 'scrap' && (!reason || reason.trim().length < 3)) return toast.error('سجّل سبب الهالك (3 أحرف على الأقل)');
+    const operation = order?.operations?.find((item) => item.status === 'in_progress');
     actionMutation.mutate({
       orderId: selectedId,
       action,
-      payload: { items: [{ material_id: material.id, quantity }] },
+      payload: { items: [{ material_id: material.id, quantity }], ...(action === 'scrap' ? { reason: reason?.trim(), operation_id: operation?.id ?? null } : {}) },
     });
   };
 
@@ -524,14 +527,15 @@ export default function Manufacturing() {
                     <h3 className="font-bold">فحص الجودة والاستلام</h3>
                     {latestInspection && <p className="text-sm">آخر فحص: {latestInspection.result === 'pass' ? 'مقبول' : latestInspection.result === 'reject' ? 'مرفوض' : 'إعادة تشغيل'} · الكمية {latestInspection.quantity}{latestInspection.reason ? ` · ${latestInspection.reason}` : ''}</p>}
                     {['in_progress', 'quality_hold'].includes(order.status) && (
-                      <div className="grid gap-2 md:grid-cols-[1fr_0.8fr_1.5fr_auto]">
+                      <div className="grid gap-2 md:grid-cols-[1fr_0.8fr_1fr_1.5fr_auto]">
                         <Select value={qualityForm.result} onValueChange={(value) => setQualityForm({ ...qualityForm, result: value })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="pass">قبول</SelectItem><SelectItem value="reject">رفض</SelectItem><SelectItem value="rework">إعادة تشغيل</SelectItem></SelectContent>
                         </Select>
                         <Input type="number" min="0.000001" step="0.001" placeholder="الكمية المفحوصة" value={qualityForm.quantity} onChange={(event) => setQualityForm({ ...qualityForm, quantity: event.target.value })} />
+                        <Select value={qualityForm.manufacturing_operation_id || 'whole-order'} onValueChange={(value) => setQualityForm({ ...qualityForm, manufacturing_operation_id: value === 'whole-order' ? '' : value })}><SelectTrigger><SelectValue placeholder="مرحلة الفحص" /></SelectTrigger><SelectContent><SelectItem value="whole-order">فحص نهائي</SelectItem>{order.operations?.map((operation) => <SelectItem key={operation.id} value={String(operation.id)}>{operation.sequence}. {operation.name}</SelectItem>)}</SelectContent></Select>
                         <Input placeholder="سبب الفحص / الرفض" value={qualityForm.reason} onChange={(event) => setQualityForm({ ...qualityForm, reason: event.target.value })} />
-                        <Button disabled={actionMutation.isPending} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'quality', payload: { result: qualityForm.result, quantity: Number(qualityForm.quantity || order.planned_quantity), reason: qualityForm.reason || null } })}>تسجيل الفحص</Button>
+                        <Button disabled={actionMutation.isPending} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'quality', payload: { result: qualityForm.result, quantity: Number(qualityForm.quantity || order.planned_quantity), reason: qualityForm.reason || null, manufacturing_operation_id: qualityForm.manufacturing_operation_id ? Number(qualityForm.manufacturing_operation_id) : null } })}>تسجيل الفحص</Button>
                       </div>
                     )}
                     {order.status === 'in_progress' && (
