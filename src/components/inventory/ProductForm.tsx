@@ -3,7 +3,7 @@
   import { useQuery } from '@tanstack/react-query';
   import { cn } from '@/lib/utils';
   import api from '@/lib/api';
-  import { X, Barcode, RefreshCw, ImageIcon, Loader2, ExternalLink } from 'lucide-react';
+  import { X, Barcode, RefreshCw, ImageIcon, Loader2, ExternalLink, Plus, Tag, Trash2, Ruler } from 'lucide-react';
   import { Button } from '@/components/ui/button';
   import { Input } from '@/components/ui/input';
   import { Label } from '@/components/ui/label';
@@ -40,6 +40,14 @@
     branch?: BranchOption | null;
     branch_name?: string;
     branch_name_ar?: string;
+  }
+
+  export interface ProductPriceTier {
+    price_type: 'retail' | 'wholesale' | 'credit';
+    min_quantity: number;
+    price: number;
+    unit_id?: string;
+    color_id?: string;
   }
 
   interface ProductFormProps {
@@ -82,11 +90,15 @@
     warehouseStocks?: Record<string, number>;
     valuationMethod: 'fifo' | 'lifo' | 'weighted_average';
     product_type: 'good' | 'service' | 'material' | 'semi_finished' | 'finished';
+    package_size: number | null;
+    package_unit: string;
+    package_cost: number | null;
     stock_unit: string;
     base_unit: string;
     conversion_factor: number;
     tracking: 'none' | 'lot' | 'serial';
     dimensions: { width?: number; height?: number; depth?: number; unit: string };
+    priceTiers: ProductPriceTier[];
   }
 
   const generateBarcode = (): string =>
@@ -162,6 +174,24 @@
       },
     });
 
+  const useColorsForm = () =>
+    useQuery({
+      queryKey: ['colors-product-form'],
+      queryFn: async () => {
+        const response = await api.post('/color/index', {
+          filters: {},
+          orderBy: 'id',
+          orderByDirection: 'asc',
+          perPage: 100,
+          paginate: false,
+        });
+        return (response.data.data || []).map((color: any) => ({
+          id: String(color.id),
+          name: color.name,
+        }));
+      },
+    });
+
   const ProductForm: React.FC<ProductFormProps> = ({
     isOpen,
     onClose,
@@ -204,14 +234,19 @@
       warehouseStocks: {},
       valuationMethod: 'fifo',
       product_type: 'good',
+      package_size: 1,
+      package_unit: 'piece',
+      package_cost: 0,
       stock_unit: 'piece',
       base_unit: 'piece',
       conversion_factor: 1,
       tracking: 'none',
       dimensions: { unit: 'cm' },
+      priceTiers: [],
     });
 
     const { data: unitsData = [] } = useUnitsForm();
+    const { data: colorsData = [], isError: colorsError } = useColorsForm();
     const [formData, setFormData] = useState<ProductFormData>(getInitialFormData());
     const lastLoadedProductId = useRef<string | null>(null);
 
@@ -252,11 +287,21 @@
           warehouseIds: safeIds,
           warehouseStocks: safeStocks,
           product_type: editProduct.product_type || 'good',
+          package_size: Number(editProduct.package_size) || 1,
+          package_unit: editProduct.package_unit || editProduct.base_unit || editProduct.stock_unit || 'piece',
+          package_cost: Number(editProduct.package_cost) || (Number(editProduct.cost) || 0) * (Number(editProduct.package_size) || 1),
           stock_unit: editProduct.stock_unit || '',
           base_unit: editProduct.base_unit || '',
           conversion_factor: Number(editProduct.conversion_factor) || 1,
           tracking: editProduct.tracking || 'none',
           dimensions: editProduct.dimensions || { unit: 'cm' },
+          priceTiers: (editProduct.priceTiers || []).map((tier) => ({
+            ...tier,
+            min_quantity: Number(tier.min_quantity) || 1,
+            price: Number(tier.price) || 0,
+            unit_id: tier.unit_id ? String(tier.unit_id) : '',
+            color_id: tier.color_id ? String(tier.color_id) : '',
+          })),
         });
       } else {
         setFormData(getInitialFormData());
@@ -380,9 +425,16 @@
       const productFormData: ProductFormData = {
         ...formData,
         price: Number(formData.price) || 0,
-        cost: Number(formData.cost) || 0,
+        cost: formData.product_type === 'material'
+          ? Number((((Number(formData.package_cost) || 0) / (Number(formData.package_size) || 1)).toFixed(2)))
+          : Number(formData.cost) || 0,
         stock: totalStock, // ✅ دايماً مجموع المخازن
-        reorderPoint: Number(formData.reorderPoint) || 5,
+        reorderPoint: formData.product_type === 'material'
+          ? Number(formData.reorderPoint) || 0
+          : Number(formData.reorderPoint) || 5,
+        package_size: formData.product_type === 'material' ? Number(formData.package_size) || 1 : null,
+        package_unit: formData.product_type === 'material' ? formData.package_unit : '',
+        package_cost: formData.product_type === 'material' ? Number(formData.package_cost) || 0 : null,
       };
 
       try {
@@ -427,19 +479,26 @@
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8">
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full max-w-4xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
-            <h2 className="text-xl font-bold text-foreground">
+        <div className="relative w-full max-w-6xl mx-4 bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between p-5 border-b border-border bg-gradient-to-l from-primary/10 via-muted/30 to-background">
+            <div>
+              <p className="text-xs font-medium text-primary">{language === 'ar' ? 'إدارة المخزون' : 'Inventory management'}</p>
+              <h2 className="mt-1 text-xl font-bold text-foreground">
               {editProduct
-                ? language === 'ar' ? 'تعديل المنتج' : 'Edit Product'
-                : language === 'ar' ? 'إضافة منتج جديد' : 'Add New Product'}
-            </h2>
+                ? formData.product_type === 'material'
+                  ? language === 'ar' ? 'تعديل الخامة' : 'Edit Material'
+                  : language === 'ar' ? 'تعديل المنتج' : 'Edit Product'
+                : formData.product_type === 'material'
+                  ? language === 'ar' ? 'إضافة خامة جديدة' : 'Add New Material'
+                  : language === 'ar' ? 'إضافة منتج جديد' : 'Add New Product'}
+              </h2>
+            </div>
             <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
               <X size={20} />
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-190px)] overflow-y-auto">
             {/* Product Image */}
             <div className="space-y-3">
               <Label>{language === 'ar' ? 'صورة المنتج' : 'Product Image'}</Label>
@@ -501,7 +560,9 @@
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Label>{language === 'ar' ? 'اسم المنتج' : 'Product Name'}</Label>
+                <Label>{language === 'ar'
+                  ? formData.product_type === 'material' ? 'اسم الخامة' : 'اسم المنتج'
+                  : formData.product_type === 'material' ? 'Material name' : 'Product Name'}</Label>
                 <Input
                   value={formData.name}
                   onChange={(e) => handleChange('name', e.target.value)}
@@ -509,6 +570,16 @@
                   required
                 />
               </div>
+              {formData.product_type === 'material' && (
+                <div>
+                  <Label>{language === 'ar' ? 'وصف الخامة' : 'Material description'}</Label>
+                  <Input
+                    value={formData.description}
+                    onChange={(event) => handleChange('description', event.target.value)}
+                    placeholder={language === 'ar' ? 'ملاحظات أو مواصفات الخامة' : 'Material notes or specifications'}
+                  />
+                </div>
+              )}
               <div>
                 <Label>{language === 'ar' ? 'الباركود' : 'Barcode'}</Label>
                 <div className="flex gap-2">
@@ -589,16 +660,44 @@
               </div>
             </div>
 
-            <div className="space-y-3 rounded-lg border border-border p-4">
-              <p className="font-medium text-foreground">
-                {language === 'ar' ? 'التصنيع والقياس' : 'Manufacturing & measurements'}
-              </p>
+            <div className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary"><Ruler size={18} /></div>
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {language === 'ar'
+                      ? formData.product_type === 'material' ? 'تفاصيل الخامة ووحداتها' : 'الوحدات والمتغيرات والأبعاد'
+                      : formData.product_type === 'material' ? 'Material details & units' : 'Units, variants & dimensions'}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {language === 'ar'
+                      ? formData.product_type === 'material'
+                        ? 'حدد وحدة التخزين والاستخدام، بيانات العبوة، وتكلفة الوحدة وحد التنبيه.'
+                        : 'حدد وحدة التخزين والبيع، ومعامل التحويل وأبعاد المنتج.'
+                      : formData.product_type === 'material'
+                        ? 'Set stock and usage units, package details, unit cost, and low-stock alert.'
+                        : 'Set stock and sales units, conversion, and product dimensions.'}
+                  </p>
+                </div>
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div>
                   <Label>{language === 'ar' ? 'نوع المنتج' : 'Product type'}</Label>
                   <Select
                     value={formData.product_type}
-                    onValueChange={(value) => handleChange('product_type', value)}
+                    onValueChange={(value: ProductFormData['product_type']) => {
+                      if (value === 'material' && formData.product_type !== 'material') {
+                        setFormData((previous) => ({
+                          ...previous,
+                          product_type: value,
+                          package_size: previous.package_size || previous.conversion_factor || 1,
+                          package_unit: previous.package_unit || previous.base_unit || previous.stock_unit || 'piece',
+                          package_cost: previous.package_cost || previous.cost * (previous.package_size || 1),
+                        }));
+                        return;
+                      }
+                      handleChange('product_type', value);
+                    }}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -611,7 +710,9 @@
                   </Select>
                 </div>
                 <div>
-                  <Label>{language === 'ar' ? 'وحدة المخزون' : 'Stock unit'}</Label>
+                  <Label>{language === 'ar'
+                    ? formData.product_type === 'material' ? 'وحدة التخزين' : 'وحدة المخزون'
+                    : formData.product_type === 'material' ? 'Inventory unit' : 'Stock unit'}</Label>
                   <Select value={formData.stock_unit || 'piece'} onValueChange={(value) => handleChange('stock_unit', value)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -629,7 +730,9 @@
                   </Select>
                 </div>
                 <div>
-                  <Label>{language === 'ar' ? 'وحدة البيع/القياس' : 'Sales / measure unit'}</Label>
+                  <Label>{language === 'ar'
+                    ? formData.product_type === 'material' ? 'وحدة الاستخدام الأساسية' : 'وحدة البيع/القياس'
+                    : formData.product_type === 'material' ? 'Base usage unit' : 'Sales / measure unit'}</Label>
                   <Select value={formData.base_unit || formData.stock_unit || 'piece'} onValueChange={(value) => handleChange('base_unit', value)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -647,18 +750,86 @@
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-4">
+              {formData.product_type === 'material' && (
+                <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {language === 'ar' ? 'بيانات العبوة والتكلفة' : 'Package & cost details'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'ar'
+                        ? 'تكلفة الوحدة الأساسية تُحسب تلقائيًا من تكلفة العبوة وحجمها.'
+                        : 'Base-unit cost is calculated from package cost and package size.'}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <Label>{language === 'ar' ? 'حجم العبوة' : 'Package size'}</Label>
+                      <Input
+                        type="number"
+                        min="0.000001"
+                        step="0.001"
+                        required
+                        value={formData.package_size ?? ''}
+                        onChange={(event) => handleNumberChange('package_size', event.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>{language === 'ar' ? 'وحدة العبوة' : 'Package unit'}</Label>
+                      <Select value={formData.package_unit || 'piece'} onValueChange={(value) => handleChange('package_unit', value)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from(new Map<string, string>([
+                            ...['piece', 'L', 'ML', 'KG', 'G'].map((code) => [code, code] as const),
+                            ...unitsData.map((unit: UnitOption) => [unit.code, language === 'ar' ? unit.nameAr : unit.name] as const),
+                          ]).entries()).map(([code, label]) => (
+                            <SelectItem key={code} value={code}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>{language === 'ar' ? 'تكلفة العبوة' : 'Package cost'}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        required
+                        value={formData.package_cost ?? ''}
+                        onChange={(event) => handleNumberChange('package_cost', event.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label>{language === 'ar' ? 'حد تنبيه المخزون' : 'Low-stock alert'}</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={formData.reorderPoint}
+                        onChange={(event) => handleNumberChange('reorderPoint', event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-primary">
+                    {language === 'ar' ? 'تكلفة الوحدة الأساسية:' : 'Base-unit cost:'}{' '}
+                    {((Number(formData.package_cost) || 0) / (Number(formData.package_size) || 1)).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 6 })}
+                  </p>
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <Label>{language === 'ar' ? 'عدد وحدات المخزون في وحدة القياس' : 'Stock units per measure unit'}</Label>
+                  <Label>{language === 'ar'
+                    ? formData.product_type === 'material' ? 'معامل تحويل وحدة الاستخدام' : 'عدد وحدات المخزون في وحدة القياس'
+                    : formData.product_type === 'material' ? 'Usage-unit conversion factor' : 'Stock units per measure unit'}</Label>
                   <Input type="number" min="0.000001" step="0.000001" value={formData.conversion_factor} onChange={(event) => handleNumberChange('conversion_factor', event.target.value)} />
                 </div>
-                {(['width', 'height', 'depth'] as const).map((dimension) => (
+                {formData.product_type !== 'material' && (['width', 'height', 'depth'] as const).map((dimension) => (
                   <div key={dimension}>
                     <Label>{language === 'ar' ? ({ width: 'العرض', height: 'الارتفاع', depth: 'العمق' }[dimension]) : dimension}</Label>
                     <Input type="number" min="0" step="0.001" value={formData.dimensions[dimension] ?? ''} onChange={(event) => handleChange('dimensions', { ...formData.dimensions, [dimension]: event.target.value === '' ? undefined : Number(event.target.value) })} />
                   </div>
                 ))}
-                <div>
+                {formData.product_type !== 'material' && <div>
                   <Label>{language === 'ar' ? 'وحدة الأبعاد' : 'Dimension unit'}</Label>
                   <Select value={formData.dimensions.unit || 'cm'} onValueChange={(value) => handleChange('dimensions', { ...formData.dimensions, unit: value })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -669,45 +840,158 @@
                       <SelectItem value="in">in</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div>}
               </div>
             </div>
 
             {/* Pricing */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>{language === 'ar' ? 'سعر البيع' : 'Selling Price'}</Label>
-                <Input
-                  type="number"
-                  value={formData.price === 0 ? '' : formData.price}
-                  onChange={(e) => handleNumberChange('price', e.target.value)}
-                  min={0}
-                  step="0.01"
-                  placeholder="0.00"
-                />
+            {formData.product_type !== 'material' && <div className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600"><Tag size={18} /></div>
+                <div>
+                  <p className="font-semibold text-foreground">{language === 'ar' ? 'الأسعار حسب نوع البيع والكمية' : 'Prices by sales type and quantity'}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{language === 'ar' ? 'السعر الأساسي للتجزئة، ويمكن إضافة سعر جملة أو آجل حسب الوحدة واللون والحد الأدنى للكمية.' : 'Base price is retail. Add wholesale or credit prices by unit, color, and minimum quantity.'}</p>
+                </div>
               </div>
-              <div>
-                <Label>{language === 'ar' ? 'التكلفة' : 'Cost'}</Label>
-                <Input
-                  type="number"
-                  value={formData.cost === 0 ? '' : formData.cost}
-                  onChange={(e) => handleNumberChange('cost', e.target.value)}
-                  min={0}
-                  step="0.01"
-                  placeholder="0.00"
-                />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <Label>{language === 'ar' ? 'سعر التجزئة الأساسي' : 'Base retail price'}</Label>
+                  <Input
+                    type="number"
+                    value={formData.price === 0 ? '' : formData.price}
+                    onChange={(e) => handleNumberChange('price', e.target.value)}
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label>{language === 'ar' ? 'التكلفة' : 'Cost'}</Label>
+                  <Input
+                    type="number"
+                    value={formData.cost === 0 ? '' : formData.cost}
+                    onChange={(e) => handleNumberChange('cost', e.target.value)}
+                    min={0}
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label>{language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Point'}</Label>
+                  <Input
+                    type="number"
+                    value={formData.reorderPoint === 0 ? '' : formData.reorderPoint}
+                    onChange={(e) => handleNumberChange('reorderPoint', e.target.value)}
+                    min={0}
+                    placeholder="5"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>{language === 'ar' ? 'حد إعادة الطلب' : 'Reorder Point'}</Label>
-                <Input
-                  type="number"
-                  value={formData.reorderPoint === 0 ? '' : formData.reorderPoint}
-                  onChange={(e) => handleNumberChange('reorderPoint', e.target.value)}
-                  min={0}
-                  placeholder="5"
-                />
-              </div>
-            </div>
+              <div className="space-y-3 border-t border-border pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{language === 'ar' ? 'شرائح الأسعار' : 'Price tiers'}</p>
+                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'يُطبق السعر على الكمية المحددة أو أكثر، ويمكن تخصيصه لوحدة أو لون.' : 'Each tier applies at its minimum quantity and can target a unit or color.'}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleChange('priceTiers', [
+                        ...formData.priceTiers,
+                        { price_type: 'wholesale', min_quantity: 10, price: 0, unit_id: '', color_id: '' },
+                      ])}
+                    >
+                      <Plus className="me-2 h-4 w-4" />
+                      {language === 'ar' ? 'إضافة سعر' : 'Add price'}
+                    </Button>
+                  </div>
+                  {colorsError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {language === 'ar' ? 'تعذر تحميل الألوان؛ أعد المحاولة قبل اختيار لون.' : 'Colors could not be loaded. Retry before assigning a color.'}
+                    </p>
+                  )}
+                  {formData.priceTiers.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      {language === 'ar' ? 'لا توجد أسعار إضافية. أضف سعر جملة أو آجل عند الحاجة.' : 'No additional prices. Add wholesale or credit pricing when needed.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {formData.priceTiers.map((tier, index) => (
+                        <div key={`${index}-${tier.price_type}`} className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+                          <div>
+                            <Label>{language === 'ar' ? 'نوع السعر' : 'Price type'}</Label>
+                            <Select
+                              value={tier.price_type}
+                              onValueChange={(value: ProductPriceTier['price_type']) => {
+                                const priceTiers = [...formData.priceTiers];
+                                priceTiers[index] = { ...tier, price_type: value };
+                                handleChange('priceTiers', priceTiers);
+                              }}
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="retail">{language === 'ar' ? 'قطاعي' : 'Retail'}</SelectItem>
+                                <SelectItem value="wholesale">{language === 'ar' ? 'جملة' : 'Wholesale'}</SelectItem>
+                                <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>{language === 'ar' ? 'الكمية من' : 'Quantity from'}</Label>
+                            <Input type="number" min="0.000001" step="0.001" value={tier.min_quantity} onChange={(event) => {
+                              const priceTiers = [...formData.priceTiers];
+                              priceTiers[index] = { ...tier, min_quantity: Number(event.target.value) || 1 };
+                              handleChange('priceTiers', priceTiers);
+                            }} />
+                          </div>
+                          <div>
+                            <Label>{language === 'ar' ? 'السعر' : 'Price'}</Label>
+                            <Input type="number" min="0" step="0.01" value={tier.price || ''} onChange={(event) => {
+                              const priceTiers = [...formData.priceTiers];
+                              priceTiers[index] = { ...tier, price: Number(event.target.value) || 0 };
+                              handleChange('priceTiers', priceTiers);
+                            }} />
+                          </div>
+                          <div>
+                            <Label>{language === 'ar' ? 'الوحدة' : 'Unit'}</Label>
+                            <Select value={tier.unit_id || 'all'} onValueChange={(value) => {
+                              const priceTiers = [...formData.priceTiers];
+                              priceTiers[index] = { ...tier, unit_id: value === 'all' ? '' : value };
+                              handleChange('priceTiers', priceTiers);
+                            }}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">{language === 'ar' ? 'كل الوحدات' : 'All units'}</SelectItem>
+                                {unitsData.map((unit: UnitOption) => <SelectItem key={unit.id} value={unit.id}>{language === 'ar' ? unit.nameAr : unit.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>{language === 'ar' ? 'اللون' : 'Color'}</Label>
+                            <Select value={tier.color_id || 'all'} onValueChange={(value) => {
+                              const priceTiers = [...formData.priceTiers];
+                              priceTiers[index] = { ...tier, color_id: value === 'all' ? '' : value };
+                              handleChange('priceTiers', priceTiers);
+                            }}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">{language === 'ar' ? 'كل الألوان' : 'All colors'}</SelectItem>
+                                {colorsData.map((color: { id: string; name: string }) => <SelectItem key={color.id} value={color.id}>{color.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-end">
+                            <Button type="button" variant="ghost" size="icon" aria-label={language === 'ar' ? 'حذف السعر' : 'Remove price'} onClick={() => handleChange('priceTiers', formData.priceTiers.filter((_, tierIndex) => tierIndex !== index))}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>}
 
             {/* Warehouses */}
             <div className="space-y-3 rounded-lg border border-border p-4">
@@ -807,7 +1091,7 @@
                 </div>
               )}
 
-              {branchPriceBranchIds.length > 0 && (
+              {formData.product_type !== 'material' && branchPriceBranchIds.length > 0 && (
                 <div className="space-y-3 border-t border-border pt-4">
                   <div>
                     <p className="font-medium text-foreground">
@@ -872,7 +1156,7 @@
             </div>
 
             {/* Variants */}
-            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+            {formData.product_type !== 'material' && <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
               <div>
                 <p className="font-medium text-foreground">
                   {language === 'ar' ? 'هل للمنتج متغيرات؟' : 'Does this product have variants?'}
@@ -885,9 +1169,9 @@
                 checked={formData.hasVariants}
                 onCheckedChange={(checked) => handleChange('hasVariants', checked)}
               />
-            </div>
+            </div>}
 
-            {formData.hasVariants && (
+            {formData.product_type !== 'material' && formData.hasVariants && (
               <VariantMatrix
                 variants={formData.variants}
                 baseSku={formData.sku}

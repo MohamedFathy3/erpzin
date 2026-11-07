@@ -169,11 +169,23 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     warehouseStocks,
     valuationMethod: apiProduct.valuation_method || 'fifo',
     product_type: apiProduct.product_type || 'good',
+    package_size: Number(apiProduct.package_size) || 1,
+    package_unit: apiProduct.package_unit || apiProduct.base_unit || apiProduct.stock_unit || 'piece',
+    package_cost: Number(apiProduct.package_cost) || (Number(apiProduct.cost) || 0) * (Number(apiProduct.package_size) || 1),
     stock_unit: apiProduct.stock_unit || '',
     base_unit: apiProduct.base_unit || '',
     conversion_factor: Number(apiProduct.conversion_factor) || 1,
     tracking: apiProduct.tracking || 'none',
     dimensions: apiProduct.dimensions || { unit: 'cm' },
+    priceTiers: Array.isArray(apiProduct.prices)
+      ? apiProduct.prices.map((tier: any) => ({
+          price_type: tier.price_type,
+          min_quantity: Number(tier.min_quantity) || 1,
+          price: Number(tier.price) || 0,
+          unit_id: tier.unit_id ? String(tier.unit_id) : '',
+          color_id: tier.color_id ? String(tier.color_id) : '',
+        }))
+      : [],
   };
 };
 
@@ -609,8 +621,9 @@ const Inventory: React.FC = () => {
 
   /* ========== نسخ منتج ========== */
   const handleDuplicateProduct = (product: Product) => {
+    const sourceProduct = dbProducts.find((item: any) => String(item.id) === product.id);
     setEditProduct({
-      ...product,
+      ...transformApiProductToFormData(sourceProduct || product),
       id: undefined,
       name: `${product.name} (Copy)`,
       nameAr: `${product.nameAr} (نسخة)`,
@@ -709,15 +722,33 @@ const Inventory: React.FC = () => {
         sku: formData.sku,
         barcode: formData.barcode || null,
         main_unit_id: formData.main_unit_id ? parseInt(formData.main_unit_id) : null,
-        reorder_level: formData.reorderPoint || 5,
+        reorder_level: formData.product_type === 'material'
+          ? Number(formData.reorderPoint) || 0
+          : Number(formData.reorderPoint) || 5,
         cost: formData.cost || 0,
         price: formData.price || 0,
+        product_type: formData.product_type,
+        package_size: formData.product_type === 'material' ? formData.package_size : null,
+        package_unit: formData.product_type === 'material' ? formData.package_unit || null : null,
+        package_cost: formData.product_type === 'material' ? formData.package_cost : null,
+        stock_unit: formData.stock_unit || null,
+        base_unit: formData.base_unit || null,
+        conversion_factor: Number(formData.conversion_factor) || 1,
+        tracking: formData.tracking,
+        dimensions: formData.dimensions,
+        prices: formData.priceTiers.map((tier) => ({
+          price_type: tier.price_type,
+          min_quantity: Number(tier.min_quantity) || 1,
+          price: Number(tier.price) || 0,
+          unit_id: tier.unit_id ? Number(tier.unit_id) : null,
+          color_id: tier.color_id ? Number(tier.color_id) : null,
+        })),
         branch_prices: Object.entries(formData.branchPrices || {})
           .filter(([branchId]) => Number.isSafeInteger(Number(branchId)) && Number(branchId) > 0)
           .map(([branchId, price]) => ({ branch_id: Number(branchId), price: Number(price) || 0 })),
         stock: totalStock, // ✅ دايماً مجموع المخازن
         active: formData.status === 'active',
-        has_variants: formData.hasVariants || false,
+        has_variants: formData.product_type === 'material' ? false : formData.hasVariants || false,
         branch_ids: formData.branchIds?.length
           ? formData.branchIds.map((id) => parseInt(id))
           : [],

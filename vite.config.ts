@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       port: 7000,
 
       allowedHosts: [
-        "asca.professionalacademyedu.com",
+        "acsa.professionalacademyedu.com",
         "localhost",
         "127.0.0.1",
         "192.168.0.132",

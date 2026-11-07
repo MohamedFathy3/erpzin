@@ -118,6 +118,15 @@ interface Product {
   active?: boolean;
   image_url?: string | null;
   units?: UnitOption[];
+  prices?: ProductPriceTier[];
+}
+
+interface ProductPriceTier {
+  price_type: 'retail' | 'wholesale' | 'credit';
+  min_quantity: number;
+  price: number;
+  unit_id?: number | null;
+  color_id?: number | null;
 }
 
 interface InvoiceItem {
@@ -138,6 +147,9 @@ interface InvoiceItem {
   color_name?: string | null;
   color_hex?: string | null;
   variant_id?: string;
+  price_type: 'retail' | 'wholesale' | 'credit' | 'custom';
+  fallback_price: number;
+  price_tiers: ProductPriceTier[];
 }
 
 interface SalesInvoiceFormProps {
@@ -488,10 +500,55 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
   const totals = calculateTotals();
 
   // تحديث عنصر في السلة مع إعادة حساب خصم المنتج
-  const updateItem = (id: string, field: string, value: number) => {
+  const resolveTierPrice = (
+    tiers: ProductPriceTier[],
+    type: ProductPriceTier['price_type'],
+    quantity: number,
+    unitId: number | null,
+    colorId: number | null,
+    fallbackPrice: number
+  ): number => {
+    const applicable = tiers
+      .filter((tier) =>
+        tier.price_type === type &&
+        Number(tier.min_quantity) <= quantity &&
+        (!tier.unit_id || Number(tier.unit_id) === unitId) &&
+        (!tier.color_id || Number(tier.color_id) === colorId)
+      )
+      .sort((a, b) => {
+        const specificityA = Number(Boolean(a.unit_id)) + Number(Boolean(a.color_id));
+        const specificityB = Number(Boolean(b.unit_id)) + Number(Boolean(b.color_id));
+        return specificityB - specificityA || Number(b.min_quantity) - Number(a.min_quantity);
+      });
+
+    return applicable.length > 0 ? Number(applicable[0].price) : fallbackPrice;
+  };
+
+  const updateItem = (id: string, field: string, value: number | string) => {
     const updated = items.map(item => {
       if (item.id === id) {
-        const newItem = { ...item, [field]: value };
+        const newItem = { ...item, [field]: value } as InvoiceItem;
+        if (field === 'unit_price') {
+          newItem.price_type = 'custom';
+        } else if (field === 'price_type' && value !== 'custom') {
+          newItem.unit_price = resolveTierPrice(
+            item.price_tiers,
+            value as ProductPriceTier['price_type'],
+            item.quantity,
+            item.unit_id ?? null,
+            item.color_id ?? null,
+            item.fallback_price
+          );
+        } else if (field === 'quantity' && item.price_type !== 'custom') {
+          newItem.unit_price = resolveTierPrice(
+            item.price_tiers,
+            item.price_type,
+            Number(value),
+            item.unit_id ?? null,
+            item.color_id ?? null,
+            item.fallback_price
+          );
+        }
 
         // إعادة حساب إجمالي المنتج وخصمه
         const grossTotal = newItem.quantity * newItem.unit_price;
@@ -545,6 +602,9 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
       }
     }
 
+    const productPrices = product.prices || [];
+    unitPrice = resolveTierPrice(productPrices, 'retail', 1, unitId, colorId, unitPrice);
+
     if (variantStock <= 0) {
       toast.error(language === 'ar' ? 'هذا المتغير غير متوفر في المخزون' : 'This variant is out of stock');
       return;
@@ -559,6 +619,16 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
     if (existingIndex >= 0) {
       const updated = [...items];
       updated[existingIndex].quantity += 1;
+      if (updated[existingIndex].price_type !== 'custom') {
+        updated[existingIndex].unit_price = resolveTierPrice(
+          updated[existingIndex].price_tiers,
+          updated[existingIndex].price_type,
+          updated[existingIndex].quantity,
+          updated[existingIndex].unit_id ?? null,
+          updated[existingIndex].color_id ?? null,
+          updated[existingIndex].fallback_price
+        );
+      }
       // إعادة حساب الإجمالي بعد زيادة الكمية
       const grossTotal = updated[existingIndex].quantity * updated[existingIndex].unit_price;
       const itemDiscountAmount = (grossTotal * updated[existingIndex].discount_percent) / 100;
@@ -586,7 +656,10 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
         color_id: colorId,
         color_name: colorName,
         color_hex: colorHex,
-        variant_id: unitId && colorId ? `${product.id}-${unitId}-${colorId}` : undefined
+        variant_id: unitId && colorId ? `${product.id}-${unitId}-${colorId}` : undefined,
+        price_type: 'retail',
+        fallback_price: unit ? parseFloat(unit.sell_price) : Number(product.sell_price || product.price || 0),
+        price_tiers: productPrices,
       };
       setItems([...items, newItem]);
       toast.success(language === 'ar' ? 'تم إضافة المنتج' : 'Product added');
@@ -1070,6 +1143,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                           <TableHead className="min-w-[200px]">{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
                           <TableHead className="w-16 text-center">{language === 'ar' ? 'المخزون' : 'Stock'}</TableHead>
                           <TableHead className="w-20 text-center">{language === 'ar' ? 'الكمية' : 'Qty'}</TableHead>
+                          <TableHead className="w-28">{language === 'ar' ? 'نوع السعر' : 'Price type'}</TableHead>
                           <TableHead className="w-28 text-right">{language === 'ar' ? 'السعر' : 'Price'}</TableHead>
                           <TableHead className="w-20 text-center">{language === 'ar' ? 'خصم %' : 'Disc %'}</TableHead>
                           <TableHead className="w-32 text-right">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
@@ -1078,7 +1152,7 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                       </TableHeader>
                       <TableBody>
                         {items.length === 0 ? (
-                          <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Package size={32} className="mx-auto opacity-30" /><span className="text-sm">{language === 'ar' ? 'لا توجد منتجات' : 'No products added'}</span></TableCell></TableRow>
+                          <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground"><Package size={32} className="mx-auto opacity-30" /><span className="text-sm">{language === 'ar' ? 'لا توجد منتجات' : 'No products added'}</span></TableCell></TableRow>
                         ) : (
                           items.map((item) => (
                             <TableRow key={item.id}>
@@ -1116,6 +1190,17 @@ const SalesInvoiceForm = ({ isOpen, onClose, editInvoice }: SalesInvoiceFormProp
                                 </span>
                               </TableCell>
                               <TableCell><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} className="w-20 text-center mx-auto h-8" /></TableCell>
+                              <TableCell>
+                                <Select value={item.price_type} onValueChange={(value) => updateItem(item.id, 'price_type', value)}>
+                                  <SelectTrigger className="h-8 min-w-24"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="retail">{language === 'ar' ? 'قطاعي' : 'Retail'}</SelectItem>
+                                    <SelectItem value="wholesale">{language === 'ar' ? 'جملة' : 'Wholesale'}</SelectItem>
+                                    <SelectItem value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</SelectItem>
+                                    {item.price_type === 'custom' && <SelectItem value="custom">{language === 'ar' ? 'يدوي' : 'Custom'}</SelectItem>}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
                               <TableCell><Input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)} className="w-24 text-right h-8" /></TableCell>
                               <TableCell>
                                 <Input
