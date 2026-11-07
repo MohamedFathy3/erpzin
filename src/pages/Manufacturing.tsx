@@ -60,7 +60,6 @@ type AvailabilityItem = {
   available: number;
   shortage: number;
 };
-type AccountNode = Account & { children?: AccountNode[]; accounts?: AccountNode[] };
 type OrderOperation = { name: string; equipment_id: string; planned_minutes: string };
 const emptyProducts: Product[] = [];
 const emptyBoms: Bom[] = [];
@@ -93,13 +92,6 @@ function errorMessage(error: ApiError, fallback: string): string {
   return firstValidationError || error.response?.data?.message || fallback;
 }
 
-function flattenAccounts(nodes: AccountNode[]): Account[] {
-  return nodes.flatMap((node) => [
-    { id: node.id, name: node.name, name_ar: node.name_ar },
-    ...flattenAccounts(node.children || node.accounts || []),
-  ]).filter((account): account is Account => Number.isInteger(account.id) && Boolean(account.name));
-}
-
 function makeIdempotencyKey(action: string, orderId: number): string {
   return `${action}:${orderId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
@@ -113,11 +105,7 @@ export default function Manufacturing() {
   const [actualMinutes, setActualMinutes] = useState<Record<number, string>>({});
   const [operationLogs, setOperationLogs] = useState<Record<number, { minutes: string; cost: string }>>({});
   const [qualityForm, setQualityForm] = useState({ result: 'pass', quantity: '', reason: '', manufacturing_operation_id: '' });
-  const [receiptForm, setReceiptForm] = useState({
-    quantity: '',
-    inventory_account_id: '',
-    work_in_progress_account_id: '',
-  });
+  const [receiptForm, setReceiptForm] = useState({ quantity: '' });
   const [materialActionQuantity, setMaterialActionQuantity] = useState<Record<number, string>>({});
 
   const overviewQuery = useQuery({
@@ -154,17 +142,13 @@ export default function Manufacturing() {
     queryKey: ['manufacturing-v2-equipment'],
     queryFn: async () => (await api.get('/manufacturing/v2/equipment', { params: { per_page: 100 } })).data.data,
   });
-  const accountsQuery = useQuery<Account[]>({
-    queryKey: ['manufacturing-v2-accounts'],
-    queryFn: async () => flattenAccounts((await api.get('/accounts/flat/tree')).data.data || []),
-  });
+
 
   const orders = ordersQuery.data || [];
   const products = productsQuery.data ?? emptyProducts;
   const boms = bomsQuery.data ?? emptyBoms;
   const warehouses = warehousesQuery.data || [];
   const equipment = equipmentQuery.data || [];
-  const accounts = accountsQuery.data || [];
   const order = orderQuery.data;
   const activeBoms = useMemo(
     () => boms.filter((bom) => bom.product_id === Number(orderForm.product_id) && bom.status === 'active'),
@@ -236,6 +220,7 @@ export default function Manufacturing() {
     },
     onSuccess: (_response, variables) => {
       toast.success('تم تسجيل العملية بنجاح');
+      if (variables.action === 'receive') setReceiptForm({ quantity: '' });
       refresh(variables.orderId);
     },
     onError: (error: ApiError) => toast.error(errorMessage(error, 'تعذر تنفيذ العملية')),
@@ -527,24 +512,13 @@ export default function Manufacturing() {
                       </div>
                     )}
                     {order.status === 'in_progress' && (
-                      <div className="grid gap-2 md:grid-cols-[1fr_1fr_0.8fr_auto]">
-                        <Input type="number" min="0.000001" step="0.001" placeholder={`كمية الاستلام (متبقي ${remainingProduction})`} value={receiptForm.quantity} onChange={(event) => setReceiptForm({ ...receiptForm, quantity: event.target.value })} />
-                        <Select value={receiptForm.inventory_account_id} onValueChange={(value) => setReceiptForm({ ...receiptForm, inventory_account_id: value })}>
-                          <SelectTrigger><SelectValue placeholder="حساب مخزون المنتج التام" /></SelectTrigger>
-                          <SelectContent>{accounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name_ar || account.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Select value={receiptForm.work_in_progress_account_id} onValueChange={(value) => setReceiptForm({ ...receiptForm, work_in_progress_account_id: value })}>
-                          <SelectTrigger><SelectValue placeholder="حساب تحت التشغيل" /></SelectTrigger>
-                          <SelectContent>{accounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name_ar || account.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button disabled={actionMutation.isPending || !receiptForm.quantity || !receiptForm.inventory_account_id || !receiptForm.work_in_progress_account_id || latestInspection?.result !== 'pass'} onClick={() => actionMutation.mutate({
+                      <div className="grid gap-2 md:grid-cols-[1fr_1.4fr_auto]">
+                        <Input type="number" min="0.000001" step="0.001" placeholder={`كمية الاستلام (متبقي ${remainingProduction})`} value={receiptForm.quantity} onChange={(event) => setReceiptForm({ quantity: event.target.value })} />
+                        <div className="flex items-center rounded-md bg-muted/40 px-3 text-sm text-muted-foreground">القيد المحاسبي يُسجَّل تلقائيًا على حساب مخزون الإنتاج التام وحساب الإنتاج تحت التشغيل.</div>
+                        <Button disabled={actionMutation.isPending || !receiptForm.quantity || latestInspection?.result !== 'pass'} onClick={() => actionMutation.mutate({
                           orderId: order.id,
                           action: 'receive',
-                          payload: {
-                            quantity: Number(receiptForm.quantity),
-                            inventory_account_id: Number(receiptForm.inventory_account_id),
-                            work_in_progress_account_id: Number(receiptForm.work_in_progress_account_id),
-                          },
+                          payload: { quantity: Number(receiptForm.quantity) },
                         })}>استلام المنتج التام</Button>
                       </div>
                     )}
