@@ -221,6 +221,7 @@ export default function Manufacturing() {
     onSuccess: (_response, variables) => {
       toast.success('تم تسجيل العملية بنجاح');
       if (variables.action === 'receive') setReceiptForm({ quantity: '' });
+      if (variables.action === 'quality') setQualityForm({ result: 'pass', quantity: '', reason: '', manufacturing_operation_id: '' });
       refresh(variables.orderId);
     },
     onError: (error: ApiError) => toast.error(errorMessage(error, 'تعذر تنفيذ العملية')),
@@ -260,13 +261,15 @@ export default function Manufacturing() {
 
   const fromInvoice = Boolean(orderForm.source_invoice_id && orderForm.invoice_item_id);
   const createOrderDisabled = createMutation.isPending
-    || (!fromInvoice && !orderForm.product_id)
+    || (!fromInvoice && (!orderForm.product_id || !orderForm.bom_version_id))
     || !orderForm.warehouse_id
     || (!fromInvoice && Number(orderForm.planned_quantity) <= 0)
     || Boolean(orderForm.source_invoice_id) !== Boolean(orderForm.invoice_item_id);
 
   const latestInspection = order?.quality_inspections?.at(-1);
   const remainingProduction = Math.max(0, Number(order?.planned_quantity || 0) - Number(order?.produced_quantity || 0));
+  const inspectionQuantity = Number(qualityForm.quantity || remainingProduction);
+  const latestInspectionExceedsPlan = Boolean(order && latestInspection && Number(latestInspection.quantity) > Number(order.planned_quantity));
   const overview = overviewQuery.data?.kpis;
 
   return (
@@ -327,11 +330,8 @@ export default function Manufacturing() {
                   </SelectContent>
                 </Select>
                 <Select value={orderForm.bom_version_id || 'none'} onValueChange={(value) => setOrderForm({ ...orderForm, bom_version_id: value === 'none' ? '' : value })}>
-                  <SelectTrigger><SelectValue placeholder="إصدار BOM" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">بدون BOM</SelectItem>
-                    {activeBoms.map((bom) => <SelectItem key={bom.id} value={String(bom.id)}>الإصدار {bom.version}</SelectItem>)}
-                  </SelectContent>
+                  <SelectTrigger><SelectValue placeholder={activeBoms.length ? "اختر إصدار BOM فعال" : "لا يوجد BOM فعال لهذا المنتج"} /></SelectTrigger>
+                  <SelectContent>{activeBoms.map((bom) => <SelectItem key={bom.id} value={String(bom.id)}>الإصدار {bom.version}</SelectItem>)}</SelectContent>
                 </Select>
                 <Select value={orderForm.warehouse_id} onValueChange={(value) => setOrderForm({ ...orderForm, warehouse_id: value })}>
                   <SelectTrigger><SelectValue placeholder="مخزن الإنتاج" /></SelectTrigger>
@@ -418,6 +418,7 @@ export default function Manufacturing() {
 
                   <section className="space-y-3">
                     <h3 className="font-bold">توافر وحجز الخامات</h3>
+                    {!order.materials?.some((material) => Boolean(material.product && material.product.product_type !== 'service')) && <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">هذا الأمر القديم لا يحتوي خامات من BOM؛ لا يمكن حجز خاماته. أنشئ أمرًا جديدًا بعد تفعيل BOM صحيح.</p>}
                     {availabilityQuery.data?.items?.length ? (
                       <div className="space-y-2">
                         {availabilityQuery.data.items.map((item) => (
@@ -429,7 +430,7 @@ export default function Manufacturing() {
                     ) : <p className="text-sm text-muted-foreground">لا توجد خامات مخزنية مرتبطة بالأمر.</p>}
                     <div className="flex flex-wrap gap-2">
                       {['draft', 'planned', 'in_progress'].includes(order.status) && (
-                        <Button variant="outline" disabled={actionMutation.isPending || availabilityQuery.data?.available === false} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'reserve' })}>
+                        <Button variant="outline" disabled={actionMutation.isPending || availabilityQuery.data?.available === false || !order.materials?.some((material) => Boolean(material.product && material.product.product_type !== 'service'))} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'reserve' })}>
                           حجز الخامات
                         </Button>
                       )}
@@ -498,24 +499,24 @@ export default function Manufacturing() {
 
                   <section className="space-y-3">
                     <h3 className="font-bold">فحص الجودة والاستلام</h3>
-                    {latestInspection && <p className="text-sm">آخر فحص: {latestInspection.result === 'pass' ? 'مقبول' : latestInspection.result === 'reject' ? 'مرفوض' : 'إعادة تشغيل'} · الكمية {latestInspection.quantity}{latestInspection.reason ? ` · ${latestInspection.reason}` : ''}</p>}
+                    {latestInspection && <p className={`text-sm ${latestInspectionExceedsPlan ? 'text-destructive' : ''}`}>آخر فحص: {latestInspection.result === 'pass' ? 'مقبول' : latestInspection.result === 'reject' ? 'مرفوض' : 'إعادة تشغيل'} · الكمية {latestInspection.quantity}{latestInspection.reason ? ` · ${latestInspection.reason}` : ''}{latestInspectionExceedsPlan ? ' — الكمية أكبر من خطة الأمر؛ أعد الفحص بالكمية المتبقية.' : ''}</p>}
                     {['in_progress', 'quality_hold'].includes(order.status) && (
                       <div className="grid gap-2 md:grid-cols-[1fr_0.8fr_1fr_1.5fr_auto]">
                         <Select value={qualityForm.result} onValueChange={(value) => setQualityForm({ ...qualityForm, result: value })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent><SelectItem value="pass">قبول</SelectItem><SelectItem value="reject">رفض</SelectItem><SelectItem value="rework">إعادة تشغيل</SelectItem></SelectContent>
                         </Select>
-                        <Input type="number" min="0.000001" step="0.001" placeholder="الكمية المفحوصة" value={qualityForm.quantity} onChange={(event) => setQualityForm({ ...qualityForm, quantity: event.target.value })} />
+                        <Input type="number" min="0.000001" max={remainingProduction} step="0.001" placeholder={`الكمية المفحوصة (متبقي ${remainingProduction})`} value={qualityForm.quantity} onChange={(event) => setQualityForm({ ...qualityForm, quantity: event.target.value })} />
                         <Select value={qualityForm.manufacturing_operation_id || 'whole-order'} onValueChange={(value) => setQualityForm({ ...qualityForm, manufacturing_operation_id: value === 'whole-order' ? '' : value })}><SelectTrigger><SelectValue placeholder="مرحلة الفحص" /></SelectTrigger><SelectContent><SelectItem value="whole-order">فحص نهائي</SelectItem>{order.operations?.map((operation) => <SelectItem key={operation.id} value={String(operation.id)}>{operation.sequence}. {operation.name}</SelectItem>)}</SelectContent></Select>
                         <Input placeholder="سبب الفحص / الرفض" value={qualityForm.reason} onChange={(event) => setQualityForm({ ...qualityForm, reason: event.target.value })} />
-                        <Button disabled={actionMutation.isPending} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'quality', payload: { result: qualityForm.result, quantity: Number(qualityForm.quantity || order.planned_quantity), reason: qualityForm.reason || null, manufacturing_operation_id: qualityForm.manufacturing_operation_id ? Number(qualityForm.manufacturing_operation_id) : null } })}>تسجيل الفحص</Button>
+                        <Button disabled={actionMutation.isPending || inspectionQuantity <= 0 || inspectionQuantity > remainingProduction} onClick={() => actionMutation.mutate({ orderId: order.id, action: 'quality', payload: { result: qualityForm.result, quantity: inspectionQuantity, reason: qualityForm.reason || null, manufacturing_operation_id: qualityForm.manufacturing_operation_id ? Number(qualityForm.manufacturing_operation_id) : null } })}>تسجيل الفحص</Button>
                       </div>
                     )}
                     {order.status === 'in_progress' && (
                       <div className="grid gap-2 md:grid-cols-[1fr_1.4fr_auto]">
                         <Input type="number" min="0.000001" step="0.001" placeholder={`كمية الاستلام (متبقي ${remainingProduction})`} value={receiptForm.quantity} onChange={(event) => setReceiptForm({ quantity: event.target.value })} />
                         <div className="flex items-center rounded-md bg-muted/40 px-3 text-sm text-muted-foreground">القيد المحاسبي يُسجَّل تلقائيًا على حساب مخزون الإنتاج التام وحساب الإنتاج تحت التشغيل.</div>
-                        <Button disabled={actionMutation.isPending || !receiptForm.quantity || latestInspection?.result !== 'pass'} onClick={() => actionMutation.mutate({
+                        <Button disabled={actionMutation.isPending || !receiptForm.quantity || latestInspection?.result !== 'pass' || latestInspectionExceedsPlan} onClick={() => actionMutation.mutate({
                           orderId: order.id,
                           action: 'receive',
                           payload: { quantity: Number(receiptForm.quantity) },
