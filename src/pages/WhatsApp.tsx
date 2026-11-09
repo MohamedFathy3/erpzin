@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import MainLayout from '@/components/layout/MainLayout';
+import WhatsAppAgentSettings from '@/components/whatsapp/WhatsAppAgentSettings';
 
 type Message = {
   id: number; customer_id: number; to_phone: string; type: 'text' | 'template'; template_name?: string;
@@ -24,6 +25,10 @@ type WhatsAppTemplate = { name: string; language: string; status: string; catego
 type WhatsAppAccount = { connected: boolean; display_phone_number?: string | null; verified_name?: string | null; phone_number_id?: string | null; waba_id?: string | null; webhook_url?: string | null; status?: string | null; last_error?: string | null };
 type EmbeddedSignupConfig = { enabled: boolean; app_id: string | null; config_id: string | null; graph_api_version: string };
 type EmbeddedSignupSession = { event: string; phone_number_id?: string; waba_id?: string; business_id?: string };
+const getApiErrorMessage = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object' || !('response' in error)) return undefined;
+  return (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+};
 
 declare global {
   interface Window {
@@ -78,7 +83,7 @@ export default function WhatsApp() {
   const testAccountMutation = useMutation({
     mutationFn: async () => api.post('/whatsapp/account/test'),
     onSuccess: () => toast.success('تم اختبار الاتصال بنجاح'),
-    onError: (error: any) => toast.error(error?.response?.data?.message || 'فشل اختبار الاتصال'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error) || 'فشل اختبار الاتصال'),
   });
   const embeddedSignupCompleteMutation = useMutation({
     mutationFn: async (payload: { code: string; phone_number_id: string; waba_id: string; business_id?: string; event: string }) =>
@@ -92,8 +97,8 @@ export default function WhatsApp() {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] }),
       ]);
     },
-    onError: (error: any) => {
-      toast.error(error?.response?.data?.message || 'تعذر إكمال ربط WhatsApp عبر Meta');
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error) || 'تعذر إكمال ربط WhatsApp عبر Meta');
       setSignupCode(''); setSignupSession(null); processedSignupCode.current = '';
     },
   });
@@ -162,7 +167,7 @@ export default function WhatsApp() {
     if (!signupCode || !signupSession || processedSignupCode.current === signupCode) return;
     processedSignupCode.current = signupCode;
     embeddedSignupCompleteMutation.mutate({ code: signupCode, ...signupSession });
-  }, [signupCode, signupSession]);
+  }, [signupCode, signupSession, embeddedSignupCompleteMutation]);
 
   const launchEmbeddedSignup = () => {
     if (!signupConfig?.enabled || !signupConfig.config_id || !window.FB) {
@@ -248,7 +253,7 @@ export default function WhatsApp() {
       setBody(''); setTemplateName(''); setComponents('');
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
     },
-    onError: (error: any) => toast.error(error?.response?.data?.message || 'تعذر إرسال رسالة WhatsApp'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error) || 'تعذر إرسال رسالة WhatsApp'),
   });
 
   return <MainLayout activeItem="whatsapp"><div className="space-y-6" dir="rtl">
@@ -264,7 +269,7 @@ export default function WhatsApp() {
     </div>
 
     <Tabs defaultValue="send" className="space-y-4">
-      <TabsList><TabsTrigger value="send">إرسال رسالة</TabsTrigger><TabsTrigger value="messages">سجل الرسائل ({messages.length})</TabsTrigger><TabsTrigger value="connection">إعداد الربط</TabsTrigger></TabsList>
+      <TabsList><TabsTrigger value="send">إرسال رسالة</TabsTrigger><TabsTrigger value="messages">سجل الرسائل ({messages.length})</TabsTrigger><TabsTrigger value="connection">إعداد الربط</TabsTrigger><TabsTrigger value="agent">وكيل الذكاء الاصطناعي</TabsTrigger></TabsList>
       <TabsContent value="send"><Card><CardHeader><CardTitle>إرسال عبر WhatsApp Cloud API</CardTitle></CardHeader><CardContent className="max-w-2xl space-y-4">
         <div><Label>العميل</Label><Select value={customerId} onValueChange={setCustomerId}><SelectTrigger><SelectValue placeholder={customersQuery.isLoading ? 'جاري تحميل العملاء...' : 'اختر العميل'} /></SelectTrigger><SelectContent>{customers.map(customer => <SelectItem key={customer.id} value={String(customer.id)}>{customer.name_ar || customer.name || `#${customer.id}`} — {customer.phone || 'بدون رقم'}</SelectItem>)}</SelectContent></Select>{selectedCustomer && <p className={`mt-1 text-xs ${selectedCustomer.phone?.trim().startsWith('+') ? 'text-emerald-600' : 'text-destructive'}`} dir="ltr">{selectedCustomer.phone || 'لا يوجد رقم'}{!selectedCustomer.phone?.trim().startsWith('+') && ' — يجب حفظه بصيغة +رمز الدولة ثم الرقم'}</p>}</div>
         <div><Label>نوع الرسالة</Label><Select value={type} onValueChange={value => setType(value as 'text' | 'template')}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="template">Template معتمدة</SelectItem><SelectItem value="text">نص حر داخل نافذة 24 ساعة</SelectItem></SelectContent></Select></div>
@@ -283,6 +288,7 @@ export default function WhatsApp() {
         {account?.connected && <div className="rounded-lg border bg-muted/40 p-3"><p className="font-medium">تم ربط {account.verified_name || 'نشاطك'} بحساب WhatsApp Cloud API.</p>{account.webhook_url && <p className="mt-1 text-xs text-muted-foreground">Webhook: <code dir="ltr">{account.webhook_url}</code></p>}</div>}
         <p className="text-xs text-muted-foreground">قبل إتاحة الربط لجميع العملاء، يجب على المنصة إكمال متطلبات Tech Provider وApp Review لدى Meta. الردود الآلية بالذكاء الاصطناعي لا تُفعّل تلقائيًا بمجرد الربط.</p>
       </CardContent></Card></TabsContent>
+      <TabsContent value="agent"><WhatsAppAgentSettings /></TabsContent>
     </Tabs>
   </div></MainLayout>;
 }
