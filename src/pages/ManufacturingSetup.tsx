@@ -12,7 +12,9 @@ import api from '@/lib/api';
 
 type ApiError = { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
 type UnitOption = { id: number; name: string; name_ar?: string; code: string };
-type Product = { id: number; name: string; sku?: string; product_type?: string; base_unit?: string | null; stock_unit?: string | null; conversion_factor?: number; dimensions?: { width?: number; height?: number; depth?: number; unit?: string }; units?: Array<{ unit?: { code?: string; name?: string; name_ar?: string }; colors?: Array<{ color?: { name?: string; name_ar?: string } }> }> };
+type ProductColor = { id: number; color_id: number; color?: { id: number; name?: string; name_ar?: string } };
+type ProductUnit = { id: number; unit?: { code?: string; name?: string; name_ar?: string }; colors?: ProductColor[] };
+type Product = { id: number; name: string; sku?: string; product_type?: string; base_unit?: string | null; stock_unit?: string | null; package_unit?: string | null; conversion_factor?: number; dimensions?: { width?: number; height?: number; depth?: number; unit?: string }; units?: ProductUnit[] };
 type BomItem = {
   id?: number;
   component_product_id: string;
@@ -20,6 +22,8 @@ type BomItem = {
   scrap_percent: string;
   unit: string;
   child_bom_version_id: string;
+  output_product_unit_id?: string;
+  output_color_id?: string;
   is_optional: boolean;
   specifications?: { width?: string | number; length?: string | number; thickness?: string | number; unit?: string; material_grade?: string; finish?: string };
   component?: Product;
@@ -66,6 +70,8 @@ const newBomItem = (): BomItem => ({
   scrap_percent: '0',
   unit: '',
   child_bom_version_id: '',
+  output_product_unit_id: '',
+  output_color_id: '',
   is_optional: false,
   specifications: { unit: 'mm' },
 });
@@ -84,6 +90,17 @@ const statusNames: Record<string, string> = { draft: 'مسودة', active: 'فع
 
 function messageFrom(error: ApiError, fallback: string): string {
   return Object.values(error.response?.data?.errors || {}).flat()[0] || error.response?.data?.message || fallback;
+}
+
+function unitFamily(unit?: string | null): string | null {
+  const code = unit?.trim().toLowerCase();
+  if (!code) return null;
+  if (['mm', 'millimeter', 'cm', 'm', 'meter'].includes(code)) return 'length';
+  if (['mg', 'g', 'kg'].includes(code)) return 'mass';
+  if (['ml', 'cc', 'l', 'liter', 'litre', 'm3'].includes(code)) return 'volume';
+  if (['piece', 'pieces', 'pc', 'pcs', 'ea', 'unit', 'units'].includes(code)) return 'count';
+  if (['cm2', 'm2'].includes(code)) return 'area';
+  return null;
 }
 
 export default function ManufacturingSetup() {
@@ -120,6 +137,7 @@ export default function ManufacturingSetup() {
   const products = productsQuery.data ?? emptyProducts;
   const boms = bomsQuery.data ?? emptyBoms;
   const equipment = equipmentQuery.data ?? emptyEquipmentList;
+  const outputProduct = products.find((product) => product.id === Number(bomForm.product_id));
   const finishedProductOptions = useMemo(() => products.filter((product) => ['good', 'finished', 'semi_finished'].includes(product.product_type || '')).map((product) => (
     <option key={product.id} value={product.id}>{product.name}{product.sku ? ` · ${product.sku}` : ''}</option>
   )), [products]);
@@ -146,8 +164,10 @@ export default function ManufacturingSetup() {
         component_product_id: Number(item.component_product_id),
         quantity: Number(item.quantity),
         scrap_percent: Number(item.scrap_percent || 0),
-        unit: componentProducts.find((product) => product.id === Number(item.component_product_id))?.base_unit || componentProducts.find((product) => product.id === Number(item.component_product_id))?.stock_unit || item.unit || null,
+        unit: item.unit || componentProducts.find((product) => product.id === Number(item.component_product_id))?.base_unit || componentProducts.find((product) => product.id === Number(item.component_product_id))?.stock_unit || null,
         child_bom_version_id: item.child_bom_version_id ? Number(item.child_bom_version_id) : null,
+        output_product_unit_id: item.output_product_unit_id ? Number(item.output_product_unit_id) : null,
+        output_color_id: item.output_color_id ? Number(item.output_color_id) : null,
         is_optional: item.is_optional,
       }));
       const common = {
@@ -235,6 +255,8 @@ export default function ManufacturingSetup() {
         scrap_percent: String(item.scrap_percent || 0),
         unit: item.unit || '',
         child_bom_version_id: item.child_bom_version_id ? String(item.child_bom_version_id) : '',
+        output_product_unit_id: item.output_product_unit_id ? String(item.output_product_unit_id) : '',
+        output_color_id: item.output_color_id ? String(item.output_color_id) : '',
         is_optional: Boolean(item.is_optional),
         specifications: item.specifications || { unit: 'mm' },
       })) : [newBomItem()],
@@ -317,7 +339,7 @@ export default function ManufacturingSetup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
-              <select className="h-10 rounded-md border bg-background px-3 text-sm" value={bomForm.product_id} disabled={Boolean(editingBomId)} onChange={(event) => setBomForm({ ...bomForm, product_id: event.target.value })}>
+              <select className="h-10 rounded-md border bg-background px-3 text-sm" value={bomForm.product_id} disabled={Boolean(editingBomId)} onChange={(event) => setBomForm({ ...bomForm, product_id: event.target.value, items: bomForm.items.map((item) => ({ ...item, output_product_unit_id: '', output_color_id: '' })) })}>
                 <option value="">المنتج النهائي *</option>{finishedProductOptions}
               </select>
               <Input placeholder="رقم الإصدار * (مثال: 1)" value={bomForm.version} onChange={(event) => setBomForm({ ...bomForm, version: event.target.value })} />
@@ -340,6 +362,13 @@ export default function ManufacturingSetup() {
               {bomForm.items.map((item, index) => {
                 const componentId = Number(item.component_product_id);
                 const childVersions = boms.filter((candidate) => candidate.product_id === componentId && candidate.status !== 'obsolete');
+                const component = componentProducts.find((product) => product.id === componentId);
+                const componentUnits = [...new Set([component?.base_unit, component?.stock_unit, component?.package_unit].filter((unit): unit is string => Boolean(unit)
+                  && (unit === component?.base_unit || unit === component?.stock_unit
+                    || Boolean(unitFamily(unit) && unitFamily(unit) === unitFamily(component?.stock_unit || component?.base_unit))
+                    || Boolean(component?.conversion_factor && unit === component?.base_unit))))];
+                const outputUnit = outputProduct?.units?.find((unit) => unit.id === Number(item.output_product_unit_id));
+                const outputColors = outputUnit?.colors || [];
                 return (
                   <div key={index} className="grid gap-2 rounded-md bg-muted/30 p-2 md:grid-cols-[1.4fr_0.7fr_0.6fr_0.6fr_1.2fr_auto]">
                     <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.component_product_id} onChange={(event) => setBomForm({
@@ -352,17 +381,27 @@ export default function ManufacturingSetup() {
                     </select>
                     <Input type="number" min="0.000001" step="0.001" placeholder="الكمية *" value={item.quantity} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row) })} />
                     <Input type="number" min="0" max="100" step="0.01" placeholder="هالك %" value={item.scrap_percent} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, scrap_percent: event.target.value } : row) })} />
-                    <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm" title="الوحدة مأخوذة من بطاقة المنتج">
-                      الوحدة: {unitName(componentProducts.find((product) => product.id === componentId)?.base_unit || componentProducts.find((product) => product.id === componentId)?.stock_unit || item.unit)}
-                    </div>
+                    <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.unit || component?.base_unit || component?.stock_unit || ''} disabled={!componentUnits.length} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, unit: event.target.value } : row) })}>
+                      {componentUnits.map((unit) => <option key={unit} value={unit}>{unitName(unit)}</option>)}
+                      {!componentUnits.length && <option value="">وحدة غير محددة</option>}
+                    </select>
                     {(() => {
-                      const component = componentProducts.find((product) => product.id === componentId);
                       const dimensions = component?.dimensions;
                       const colors = [...new Set((component?.units || []).flatMap((unit) => unit.colors || []).map((entry) => entry.color?.name_ar || entry.color?.name).filter(Boolean))];
                       return <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground md:col-span-6">
                         <span>المقاسات من بطاقة المنتج: {dimensions ? `${dimensions.width ?? '—'} × ${dimensions.height ?? '—'} × ${dimensions.depth ?? '—'} ${dimensions.unit || ''}` : 'غير مسجلة'}</span>
                         <span>الألوان من بطاقة المنتج: {colors.length ? colors.join('، ') : 'غير محددة'}</span>
                         <span>وحدة المخزون: {unitName(component?.stock_unit)}</span>
+                        <div className="grid w-full gap-2 sm:grid-cols-2">
+                          <select className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_product_unit_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_product_unit_id: event.target.value === 'all' ? '' : event.target.value, output_color_id: '' } : row) })}>
+                            <option value="all">ينطبق على كل المقاسات والألوان</option>
+                            {(outputProduct?.units || []).map((unit) => <option key={unit.id} value={unit.id}>{unit.unit?.name_ar || unit.unit?.name || unit.unit?.code || `خيار #${unit.id}`}</option>)}
+                          </select>
+                          {outputUnit && outputColors.length > 0 && <select className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_color_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_color_id: event.target.value === 'all' ? '' : event.target.value } : row) })}>
+                            <option value="all">كل الألوان لهذا المقاس</option>
+                            {outputColors.map((entry) => <option key={entry.color_id} value={entry.color_id}>{entry.color?.name_ar || entry.color?.name || `لون #${entry.color_id}`}</option>)}
+                          </select>}
+                        </div>
                       </div>;
                     })()}
                     <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.child_bom_version_id || 'none'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, child_bom_version_id: event.target.value === 'none' ? '' : event.target.value } : row) })}>

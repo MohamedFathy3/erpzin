@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import api from '@/lib/api';
 
 type ApiError = { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
-type Product = { id: number; name: string; sku?: string; product_type?: string; stock_unit?: string };
+type ProductColor = { id: number; color_id: number; color?: { id: number; name?: string; name_ar?: string } };
+type ProductUnit = { id: number; unit?: { code?: string; name?: string; name_ar?: string }; colors?: ProductColor[] };
+type Product = { id: number; name: string; sku?: string; product_type?: string; stock_unit?: string; units?: ProductUnit[] };
 type Bom = { id: number; version: string; status: string; product_id: number; product?: Product };
 type Warehouse = { id: number; name: string; branch_id?: number };
 type Account = { id: number; name: string; name_ar?: string };
@@ -35,6 +37,8 @@ type Material = {
   product?: Product;
 };
 type Inspection = { id: number; result: string; quantity: number; reason?: string; created_at: string };
+type StatusChange = { id: number; from_status?: string | null; to_status: string; reason?: string | null; created_at: string };
+type RequirementPreview = { bom_item_id: number; product_id: number; required_quantity: number; unit_cost: number };
 type ManufacturingOrder = {
   id: number;
   order_number: string;
@@ -44,10 +48,13 @@ type ManufacturingOrder = {
   reserved_quantity: number;
   actual_cost: number;
   product?: Product;
+  product_unit?: ProductUnit;
+  color?: { id: number; name?: string; name_ar?: string };
   bom_version?: Bom;
   materials?: Material[];
   operations?: Operation[];
   quality_inspections?: Inspection[];
+  status_history?: StatusChange[];
   costs?: Array<{ id: number; cost_type: string; amount: number; notes?: string }>;
   notes?: string;
   dimensions?: { width?: number; height?: number; depth?: number; unit?: string };
@@ -55,6 +62,7 @@ type ManufacturingOrder = {
 type AvailabilityItem = {
   product_id: number;
   product_name: string;
+  unit?: string | null;
   required: number;
   on_hand: number;
   available: number;
@@ -67,6 +75,8 @@ const emptyBoms: Bom[] = [];
 const emptyOrder = {
   product_id: '',
   bom_version_id: '',
+  product_unit_id: '',
+  color_id: '',
   warehouse_id: '',
   planned_quantity: '',
   planned_at: '',
@@ -154,6 +164,21 @@ export default function Manufacturing() {
     () => boms.filter((bom) => bom.product_id === Number(orderForm.product_id) && bom.status === 'active'),
     [boms, orderForm.product_id],
   );
+  const selectedProduct = products.find((product) => product.id === Number(orderForm.product_id));
+  const selectedProductUnit = selectedProduct?.units?.find((unit) => unit.id === Number(orderForm.product_unit_id));
+  const variantReady = !selectedProduct?.units?.length
+    || Boolean(orderForm.product_unit_id && (!selectedProductUnit?.colors?.length || orderForm.color_id));
+  const requirementPreviewQuery = useQuery<RequirementPreview[]>({
+    queryKey: ['manufacturing-order-preview', orderForm.product_id, orderForm.bom_version_id, orderForm.planned_quantity, orderForm.product_unit_id, orderForm.color_id],
+    enabled: showCreate && Boolean(orderForm.product_id && orderForm.bom_version_id && Number(orderForm.planned_quantity) > 0 && variantReady),
+    queryFn: async () => (await api.post('/manufacturing/v2/orders/preview', {
+      product_id: Number(orderForm.product_id),
+      bom_version_id: Number(orderForm.bom_version_id),
+      planned_quantity: Number(orderForm.planned_quantity),
+      product_unit_id: orderForm.product_unit_id ? Number(orderForm.product_unit_id) : null,
+      color_id: orderForm.color_id ? Number(orderForm.color_id) : null,
+    })).data.data,
+  });
 
   const refresh = (orderId?: number) => {
     void queryClient.invalidateQueries({ queryKey: ['manufacturing-v2-orders'] });
@@ -177,6 +202,8 @@ export default function Manufacturing() {
       const payload = {
         product_id: Number(orderForm.product_id),
         bom_version_id: orderForm.bom_version_id ? Number(orderForm.bom_version_id) : null,
+        product_unit_id: orderForm.product_unit_id ? Number(orderForm.product_unit_id) : null,
+        color_id: orderForm.color_id ? Number(orderForm.color_id) : null,
         warehouse_id: Number(orderForm.warehouse_id),
         planned_quantity: Number(orderForm.planned_quantity),
         planned_at: orderForm.planned_at || null,
@@ -187,6 +214,8 @@ export default function Manufacturing() {
         return api.post(`/manufacturing/v2/orders/from-invoice/${Number(orderForm.source_invoice_id)}`, {
           invoice_item_id: Number(orderForm.invoice_item_id),
           warehouse_id: payload.warehouse_id,
+          product_unit_id: payload.product_unit_id,
+          color_id: payload.color_id,
           operations,
         });
       }
@@ -262,6 +291,7 @@ export default function Manufacturing() {
   const fromInvoice = Boolean(orderForm.source_invoice_id && orderForm.invoice_item_id);
   const createOrderDisabled = createMutation.isPending
     || (!fromInvoice && (!orderForm.product_id || !orderForm.bom_version_id))
+    || (!fromInvoice && !variantReady)
     || !orderForm.warehouse_id
     || (!fromInvoice && Number(orderForm.planned_quantity) <= 0)
     || Boolean(orderForm.source_invoice_id) !== Boolean(orderForm.invoice_item_id);
@@ -321,7 +351,7 @@ export default function Manufacturing() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
-                <Select value={orderForm.product_id} onValueChange={(value) => setOrderForm({ ...orderForm, product_id: value, bom_version_id: '' })}>
+                <Select value={orderForm.product_id} onValueChange={(value) => setOrderForm({ ...orderForm, product_id: value, bom_version_id: '', product_unit_id: '', color_id: '' })}>
                   <SelectTrigger><SelectValue placeholder="المنتج النهائي" /></SelectTrigger>
                   <SelectContent>
                     {products.filter((product) => product.product_type !== 'service').map((product) => (
@@ -339,12 +369,48 @@ export default function Manufacturing() {
                 </Select>
                 <Input type="number" min="0.000001" step="0.001" placeholder="الكمية المخططة" value={orderForm.planned_quantity} onChange={(event) => setOrderForm({ ...orderForm, planned_quantity: event.target.value })} />
               </div>
+              {selectedProduct?.units?.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Select value={orderForm.product_unit_id || 'none'} onValueChange={(value) => setOrderForm({ ...orderForm, product_unit_id: value === 'none' ? '' : value, color_id: '' })}>
+                    <SelectTrigger><SelectValue placeholder="مقاس / وحدة المنتج" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">اختر المقاس / الوحدة</SelectItem>
+                      {selectedProduct.units.map((unit) => <SelectItem key={unit.id} value={String(unit.id)}>{unit.unit?.name_ar || unit.unit?.name || unit.unit?.code || `خيار #${unit.id}`}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selectedProductUnit?.colors?.length ? (
+                    <Select value={orderForm.color_id || 'none'} onValueChange={(value) => setOrderForm({ ...orderForm, color_id: value === 'none' ? '' : value })}>
+                      <SelectTrigger><SelectValue placeholder="لون المنتج" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">اختر اللون</SelectItem>
+                        {selectedProductUnit.colors.map((entry) => <SelectItem key={entry.color_id} value={String(entry.color_id)}>{entry.color?.name_ar || entry.color?.name || `لون #${entry.color_id}`}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                </div>
+              ) : null}
+              {!fromInvoice && orderForm.product_id && !variantReady && <p className="text-sm text-destructive">اختر المقاس واللون قبل إنشاء أمر الإنتاج؛ سيُخزَّن الناتج منفصلًا لهذا الخيار.</p>}
               <div className="grid gap-3 md:grid-cols-3">
                 <Input type="date" value={orderForm.planned_at} onChange={(event) => setOrderForm({ ...orderForm, planned_at: event.target.value })} />
                 <Input type="number" min="1" placeholder="رقم فاتورة (اختياري)" value={orderForm.source_invoice_id} onChange={(event) => setOrderForm({ ...orderForm, source_invoice_id: event.target.value })} />
                 <Input type="number" min="1" placeholder="رقم بند الفاتورة" value={orderForm.invoice_item_id} onChange={(event) => setOrderForm({ ...orderForm, invoice_item_id: event.target.value })} />
               </div>
               <Input placeholder="ملاحظات أمر الإنتاج" value={orderForm.notes} onChange={(event) => setOrderForm({ ...orderForm, notes: event.target.value })} />
+              {orderForm.bom_version_id && Number(orderForm.planned_quantity) > 0 && (
+                <section className="space-y-2 rounded-lg border p-3">
+                  <h3 className="font-semibold">احتياج الخامات للكمية المخططة</h3>
+                  <p className="text-xs text-muted-foreground">الكميات معروضة بوحدة المخزون بعد تطبيق معامل الهالك والتحويل بين الوحدات. الحجز لا يخصم المخزون؛ الخصم يتم عند صرف الخامات.</p>
+                  {requirementPreviewQuery.isLoading ? <p className="text-sm">جارٍ حساب الاحتياج...</p>
+                    : requirementPreviewQuery.isError ? <p className="text-sm text-destructive">تعذر حساب الاحتياج؛ راجع الوحدات ومكونات BOM.</p>
+                      : requirementPreviewQuery.data?.length ? requirementPreviewQuery.data.map((requirement) => {
+                        const material = products.find((product) => product.id === requirement.product_id);
+                        return <div key={`${requirement.bom_item_id}-${requirement.product_id}`} className="flex flex-wrap justify-between gap-2 rounded border bg-muted/30 p-2 text-sm">
+                          <span>{material?.name || `مادة #${requirement.product_id}`}</span>
+                          <span className="font-semibold">{Number(requirement.required_quantity).toLocaleString()} {material?.stock_unit || ''}</span>
+                        </div>;
+                      }) : <p className="text-sm text-destructive">لا توجد خامات معرفة لهذا الخيار من المنتج.</p>}
+                </section>
+              )}
               <div className="space-y-2 rounded-lg border p-3">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold">مراحل التشغيل بالترتيب</p>
@@ -381,7 +447,12 @@ export default function Manufacturing() {
                   <div key={row.id} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-center">
                     <div>
                       <p className="font-bold">{row.order_number}</p>
-                      <p className="text-sm text-muted-foreground">{row.product?.name || 'منتج'} · المخطط {row.planned_quantity} · المستلم {row.produced_quantity}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {row.product?.name || 'منتج'}
+                        {row.product_unit?.unit && ` · ${row.product_unit.unit.name_ar || row.product_unit.unit.name || row.product_unit.unit.code}`}
+                        {row.color && ` · ${row.color.name_ar || row.color.name}`}
+                        {' · '}المخطط {row.planned_quantity} · المستلم {row.produced_quantity}
+                      </p>
                     </div>
                     <div><Badge variant={row.status === 'completed' || row.status === 'closed' ? 'default' : 'secondary'}>{statusLabels[row.status] || row.status}</Badge></div>
                     <div className="text-sm text-muted-foreground">التكلفة الفعلية: {Number(row.actual_cost || 0).toFixed(2)}</div>
@@ -415,6 +486,21 @@ export default function Manufacturing() {
                     {order.dimensions && <div className="rounded-lg bg-muted p-3 md:col-span-2"><p className="text-xs text-muted-foreground">مقاسات أمر التشغيل (عرض × ارتفاع × عمق)</p><p className="font-semibold">{[order.dimensions.width, order.dimensions.height, order.dimensions.depth].map((value) => value ?? '—').join(' × ')} {order.dimensions.unit || ''}</p></div>}
                     <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">التكلفة الفعلية</p><p className="font-semibold">{Number(order.actual_cost || 0).toFixed(2)}</p></div>
                   </div>
+                  {(order.product_unit || order.color) && <p className="rounded-md border bg-muted/30 p-3 text-sm">
+                    خيار المنتج المصنّع:
+                    {order.product_unit?.unit && ` ${order.product_unit.unit.name_ar || order.product_unit.unit.name || order.product_unit.unit.code}`}
+                    {order.color && ` · ${order.color.name_ar || order.color.name}`}
+                  </p>}
+                  <section className="space-y-2">
+                    <h3 className="font-bold">سجل حالات أمر الإنتاج</h3>
+                    {order.status_history?.length ? <ol className="space-y-2 border-r-2 pr-4">
+                      {order.status_history.map((event) => <li key={event.id} className="relative rounded-md border p-2 text-sm">
+                        <span className="font-semibold">{event.from_status ? `${statusLabels[event.from_status] || event.from_status} ← ` : ''}{statusLabels[event.to_status] || event.to_status}</span>
+                        <span className="mr-2 text-xs text-muted-foreground">{new Date(event.created_at).toLocaleString()}</span>
+                        {event.reason && <p className="mt-1 text-muted-foreground">{event.reason}</p>}
+                      </li>)}
+                    </ol> : <p className="text-sm text-muted-foreground">لا يوجد سجل حالات مسجل لهذا الأمر.</p>}
+                  </section>
 
                   <section className="space-y-3">
                     <h3 className="font-bold">توافر وحجز الخامات</h3>
@@ -423,7 +509,7 @@ export default function Manufacturing() {
                       <div className="space-y-2">
                         {availabilityQuery.data.items.map((item) => (
                           <div key={item.product_id} className="grid grid-cols-2 gap-2 rounded-lg border p-3 text-sm md:grid-cols-5">
-                            <span className="font-medium">{item.product_name}</span><span>المطلوب: {item.required}</span><span>بالمخزن: {item.on_hand}</span><span>متاح: {item.available}</span><span className={item.shortage > 0 ? 'text-destructive' : 'text-green-700'}>العجز: {item.shortage}</span>
+                            <span className="font-medium">{item.product_name}</span><span>المطلوب: {item.required} {item.unit || ''}</span><span>بالمخزن: {item.on_hand}</span><span>متاح: {item.available}</span><span className={item.shortage > 0 ? 'text-destructive' : 'text-green-700'}>العجز: {item.shortage}</span>
                           </div>
                         ))}
                       </div>
@@ -459,7 +545,7 @@ export default function Manufacturing() {
                           return (
                             <div key={material.id} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1.3fr_repeat(3,0.7fr)_1fr_auto_auto] md:items-center">
                               <span className="font-medium">{material.product?.name || `مادة #${material.product_id}`}{service ? ' (خدمة)' : ''}</span>
-                              <span className="text-sm">مطلوب: {material.required_quantity}</span>
+                              <span className="text-sm">مطلوب: {material.required_quantity} {material.product?.stock_unit || ''}</span>
                               <span className="text-sm">محجوز: {material.reserved_quantity}</span>
                               <span className="text-sm">مصروف: {material.issued_quantity}</span>
                               <Input type="number" min="0.000001" step="0.001" placeholder="الكمية" value={materialActionQuantity[material.id] || ''} disabled={service} onChange={(event) => setMaterialActionQuantity({ ...materialActionQuantity, [material.id]: event.target.value })} />
