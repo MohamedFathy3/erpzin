@@ -107,6 +107,7 @@ export default function WhatsApp() {
   const templatesQuery = useQuery<{ data: WhatsAppTemplate[] }>({
     queryKey: ['whatsapp-templates'],
     queryFn: async () => (await api.get('/whatsapp/templates')).data,
+    enabled: Boolean(account?.connected),
   });
   const templates = templatesQuery.data?.data ?? [];
   const sendableTemplates = templates.filter(template => template.status === 'APPROVED' && template.name !== 'hello_world');
