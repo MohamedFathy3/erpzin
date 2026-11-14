@@ -412,12 +412,18 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
           : `Purchase invoice ${isEditMode ? 'updated' : 'created'} successfully`
       });
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      queryClient.invalidateQueries({ queryKey: ['treasury'] });
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      // Refresh every product cache that can display the updated purchase cost.
+      // The purchase form uses `products-for-purchase`, while Inventory uses
+      // `inventory-products`; invalidating only `products` leaves both views stale.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['purchase-invoices'] }),
+        queryClient.invalidateQueries({ queryKey: ['products'] }),
+        queryClient.invalidateQueries({ queryKey: ['products-for-purchase'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory-products'] }),
+        queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+        queryClient.invalidateQueries({ queryKey: ['treasury'] }),
+        queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+      ]);
 
       // Handle print
       if (action === 'save_and_print') {
