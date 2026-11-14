@@ -47,7 +47,15 @@ import { CustomerPortal, TechnicianPortal } from "./pages/AutomotivePortals";
 import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
 import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Keep the current screen and cached data when the user returns to the tab.
+      // Individual queries can opt in when a live refresh is genuinely required.
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
