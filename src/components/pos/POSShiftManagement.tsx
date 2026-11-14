@@ -127,6 +127,28 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
   const currentShift = externalShift !== undefined ? externalShift : fetchedShift;
 
   const {
+    data: currentShiftReport,
+    isLoading: isLoadingCurrentShiftReport,
+    isError: isCurrentShiftReportError,
+    refetch: refetchCurrentShiftReport,
+  } = useQuery({
+    queryKey: ['shift-report', 'current-summary', currentShift?.id],
+    enabled: showSummary && Boolean(currentShift?.id),
+    queryFn: async () => {
+      if (!currentShift) {
+        throw new Error('No shift selected');
+      }
+
+      const response = await api.get(`/shifts/${currentShift.id}/report`);
+      if (response.data?.status !== true || !response.data?.data) {
+        throw new Error(response.data?.message || 'Failed to load shift report');
+      }
+      return response.data.data;
+    },
+    staleTime: 15_000,
+  });
+
+  const {
     data: closeShiftReport,
     isLoading: isLoadingCloseShiftReport,
     isError: isCloseShiftReportError,
@@ -244,11 +266,15 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
 
   // ✅ إذا الباك إند رجّع expected_amount، استخدمه (لأنه محسوب live)
   const displayExpectedAmount = useMemo(() => {
+    const reportExpected = currentShiftReport?.reconciliation?.expected_amount;
+    if (reportExpected !== null && reportExpected !== undefined) {
+      return parseFloat(String(reportExpected)) || 0;
+    }
     if (currentShift?.expected_amount !== null && currentShift?.expected_amount !== undefined) {
       return parseFloat(currentShift.expected_amount) || expectedAmount;
     }
     return expectedAmount;
-  }, [currentShift, expectedAmount]);
+  }, [currentShift, currentShiftReport, expectedAmount]);
 
   // ========== حساب الفرق ==========
   const currentVariance = useMemo(() => {
@@ -680,27 +706,27 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
               <div className="p-3 rounded-lg bg-emerald-100/50 dark:bg-emerald-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Banknote className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.cash}</div>
-                <div className="font-bold text-emerald-700">{formatAmount(currentShift.cash_sales)}</div>
+                <div className="font-bold text-emerald-700">{formatAmount(currentShiftReport?.collections?.cash ?? currentShift.cash_sales)}</div>
               </div>
               <div className="p-3 rounded-lg bg-blue-100/50 dark:bg-blue-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <CreditCard className="h-5 w-5 mx-auto mb-1 text-blue-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.card}</div>
-                <div className="font-bold text-blue-700">{formatAmount(currentShift.card_sales)}</div>
+                <div className="font-bold text-blue-700">{formatAmount(currentShiftReport?.collections?.card ?? currentShift.card_sales)}</div>
               </div>
               <div className="p-3 rounded-lg bg-purple-100/50 dark:bg-purple-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Wallet className="h-5 w-5 mx-auto mb-1 text-purple-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.wallet}</div>
-                <div className="font-bold text-purple-700">{formatAmount(currentShift.wallet_sales)}</div>
+                <div className="font-bold text-purple-700">{formatAmount(currentShiftReport?.collections?.wallet ?? currentShift.wallet_sales)}</div>
               </div>
               <div className="p-3 rounded-lg bg-red-100/50 dark:bg-red-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Receipt className="h-5 w-5 mx-auto mb-1 text-red-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.returns}</div>
-                <div className="font-bold text-red-700">{formatAmount(currentShift.returns_amount)}</div>
+                <div className="font-bold text-red-700">{formatAmount(currentShiftReport?.summary?.returns?.total_amount ?? currentShift.returns_amount)}</div>
               </div>
               <div className="p-3 rounded-lg bg-amber-100/50 dark:bg-amber-900/20 text-center hover:scale-105 transition-all cursor-default">
                 <Wallet className="h-5 w-5 mx-auto mb-1 text-amber-600" />
                 <div className="text-xs text-muted-foreground mb-1">{t.expenses}</div>
-                <div className="font-bold text-amber-700">{formatAmount(currentShift.expenses_amount || 0)}</div>
+                <div className="font-bold text-amber-700">{formatAmount(currentShiftReport?.summary?.expenses?.total_amount ?? currentShift.expenses_amount ?? 0)}</div>
               </div>
             </div>
 
@@ -718,6 +744,16 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             )}
 
             <div className="flex gap-2">
+              <Button
+                className="flex-1 gap-2"
+                variant="outline"
+                onClick={() => setShowSummary(value => !value)}
+              >
+                <Info className="h-4 w-4" />
+                {showSummary
+                  ? (language === 'ar' ? 'إخفاء التفاصيل' : 'Hide details')
+                  : t.shiftDetails}
+              </Button>
               <Button className="flex-1 gap-2" variant="destructive" onClick={() => setCloseShiftModal(true)}>
                 <X className="h-4 w-4" />{t.closeShift}
               </Button>
@@ -726,14 +762,47 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
             {showSummary && (
               <div className="mt-4 p-4 bg-muted/30 rounded-lg space-y-2 animate-in slide-in-from-top-2">
                 <h4 className="font-medium text-sm mb-3">{t.shiftDetails}</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">{t.cashSales}:</span><div className="font-mono">{formatAmount(currentShift.cash_sales)}</div></div>
-                  <div><span className="text-muted-foreground">{t.cardSales}:</span><div className="font-mono">{formatAmount(currentShift.card_sales)}</div></div>
-                  <div><span className="text-muted-foreground">{t.walletsales}:</span><div className="font-mono">{formatAmount(currentShift.wallet_sales)}</div></div>
-                  <div><span className="text-muted-foreground">{t.totalReturns}:</span><div className="font-mono text-destructive">{formatAmount(currentShift.returns_amount)}</div></div>
-                  <div className="col-span-2"><Separator /></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">{t.netSales}:</span><div className="font-mono text-primary text-lg">{formatAmount(parseFloat(currentShift.cash_sales) + parseFloat(currentShift.card_sales) + parseFloat(currentShift.wallet_sales) - parseFloat(currentShift.returns_amount))}</div></div>
-                </div>
+                {isLoadingCurrentShiftReport ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    {language === 'ar' ? 'جاري تحميل تفاصيل الوردية...' : 'Loading shift details...'}
+                  </div>
+                ) : isCurrentShiftReportError ? (
+                  <div className="flex items-center justify-between gap-2 text-sm text-destructive">
+                    <span>{language === 'ar' ? 'تعذر تحميل تفاصيل الوردية.' : 'Could not load shift details.'}</span>
+                    <Button variant="outline" size="sm" onClick={() => void refetchCurrentShiftReport()}>
+                      {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                    </Button>
+                  </div>
+                ) : currentShiftReport ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><span className="text-muted-foreground">{t.cashSales}:</span><div className="font-mono">{formatAmount(currentShiftReport.collections?.cash ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{t.cardSales}:</span><div className="font-mono">{formatAmount(currentShiftReport.collections?.card ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{t.walletsales}:</span><div className="font-mono">{formatAmount(currentShiftReport.collections?.wallet ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{language === 'ar' ? 'إجمالي التحصيل' : 'Total collected'}:</span><div className="font-mono">{formatAmount(currentShiftReport.collections?.total ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{t.totalReturns}:</span><div className="font-mono text-destructive">{formatAmount(currentShiftReport.summary?.returns?.total_amount ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{t.expenses}:</span><div className="font-mono">{formatAmount(currentShiftReport.summary?.expenses?.total_amount ?? 0)}</div></div>
+                      <div><span className="text-muted-foreground">{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}:</span><div className="font-mono">{currentShiftReport.summary?.sales?.invoices_count ?? 0}</div></div>
+                    </div>
+                    <Separator />
+                    <div>
+                      <span className="text-muted-foreground">{language === 'ar' ? 'أكثر المنتجات مبيعًا' : 'Top products'}:</span>
+                      {currentShiftReport.top_products?.length ? (
+                        <ul className="mt-1 space-y-1">
+                          {currentShiftReport.top_products.slice(0, 5).map((product: any) => (
+                            <li key={`${product.product_id ?? ''}-${product.product_name}`} className="flex justify-between gap-2">
+                              <span>{product.product_name}</span>
+                              <span className="font-mono">{formatAmount(product.selling_total)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="mt-1 text-muted-foreground">{language === 'ar' ? 'لا توجد مبيعات بعد.' : 'No sales yet.'}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
           </CardContent>
@@ -779,93 +848,104 @@ const POSShiftManagement: React.FC<POSShiftManagementProps> = ({
 
       {/* Close Shift Modal */}
       <Dialog open={closeShiftModal} onOpenChange={setCloseShiftModal}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><div className="p-2 bg-destructive/10 rounded-lg"><CheckCircle2 className="h-5 w-5 text-destructive" /></div>{t.closeShift}</DialogTitle></DialogHeader>
+        <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl">
+          <DialogHeader className="border-b bg-muted/20 px-6 py-5 text-start">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="rounded-xl bg-destructive/10 p-2.5"><CheckCircle2 className="h-5 w-5 text-destructive" /></div>
+              <span>{t.closeShift}</span>
+            </DialogTitle>
+            {currentShift && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 ps-12 text-sm text-muted-foreground">
+                <span>#{currentShift.id}</span>
+                <span>{language === 'ar' ? 'بدأت' : 'Started'}: {format(new Date(currentShift.opened_at), 'yyyy-MM-dd HH:mm')}</span>
+                <span>{getShiftDuration(currentShift)}</span>
+              </div>
+            )}
+          </DialogHeader>
           {currentShift && (
-            <div className="space-y-4 py-4">
-              <div className="p-5 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 border space-y-3">
-                <h4 className="font-medium text-sm flex items-center gap-2"><Receipt className="h-4 w-4" />{t.summary}</h4>
-                <div className="flex justify-between"><span>{t.openingBalance}:</span><span>{formatAmount(currentShift.opening_balance)}</span></div>
-                <div className="flex justify-between text-emerald-600"><span>+ {t.cashSales}:</span><span>+ {formatAmount(currentShift.cash_sales)}</span></div>
-                <div className="flex justify-between text-blue-600"><span>{t.cardSales}:</span><span>{formatAmount(currentShift.card_sales)}</span></div>
-                <div className="flex justify-between text-purple-600"><span>{t.walletsales}:</span><span>{formatAmount(currentShift.wallet_sales)}</span></div>
-                <div className="flex justify-between text-indigo-600"><span>{language === 'ar' ? 'مبيعات الإكسسوارات:' : 'Accessory sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.accessories_sales ?? currentShift.accessories_sales ?? closeShiftReport?.summary?.sales?.by_type?.accessories ?? 0))}</span></div>
-                <div className="flex justify-between text-cyan-700"><span>{language === 'ar' ? 'مبيعات الخدمات:' : 'Service sales:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.services_sales ?? currentShift.services_sales ?? closeShiftReport?.summary?.sales?.by_type?.services ?? 0))}</span></div>
-                <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الإجماليات حسب نوع البند قبل المرتجعات؛ المرتجعات معروضة بشكل مستقل.' : 'Item-type sales are before returns; returns are shown separately.'}</p>
-                <div className="flex justify-between text-red-600"><span>- {t.returns}:</span><span>- {formatAmount(currentShift.returns_amount)}</span></div>
-                <div className="flex justify-between text-amber-700"><span>- {t.expenses}:</span><span>- {formatAmount(currentShift.expenses_amount || 0)}</span></div>
-                <div className="flex justify-between text-indigo-600"><span>{language === 'ar' ? 'بند الزيادات بالفواتير:' : 'Invoice Increases:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.extra_charge_total ?? 0))}</span></div>
-                <div className="flex justify-between font-semibold text-indigo-700"><span>{language === 'ar' ? 'إجمالي المبيعات شامل الزيادات:' : 'Total Sales Including Increases:'}</span><span>{formatCurrency(Number(closeShiftReport?.summary?.sales?.sales_including_extra_charge ?? 0))}</span></div>
-                <p className="text-xs text-muted-foreground">{language === 'ar' ? 'الزيادات معروضة ضمن إجمالي المبيعات ولا تدخل في حساب النقدي المتوقع.' : 'Increases are included in reported sales, not in expected cash.'}</p>
-                <Separator />
-                <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
-                  <div className="mb-2 flex items-center gap-2 font-medium text-purple-700">
-                    <Gift className="h-4 w-4" />
-                    <span>{t.complimentary}</span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <section className="rounded-2xl border bg-card p-4 shadow-sm">
+                    <h4 className="mb-4 flex items-center gap-2 font-semibold"><Banknote className="h-4 w-4 text-emerald-600" />{language === 'ar' ? 'تسوية الدرج النقدي' : 'Cash drawer reconciliation'}</h4>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between gap-4"><span className="text-muted-foreground">{t.openingBalance}</span><span className="font-medium tabular-nums">{formatAmount(currentShift.opening_balance)}</span></div>
+                      <div className="flex justify-between gap-4 text-emerald-700"><span>+ {t.cashSales}</span><span className="font-medium tabular-nums">+ {formatAmount(currentShiftReport?.collections?.cash ?? currentShift.cash_sales)}</span></div>
+                      <div className="flex justify-between gap-4 text-red-600"><span>- {t.returns}</span><span className="font-medium tabular-nums">- {formatAmount(currentShiftReport?.summary?.returns?.total_amount ?? currentShift.returns_amount)}</span></div>
+                      <div className="flex justify-between gap-4 text-amber-700"><span>- {t.expenses}</span><span className="font-medium tabular-nums">- {formatAmount(currentShiftReport?.summary?.expenses?.total_amount ?? currentShift.expenses_amount ?? 0)}</span></div>
+                      <div className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-primary/10 px-4 py-3">
+                        <span className="font-semibold">{t.expectedAmount}</span>
+                        <span className="text-lg font-bold tabular-nums text-primary">{formatAmount(displayExpectedAmount)}</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{t.nonCashSalesNote}</p>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border bg-card p-4 shadow-sm">
+                    <h4 className="mb-4 flex items-center gap-2 font-semibold"><TrendingUp className="h-4 w-4 text-blue-600" />{language === 'ar' ? 'ملخص المبيعات' : 'Sales overview'}</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-blue-500/5 p-3"><div className="text-xs text-muted-foreground">{t.cardSales}</div><div className="mt-1 font-semibold tabular-nums text-blue-700">{formatAmount(currentShiftReport?.collections?.card ?? currentShift.card_sales)}</div></div>
+                      <div className="rounded-xl bg-purple-500/5 p-3"><div className="text-xs text-muted-foreground">{t.walletsales}</div><div className="mt-1 font-semibold tabular-nums text-purple-700">{formatAmount(currentShiftReport?.collections?.wallet ?? currentShift.wallet_sales)}</div></div>
+                      <div className="rounded-xl bg-indigo-500/5 p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'الإكسسوارات' : 'Accessories'}</div><div className="mt-1 font-semibold tabular-nums text-indigo-700">{formatCurrency(Number(closeShiftReport?.summary?.sales?.accessories_sales ?? currentShift.accessories_sales ?? closeShiftReport?.summary?.sales?.by_type?.accessories ?? 0))}</div></div>
+                      <div className="rounded-xl bg-cyan-500/5 p-3"><div className="text-xs text-muted-foreground">{language === 'ar' ? 'الخدمات' : 'Services'}</div><div className="mt-1 font-semibold tabular-nums text-cyan-700">{formatCurrency(Number(closeShiftReport?.summary?.sales?.services_sales ?? currentShift.services_sales ?? closeShiftReport?.summary?.sales?.by_type?.services ?? 0))}</div></div>
+                    </div>
+                    <Separator className="my-4" />
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between gap-4 text-indigo-700"><span>{language === 'ar' ? 'الزيادات بالفواتير' : 'Invoice increases'}</span><span className="font-medium tabular-nums">{formatCurrency(Number(closeShiftReport?.summary?.sales?.extra_charge_total ?? 0))}</span></div>
+                      <div className="flex justify-between gap-4 font-semibold"><span>{language === 'ar' ? 'المبيعات شامل الزيادات' : 'Sales incl. increases'}</span><span className="tabular-nums">{formatCurrency(Number(closeShiftReport?.summary?.sales?.sales_including_extra_charge ?? 0))}</span></div>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{language === 'ar' ? 'مبيعات الإكسسوارات والخدمات قبل المرتجعات. الزيادات ضمن إجمالي المبيعات.' : 'Accessory and service sales are before returns; increases are included in total sales.'}</p>
+                    </div>
+                  </section>
+                </div>
+
+                <section className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h4 className="flex items-center gap-2 font-semibold text-purple-700"><Gift className="h-4 w-4" />{t.complimentary}</h4>
+                    {isLoadingCloseShiftReport ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        {language === 'ar' ? 'جاري تحميل بيانات المجاملات...' : 'Loading complimentary details...'}
+                      </div>
+                    ) : isCloseShiftReportError ? (
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                        <span>{closeShiftReportError instanceof Error ? closeShiftReportError.message : (language === 'ar' ? 'تعذر تحميل المجاملات' : 'Could not load complimentary details')}</span>
+                        <Button type="button" variant="outline" size="sm" onClick={() => refetchCloseShiftReport()}>{t.retry}</Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                        <div><span className="text-muted-foreground">{t.complimentaryInvoices}: </span><span className="font-semibold">{Number(closeShiftReport?.summary?.complimentary?.count ?? 0)}</span></div>
+                        <div><span className="text-muted-foreground">{t.complimentaryValue}: </span><span className="font-semibold">{formatCurrency(Number(closeShiftReport?.summary?.complimentary?.market_value ?? 0))}</span></div>
+                      </div>
+                    )}
                   </div>
-                  {isLoadingCloseShiftReport ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      {language === 'ar' ? 'جاري تحميل بيانات المجاملات...' : 'Loading complimentary details...'}
-                    </div>
-                  ) : isCloseShiftReportError ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
-                      <span>
-                        {closeShiftReportError instanceof Error
-                          ? closeShiftReportError.message
-                          : (language === 'ar' ? 'تعذر تحميل المجاملات' : 'Could not load complimentary details')}
-                      </span>
-                      <Button type="button" variant="outline" size="sm" onClick={() => refetchCloseShiftReport()}>
-                        {t.retry}
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span>{t.complimentaryInvoices}:</span>
-                        <span className="font-semibold">
-                          {Number(closeShiftReport?.summary?.complimentary?.count ?? 0)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex justify-between text-sm">
-                        <span>{t.complimentaryValue}:</span>
-                        <span className="font-semibold">
-                          {formatCurrency(Number(closeShiftReport?.summary?.complimentary?.market_value ?? 0))}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <Separator />
-                <div className="flex justify-between font-bold text-lg"><span>{t.expectedAmount}:</span><span className="text-primary">{formatAmount(displayExpectedAmount)}</span></div>
-                <p className="text-xs text-muted-foreground">{t.nonCashSalesNote}</p>
-              </div>
+                </section>
 
-              <div className="space-y-2">
-                <Label htmlFor="closing-amount">{t.actualAmount} <span className="text-destructive">*</span></Label>
-                <div className="relative">
-                  <Input id="closing-amount" type="number" min="0" step="0.01" placeholder="0" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="text-left text-lg pl-16 h-12" dir="ltr" autoFocus />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">ر.ي</span>
-                </div>
-              </div>
+                <section className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="closing-amount">{t.actualAmount} <span className="text-destructive">*</span></Label>
+                    <Input id="closing-amount" type="number" min="0" step="0.01" placeholder="0.00" value={closingAmount} onChange={(e) => setClosingAmount(e.target.value)} className="h-12 text-lg tabular-nums" dir="ltr" autoFocus />
+                    <p className="text-xs text-muted-foreground">{language === 'ar' ? `العملة: ${formatCurrency(0)}` : `Currency: ${formatCurrency(0)}`}</p>
+                  </div>
 
-              {closingAmount && (
-                <div className={cn("p-4 rounded-xl flex items-center justify-between border-2 transition-all", currentVariance === 0 ? "bg-emerald-100/50 border-emerald-200" : currentVariance > 0 ? "bg-blue-100/50 border-blue-200" : "bg-red-100/50 border-red-200")}>
+                  <div className="space-y-2">
+                    <Label htmlFor="closing-notes">{t.closingNotes} <span className="text-muted-foreground text-xs">({t.optional})</span></Label>
+                    <Textarea id="closing-notes" placeholder={t.notes} value={closingNotes} onChange={(e) => setClosingNotes(e.target.value)} rows={2} className="min-h-12 resize-y" />
+                  </div>
+                </section>
+
+                {closingAmount && (
+                  <div className={cn("flex items-center justify-between rounded-xl border p-4 transition-all", currentVariance === 0 ? "border-emerald-200 bg-emerald-100/50" : currentVariance > 0 ? "border-blue-200 bg-blue-100/50" : "border-red-200 bg-red-100/50")}>
                   <div className="flex items-center gap-3">
                     {currentVariance === 0 ? <CheckCircle2 className="h-6 w-6 text-emerald-600" /> : currentVariance > 0 ? <TrendingUp className="h-6 w-6 text-blue-600" /> : <TrendingDown className="h-6 w-6 text-red-600" />}
                     <div><div className="font-medium">{currentVariance === 0 ? t.exact : currentVariance > 0 ? t.surplus : t.shortage}</div><div className="text-xs text-muted-foreground">{t.variance}</div></div>
                   </div>
-                  <span className="font-bold text-xl">{formatCurrency(Math.abs(currentVariance))}</span>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="closing-notes">{t.closingNotes} <span className="text-muted-foreground text-xs">({t.optional})</span></Label>
-                <Textarea id="closing-notes" placeholder={t.notes} value={closingNotes} onChange={(e) => setClosingNotes(e.target.value)} rows={3} />
+                    <span className="text-xl font-bold tabular-nums">{formatCurrency(Math.abs(currentVariance))}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="border-t bg-background px-6 py-4 sm:space-x-0">
             <Button variant="outline" onClick={() => currentShift && printShift(currentShift)} disabled={!closingAmount} className="gap-2">
               <Printer className="h-4 w-4" />
               {t.printZ}

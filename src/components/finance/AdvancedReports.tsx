@@ -20,6 +20,7 @@ import {
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, 
   startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths, subQuarters, subYears } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, Legend, PieChart, Pie, Cell
@@ -30,6 +31,7 @@ interface AdvancedReportsProps {
 }
 
 const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const [reportType, setReportType] = useState('profit_loss');
   const [periodType, setPeriodType] = useState('current_month');
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
@@ -269,7 +271,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
               <TrendingUp className="h-8 w-8 text-green-600" />
               <div>
                 <p className="text-xs text-muted-foreground">{language === 'ar' ? 'إجمالي الدخل' : 'Total Income'}</p>
-                <p className="text-xl font-bold text-green-600">{totalIncome.toLocaleString()}</p>
+                <p className="text-xl font-bold text-green-600">{formatDefaultCurrency(totalIncome)}</p>
               </div>
             </div>
           </CardContent>
@@ -281,7 +283,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
               <TrendingDown className="h-8 w-8 text-red-600" />
               <div>
                 <p className="text-xs text-muted-foreground">{language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses'}</p>
-                <p className="text-xl font-bold text-red-600">{(totalExpenses + totalPurchases).toLocaleString()}</p>
+                <p className="text-xl font-bold text-red-600">{formatDefaultCurrency(totalExpenses + totalPurchases)}</p>
               </div>
             </div>
           </CardContent>
@@ -293,7 +295,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
               <DollarSign className="h-8 w-8 text-blue-600" />
               <div>
                 <p className="text-xs text-muted-foreground">{language === 'ar' ? 'صافي الربح' : 'Net Profit'}</p>
-                <p className={`text-xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{netProfit.toLocaleString()}</p>
+                <p className={`text-xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatDefaultCurrency(netProfit)}</p>
               </div>
             </div>
           </CardContent>
@@ -331,16 +333,16 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                   <div className="ps-4 space-y-1">
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">{language === 'ar' ? 'المبيعات' : 'Sales'}</span>
-                      <span>{totalSales.toLocaleString()}</span>
+                      <span>{formatDefaultCurrency(totalSales)}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">{language === 'ar' ? 'إيرادات أخرى' : 'Other Revenue'}</span>
-                      <span>{totalRevenues.toLocaleString()}</span>
+                      <span>{formatDefaultCurrency(totalRevenues)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between py-1 font-medium">
                       <span>{language === 'ar' ? 'إجمالي الإيرادات' : 'Total Revenue'}</span>
-                      <span className="text-green-600">{totalIncome.toLocaleString()}</span>
+                      <span className="text-green-600">{formatDefaultCurrency(totalIncome)}</span>
                     </div>
                   </div>
                 </div>
@@ -350,12 +352,12 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                   <div className="ps-4 space-y-1">
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">{language === 'ar' ? 'المشتريات' : 'Purchases'}</span>
-                      <span>{totalPurchases.toLocaleString()}</span>
+                      <span>{formatDefaultCurrency(totalPurchases)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between py-1 font-medium">
                       <span>{language === 'ar' ? 'إجمالي الربح' : 'Gross Profit'}</span>
-                      <span className={grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}>{grossProfit.toLocaleString()}</span>
+                      <span className={grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}>{formatDefaultCurrency(grossProfit)}</span>
                     </div>
                   </div>
                 </div>
@@ -366,13 +368,13 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                     {Object.entries(expensesByCategory).map(([cat, amount]) => (
                       <div key={cat} className="flex justify-between py-1">
                         <span className="text-muted-foreground">{language === 'ar' ? categoryLabels[cat]?.ar : categoryLabels[cat]?.en || cat}</span>
-                        <span>{Number(amount).toLocaleString()}</span>
+                        <span>{formatDefaultCurrency(Number(amount))}</span>
                       </div>
                     ))}
                     <Separator />
                     <div className="flex justify-between py-1 font-medium">
                       <span>{language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses'}</span>
-                      <span className="text-red-600">{totalExpenses.toLocaleString()}</span>
+                      <span className="text-red-600">{formatDefaultCurrency(totalExpenses)}</span>
                     </div>
                   </div>
                 </div>
@@ -381,7 +383,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold">{language === 'ar' ? 'صافي الربح' : 'Net Profit'}</span>
                     <span className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {netProfit.toLocaleString()} ر.ي
+                      {formatDefaultCurrency(netProfit)}
                     </span>
                   </div>
                 </div>
@@ -408,7 +410,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                    <Tooltip formatter={(value: number) => formatDefaultCurrency(value)} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -426,7 +428,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                    <Tooltip formatter={(value: number) => formatDefaultCurrency(value)} />
                     <Bar dataKey="value" fill="#22c55e" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -442,7 +444,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                     <p className="text-sm text-muted-foreground">{language === 'ar' ? 'عدد الفواتير' : 'Invoices'}</p>
                   </div>
                   <div className="p-4 bg-muted rounded-lg text-center">
-                    <p className="text-2xl font-bold">{sales.length > 0 ? Math.round(totalSales / sales.length).toLocaleString() : 0}</p>
+                    <p className="text-2xl font-bold">{formatDefaultCurrency(sales.length > 0 ? Math.round(totalSales / sales.length) : 0)}</p>
                     <p className="text-sm text-muted-foreground">{language === 'ar' ? 'متوسط الفاتورة' : 'Avg. Invoice'}</p>
                   </div>
                 </div>
@@ -475,7 +477,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                           </Badge>
                         </TableCell>
                         <TableCell>{exp.description || '-'}</TableCell>
-                        <TableCell className="font-bold text-red-600">{Number(exp.amount).toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-red-600">{formatDefaultCurrency(Number(exp.amount))}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -504,7 +506,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                       <TableRow key={inv.id}>
                         <TableCell className="font-mono">{inv.invoice_number}</TableCell>
                         <TableCell>{format(new Date(inv.invoice_date), 'yyyy/MM/dd')}</TableCell>
-                        <TableCell className="font-bold">{Number(inv.total_amount).toLocaleString()}</TableCell>
+                        <TableCell className="font-bold">{formatDefaultCurrency(Number(inv.total_amount))}</TableCell>
                         <TableCell>
                           <Badge variant={inv.payment_status === 'paid' ? 'default' : inv.payment_status === 'partial' ? 'secondary' : 'destructive'}>
                             {inv.payment_status === 'paid' ? (language === 'ar' ? 'مدفوع' : 'Paid') : 
@@ -542,7 +544,7 @@ const AdvancedReports: React.FC<AdvancedReportsProps> = ({ language }) => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي المبيعات' : 'Total Sales'}</span>
-                        <span className="font-bold text-green-600">{branchTotal.toLocaleString()}</span>
+                        <span className="font-bold text-green-600">{formatDefaultCurrency(branchTotal)}</span>
                       </div>
                     </div>
                   </CardContent>

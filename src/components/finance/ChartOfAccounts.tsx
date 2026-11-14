@@ -15,6 +15,7 @@ import {
   Wallet, Building2, Truck, Receipt, Landmark
 } from 'lucide-react';
 import api from '@/lib/api';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 
 interface ChartOfAccountsProps {
   language: string;
@@ -83,6 +84,7 @@ interface AccountsStats {
 
 const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
   const queryClient = useQueryClient();
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const [showForm, setShowForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -340,7 +342,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                             </Badge>
                           )}
                           <Badge variant="outline" className="text-xs">
-                            {Number(child.balance || 0).toLocaleString()}
+                            {formatDefaultCurrency(Number(child.balance || 0))}
                           </Badge>
                         </div>
                       </div>
@@ -380,7 +382,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
 
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {Number(child.balance || 0).toLocaleString()}
+                        {formatDefaultCurrency(Number(child.balance || 0))}
                       </Badge>
                     </div>
                   );
@@ -449,7 +451,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium">
-              {Number(account.balance || 0).toLocaleString()}
+              {formatDefaultCurrency(Number(account.balance || 0))}
             </span>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
@@ -581,7 +583,7 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                 <div className={`w-3 h-3 rounded-full ${type.color} mx-auto mb-2`} />
                 <p className="text-xs text-muted-foreground">{type.label}</p>
                 <p className="font-bold">{typeAccounts.length}</p>
-                <p className="text-xs text-muted-foreground mt-1">{total.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">{formatDefaultCurrency(total)}</p>
               </CardContent>
             </Card>
           );
@@ -646,15 +648,15 @@ const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ language }) => {
                     </div>
                     <div>
                       <p className="text-muted-foreground">{language === 'ar' ? 'الرصيد' : 'Balance'}</p>
-                      <p className="font-bold">{Number(selectedAccount.balance || 0).toLocaleString()}</p>
+                      <p className="font-bold">{formatDefaultCurrency(Number(selectedAccount.balance || 0))}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">{language === 'ar' ? 'المدين' : 'Debit'}</p>
-                      <p className="font-medium">{Number(selectedAccount.debit || 0).toLocaleString()}</p>
+                      <p className="font-medium">{formatDefaultCurrency(Number(selectedAccount.debit || 0))}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">{language === 'ar' ? 'الدائن' : 'Credit'}</p>
-                      <p className="font-medium">{Number(selectedAccount.credit || 0).toLocaleString()}</p>
+                      <p className="font-medium">{formatDefaultCurrency(Number(selectedAccount.credit || 0))}</p>
                     </div>
                   </div>
                   <div className="mt-2">

@@ -24,12 +24,14 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 
 interface AccountsPayableProps {
   language: string;
 }
 
 const AccountsPayable: React.FC<AccountsPayableProps> = ({ language }) => {
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -216,7 +218,7 @@ const AccountsPayable: React.FC<AccountsPayableProps> = ({ language }) => {
                   {language === 'ar' ? 'إجمالي المستحقات' : 'Total Payable'}
                 </p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {totalPayable.toLocaleString()} <span className="text-sm">ر.ي</span>
+                  {formatDefaultCurrency(totalPayable)}
                 </p>
               </div>
             </div>
@@ -350,13 +352,13 @@ const AccountsPayable: React.FC<AccountsPayableProps> = ({ language }) => {
                                 : invoice.supplier?.name}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {Number(invoice.total_amount).toLocaleString()} ر.ي
+                              {formatDefaultCurrency(Number(invoice.total_amount))}
                             </TableCell>
                             <TableCell className="text-green-600">
-                              {Number(invoice.paid_amount || 0).toLocaleString()} ر.ي
+                              {formatDefaultCurrency(Number(invoice.paid_amount || 0))}
                             </TableCell>
                             <TableCell className="text-orange-600 font-medium">
-                              {Number(invoice.remaining_amount || invoice.total_amount).toLocaleString()} ر.ي
+                              {formatDefaultCurrency(Number(invoice.remaining_amount || invoice.total_amount))}
                             </TableCell>
                             <TableCell>
                               <div>
@@ -434,7 +436,7 @@ const AccountsPayable: React.FC<AccountsPayableProps> = ({ language }) => {
                           </TableCell>
                           <TableCell>{payment.invoice?.invoice_number || '-'}</TableCell>
                           <TableCell className="text-green-600 font-medium">
-                            {Number(payment.amount).toLocaleString()} ر.ي
+                            {formatDefaultCurrency(Number(payment.amount))}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{payment.payment_method}</Badge>
@@ -481,7 +483,7 @@ const AccountsPayable: React.FC<AccountsPayableProps> = ({ language }) => {
                 <div className="flex justify-between text-lg font-bold">
                   <span>{language === 'ar' ? 'المتبقي:' : 'Remaining:'}</span>
                   <span className="text-orange-600">
-                    {Number(selectedInvoice.remaining_amount || selectedInvoice.total_amount).toLocaleString()} ر.ي
+                    {formatDefaultCurrency(Number(selectedInvoice.remaining_amount || selectedInvoice.total_amount))}
                   </span>
                 </div>
               </div>

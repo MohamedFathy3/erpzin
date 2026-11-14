@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,7 +87,7 @@ interface PurchaseOrderFormProps {
 
 const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, onSave, editOrder }) => {
   const { language } = useLanguage();
-  const { formatCurrency } = useRegionalSettings();
+  const { formatAmount } = useCurrencyTax();
   const queryClient = useQueryClient();
 
   const [supplierId, setSupplierId] = useState('');
@@ -358,7 +358,7 @@ const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({ isOpen, onClose, 
               <div>
                 <Label>{language === 'ar' ? 'الإجمالي' : 'Total'}</Label>
                 <div className="h-10 px-3 flex items-center bg-muted rounded-md text-lg font-bold text-primary">
-                  {formatCurrency(totalAmount)}
+                  {formatAmount(totalAmount)}
                 </div>
               </div>
             </div>

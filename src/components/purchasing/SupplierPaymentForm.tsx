@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
   preselectedSupplier
 }) => {
   const { language } = useLanguage();
+  const { formatAmount } = useCurrencyTax();
   const [loading, setLoading] = useState(false);
   const [pendingExpenseSync, setPendingExpenseSync] = useState<{
     payment_number: string;
@@ -259,7 +261,7 @@ const SupplierPaymentForm: React.FC<SupplierPaymentFormProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-sm">{language === 'ar' ? 'الرصيد المستحق' : 'Balance Due'}</span>
                 <span className="text-lg font-bold text-destructive">
-                  {currentBalance.toLocaleString()} YER
+                  {formatAmount(currentBalance)}
                 </span>
               </div>
             </div>

@@ -65,10 +65,16 @@ export interface PurchaseInvoicePayment {
 }
 export interface PurchaseInvoiceItem {
   product_id: number;
-  product_name: string;
+  product_name: string | null;
   product_name_ar?: string;
-  product_sku?: string;
+  product_sku?: string | null;
+  unit_name?: string | null;
+  color_name?: string | null;
+  size_name?: string | null;
+  variant_name?: string | null;
   quantity: number;
+  returned_quantity?: number;
+  remaining_quantity?: number;
   price: number;
   discount: number;
   tax: number;

@@ -39,7 +39,7 @@ import {
   Bar,
   Legend
 } from 'recharts';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -52,12 +52,13 @@ interface FinanceDashboardProps {
 interface SalesInvoice {
   id: number;
   invoice_number: string;
-  customer: {
+  customer?: {
     id: number;
     name: string;
-  };
-  total_amount: string;
-  payment_method: string;
+  } | null;
+  total_amount: string | number;
+  payment_method?: string;
+  payments?: { method: string; amount: string | number }[];
   created_at: string;
 }
 
@@ -140,7 +141,7 @@ const PeriodSelector: React.FC<PeriodSelectorProps> = ({ value, onChange, option
 };
 
 const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
-  const { formatCurrency } = useRegionalSettings();
+  const { formatDefaultCurrency: formatCurrency } = useDefaultCurrencyFormatter();
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -201,12 +202,17 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     queryKey: ['finance-sales-current', currentMonthStart, currentMonthEnd],
     queryFn: async () => {
       try {
-        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
-          date_from: `${currentMonthStart}`,
-          date_to: `${currentMonthEnd}`,
-          paginate: false
-        });
-        return response.data.data || [];
+        const [salesResponse, posResponse] = await Promise.all([
+          api.post<SalesInvoiceResponse>('/sales-invoices/index', {
+            filters: { date_from: currentMonthStart, date_to: currentMonthEnd },
+            paginate: false
+          }),
+          api.post<SalesInvoiceResponse>('/invoices/index', {
+            filters: { date_from: currentMonthStart, date_to: currentMonthEnd },
+            paginate: false
+          })
+        ]);
+        return [...(salesResponse.data.data || []), ...(posResponse.data.data || [])];
       } catch (error) {
         console.error('Error fetching current sales:', error);
         return [];
@@ -216,17 +222,23 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
 
   const { 
     data: lastMonthSales = [], 
-    isLoading: loadingLastMonthSales 
+    isLoading: loadingLastMonthSales,
+    refetch: refetchLastMonthSales
   } = useQuery<SalesInvoice[]>({
     queryKey: ['finance-sales-last', lastMonthStartStr, lastMonthEndStr],
     queryFn: async () => {
       try {
-        const response = await api.post<SalesInvoiceResponse>('/sales-invoices/index', {
-          date_from: `${lastMonthStartStr}`,
-          date_to: `${lastMonthEndStr}`,
-          paginate: false
-        });
-        return response.data.data || [];
+        const [salesResponse, posResponse] = await Promise.all([
+          api.post<SalesInvoiceResponse>('/sales-invoices/index', {
+            filters: { date_from: lastMonthStartStr, date_to: lastMonthEndStr },
+            paginate: false
+          }),
+          api.post<SalesInvoiceResponse>('/invoices/index', {
+            filters: { date_from: lastMonthStartStr, date_to: lastMonthEndStr },
+            paginate: false
+          })
+        ]);
+        return [...(salesResponse.data.data || []), ...(posResponse.data.data || [])];
       } catch (error) {
         console.error('Error fetching last month sales:', error);
         return [];
@@ -308,6 +320,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     setIsRefreshing(true);
     await Promise.all([
       refetchCurrentSales(),
+      refetchLastMonthSales(),
       refetchCurrentExpenses(),
       refetchLastMonthExpenses(),
     ]);
@@ -439,7 +452,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
     const methods: Record<string, number> = {};
     
     currentSales.forEach(sale => {
-      const method = sale.payment_method || 'cash';
+      const method = sale.payment_method || sale.payments?.[0]?.method || 'cash';
       methods[method] = (methods[method] || 0) + Number(sale.total_amount);
     });
 
@@ -882,7 +895,7 @@ const FinanceDashboard: React.FC<FinanceDashboardProps> = ({ language }) => {
               <div className="text-center p-3 rounded-lg bg-gradient-to-br from-accent/5 to-transparent">
                 <p className="text-3xl font-bold text-accent">
                   {currentSales.length > 0 
-                    ? Math.round(metrics.totalSalesAmount / currentSales.length).toLocaleString()
+                    ? formatCurrency(Math.round(metrics.totalSalesAmount / currentSales.length))
                     : '0'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">

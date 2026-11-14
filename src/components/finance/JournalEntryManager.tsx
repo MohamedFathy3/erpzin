@@ -23,6 +23,7 @@ import {
 import { format, parse, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import { useReactToPrint } from 'react-to-print';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -217,11 +218,12 @@ const PrintTemplate = React.forwardRef<HTMLDivElement, {
   totalStats: { totalDebit: number; totalCredit: number; count: number };
 }>(({ entries, dateRange, totalStats }, ref) => {
   const { language } = useLanguage();
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const isRTL = language === 'ar';
 
   const formatAmount = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatDefaultCurrency(num, 2);
   };
 
   const formatDate = (dateString: string) => {
@@ -410,6 +412,7 @@ const useMediaQuery = (query: string): boolean => {
 // ==================== Main Component ====================
 const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
   const queryClient = useQueryClient();
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const isRTL = language === 'ar';
   const isMobile = useMediaQuery('(max-width: 768px)');
   const printRef = useRef<HTMLDivElement>(null);
@@ -801,8 +804,8 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
 
   const formatAmount = useCallback((amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }, []);
+    return formatDefaultCurrency(num, 2);
+  }, [formatDefaultCurrency]);
 
   const formatDate = useCallback((dateString: string) => {
     try {
@@ -1533,7 +1536,7 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                               <Landmark size={14} className="text-muted-foreground" />
                               <span>{t(treasury.name_ar || treasury.name, treasury.name)}</span>
                               <span className="text-xs text-muted-foreground ms-1">
-                                ({Number(treasury.balance).toLocaleString()})
+                                ({formatDefaultCurrency(Number(treasury.balance))})
                               </span>
                             </div>
                           </SelectItem>
@@ -1654,12 +1657,12 @@ const JournalEntryManager: React.FC<{ language: string }> = ({ language }) => {
                   
                   <div className={cn("p-3 border-t bg-muted/30 flex flex-wrap items-center gap-4", isRTL ? "flex-row-reverse" : "")}>
                     <span className="font-bold">{t('الإجمالي:', 'Total:')}</span>
-                    <span className="font-bold text-green-600">{t('مدين:', 'Debit:')} {totalDebit.toLocaleString()}</span>
-                    <span className="font-bold text-red-600">{t('دائن:', 'Credit:')} {totalCredit.toLocaleString()}</span>
+                    <span className="font-bold text-green-600">{t('مدين:', 'Debit:')} {formatDefaultCurrency(totalDebit)}</span>
+                    <span className="font-bold text-red-600">{t('دائن:', 'Credit:')} {formatDefaultCurrency(totalCredit)}</span>
                     {isBalanced ? (
                       <Badge className="bg-green-100 text-green-800"><Check size={12} className="me-1" />{t('متوازن', 'Balanced')}</Badge>
                     ) : (
-                      <Badge className="bg-red-100 text-red-800"><AlertCircle size={12} className="me-1" />{t('غير متوازن', 'Not Balanced')} ({Math.abs(totalDebit - totalCredit).toLocaleString()})</Badge>
+                      <Badge className="bg-red-100 text-red-800"><AlertCircle size={12} className="me-1" />{t('غير متوازن', 'Not Balanced')} ({formatDefaultCurrency(Math.abs(totalDebit - totalCredit))})</Badge>
                     )}
                   </div>
                 </div>

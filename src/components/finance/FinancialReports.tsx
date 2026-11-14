@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import {
   BarChart,
   Bar,
@@ -38,6 +39,7 @@ interface FinancialReportsProps {
 }
 
 const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
   // Fetch company settings for print header
   const { data: companySettings } = useQuery({
     queryKey: ['company-settings'],
@@ -213,15 +215,15 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
           <div class="section-title">${language === 'ar' ? 'الإيرادات' : 'Revenue'}</div>
           <div class="row">
             <span>${language === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales'}</span>
-            <span>${totalRevenue.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span>${formatDefaultCurrency(totalRevenue)}</span>
           </div>
           <div class="row">
             <span>${language === 'ar' ? 'الخصومات' : 'Discounts'}</span>
-            <span>(${totalDiscount.toLocaleString()}) ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span>(${formatDefaultCurrency(totalDiscount)})</span>
           </div>
           <div class="row total">
             <span>${language === 'ar' ? 'صافي المبيعات' : 'Net Sales'}</span>
-            <span>${netSales.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span>${formatDefaultCurrency(netSales)}</span>
           </div>
         </div>
 
@@ -229,11 +231,11 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
           <div class="section-title">${language === 'ar' ? 'تكلفة المبيعات' : 'Cost of Goods Sold'}</div>
           <div class="row">
             <span>${language === 'ar' ? 'المشتريات' : 'Purchases'}</span>
-            <span>${totalPurchases.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span>${formatDefaultCurrency(totalPurchases)}</span>
           </div>
           <div class="row total">
             <span>${language === 'ar' ? 'إجمالي الربح' : 'Gross Profit'}</span>
-            <span class="${grossProfit >= 0 ? 'profit' : 'loss'}">${grossProfit.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span class="${grossProfit >= 0 ? 'profit' : 'loss'}">${formatDefaultCurrency(grossProfit)}</span>
           </div>
         </div>
 
@@ -242,19 +244,19 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
           ${Object.entries(expensesByCategory).map(([cat, amount]) => `
             <div class="row">
               <span>${language === 'ar' ? categoryLabels[cat]?.ar : categoryLabels[cat]?.en || cat}</span>
-              <span>${Number(amount).toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+              <span>${formatDefaultCurrency(Number(amount))}</span>
             </div>
           `).join('')}
           <div class="row total">
             <span>${language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses'}</span>
-            <span>${totalExpenses.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span>${formatDefaultCurrency(totalExpenses)}</span>
           </div>
         </div>
 
         <div class="section">
           <div class="row total" style="font-size: 20px; background: ${netProfit >= 0 ? '#d4edda' : '#f8d7da'};">
             <span>${language === 'ar' ? 'صافي الربح' : 'Net Profit'}</span>
-            <span class="${netProfit >= 0 ? 'profit' : 'loss'}">${netProfit.toLocaleString()} ${language === 'ar' ? 'ر.ي' : 'YER'}</span>
+            <span class="${netProfit >= 0 ? 'profit' : 'loss'}">${formatDefaultCurrency(netProfit)}</span>
           </div>
           <div class="row">
             <span>${language === 'ar' ? 'هامش الربح' : 'Profit Margin'}</span>
@@ -323,18 +325,18 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                     <span className="text-muted-foreground">
                       {language === 'ar' ? 'إجمالي المبيعات' : 'Gross Sales'}
                     </span>
-                    <span>{totalRevenue.toLocaleString()} ر.ي</span>
+                    <span>{formatDefaultCurrency(totalRevenue)}</span>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-muted-foreground">
                       {language === 'ar' ? 'الخصومات' : 'Discounts'}
                     </span>
-                    <span className="text-red-600">({totalDiscount.toLocaleString()}) ر.ي</span>
+                    <span className="text-red-600">({formatDefaultCurrency(totalDiscount)})</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between py-1 font-medium">
                     <span>{language === 'ar' ? 'صافي المبيعات' : 'Net Sales'}</span>
-                    <span className="text-green-600">{netSales.toLocaleString()} ر.ي</span>
+                    <span className="text-green-600">{formatDefaultCurrency(netSales)}</span>
                   </div>
                 </div>
               </div>
@@ -350,13 +352,13 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                     <span className="text-muted-foreground">
                       {language === 'ar' ? 'المشتريات' : 'Purchases'}
                     </span>
-                    <span>{totalPurchases.toLocaleString()} ر.ي</span>
+                    <span>{formatDefaultCurrency(totalPurchases)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between py-1 font-medium">
                     <span>{language === 'ar' ? 'إجمالي الربح' : 'Gross Profit'}</span>
                     <span className={grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {grossProfit.toLocaleString()} ر.ي
+                      {formatDefaultCurrency(grossProfit)}
                     </span>
                   </div>
                 </div>
@@ -374,13 +376,13 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                       <span className="text-muted-foreground">
                         {language === 'ar' ? categoryLabels[cat]?.ar : categoryLabels[cat]?.en || cat}
                       </span>
-                      <span>{Number(amount).toLocaleString()} ر.ي</span>
+                      <span>{formatDefaultCurrency(Number(amount))}</span>
                     </div>
                   ))}
                   <Separator />
                   <div className="flex justify-between py-1 font-medium">
                     <span>{language === 'ar' ? 'إجمالي المصروفات' : 'Total Expenses'}</span>
-                    <span className="text-red-600">{totalExpenses.toLocaleString()} ر.ي</span>
+                    <span className="text-red-600">{formatDefaultCurrency(totalExpenses)}</span>
                   </div>
                 </div>
               </div>
@@ -392,7 +394,7 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                     {language === 'ar' ? 'صافي الربح' : 'Net Profit'}
                   </span>
                   <span className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {netProfit.toLocaleString()} ر.ي
+                    {formatDefaultCurrency(netProfit)}
                   </span>
                 </div>
                 <div className="flex justify-between mt-2 text-sm">
@@ -427,7 +429,7 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                 {language === 'ar' ? 'متوسط قيمة الفاتورة' : 'Avg. Order Value'}
               </p>
               <p className="text-2xl font-bold text-blue-600">
-                {sales.length > 0 ? Math.round(totalRevenue / sales.length).toLocaleString() : 0}
+                {formatDefaultCurrency(sales.length > 0 ? Math.round(totalRevenue / sales.length) : 0)}
               </p>
             </div>
 
@@ -436,7 +438,7 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                 {language === 'ar' ? 'الضرائب المحصلة' : 'Tax Collected'}
               </p>
               <p className="text-2xl font-bold text-purple-600">
-                {totalTax.toLocaleString()}
+                {formatDefaultCurrency(totalTax)}
               </p>
             </div>
 
@@ -466,7 +468,7 @@ const FinancialReports: React.FC<FinancialReportsProps> = ({ language }) => {
                 <XAxis dataKey="month" className="text-xs" />
                 <YAxis className="text-xs" />
                 <Tooltip 
-                  formatter={(value: number) => [`${value.toLocaleString()} ر.ي`]}
+                  formatter={(value: number) => [formatDefaultCurrency(value)]}
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--popover))', 
                     border: '1px solid hsl(var(--border))',

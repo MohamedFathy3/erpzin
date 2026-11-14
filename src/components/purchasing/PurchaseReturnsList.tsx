@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useCurrencyTax } from "@/hooks/useCurrencyTax";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ const transformItems = (items: ReturnItem[]): PrintItem[] =>
 
 const PurchaseReturnsList = () => {
   const { language } = useLanguage();
+  const { defaultCurrency, formatAmount: formatCurrencyAmount } = useCurrencyTax();
   const [filterValues, setFilterValues] = useState<FilterValues>({});
   const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -111,11 +113,6 @@ const PurchaseReturnsList = () => {
     } catch {
       return dateStr;
     }
-  };
-
-  const formatAmount = (amount: number | string) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return isNaN(num) ? '0' : num.toLocaleString();
   };
 
   const getPaymentMethodLabel = (method: string) => {
@@ -194,7 +191,7 @@ const PurchaseReturnsList = () => {
                       <TableCell className="font-mono">{ret.invoice_number}</TableCell>
                       <TableCell className="text-center">{ret.items?.length || 0}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {formatAmount(ret.total_amount)} YER
+                        {formatCurrencyAmount(Number(ret.total_amount) || 0, ret.currency_code || defaultCurrency?.code)}
                       </TableCell>
                       <TableCell>{ret.treasury_name || '-'}</TableCell>
                       <TableCell>{ret.currency_code || '-'}</TableCell>
@@ -277,7 +274,7 @@ const PurchaseReturnsList = () => {
                       {language === 'ar' ? 'الإجمالي' : 'Total'}
                     </div>
                     <div className="font-bold text-lg text-primary">
-                      {formatAmount(selectedReturn.total_amount)} YER
+                      {formatCurrencyAmount(Number(selectedReturn.total_amount) || 0, selectedReturn.currency_code || defaultCurrency?.code)}
                     </div>
                   </CardContent>
                 </Card>
@@ -387,9 +384,9 @@ const PurchaseReturnsList = () => {
                               ) : '-'}
                             </TableCell>
                             <TableCell className="text-center">{item.quantity || 0}</TableCell>
-                            <TableCell className="text-right">{formatAmount(item.unit_price)} YER</TableCell>
+                            <TableCell className="text-right">{formatCurrencyAmount(Number(item.unit_price) || 0, selectedReturn.currency_code || defaultCurrency?.code)}</TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatAmount(item.total_price)} YER
+                              {formatCurrencyAmount(Number(item.total_price) || 0, selectedReturn.currency_code || defaultCurrency?.code)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -403,7 +400,7 @@ const PurchaseReturnsList = () => {
                           {language === 'ar' ? 'الإجمالي:' : 'Total:'}
                         </span>
                         <span className="text-xl font-bold text-primary">
-                          {formatAmount(selectedReturn.total_amount)} YER
+                          {formatCurrencyAmount(Number(selectedReturn.total_amount) || 0, selectedReturn.currency_code || defaultCurrency?.code)}
                         </span>
                       </div>
                     </div>

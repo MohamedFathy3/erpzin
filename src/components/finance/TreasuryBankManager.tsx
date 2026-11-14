@@ -38,6 +38,7 @@ import type { Bank, Movement, MovementResponse } from '@/types/bank';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 
 interface TreasuryBankManagerProps {
   language: string;
@@ -56,6 +57,7 @@ type ApiError = {
 
 const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
+  const { defaultCurrency, formatDefaultCurrency } = useDefaultCurrencyFormatter();
   const [activeTab, setActiveTab] = useState('treasuries');
   const [showTreasuryForm, setShowTreasuryForm] = useState(false);
   const [showBankForm, setShowBankForm] = useState(false);
@@ -398,11 +400,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
   };
 
   const formatAmount = (amount: string | number) => {
-    try {
-      return Number(amount).toLocaleString();
-    } catch {
-      return String(amount);
-    }
+    return formatDefaultCurrency(Number(amount));
   };
 
   const getMovementTypeLabel = (type: string) => {
@@ -483,7 +481,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       swift_code: '',
       branch_id: '',
       balance: '',
-      currency: currencies.find((c: Currency) => c.default)?.code || 'YER',
+      currency: defaultCurrency?.code || currencies.find((c: Currency) => c.default)?.code || currencies[0]?.code || '',
       contact_person: '',
       phone: '',
       address: '',
@@ -497,7 +495,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       entity_id: '',
       transaction_type: 'deposit',
       amount: '',
-      currency: currencies.find((c: Currency) => c.default)?.code || 'YER',
+      currency: defaultCurrency?.code || currencies.find((c: Currency) => c.default)?.code || currencies[0]?.code || '',
       description: ''
     });
   };
@@ -511,7 +509,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       from_bank_id: '',
       to_bank_id: '',
       amount: '',
-      currency: currencies.find((c: Currency) => c.default)?.code || 'YER',
+      currency: defaultCurrency?.code || currencies.find((c: Currency) => c.default)?.code || currencies[0]?.code || '',
       notes: ''
     });
   };
@@ -541,7 +539,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       swift_code: bank.swift_code || '',
       branch_id: bank.branch_id?.toString() || '',
       balance: bank.balance?.toString() || '0',
-      currency: bank.currency || currencies.find((c: Currency) => c.default)?.code || 'YER',
+      currency: bank.currency || defaultCurrency?.code || currencies.find((c: Currency) => c.default)?.code || currencies[0]?.code || '',
       contact_person: bank.contact_person || '',
       phone: bank.phone || '',
       address: bank.address || '',
@@ -610,7 +608,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
       from_bank_id: '',
       to_bank_id: '',
       amount: '',
-      currency: currencies.find((c: Currency) => c.default)?.code || 'YER',
+      currency: defaultCurrency?.code || currencies.find((c: Currency) => c.default)?.code || currencies[0]?.code || '',
       notes: ''
     });
   };
@@ -661,7 +659,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي الخزائن' : 'Total Treasuries'}</p>
                 <p className="text-2xl font-bold text-amber-600">
-                  {totalTreasuryBalance.toLocaleString()}
+                  {formatDefaultCurrency(totalTreasuryBalance)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {treasuries.length} {language === 'ar' ? 'خزينة' : 'treasuries'}
@@ -678,7 +676,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي البنوك' : 'Total Banks'}</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {totalBankBalance.toLocaleString()}
+                  {formatDefaultCurrency(totalBankBalance)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {banks.length} {language === 'ar' ? 'بنك' : 'banks'}
@@ -695,7 +693,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
               <div>
                 <p className="text-sm text-muted-foreground">{language === 'ar' ? 'إجمالي السيولة' : 'Total Liquidity'}</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {(totalTreasuryBalance + totalBankBalance).toLocaleString()}
+                  {formatDefaultCurrency(totalTreasuryBalance + totalBankBalance)}
                 </p>
               </div>
             </div>
@@ -821,17 +819,17 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                             {treasury.currency || '-'}
                           </Badge>
                           <span className="font-bold text-amber-600">
-                            {treasury.balance?.toLocaleString() || '0'}
+                            {formatDefaultCurrency(Number(treasury.balance || 0))}
                           </span>
                           {treasury.is_main && (
                             <Star size={10} className="text-amber-500" />
                           )}
                         </div>
                         <Badge variant="secondary" className="text-xs">
-                          Total: {treasury.balance?.toLocaleString() || '0'}
+                          Total: {formatDefaultCurrency(Number(treasury.balance || 0))}
                         </Badge>
                         <TableCell className="font-bold text-green-600">
-  {treasury.balance?.toLocaleString() || 0}
+  {formatDefaultCurrency(Number(treasury.balance || 0))}
                         </TableCell>
                         <TableCell>
                           <button
@@ -1519,7 +1517,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                     const balance = 'total_balance' in item ? (item as Treasury).total_balance : (item as Bank).balance;
                     return (
                       <SelectItem key={item.id} value={item.id.toString()}>
-                        {item.name} ({Number(balance || 0).toLocaleString()})
+                        {item.name} ({formatDefaultCurrency(Number(balance || 0))})
                       </SelectItem>
                     );
                   })}
@@ -1630,7 +1628,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                   <SelectContent>
                     {treasuries.map((t: Treasury) => (
                       <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.name} ({t.total_balance?.toLocaleString()})
+                        {t.name} ({formatDefaultCurrency(Number(t.total_balance || 0))})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1671,7 +1669,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                   <SelectContent>
                     {getTransferToOptions().map((item: Treasury) => (
                       <SelectItem key={item.id} value={item.id.toString()}>
-                        {item.name} ({item.total_balance?.toLocaleString()})
+                        {item.name} ({formatDefaultCurrency(Number(item.total_balance || 0))})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1707,7 +1705,7 @@ const TreasuryBankManager: React.FC<TreasuryBankManagerProps> = ({ language }) =
                   <SelectContent>
                     {getTransferToOptions().map((item: Treasury) => (
                       <SelectItem key={item.id} value={item.id.toString()}>
-                        {item.name} ({item.total_balance?.toLocaleString()})
+                        {item.name} ({formatDefaultCurrency(Number(item.total_balance || 0))})
                       </SelectItem>
                     ))}
                   </SelectContent>

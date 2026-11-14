@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,6 +60,7 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 }) => {
   const { language } = useLanguage();
   const { user } = useAuth();
+  const { currency: defaultCurrencyCode } = useRegionalSettings();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [variantProduct, setVariantProduct] = useState<any>(null);
@@ -100,6 +102,11 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   const { data: branches = [], isLoading: loadingBranches } = useBranches(isOpen);
   const { data: warehouses = [], isLoading: loadingWarehouses } = useWarehouses(formData.branch_id, isOpen);
   const { data: currencies = [], isLoading: loadingCurrencies } = useCurrencies(isOpen);
+  const defaultCurrency = useMemo(
+    () => currencies.find(c => c.default === true)
+      || currencies.find(c => c.code === defaultCurrencyCode),
+    [currencies, defaultCurrencyCode]
+  );
   const { data: taxes = [], isLoading: loadingTaxes } = useTaxes(isOpen);
   const { data: treasuries = [], isLoading: treasuryLoading } = useTreasuries(formData.branch_id, isOpen);
   const { data: products = [], isLoading: loadingProducts } = useProducts(isOpen);
@@ -208,11 +215,10 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
 
   // ========== Set default currency and tax for new invoice ==========
   useEffect(() => {
-    if (currencies.length > 0 && !formData.currency_id && !isEditMode) {
-      const defaultCurr = currencies.find((c: any) => c.default === true) || currencies[0];
-      setFormData(prev => ({ ...prev, currency_id: defaultCurr?.id?.toString() || '' }));
+    if (defaultCurrency && !formData.currency_id && !isEditMode) {
+      setFormData(prev => ({ ...prev, currency_id: defaultCurrency.id.toString() }));
     }
-  }, [currencies, formData.currency_id, isEditMode]);
+  }, [currencies, defaultCurrency, formData.currency_id, isEditMode]);
 
   useEffect(() => {
     if (taxes.length > 0 && !formData.tax_id && !isEditMode) {
@@ -482,7 +488,6 @@ const PurchaseInvoiceForm: React.FC<PurchaseInvoiceFormProps> = ({
   });
 
   const resetForm = () => {
-    const defaultCurrency = currencies.find((c: any) => c.default === true) || currencies[0];
     const defaultTax = taxes.find((t: any) => t.default === true) || taxes[0];
 
     setFormData({

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext'; // ✅ إضافة useAuth
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ const PurchaseOrderPrintTemplate = React.forwardRef<HTMLDivElement, {
   user: any;
 }>(({ order, items, language, user }, ref) => {
   const isRTL = language === 'ar';
+  const { formatAmount } = useCurrencyTax();
   
   // بيانات الشركة من auth
   const companyInfo = {
@@ -153,8 +155,8 @@ const PurchaseOrderPrintTemplate = React.forwardRef<HTMLDivElement, {
                 <div>{isRTL ? item.products?.name_ar || item.products?.name : item.products?.name}</div>
               </td>
               <td className="py-1 text-center">{item.quantity}</td>
-              <td className="py-1 text-right">{Number(item.unit_cost).toLocaleString()} YER</td>
-              <td className="py-1 text-right">{Number(item.total_cost).toLocaleString()} YER</td>
+              <td className="py-1 text-right">{formatAmount(Number(item.unit_cost))}</td>
+              <td className="py-1 text-right">{formatAmount(Number(item.total_cost))}</td>
             </tr>
           ))}
         </tbody>
@@ -165,7 +167,7 @@ const PurchaseOrderPrintTemplate = React.forwardRef<HTMLDivElement, {
         <div className="w-3/4 text-[9px]">
           <div className="flex justify-between py-1 font-bold border-t border-gray-400">
             <span>{texts.grandTotal}:</span>
-            <span>{Number(order.total_amount).toLocaleString()} YER</span>
+            <span>{formatAmount(Number(order.total_amount))}</span>
           </div>
         </div>
       </div>
@@ -236,6 +238,7 @@ interface PurchaseOrderDetailsProps {
 const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onClose, order, onEdit }) => {
   const { language } = useLanguage();
   const { user } = useAuth(); // ✅ استخدام useAuth
+  const { formatAmount } = useCurrencyTax();
   const printRef = useRef<HTMLDivElement>(null);
   const [showPrint, setShowPrint] = useState(false);
 
@@ -372,7 +375,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
               <Card className="bg-primary/5">
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'الإجمالي' : 'Total'}</div>
-                  <p className="text-xl font-bold text-primary">{Number(displayOrder.total_amount).toLocaleString()} YER</p>
+                  <p className="text-xl font-bold text-primary">{formatAmount(Number(displayOrder.total_amount))}</p>
                 </CardContent>
               </Card>
             </div>
@@ -398,8 +401,8 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                           {language === 'ar' ? item.products?.name_ar || item.products?.name : item.products?.name}
                         </TableCell>
                         <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell>{Number(item.unit_cost).toLocaleString()} YER</TableCell>
-                        <TableCell className="font-medium">{Number(item.total_cost).toLocaleString()} YER</TableCell>
+                        <TableCell>{formatAmount(Number(item.unit_cost))}</TableCell>
+                        <TableCell className="font-medium">{formatAmount(Number(item.total_cost))}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow className="bg-muted/50">
@@ -407,7 +410,7 @@ const PurchaseOrderDetails: React.FC<PurchaseOrderDetailsProps> = ({ isOpen, onC
                         {language === 'ar' ? 'الإجمالي' : 'Total'}
                       </TableCell>
                       <TableCell className="font-bold text-primary">
-                        {Number(displayOrder.total_amount).toLocaleString()} YER
+                        {formatAmount(Number(displayOrder.total_amount))}
                       </TableCell>
                     </TableRow>
                   </TableBody>

@@ -1,6 +1,7 @@
 // hooks/useDirectReturn.ts
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useCurrencyTax } from '@/hooks/useCurrencyTax';
@@ -8,7 +9,12 @@ import { generateId } from '@/lib/utils';
 
 export interface DirectReturnItem {
   id: string;
-  product_id: number;
+  product_id: number | null;
+  invoice_item_id?: number;
+  automotive_service_id?: number | null;
+  meter_quantity?: number | null;
+  color?: string | null;
+  size?: string | null;
   product_name: string;
   sku: string;
   quantity: number;
@@ -28,6 +34,13 @@ export interface DirectReturnItem {
 
 export interface InvoiceProduct {
   id: number;
+  product_id?: number | null;
+  invoice_item_id?: number;
+  item_type?: string;
+  automotive_service_id?: number | null;
+  meter_quantity?: number | null;
+  color?: string | null;
+  size?: string | null;
   name: string;
   name_ar?: string | null;
   sku: string;
@@ -36,6 +49,48 @@ export interface InvoiceProduct {
   invoice_price: string;
   image_url?: string | null;
   stock?: number;
+}
+
+interface InvoiceItemSearchResult {
+  id: number;
+  product_id: number | null;
+  item_type?: string;
+  automotive_service_id?: number | null;
+  meter_quantity?: number | null;
+  color?: string | null;
+  size?: string | null;
+  product_name: string;
+  quantity: number;
+  price: number | string;
+  total?: number | string | null;
+  sku?: string;
+  stock?: number;
+}
+
+interface InvoiceSearchResponse {
+  data?: {
+    is_complimentary?: boolean;
+    total_amount?: number | string;
+    original_total_amount?: number | string;
+    items?: InvoiceItemSearchResult[];
+  };
+}
+
+interface ReturnPayload {
+  refund_method: string;
+  reason: string;
+  items: Array<{
+    product_id: number | null;
+    invoice_item_id?: number;
+    automotive_service_id?: number | null;
+    meter_quantity?: number | null;
+    color?: string | null;
+    size?: string | null;
+    quantity: number;
+    price: number;
+  }>;
+  payments: Array<{ method: string; amount: number }>;
+  invoice_number?: string;
 }
 
 export interface UseDirectReturnProps {
@@ -72,18 +127,18 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       if (!invoiceNumber.trim()) return null;
 
       try {
-        const response = await api.get('/invoices/search', {
+        const response = await api.get<InvoiceSearchResponse>('/invoices/search', {
           params: { invoice_number: invoiceNumber }
         });
         setShowResults(true);
         // حفظ total_amount
         if (response.data?.data?.total_amount) {
-          setInvoiceTotalAmount(parseFloat(response.data.data.total_amount));
+          setInvoiceTotalAmount(Number(response.data.data.total_amount));
         }
         return response.data;
-      } catch (error: any) {
+      } catch (error: unknown) {
         setShowResults(true);
-        if (error.response?.status === 404) {
+        if (isAxiosError(error) && error.response?.status === 404) {
           toast.error('الفاتورة غير موجودة');
         } else {
           toast.error('خطأ في البحث عن الفاتورة');
@@ -108,7 +163,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       if (!searchQuery.trim() || searchMode !== 'product') return [];
 
       try {
-        const response = await api.get('/products/search', {
+        const response = await api.get<{ data?: InvoiceProduct[] }>('/products/search', {
           params: { name: searchQuery }
         });
         setShowResults(true);
@@ -122,15 +177,34 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     enabled: searchMode === 'product' && !!searchQuery,
   });
 
-  // Keep the historical unit price stored on each invoice item. Different
-  // products in one invoice can have different prices (for example 500 and
-  // 400), so the invoice total must not be distributed across all items.
+  // Keep each item's share of the original invoice total for proportional returns.
   const isComplimentaryInvoice = Boolean(invoiceData?.data?.is_complimentary);
-  const invoiceProducts: InvoiceProduct[] = (invoiceData?.data?.items || []).map((item: any) => {
-    const unitPrice = String(isComplimentaryInvoice ? 0 : (item.price ?? 0));
+  const invoiceItems = invoiceData?.data?.items ?? [];
+  const invoiceItemsTotal = invoiceItems.reduce(
+    (sum, item) => sum + Number(item.total ?? (Number(item.price ?? 0) * Number(item.quantity ?? 0))),
+    0,
+  );
+  const invoiceValueFactor = invoiceItemsTotal > 0
+    ? Number(invoiceData?.data?.original_total_amount ?? invoiceData?.data?.total_amount ?? 0) / invoiceItemsTotal
+    : 1;
+  const invoiceProducts: InvoiceProduct[] = invoiceItems.map((item) => {
+    const quantity = Number(item.quantity) || 0;
+    const lineTotal = Number(item.total ?? (Number(item.price ?? 0) * quantity));
+    const unitPrice = String(isComplimentaryInvoice
+      ? 0
+      : quantity > 0
+        ? (lineTotal / quantity) * invoiceValueFactor
+        : (item.price ?? 0));
     
     return {
-      id: item.product_id,
+      id: Number(item.product_id ?? item.id),
+      product_id: item.product_id == null ? null : Number(item.product_id),
+      invoice_item_id: Number(item.id),
+      item_type: item.item_type,
+      automotive_service_id: item.automotive_service_id ?? null,
+      meter_quantity: item.meter_quantity ?? null,
+      color: item.color ?? null,
+      size: item.size ?? null,
       name: item.product_name,
       name_ar: item.product_name,
       sku: item.sku || '',
@@ -153,7 +227,9 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
 
     const quantitySold = searchMode === 'invoice' ? product.quantity_sold : undefined;
 
-    const existing = items.find(i => i.product_id === product.id);
+    const existing = items.find(i => product.invoice_item_id
+      ? i.invoice_item_id === product.invoice_item_id
+      : i.product_id === product.id);
 
     if (existing) {
       if (quantitySold && existing.quantity + 1 > quantitySold) {
@@ -162,14 +238,19 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       }
 
       setItems(prev => prev.map(i =>
-        i.product_id === product.id
+        (product.invoice_item_id ? i.invoice_item_id === product.invoice_item_id : i.product_id === product.id)
           ? { ...i, quantity: i.quantity + 1 }
           : i
       ));
     } else {
       setItems(prev => [...prev, {
         id: generateId(),
-        product_id: product.id,
+        product_id: searchMode === 'invoice' ? (product.product_id ?? null) : product.id,
+        invoice_item_id: product.invoice_item_id,
+        automotive_service_id: product.automotive_service_id ?? null,
+        meter_quantity: product.meter_quantity ?? null,
+        color: product.color ?? null,
+        size: product.size ?? null,
         product_name: product.name_ar || product.name,
         sku: product.sku || 'N/A',
         quantity: 1,
@@ -228,7 +309,7 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
   const subtotal = items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
   const selectedTaxRate = taxRates.find(t => t.id === Number(taxRateId));
   const taxPercent = selectedTaxRate?.rate ?? 0;
-  const taxAmount = (subtotal * (taxPercent ?? 0)) / 100;
+  const taxAmount = searchMode === 'invoice' ? 0 : (subtotal * (taxPercent ?? 0)) / 100;
   const total = isComplimentaryInvoice ? 0 : subtotal + taxAmount;
 
   const selectedCurrency = currencies.find(c => c.id === currencyId);
@@ -238,11 +319,16 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
     mutationFn: async () => {
       if (items.length === 0) throw new Error('لم يتم إضافة أي صنف');
 
-      const payload: any = {
+      const payload: ReturnPayload = {
         refund_method: isComplimentaryInvoice ? 'none' : refundMethod,
         reason: returnReason || 'مرتجع بدون سبب',
         items: items.map(item => ({
           product_id: item.product_id,
+          invoice_item_id: item.invoice_item_id,
+          automotive_service_id: item.automotive_service_id,
+          meter_quantity: item.meter_quantity,
+          color: item.color,
+          size: item.size,
           quantity: item.quantity,
           price: item.unit_price
         })),
@@ -275,9 +361,10 @@ export const useDirectReturn = ({ onComplete, currentShiftId }: UseDirectReturnP
       setShowResults(false);
       setInvoiceTotalAmount(null);
     },
-    onError: (error: any) => {
-      console.error('❌ Return Error:', error.response?.data || error.message);
-      toast.error(error.response?.data?.message || 'خطأ في معالجة المرتجع');
+    onError: (error: unknown) => {
+      const responseData = isAxiosError<{ message?: string }>(error) ? error.response?.data : undefined;
+      console.error('❌ Return Error:', responseData ?? error);
+      toast.error(responseData?.message || 'خطأ في معالجة المرتجع');
     }
   });
 

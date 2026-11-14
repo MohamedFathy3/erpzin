@@ -75,6 +75,9 @@ class PurchaseInvoiceService extends BaseService<PurchaseInvoice> {
         showAll?: boolean;
         filters?: {
             search?: string;
+            invoice_number?: string;
+            supplier_id?: number | string;
+            branch_id?: number | string;
             date_from?: string;
             date_to?: string;
             amount_min?: number;
@@ -93,9 +96,19 @@ class PurchaseInvoiceService extends BaseService<PurchaseInvoice> {
 
         const filters: any = {};
 
-        // تحسين الفلترة للبحث في رقم الفاتورة واسم المورد
+        if (filtersInput?.invoice_number && filtersInput.invoice_number !== 'all') {
+            filters.invoice_number = filtersInput.invoice_number;
+        }
+
+        if (filtersInput?.supplier_id && filtersInput.supplier_id !== 'all') {
+            filters.supplier_id = filtersInput.supplier_id;
+        }
+
+        if (filtersInput?.branch_id && filtersInput.branch_id !== 'all') {
+            filters.branch_id = filtersInput.branch_id;
+        }
+
         if (filtersInput?.search) {
-            // يمكن البحث برقم الفاتورة أو اسم المورد
             filters.search = filtersInput.search;
         }
 

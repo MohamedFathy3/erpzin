@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TimePicker } from '@/components/ui/time-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { format, isWithinInterval, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -41,7 +43,8 @@ import {
   Tag,
   Share2,
   CheckCircle,
-  XCircle
+  XCircle,
+  Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -87,6 +90,7 @@ interface Sale {
   invoice_number: string;
   status: 'paid' | 'pending' | 'cancelled' | 'partial';
   customer: Customer | null;
+  branch?: { id: number | string; name?: string; name_ar?: string | null } | null;
   salesRepresentative: { id: number; name: string, name_ar:string } | null;
   amounts: Amounts;
   items: SaleItem[];
@@ -176,6 +180,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('all');
+  const [selectedProduct, setSelectedProduct] = useState<string>('all');
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [selectedSalesRepresentative, setSelectedSalesRepresentative] = useState('all');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -236,6 +243,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     dateTo: language === 'ar' ? 'إلى تاريخ' : 'To Date',
     branch: language === 'ar' ? 'الفرع' : 'Branch',
     allBranches: language === 'ar' ? 'جميع الفروع' : 'All Branches',
+    allCustomers: language === 'ar' ? 'جميع العملاء' : 'All customers',
+    allProducts: language === 'ar' ? 'جميع المنتجات' : 'All products',
+    searchProducts: language === 'ar' ? 'ابحث باسم المنتج أو الكود...' : 'Search by product name or SKU...',
     paymentMethod: language === 'ar' ? 'طريقة الدفع' : 'Payment Method',
     allMethods: language === 'ar' ? 'الكل' : 'All Methods',
     status: language === 'ar' ? 'الحالة' : 'Status',
@@ -291,6 +301,45 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   };
 
   // ========== Queries ==========
+  const branchesQuery = useQuery({
+    queryKey: ['pos-invoice-filter-branches'],
+    queryFn: async () => {
+      const response = await api.post('/branch/index', {
+        filters: { active: true },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 500,
+        paginate: false,
+      });
+      return response.data?.result === 'Success' ? response.data.data || [] : [];
+    },
+  });
+  const customersQuery = useQuery({
+    queryKey: ['pos-invoice-filter-customers'],
+    queryFn: async () => {
+      const response = await api.post('/customer/index', {
+        filters: {},
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false,
+      });
+      return response.data?.result === 'Success' ? response.data.data || [] : [];
+    },
+  });
+  const productsQuery = useQuery({
+    queryKey: ['pos-invoice-filter-products'],
+    queryFn: async () => {
+      const response = await api.post('/product/index', {
+        filters: { active: true },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false,
+      });
+      return response.data?.result === 'Success' ? response.data.data || [] : [];
+    },
+  });
   const salesRepresentativesQuery = useQuery({
     queryKey: ['pos-sales-representatives'],
     queryFn: async () => {
@@ -317,15 +366,19 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
   // ✅ جلب الفواتير
   const { data: sales = [], isLoading: salesLoading, refetch: refetchSales } = useQuery({
-    queryKey: ['pos-sales', activeTab],
+    queryKey: ['pos-sales', activeTab, selectedBranch, selectedCustomer, selectedProduct],
     queryFn: async () => {
       try {
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
-          perPage: 100,
+          perPage: 1000,
           paginate: false,
+          filters: {},
         };
+        if (selectedBranch !== 'all') payload.filters.branch_id = Number(selectedBranch);
+        if (selectedCustomer !== 'all') payload.filters.customer_id = Number(selectedCustomer);
+        if (selectedProduct !== 'all') payload.filters.product_id = Number(selectedProduct);
 
         const response = await api.post('/invoices/index', payload);
 
@@ -335,9 +388,9 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         return [];
       } catch (error) {
         console.error('Error fetching POS sales:', error);
-        return [];
+        throw error;
       }
-    }
+    },
   });
 
   // ✅ جلب المرتجعات
@@ -454,6 +507,10 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
       return false;
     }
 
+    if (selectedBranch !== 'all' && String(sale.branch?.id) !== selectedBranch) return false;
+    if (selectedCustomer !== 'all' && String(sale.customer?.id) !== selectedCustomer) return false;
+    if (selectedProduct !== 'all' && !sale.items?.some(item => String(item.product_id) === selectedProduct)) return false;
+
     return true;
   };
 
@@ -500,7 +557,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
 
   const filteredSales = useMemo(() => {
     return sales.filter(filterSales);
-  }, [sales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus, selectedSalesRepresentative]);
+  }, [sales, searchTerm, dateFrom, dateTo, selectedPaymentMethod, selectedStatus, selectedSalesRepresentative, selectedBranch, selectedCustomer, selectedProduct]);
 
   const filteredReturns = useMemo(() => {
     return returns.filter(filterReturns);
@@ -639,6 +696,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     setDateFrom('');
     setDateTo('');
     setSelectedBranch('all');
+    setSelectedCustomer('all');
+    setSelectedProduct('all');
     setSelectedSalesRepresentative('all');
     setSelectedPaymentMethod('all');
     setSelectedStatus('all');
@@ -655,7 +714,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
     }
   };
 
-  const hasActiveFilters = searchTerm || dateFrom || dateTo || selectedSalesRepresentative !== 'all' || selectedPaymentMethod !== 'all' || selectedStatus !== 'all';
+  const hasActiveFilters = searchTerm || dateFrom || dateTo || selectedBranch !== 'all' || selectedCustomer !== 'all' || selectedProduct !== 'all' || selectedSalesRepresentative !== 'all' || selectedPaymentMethod !== 'all' || selectedStatus !== 'all';
   const isLoading = salesLoading || returnsLoading;
 
   // ========== Render ==========
@@ -789,7 +848,91 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
               )}
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">{t.branch}</Label>
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.branch} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.allBranches}</SelectItem>
+                    {(branchesQuery.data || []).map((branch: Branch) => (
+                      <SelectItem key={branch.id} value={String(branch.id)}>
+                        {language === 'ar' ? branch.name_ar || branch.name : branch.name || branch.name_ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">{t.customer}</Label>
+                <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t.customer} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.allCustomers}</SelectItem>
+                    {(customersQuery.data || []).map((customer: Customer) => (
+                      <SelectItem key={customer.id} value={String(customer.id)}>
+                        {language === 'ar' ? customer.name_ar || customer.name : customer.name || customer.name_ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">{language === 'ar' ? 'المنتج' : 'Product'}</Label>
+                <Popover open={productPickerOpen} onOpenChange={setProductPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" aria-expanded={productPickerOpen} className="w-full justify-between font-normal">
+                      {selectedProduct === 'all'
+                        ? t.allProducts
+                        : (() => {
+                            const product = (productsQuery.data || []).find((item: any) => String(item.id) === selectedProduct);
+                            return product
+                              ? (language === 'ar' ? product.name_ar || product.name : product.name || product.name_ar)
+                              : t.allProducts;
+                          })()}
+                      <ChevronDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder={t.searchProducts} />
+                      <CommandList>
+                        <CommandEmpty>{t.noData}</CommandEmpty>
+                        <CommandItem
+                          value={t.allProducts}
+                          onSelect={() => {
+                            setSelectedProduct('all');
+                            setProductPickerOpen(false);
+                          }}
+                        >
+                          <Check className={cn('me-2 h-4 w-4', selectedProduct === 'all' ? 'opacity-100' : 'opacity-0')} />
+                          {t.allProducts}
+                        </CommandItem>
+                        {(productsQuery.data || []).map((product: any) => {
+                          const productName = language === 'ar' ? product.name_ar || product.name : product.name || product.name_ar;
+                          return (
+                            <CommandItem
+                              key={product.id}
+                              value={`${productName} ${product.sku || ''}`}
+                              onSelect={() => {
+                                setSelectedProduct(String(product.id));
+                                setProductPickerOpen(false);
+                              }}
+                            >
+                              <Check className={cn('me-2 h-4 w-4', selectedProduct === String(product.id) ? 'opacity-100' : 'opacity-0')} />
+                              {productName}{product.sku ? ` (${product.sku})` : ''}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{t.salesRepresentative}</Label>
                 <Select value={selectedSalesRepresentative} onValueChange={setSelectedSalesRepresentative}>

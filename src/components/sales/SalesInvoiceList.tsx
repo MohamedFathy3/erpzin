@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus, Eye, Receipt, RotateCcw, X, Filter, Search,
+  Plus, Eye, Receipt, RotateCcw, X, Filter, Search, Check,
   ChevronDown, ChevronUp, Printer, FileSpreadsheet,
   DollarSign, CreditCard, Wallet, Calendar, User,
   Building2, Package, Truck, Hash, Clock, Percent,
@@ -26,6 +26,14 @@ import { useReactToPrint } from "react-to-print";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 // ========== مكون الطباعة المتقدم ==========
 const AdvancedPrintTemplate = forwardRef<HTMLDivElement, any>(
   ({ invoice, companyInfo, language }, ref) => {
@@ -430,6 +438,7 @@ interface InvoiceFilters {
   invoice_number?: string;
   customer_id?: number;
   branch_id?: number;
+  product_id?: number;
   sales_representative_id?: number;
   warehouse_id?: number;
   tax_id?: number;
@@ -455,6 +464,8 @@ const SalesInvoiceList = () => {
   const [filtersCollapsed, setFiltersCollapsed] = useState(true);
   const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [invoiceToPrint, setInvoiceToPrint] = useState<SalesInvoice | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const cancelInvoiceMutation = useMutation({
@@ -501,6 +512,7 @@ const SalesInvoiceList = () => {
     branch_id: user?.branch_id ? String(user.branch_id) : 'all',
     salesman_id: 'all',
     customer_id: 'all',
+    product_id: 'all',
     warehouse_id: 'all',
     currency_id: 'all',
     tax_id: 'all',
@@ -524,6 +536,9 @@ const SalesInvoiceList = () => {
     }
     if (filters.branch_id !== 'all') {
       apiFilters.branch_id = Number(filters.branch_id);
+    }
+    if (filters.product_id !== 'all') {
+      apiFilters.product_id = Number(filters.product_id);
     }
     if (filters.salesman_id !== 'all') {
       apiFilters.sales_representative_id = Number(filters.salesman_id);
@@ -611,6 +626,20 @@ const SalesInvoiceList = () => {
         orderByDirection: 'asc',
         perPage: 100,
         paginate: false
+      });
+      return response.data.result === 'Success' ? response.data.data || [] : [];
+    },
+  });
+
+  const { data: products = [] } = useQuery({
+    queryKey: ['products-sales-invoice-filter'],
+    queryFn: async () => {
+      const response = await api.post('/product/index', {
+        filters: { active: true },
+        orderBy: 'name',
+        orderByDirection: 'asc',
+        perPage: 1000,
+        paginate: false,
       });
       return response.data.result === 'Success' ? response.data.data || [] : [];
     },
@@ -795,6 +824,7 @@ const SalesInvoiceList = () => {
       branch_id: user?.branch_id ? String(user.branch_id) : 'all',
       salesman_id: 'all',
       customer_id: 'all',
+      product_id: 'all',
       warehouse_id: 'all',
       currency_id: 'all',
       tax_id: 'all',
@@ -814,6 +844,19 @@ const SalesInvoiceList = () => {
     if (key === 'search') return value !== '';
     return value !== 'all' && value !== '';
   }).length;
+
+  const getCustomerFilterName = (id: string) => {
+    const customer = customers.find((item: any) => String(item.id) === id);
+    return language === 'ar' ? customer?.name_ar || customer?.name : customer?.name;
+  };
+  const getBranchFilterName = (id: string) => {
+    const branch = branches.find((item: any) => String(item.id) === id);
+    return language === 'ar' ? branch?.name_ar || branch?.name : branch?.name;
+  };
+  const getProductFilterName = (id: string) => {
+    const product = products.find((item: any) => String(item.id) === id);
+    return language === 'ar' ? product?.name_ar || product?.name : product?.name;
+  };
 
   // ========== Helper Functions ==========
   const getPaymentMethodBadge = (method: string) => {
@@ -998,15 +1041,73 @@ const SalesInvoiceList = () => {
                   <label className="text-sm font-medium"><User size={12} className="inline ml-1" />{language === 'ar' ? 'العميل' : 'Customer'}</label>
                   <select className="w-full px-3 py-2 border rounded-md bg-background" value={filters.customer_id} onChange={(e) => handleFilterChange('customer_id', e.target.value)}>
                     <option value="all">{language === 'ar' ? 'كل العملاء' : 'All Customers'}</option>
-                    {customers.map((c: any) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                    {customers.map((c: any) => (<option key={c.id} value={c.id}>{language === 'ar' ? c.name_ar || c.name : c.name}</option>))}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium"><Building2 size={12} className="inline ml-1" />{language === 'ar' ? 'الفرع' : 'Branch'}</label>
                   <select className="w-full px-3 py-2 border rounded-md bg-background" value={filters.branch_id} onChange={(e) => handleFilterChange('branch_id', e.target.value)}>
                     <option value="all">{language === 'ar' ? 'كل الفروع' : 'All Branches'}</option>
-                    {branches.map((b: any) => (<option key={b.id} value={b.id}>{b.name}</option>))}
+                    {branches.map((b: any) => (<option key={b.id} value={b.id}>{language === 'ar' ? b.name_ar || b.name : b.name}</option>))}
                   </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium"><Package size={12} className="inline ml-1" />{language === 'ar' ? 'المنتج' : 'Product'}</label>
+                  <Popover open={productPickerOpen} onOpenChange={setProductPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" role="combobox" aria-expanded={productPickerOpen} className="w-full justify-between font-normal">
+                        {filters.product_id !== 'all'
+                          ? (() => {
+                              const selectedProduct = products.find((product: any) => String(product.id) === filters.product_id);
+                              return selectedProduct
+                                ? (language === 'ar' ? selectedProduct.name_ar || selectedProduct.name : selectedProduct.name)
+                                : (language === 'ar' ? 'اختر المنتج' : 'Select product');
+                            })()
+                          : (language === 'ar' ? 'كل المنتجات' : 'All products')}
+                        <ChevronDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          value={productSearch}
+                          onValueChange={setProductSearch}
+                          placeholder={language === 'ar' ? 'ابحث عن منتج...' : 'Search products...'}
+                        />
+                        <CommandList>
+                          <CommandEmpty>{language === 'ar' ? 'لا توجد منتجات' : 'No products found'}</CommandEmpty>
+                          <CommandItem
+                            value="all-products"
+                            onSelect={() => {
+                              handleFilterChange('product_id', 'all');
+                              setProductPickerOpen(false);
+                            }}
+                          >
+                            <Check className={`me-2 h-4 w-4 ${filters.product_id === 'all' ? 'opacity-100' : 'opacity-0'}`} />
+                            {language === 'ar' ? 'كل المنتجات' : 'All products'}
+                          </CommandItem>
+                          {products.map((product: any) => {
+                            const productName = language === 'ar' ? product.name_ar || product.name : product.name;
+                            return (
+                              <CommandItem
+                                key={product.id}
+                                value={`${productName} ${product.sku || ''}`}
+                                onSelect={() => {
+                                  handleFilterChange('product_id', String(product.id));
+                                  setProductPickerOpen(false);
+                                  setProductSearch('');
+                                }}
+                              >
+                                <Check className={`me-2 h-4 w-4 ${filters.product_id === String(product.id) ? 'opacity-100' : 'opacity-0'}`} />
+                                <span>{productName}</span>
+                                {product.sku && <span className="ms-auto text-xs text-muted-foreground">{product.sku}</span>}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium"><Truck size={12} className="inline ml-1" />{language === 'ar' ? 'المندوب' : 'Salesman'}</label>
@@ -1074,8 +1175,9 @@ const SalesInvoiceList = () => {
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="font-medium">{language === 'ar' ? 'الفلاتر النشطة:' : 'Active filters:'}</span>
                 {filters.search && <Badge variant="secondary">🔍 {filters.search}</Badge>}
-                {filters.customer_id !== 'all' && <Badge variant="secondary">👤 {customers.find((c: any) => c.id === Number(filters.customer_id))?.name}</Badge>}
-                {filters.branch_id !== 'all' && <Badge variant="secondary">🏢 {branches.find((b: any) => b.id === Number(filters.branch_id))?.name}</Badge>}
+                {filters.customer_id !== 'all' && <Badge variant="secondary">👤 {getCustomerFilterName(filters.customer_id)}</Badge>}
+                {filters.branch_id !== 'all' && <Badge variant="secondary">🏢 {getBranchFilterName(filters.branch_id)}</Badge>}
+                {filters.product_id !== 'all' && <Badge variant="secondary">📦 {getProductFilterName(filters.product_id)}</Badge>}
               </div>
             </div>
           )}

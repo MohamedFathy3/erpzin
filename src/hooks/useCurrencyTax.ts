@@ -62,7 +62,11 @@ export function useCurrencyTax() {
           paginate: false
         });
         
-        return response.data.data || [];
+        return (response.data.data || []).map(currency => ({
+          ...currency,
+          active: currency.active === true || Number(currency.active) === 1,
+          default: currency.default === true || Number(currency.default) === 1,
+        }));
       } catch (error) {
         console.error('Error fetching currencies:', error);
         throw error; // رمي الخطأ بدلاً من إرجاع مصفوفة فارغة
@@ -292,4 +296,14 @@ export function useCurrencyTax() {
     isDefaultCurrency,
     isDefaultTaxRate
   };
+}
+
+export function useDefaultCurrencyFormatter() {
+  const { defaultCurrency, formatAmount } = useCurrencyTax();
+
+  const formatDefaultCurrency = useCallback((amount: number, decimals = 0) => {
+    return formatAmount(amount, defaultCurrency?.code, { decimals });
+  }, [defaultCurrency?.code, formatAmount]);
+
+  return { defaultCurrency, formatDefaultCurrency };
 }

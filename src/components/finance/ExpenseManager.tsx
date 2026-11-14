@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,7 +76,7 @@ interface Expense {
 
 const ExpenseManager: React.FC<ExpenseManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
-  const { formatCurrency } = useRegionalSettings();
+  const { formatDefaultCurrency: formatCurrency } = useDefaultCurrencyFormatter();
   const { userBranch, currentBranch } = useApp();
   
   const [showForm, setShowForm] = useState(false);

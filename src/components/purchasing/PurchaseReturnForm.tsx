@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -73,6 +74,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
   invoiceId
 }) => {
   const { language } = useLanguage();
+  const { formatAmount } = useCurrencyTax();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -463,7 +465,7 @@ const PurchaseReturnForm: React.FC<PurchaseReturnFormProps> = ({
                         <div className="flex justify-between items-center">
                           <span className="font-semibold">{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span>
                           <span className="text-xl font-bold text-orange-600">
-                            {totalAmount.toLocaleString()} YER
+                            {formatAmount(totalAmount)}
                           </span>
                         </div>
                       </div>

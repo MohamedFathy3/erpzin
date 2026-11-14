@@ -1,7 +1,7 @@
 // components/purchasing/PurchaseReturnPrintTemplate.tsx
 import React, { forwardRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface PurchaseReturnPrintTemplateProps {
@@ -30,7 +30,7 @@ const PurchaseReturnPrintTemplate = forwardRef<HTMLDivElement, PurchaseReturnPri
   ({ returnData }, ref) => {
     const { language } = useLanguage();
     const isRTL = language === 'ar';
-    const { formatCurrency } = useRegionalSettings();
+    const { formatAmount: formatCurrencyAmount } = useCurrencyTax();
     const { user } = useAuth();
 
     // بيانات الشركة من auth
@@ -79,7 +79,7 @@ const PurchaseReturnPrintTemplate = forwardRef<HTMLDivElement, PurchaseReturnPri
 
     const formatAmount = (amount: string) => {
       const num = parseFloat(amount);
-      return formatCurrency ? formatCurrency(num) : `${num.toLocaleString()} YER`;
+      return formatCurrencyAmount(Number.isFinite(num) ? num : 0, returnData.currency_code || undefined);
     };
 
     const formatDate = (dateStr: string) => {

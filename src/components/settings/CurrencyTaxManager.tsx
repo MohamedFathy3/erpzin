@@ -132,6 +132,7 @@ const CurrencyTaxManager = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['currencies-all'] });
       toast({ title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully' });
       resetCurrencyForm();
     },
@@ -151,6 +152,7 @@ const CurrencyTaxManager = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['currencies-all'] });
       toast({
         title: language === 'ar' ? 'تم تحديث الحالة' : 'Status updated'
       });
@@ -177,10 +179,11 @@ const CurrencyTaxManager = () => {
       await Promise.all(resetPromises);
 
       // ✅ ثم ن set العملة المختارة كـ default
-      await api.put('/currency/' + id, { default: 1 });
+      await api.put('/currency/' + id, { default: 1, active: 1 });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['currencies-all'] });
       toast({
         title: language === 'ar' ? 'تم تعيين العملة الافتراضية' : 'Default currency set'
       });
@@ -202,6 +205,7 @@ const CurrencyTaxManager = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currencies'] });
+      queryClient.invalidateQueries({ queryKey: ['currencies-all'] });
       toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' });
     },
     onError: (error) => {

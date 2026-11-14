@@ -16,12 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Building2, Phone, Mail, MapPin, FileText,
-  TrendingUp, Wallet, Calendar, Edit2, CreditCard, ChevronDown, ChevronUp
+  TrendingUp, Wallet, Calendar, Edit2, CreditCard, ChevronDown, ChevronUp, Package
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
 import { toast } from '@/components/ui/use-toast';
 import type { PurchaseInvoice, PurchaseInvoicesResponse, PaymentPayload } from '@/types/PurchaseInvoice';
 import {
@@ -166,11 +166,12 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
   onEdit
 }) => {
   const { language } = useLanguage();
-  const { formatCurrency } = useRegionalSettings();
+  const { defaultCurrency, formatAmount: formatCurrency } = useCurrencyTax();
   const queryClient = useQueryClient();
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<PurchaseInvoice | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [expandedPaymentsInvoiceId, setExpandedPaymentsInvoiceId] = useState<number | null>(null);
+  const [expandedItemsInvoiceId, setExpandedItemsInvoiceId] = useState<number | null>(null);
   const [paymentData, setPaymentData] = useState<PaymentPayload>({
     amount: 0,
     treasury_id: undefined,
@@ -583,9 +584,9 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                     <TableCell className="font-mono">{inv.invoice_number}</TableCell>
                                     <TableCell>{formatDate(inv.invoice_date)}</TableCell>
                                     <TableCell>{formatDate(inv.due_date)}</TableCell>
-                                    <TableCell className="text-end font-medium">{formatCurrency(total)}</TableCell>
-                                    <TableCell className="text-end">{formatCurrency(paid)}</TableCell>
-                                    <TableCell className="text-end font-medium text-destructive">{formatCurrency(remaining)}</TableCell>
+                                    <TableCell className="text-end font-medium">{formatCurrency(total, inv.currency_code || defaultCurrency?.code)}</TableCell>
+                                    <TableCell className="text-end">{formatCurrency(paid, inv.currency_code || defaultCurrency?.code)}</TableCell>
+                                    <TableCell className="text-end font-medium text-destructive">{formatCurrency(remaining, inv.currency_code || defaultCurrency?.code)}</TableCell>
                                     <TableCell>
                                       <Badge variant={
                                         paymentStatus === 'paid' ? 'default' :
@@ -601,6 +602,16 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex items-center gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setExpandedItemsInvoiceId(expandedItemsInvoiceId === inv.id ? null : inv.id)}
+                                          className="h-8 px-2"
+                                          title={language === 'ar' ? 'عرض أصناف الفاتورة' : 'Show invoice items'}
+                                        >
+                                          <Package className="h-4 w-4" />
+                                          <span className="ms-1 text-xs">{language === 'ar' ? `الأصناف (${inv.items?.length || 0})` : `Items (${inv.items?.length || 0})`}</span>
+                                        </Button>
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -625,6 +636,63 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                       </div>
                                     </TableCell>
                                   </TableRow>
+                                  {expandedItemsInvoiceId === inv.id && (
+                                    <TableRow>
+                                      <TableCell colSpan={8} className="bg-muted/30 p-3">
+                                        {!inv.items?.length ? (
+                                          <p className="py-3 text-center text-sm text-muted-foreground">
+                                            {language === 'ar' ? 'لا توجد أصناف مسجلة على هذه الفاتورة.' : 'No items recorded for this invoice.'}
+                                          </p>
+                                        ) : (
+                                          <div className="overflow-x-auto">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead>{language === 'ar' ? 'المنتج' : 'Product'}</TableHead>
+                                                  <TableHead className="text-end">{language === 'ar' ? 'الكمية' : 'Quantity'}</TableHead>
+                                                  <TableHead className="text-end">{language === 'ar' ? 'المرتجع' : 'Returned'}</TableHead>
+                                                  <TableHead className="text-end">{language === 'ar' ? 'المتبقي' : 'Remaining'}</TableHead>
+                                                  <TableHead className="text-end">{language === 'ar' ? 'سعر الوحدة' : 'Unit price'}</TableHead>
+                                                  <TableHead className="text-end">{language === 'ar' ? 'الإجمالي' : 'Total'}</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {inv.items.map((item, index) => {
+                                                  const returnedQuantity = Number(item.returned_quantity || 0);
+                                                  const remainingQuantity = item.remaining_quantity ?? Math.max(0, Number(item.quantity) - returnedQuantity);
+                                                  const details = [
+                                                    item.product_sku,
+                                                    item.unit_name,
+                                                    item.color_name,
+                                                    item.size_name,
+                                                    item.variant_name,
+                                                  ].filter(Boolean);
+
+                                                  return (
+                                                    <TableRow key={`${inv.id}-${item.product_id}-${index}`}>
+                                                      <TableCell>
+                                                        <div className="font-medium">
+                                                          {item.product_name_ar || item.product_name || `#${item.product_id}`}
+                                                        </div>
+                                                        {details.length > 0 && (
+                                                          <div className="text-xs text-muted-foreground">{details.join(' · ')}</div>
+                                                        )}
+                                                      </TableCell>
+                                                      <TableCell className="text-end">{Number(item.quantity)}</TableCell>
+                                                      <TableCell className="text-end">{returnedQuantity}</TableCell>
+                                                      <TableCell className="text-end">{Number(remainingQuantity)}</TableCell>
+                                                      <TableCell className="text-end">{formatCurrency(Number(item.price), inv.currency_code || defaultCurrency?.code)}</TableCell>
+                                                      <TableCell className="text-end font-medium">{formatCurrency(Number(item.total), inv.currency_code || defaultCurrency?.code)}</TableCell>
+                                                    </TableRow>
+                                                  );
+                                                })}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
                                   {expandedPaymentsInvoiceId === inv.id && (
                                     <TableRow>
                                       <TableCell colSpan={8} className="bg-muted/30 p-3">
@@ -649,7 +717,7 @@ const SupplierDetails: React.FC<SupplierDetailsProps> = ({
                                               {inv.payments.map((payment) => (
                                                 <TableRow key={payment.id}>
                                                   <TableCell>{formatDate(payment.payment_date)}</TableCell>
-                                                  <TableCell className="text-end font-medium">{formatCurrency(Number(payment.amount))}</TableCell>
+                                                  <TableCell className="text-end font-medium">{formatCurrency(Number(payment.amount), inv.currency_code || defaultCurrency?.code)}</TableCell>
                                                   <TableCell>{payment.payment_method || '-'}</TableCell>
                                                   <TableCell>{payment.treasury_name || (payment.treasury_id ? `#${payment.treasury_id}` : '-')}</TableCell>
                                                   <TableCell>{payment.reference_number || '-'}</TableCell>

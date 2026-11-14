@@ -25,6 +25,8 @@ import { toast } from '@/components/ui/use-toast';
 import { useReactToPrint } from 'react-to-print';
 import PurchaseInvoiceTemplate from '@/components/purchasing/PurchaseInvoiceTemplate';
 import { useApp } from '@/contexts/AppContext';
+import { useCurrencyTax } from '@/hooks/useCurrencyTax';
+import { useBranches, useSuppliers } from '@/hooks/usePurchaseFormData';
 
 import {
   Plus, FileText, Building2, Phone,
@@ -48,12 +50,13 @@ interface InvoiceTableRow {
   treasury_name: string;
   total_amount: number;
   payment_method: string;
-  discount_total: string;
+  discount_total: number;
   invoice_date: string;
   due_date: string;
   items_count: number;
   paid_amount: number;
   remaining_amount: number;
+  currency_code?: string;
 }
 
 interface PurchaseOrdersResponse {
@@ -83,6 +86,10 @@ interface PurchaseReturnsResponse {
 const Purchasing = () => {
   const { language } = useLanguage();
   const { user } = useAuth();
+  const { defaultCurrency, convertToDefault, formatAmount: formatCurrencyAmount } = useCurrencyTax();
+  const defaultCurrencyCode = defaultCurrency?.code || 'EGP';
+  const { data: invoiceFilterSuppliers = [] } = useSuppliers();
+  const { data: invoiceFilterBranches = [] } = useBranches();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('invoices');
   const [invoiceFilters, setInvoiceFilters] = useState<FilterValues>({});
@@ -126,8 +133,12 @@ const Purchasing = () => {
 
       const apiFilters: any = { ...invoiceFilters };
 
-      if (currentBranch?.id) {
+      if (invoiceFilters.branch_id && invoiceFilters.branch_id !== 'all') {
+        apiFilters.branch_id = invoiceFilters.branch_id;
+      } else if (currentBranch?.id) {
         apiFilters.branch_id = currentBranch.id;
+      } else {
+        delete apiFilters.branch_id;
       }
 
       console.log('📦 Final filters to API:', apiFilters);
@@ -153,13 +164,14 @@ const Purchasing = () => {
       return invoice.treasury_name || '-';
     })(),
     total_amount: invoice.total_amount,
-    discount_total: (Number(invoice.subtotal) * Number(invoice.discount_total)) / 100,
+    discount_total: Number(invoice.discount_total) || 0,
     payment_method: invoice.payment_method,
     invoice_date: invoice.invoice_date,
     due_date: invoice.due_date,
     items_count: invoice.items?.length || 0,
     paid_amount: invoice.paid_amount,
     remaining_amount: invoice.remaining_amount,
+    currency_code: invoice.currency_code || invoice.currency?.code,
   }));
 
   const paginationMeta = invoicesResponse?.meta;
@@ -303,7 +315,13 @@ const Purchasing = () => {
     (sum: number, s: Supplier) => sum + Number(s.financial_summary?.remaining || 0),
     0
   );
-  const totalPurchaseValue = invoicesList.reduce((sum: number, inv: InvoiceTableRow) => sum + Number(inv.total_amount || 0), 0);
+  const totalPurchaseValueInDefaultCurrency = invoicesList.reduce(
+    (sum: number, invoice: InvoiceTableRow) => sum + convertToDefault(
+      Number(invoice.total_amount) || 0,
+      invoice.currency_code || defaultCurrencyCode
+    ),
+    0
+  );
 
   const stats = [
     {
@@ -314,7 +332,7 @@ const Purchasing = () => {
     },
     {
       label: language === 'ar' ? 'قيمة المشتريات' : 'Purchase Value',
-      value: `${totalPurchaseValue.toLocaleString()} YER`,
+      value: formatCurrencyAmount(totalPurchaseValueInDefaultCurrency, defaultCurrencyCode),
       icon: <Receipt className="text-chart-2" size={24} />,
       color: 'bg-chart-2/10'
     },
@@ -326,7 +344,7 @@ const Purchasing = () => {
     },
     {
       label: language === 'ar' ? 'المستحق للموردين' : 'Payables',
-      value: `${totalBalance.toLocaleString()} YER`,
+      value: formatCurrencyAmount(totalBalance, defaultCurrencyCode),
       icon: <Wallet className="text-destructive" size={24} />,
       color: 'bg-destructive/10'
     },
@@ -351,12 +369,38 @@ const Purchasing = () => {
   // ========== Invoice filter fields ==========
   const invoiceFilterFields: FilterField[] = [
     {
-      key: 'search',
-      label: 'Invoice/Supplier',
-      labelAr: 'الفاتورة/المورد',
+      key: 'branch_id',
+      label: 'Branch',
+      labelAr: 'الفرع',
+      type: 'select',
+      placeholder: 'Select branch',
+      placeholderAr: 'اختر الفرع',
+      options: invoiceFilterBranches.map(branch => ({
+        value: String(branch.id),
+        label: branch.name,
+        labelAr: branch.name_ar || branch.name,
+      })),
+    },
+    {
+      key: 'supplier_id',
+      label: 'Supplier',
+      labelAr: 'المورد',
+      type: 'select',
+      placeholder: 'Select supplier',
+      placeholderAr: 'اختر المورد',
+      options: invoiceFilterSuppliers.map(supplier => ({
+        value: String(supplier.id),
+        label: supplier.name,
+        labelAr: supplier.name_ar || supplier.name,
+      })),
+    },
+    {
+      key: 'invoice_number',
+      label: 'Invoice number',
+      labelAr: 'رقم الفاتورة',
       type: 'text',
-      placeholder: 'Search...',
-      placeholderAr: 'بحث...'
+      placeholder: 'Enter invoice number',
+      placeholderAr: 'اكتب رقم الفاتورة',
     },
     {
       key: 'date',
@@ -460,7 +504,10 @@ const Purchasing = () => {
                 <AdvancedFilter
                   fields={invoiceFilterFields}
                   values={invoiceFilters}
-                  onChange={setInvoiceFilters}
+                  onChange={(values) => {
+                    setInvoiceFilters(values);
+                    setCurrentPage(1);
+                  }}
                   onReset={() => {
                     setInvoiceFilters({});
                     setCurrentPage(1);
@@ -509,13 +556,13 @@ const Purchasing = () => {
                             <TableCell className="font-mono font-medium">{inv.invoice_number}</TableCell>
                             <TableCell>{inv.supplier_name}</TableCell>
                             <TableCell>{inv.treasury_name}</TableCell>
-                            <TableCell>{inv.total_amount.toLocaleString()} YER</TableCell>
-                            <TableCell className="text-green-600">{inv.paid_amount.toLocaleString()} YER</TableCell>
+                            <TableCell>{inv.total_amount.toLocaleString()} {inv.currency_code || defaultCurrencyCode}</TableCell>
+                            <TableCell className="text-green-600">{inv.paid_amount.toLocaleString()} {inv.currency_code || defaultCurrencyCode}</TableCell>
                             <TableCell className="text-red-500 font-medium">
-                              -{inv.discount_total?.toLocaleString() || 0} YER
+                              -{inv.discount_total?.toLocaleString() || 0} {inv.currency_code || defaultCurrencyCode}
                             </TableCell>
                             <TableCell className={inv.remaining_amount > 0 ? 'text-orange-500' : ''}>
-                              {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} YER
+                              {inv.remaining_amount > 0 ? inv.remaining_amount.toLocaleString() : '-'} {inv.currency_code || defaultCurrencyCode}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">{getPaymentMethodLabel(inv.payment_method)}</Badge>
@@ -678,7 +725,7 @@ const Purchasing = () => {
                                   {language === 'ar' ? 'الرصيد' : 'Credit Limit'}
                                 </span>
                                 <span className={cn("font-semibold", Number(supplier.credit_limit) > 0 ? "text-destructive" : "text-success")}>
-                                  {Number(supplier.credit_limit || 0).toLocaleString()} YER
+                                  {formatCurrencyAmount(Number(supplier.credit_limit) || 0, defaultCurrencyCode)}
                                 </span>
                               </div>
                             </div>
@@ -740,7 +787,7 @@ const Purchasing = () => {
                       <DollarSign className="h-3 w-3" />
                       {language === 'ar' ? 'الإجمالي' : 'Total'}
                     </div>
-                    <div className="font-bold text-lg text-primary">{formatAmount(invoiceData.total_amount)} YER</div>
+                    <div className="font-bold text-lg text-primary">{formatAmount(invoiceData.total_amount)} {invoiceData.currency_code || defaultCurrencyCode}</div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -802,11 +849,11 @@ const Purchasing = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div className="p-3 bg-green-100 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المدفوع' : 'Paid'}</p>
-                  <p className="font-bold text-green-600">{formatAmount(invoiceData.paid_amount)} YER</p>
+                  <p className="font-bold text-green-600">{formatAmount(invoiceData.paid_amount)} {invoiceData.currency_code || defaultCurrencyCode}</p>
                 </div>
                 <div className="p-3 bg-orange-100 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'المتبقي' : 'Remaining'}</p>
-                  <p className="font-bold text-orange-600">{formatAmount(invoiceData.remaining_amount)} YER</p>
+                  <p className="font-bold text-orange-600">{formatAmount(invoiceData.remaining_amount)} {invoiceData.currency_code || defaultCurrencyCode}</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">{language === 'ar' ? 'تاريخ الاستحقاق' : 'Due Date'}</p>
@@ -867,8 +914,8 @@ const Purchasing = () => {
                               ) : '-'}
                             </TableCell>
                             <TableCell className="text-center">{item.quantity}</TableCell>
-                            <TableCell className="text-right">{formatAmount(item.price)} YER</TableCell>
-                            <TableCell className="text-right font-semibold">{formatAmount(item.total)} YER</TableCell>
+                            <TableCell className="text-right">{formatAmount(item.price)} {invoiceData.currency_code || defaultCurrencyCode}</TableCell>
+                            <TableCell className="text-right font-semibold">{formatAmount(item.total)} {invoiceData.currency_code || defaultCurrencyCode}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -880,19 +927,19 @@ const Purchasing = () => {
                     <div className="w-64 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
-                        <span>{formatAmount(invoiceData.subtotal)} YER</span>
+                        <span>{formatAmount(invoiceData.subtotal)} {invoiceData.currency_code || defaultCurrencyCode}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الخصم' : 'Total Discount'}</span>
-                        <span className="text-red-500">-{formatAmount(invoiceData.discount_total)} YER</span>
+                        <span className="text-red-500">-{formatAmount(invoiceData.discount_total)} {invoiceData.currency_code || defaultCurrencyCode}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{language === 'ar' ? 'إجمالي الضريبة' : 'Total Tax'}</span>
-                        <span>+{formatAmount(invoiceData.tax_total)} YER</span>
+                        <span>+{formatAmount(invoiceData.tax_total)} {invoiceData.currency_code || defaultCurrencyCode}</span>
                       </div>
                       <div className="flex justify-between font-bold pt-2 border-t">
                         <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-                        <span className="text-primary">{formatAmount(invoiceData.total_amount)} YER</span>
+                        <span className="text-primary">{formatAmount(invoiceData.total_amount)} {invoiceData.currency_code || defaultCurrencyCode}</span>
                       </div>
                     </div>
                   </div>

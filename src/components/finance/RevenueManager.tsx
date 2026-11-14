@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 import { useApp } from '@/contexts/AppContext'; // ✅ إضافة
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ interface Currency {
 
 const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
   const queryClient = useQueryClient();
-  const { formatCurrency } = useRegionalSettings();
+  const { formatDefaultCurrency: formatCurrency } = useDefaultCurrencyFormatter();
   const { userBranch, currentBranch } = useApp(); // ✅ جلب الفرع
   const [showForm, setShowForm] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<any>(null);
@@ -502,7 +502,7 @@ const RevenueManager: React.FC<RevenueManagerProps> = ({ language }) => {
                         {revenue.description || '-'}
                       </TableCell>
                       <TableCell className="font-bold text-green-600">
-                        {revenue.formatted_amount || formatCurrency(Number(revenue.amount))}
+                        {formatCurrency(Number(revenue.amount))}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">

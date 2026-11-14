@@ -3,6 +3,7 @@ export interface PurchaseReturn {
     return_number: string;
     invoice_number: string;
     total_amount: string;
+    currency_code?: string;
     reason: string | null;
     items: ReturnItem[];
     created_at: string;

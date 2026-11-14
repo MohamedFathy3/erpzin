@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RefreshCw, AlertCircle, FileBarChart2 } from 'lucide-react';
 import { format, startOfMonth } from 'date-fns';
+import { useDefaultCurrencyFormatter } from '@/hooks/useCurrencyTax';
 
 type Props = { language: string };
 type ReportLine = {
@@ -17,13 +18,14 @@ type ReportLine = {
   level?: number; is_rollup?: boolean; period_debit?: number; period_credit?: number;
   debit_balance?: number; credit_balance?: number;
 };
-const money = (value: unknown) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = format(new Date(), 'yyyy-MM-dd');
 const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
 const AccountingReports = ({ language }: Props) => {
   const ar = language === 'ar';
   const { currentBranch } = useApp();
+  const { formatDefaultCurrency } = useDefaultCurrencyFormatter();
+  const money = (value: unknown) => formatDefaultCurrency(Number(value || 0), 2);
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [ledgerAccountId, setLedgerAccountId] = useState('');
