@@ -179,12 +179,12 @@ export const transformApiProductToFormData = (apiProduct: any): ProductFormData 
     dimensions: apiProduct.dimensions || { unit: 'cm' },
     priceTiers: Array.isArray(apiProduct.prices)
       ? apiProduct.prices.map((tier: any) => ({
-          price_type: tier.price_type,
-          min_quantity: Number(tier.min_quantity) || 1,
-          price: Number(tier.price) || 0,
-          unit_id: tier.unit_id ? String(tier.unit_id) : '',
-          color_id: tier.color_id ? String(tier.color_id) : '',
-        }))
+        price_type: tier.price_type,
+        min_quantity: Number(tier.min_quantity) || 1,
+        price: Number(tier.price) || 0,
+        unit_id: tier.unit_id ? String(tier.unit_id) : '',
+        color_id: tier.color_id ? String(tier.color_id) : '',
+      }))
       : [],
   };
 };
@@ -389,12 +389,6 @@ const Inventory: React.FC = () => {
 
   const dbCategories = categories;
 
-
-
-
-
-
-  
   const products: Product[] = useMemo(() => {
     return dbProducts.map((product: any) => {
       const transformed: any = transformApiProduct(product);
@@ -547,6 +541,119 @@ const Inventory: React.FC = () => {
         language === 'ar'
           ? `تم تصدير ${minimumStockProducts.length} منتج.`
           : `Exported ${minimumStockProducts.length} products.`,
+    });
+  };
+
+  /* ========== تصدير كل المنتجات Excel ========== */
+  const exportAllProductsToExcel = () => {
+    if (filteredProducts.length === 0) {
+      toast({
+        title: language === 'ar' ? 'لا توجد منتجات للتصدير' : 'No products to export',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // أسماء الفروع التابع لها المنتج (من بيانات الـ API الأصلية)
+    const getBranchNames = (productId: string | number): string => {
+      const raw: any = dbProducts.find((p: any) => String(p.id) === String(productId));
+      if (!raw) return '';
+
+      const ids = new Set<string>();
+      if (Array.isArray(raw.branch_ids)) raw.branch_ids.forEach((id: any) => ids.add(String(id)));
+      if (Array.isArray(raw.branches)) {
+        raw.branches.forEach((b: any) => ids.add(String(typeof b === 'object' ? b.id : b)));
+      }
+      const singleBranchId = raw.branch?.id ?? raw.branch_id;
+      if (singleBranchId) ids.add(String(typeof singleBranchId === 'object' ? singleBranchId.id : singleBranchId));
+      if (Array.isArray(raw.branch_prices)) {
+        raw.branch_prices.forEach((bp: any) => bp?.branch_id && ids.add(String(bp.branch_id)));
+      }
+
+      return Array.from(ids)
+        .map((id) => {
+          const branch: any = branches.find((b: any) => String(b.id) === id);
+          if (!branch) return `#${id}`;
+          return language === 'ar' ? branch.name_ar || branch.name : branch.name;
+        })
+        .join(' - ');
+    };
+
+    // عمود لكل مخزن (اسم المخزن) وقيمته كمية المنتج في المخزن ده
+    const warehouseColumns = (() => {
+      const used = new Set<string>();
+      return warehouses.map((w: any) => {
+        const name = (language === 'ar' ? w.name_ar || w.name : w.name) || `#${w.id}`;
+        let label = language === 'ar' ? `كمية - ${name}` : `Stock - ${name}`;
+        if (used.has(label)) label = `${label} (#${w.id})`;
+        used.add(label);
+        return { id: String(w.id), label };
+      });
+    })();
+
+    const getWarehouseStocks = (productId: string | number): Record<string, number> => {
+      const raw: any = dbProducts.find((p: any) => String(p.id) === String(productId));
+      const ws =
+        raw?.warehouse_stocks &&
+          typeof raw.warehouse_stocks === 'object' &&
+          !Array.isArray(raw.warehouse_stocks)
+          ? raw.warehouse_stocks
+          : {};
+      const result: Record<string, number> = {};
+      warehouseColumns.forEach((col) => {
+        result[col.label] = Number(ws[col.id]) || 0;
+      });
+      return result;
+    };
+
+    const rows = filteredProducts.map((product: any) =>
+      language === 'ar'
+        ? {
+          'اسم المنتج': product.nameAr || product.name,
+          'كود المنتج': product.sku,
+          الباركود: product.barcode || '',
+          التصنيف: product.categoryAr || product.category || '',
+          الفرع: getBranchNames(product.id),
+          'سعر التكلفة': product.cost ?? 0,
+          'سعر البيع': product.price ?? 0,
+          'الكمية الحالية': product.stock ?? 0,
+          ...getWarehouseStocks(product.id),
+          'الحد الأدنى للمخزون': product.minStock ?? 5,
+          الحالة: product.status === 'active' ? 'نشط' : 'غير نشط',
+        }
+        : {
+          'Product name': product.name,
+          SKU: product.sku,
+          Barcode: product.barcode || '',
+          Category: product.category || '',
+          Branch: getBranchNames(product.id),
+          Cost: product.cost ?? 0,
+          Price: product.price ?? 0,
+          'Current stock': product.stock ?? 0,
+          ...getWarehouseStocks(product.id),
+          'Minimum stock': product.minStock ?? 5,
+          Status: product.status === 'active' ? 'Active' : 'Inactive',
+        }
+    );
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      language === 'ar' ? 'المنتجات' : 'Products'
+    );
+    XLSX.writeFile(
+      workbook,
+      `products-${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+
+    toast({
+      title: language === 'ar' ? 'تم تصدير ملف Excel' : 'Excel export complete',
+      description:
+        language === 'ar'
+          ? `تم تصدير ${filteredProducts.length} منتج.`
+          : `Exported ${filteredProducts.length} products.`,
     });
   };
 
@@ -813,9 +920,6 @@ const Inventory: React.FC = () => {
         }
       }
 
-      // ✅ Log للتشخيص
-
-
       let productId = formData.id;
       if (productId) {
         console.log('WAREHOUSE DEBUG', {
@@ -1048,6 +1152,19 @@ const Inventory: React.FC = () => {
                     {language === 'ar'
                       ? 'تنزيل نتائج الحد الأدنى Excel'
                       : 'Export minimum stock to Excel'}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 gap-2"
+                    onClick={exportAllProductsToExcel}
+                    disabled={filteredProducts.length === 0}
+                  >
+                    <FileSpreadsheet size={16} />
+                    {language === 'ar'
+                      ? 'تصدير كل المنتجات Excel'
+                      : 'Export all products to Excel'}
                   </Button>
                 </div>
 
