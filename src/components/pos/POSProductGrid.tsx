@@ -150,7 +150,7 @@ const filteredProducts = useMemo(() => {
       </div>
 
       {/* Grid المنتجات */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const imageUrl = getProductImageUrl(product);
@@ -162,18 +162,18 @@ const filteredProducts = useMemo(() => {
               <article
                 key={product.id}
                 className={cn(
-                  'relative flex flex-col rounded-lg overflow-hidden transition-all duration-200',
-                  'bg-card border border-border hover:border-primary hover:shadow-md',
+                  'group relative flex flex-col rounded-2xl overflow-hidden transition-all duration-200',
+                  'bg-card border border-slate-200/80 hover:border-primary/50 hover:-translate-y-0.5 hover:shadow-lg',
                   'touch-manipulation w-full',
                   product.stock === 0 && 'opacity-60'
                 )}
               >
-                <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden relative w-full">
+                <div className="h-36 sm:h-40 bg-gradient-to-br from-slate-50 to-slate-100/80 flex items-center justify-center overflow-hidden relative w-full">
                   {imageUrl ? (
                     <img 
                       src={imageUrl} 
                       alt={language === 'ar' ? product.nameAr : product.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.03]"
                       loading="lazy"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
@@ -190,17 +190,17 @@ const filteredProducts = useMemo(() => {
                     "fallback-icon absolute inset-0 flex items-center justify-center",
                     imageUrl ? "hidden" : "flex"
                   )}>
-                    <span className="text-3xl sm:text-4xl text-muted-foreground/30">
+                    <span className="text-4xl sm:text-5xl text-muted-foreground/30">
                       {product.automotive_service ? '🚗' : product.hasVariants ? '🔄' : '👕'}
                     </span>
                   </div>
                   
                   {product.automotive_service && (
-                    <div className="absolute top-1 end-1"><span className="px-1.5 py-0.5 bg-emerald-600/90 text-white text-[8px] rounded-md">خدمة سيارات</span></div>
+                    <div className="absolute top-2 end-2"><span className="px-2 py-1 bg-emerald-700/90 text-white text-[10px] font-semibold rounded-lg">خدمة سيارات</span></div>
                   )}
                   {product.hasVariants && (
                     <div className="absolute top-1 start-1">
-                      <span className="px-1.5 py-0.5 bg-primary/90 text-white text-[8px] rounded-md">
+                      <span className="px-2 py-1 bg-primary/90 text-white text-[10px] font-semibold rounded-lg">
                         {language === 'ar' ? 'متغيرات' : 'Variants'}
                       </span>
                     </div>
@@ -208,55 +208,68 @@ const filteredProducts = useMemo(() => {
                   
                   {product.stock === 0 && (
                     <div className="absolute bottom-1 end-1">
-                      <span className="px-1.5 py-0.5 bg-destructive/90 text-white text-[8px] rounded-md">
+                      <span className="px-2 py-1 bg-destructive/90 text-white text-[10px] font-semibold rounded-lg">
                         {language === 'ar' ? 'نفذ' : 'Out'}
                       </span>
                     </div>
                   )}
                   {product.stock > 0 && product.stock < 10 && (
                     <div className="absolute bottom-1 end-1">
-                      <span className="px-1.5 py-0.5 bg-amber-500/90 text-white text-[8px] rounded-md">
+                      <span className="px-2 py-1 bg-amber-600/95 text-white text-[10px] font-semibold rounded-lg">
                         {language === 'ar' ? 'كمية قليلة' : 'Low'}
                       </span>
                     </div>
                   )}
                 </div>
                 
-                <div className="p-2 text-start w-full bg-card">
-                  <p className="font-medium text-xs text-foreground line-clamp-1 leading-tight">
+                <div className="p-3 text-start w-full bg-card">
+                  <p className="font-semibold text-sm sm:text-base text-foreground line-clamp-2 leading-snug min-h-10">
                     {language === 'ar' ? product.nameAr : product.name}
                   </p>
-                  <p className="font-bold text-primary mt-1 text-sm">
+                  <p className="font-extrabold text-primary mt-1 text-lg sm:text-xl tracking-tight">
                     {formatCurrency(displayPrice)}
                     
                   </p>
                   
-                  {product.stock > 0 && product.stock < 10 && (
-                    <p className="text-[9px] text-orange-500 mt-0.5">
-                      {language === 'ar' ? `آخر ${product.stock}` : `Last ${product.stock}`}
-                    </p>
-                  )}
+                  <div className="mt-2 min-h-5">
+                    {product.stock === 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                        {language === 'ar' ? 'نفد المخزون' : 'Out of stock'}
+                      </span>
+                    ) : product.stock < 10 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        {language === 'ar' ? `كمية قليلة · ${product.stock}` : `Low stock · ${product.stock}`}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        {language === 'ar' ? `متاح · ${product.stock}` : `In stock · ${product.stock}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-auto grid grid-cols-[1fr_92px] gap-2 border-t border-border p-2" onClick={(event) => event.stopPropagation()}>
+                <div className="mt-auto grid grid-cols-[1fr_104px] gap-2 border-t border-slate-100 p-3" onClick={(event) => event.stopPropagation()}>
                   <select
                     value={priceType}
                     onChange={(event) => setPriceTypes((current) => ({
                       ...current,
                       [product.id]: event.target.value as 'retail' | 'wholesale' | 'credit',
                     }))}
-                    className="h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs"
+                    className="h-9 min-w-0 rounded-xl border border-border bg-background px-2 text-xs"
                     disabled={product.stock === 0}
                   >
                     <option value="retail">{language === 'ar' ? 'قطاعي' : 'Retail'}</option>
                     <option value="wholesale">{language === 'ar' ? 'جملة' : 'Wholesale'}</option>
                     <option value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</option>
                   </select>
-                  <div className="flex h-8 items-center rounded-md border border-border bg-background">
+                  <div className="flex h-9 items-center rounded-xl border border-border bg-background">
                     <button
                       type="button"
                       aria-label={language === 'ar' ? 'تقليل الكمية' : 'Decrease quantity'}
-                      className="h-full w-7 text-lg"
+                      className="h-full w-8 text-lg text-muted-foreground hover:text-foreground"
                       onClick={() => setQuantities((current) => ({
                         ...current,
                         [product.id]: Math.max(1, getQuantity(product.id) - 1),
@@ -275,13 +288,13 @@ const filteredProducts = useMemo(() => {
                         ...current,
                         [product.id]: Math.max(1, Number(event.target.value) || 1),
                       }))}
-                      className="h-full w-10 border-x border-border bg-transparent text-center text-xs outline-none"
+                      className="h-full w-10 border-x border-border bg-transparent text-center text-sm font-semibold outline-none"
                       disabled={product.stock === 0}
                     />
                     <button
                       type="button"
                       aria-label={language === 'ar' ? 'زيادة الكمية' : 'Increase quantity'}
-                      className="h-full w-7 text-lg"
+                      className="h-full w-8 text-lg text-muted-foreground hover:text-foreground"
                       onClick={() => setQuantities((current) => ({
                         ...current,
                         [product.id]: product.stock > 0
@@ -297,7 +310,7 @@ const filteredProducts = useMemo(() => {
                     type="button"
                     onClick={() => onAddToCart(product as any, { quantity, priceType, price: displayPrice })}
                     disabled={product.stock === 0}
-                    className="col-span-2 h-9 rounded-md bg-primary text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                    className="col-span-2 h-11 rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:shadow-md disabled:opacity-50"
                   >
                     {language === 'ar' ? 'إضافة للسلة' : 'Add to cart'}
                   </button>

@@ -117,11 +117,11 @@ const POSCart: React.FC<POSCartProps> = ({
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col bg-card rounded-xl border border-border overflow-hidden">
+      <div className="h-full flex flex-col bg-card rounded-2xl border border-slate-200/80 overflow-hidden shadow-lg shadow-slate-900/5">
         {/* Cart Header */}
-        <div className="p-4 border-b border-border bg-muted/30">
+        <div className="p-4 border-b border-slate-100 bg-white">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-lg text-foreground">
+            <h2 className="font-extrabold text-lg text-foreground">
               {language === 'ar' ? 'سلة المشتريات' : 'Cart'}
             </h2>
             <div className="flex items-center gap-2">
@@ -136,7 +136,7 @@ const POSCart: React.FC<POSCartProps> = ({
                   <span className="text-[10px] ms-1 opacity-60">F8</span>
                 </Button>
               )}
-              <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+              <span className="min-w-8 px-2.5 py-1 bg-primary text-primary-foreground rounded-full text-sm font-bold text-center shadow-sm">
                 {items.reduce((sum, item) => sum + item.quantity, 0)}
               </span>
             </div>
@@ -156,14 +156,14 @@ const POSCart: React.FC<POSCartProps> = ({
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3">
           {items.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
               <span className="text-4xl mb-2">🛒</span>
               <p className="text-sm">{language === 'ar' ? 'السلة فارغة' : 'Cart is empty'}</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {items.map((item) => {
                 const itemKey = item.variantId || item.id;
                 const itemSubtotal = item.price * item.quantity;
@@ -173,7 +173,7 @@ const POSCart: React.FC<POSCartProps> = ({
                 return (
                   <div
                     key={itemKey}
-                    className="p-3 bg-background rounded-lg border border-border hover:border-primary/50 transition-colors"
+                    className="p-3 bg-background rounded-xl border border-slate-200/80 hover:border-primary/40 hover:shadow-sm transition-all"
                   >
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
@@ -224,20 +224,20 @@ const POSCart: React.FC<POSCartProps> = ({
                           <TooltipTrigger asChild>
                             <button
                               onClick={() => onUpdateQuantity(item.id, item.quantity - 1, item.variantId)}
-                              className="w-7 h-7 rounded-lg bg-muted hover:bg-muted/80 flex items-center justify-center"
+                              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center"
                             >
                               <Minus size={12} />
                             </button>
                           </TooltipTrigger>
                         </Tooltip>
 
-                        <span className="w-8 text-center font-semibold text-sm">{item.quantity}</span>
+                        <span className="min-w-9 h-8 px-2 rounded-lg border border-slate-200 bg-white flex items-center justify-center font-bold text-sm">{item.quantity}</span>
 
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button
                               onClick={() => onUpdateQuantity(item.id, item.quantity + 1, item.variantId)}
-                              className="w-7 h-7 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center"
+                              className="w-8 h-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center shadow-sm"
                             >
                               <Plus size={12} />
                             </button>
@@ -278,7 +278,7 @@ const POSCart: React.FC<POSCartProps> = ({
         </div>
 
         {/* Cart Summary */}
-        <div className="border-t border-border p-4 space-y-3 bg-muted/30">
+        <div className="sticky bottom-0 border-t border-slate-200 p-4 space-y-3 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">{language === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
@@ -337,9 +337,9 @@ const POSCart: React.FC<POSCartProps> = ({
               />
             </div>
             
-            <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
-              <span>{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
-              <span className="text-primary">{formatCurrency(total)}</span>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-sidebar px-4 py-3 text-white">
+              <span className="text-sm font-semibold text-white/75">{language === 'ar' ? 'الإجمالي' : 'Total'}</span>
+              <span className="text-xl font-extrabold tracking-tight text-white">{formatCurrency(total)}</span>
             </div>
           </div>
 
@@ -349,7 +349,7 @@ const POSCart: React.FC<POSCartProps> = ({
               variant="outline"
               onClick={onHoldOrder}
               disabled={items.length === 0}
-              className="flex-1 h-12 border-warning text-warning hover:bg-warning hover:text-warning-foreground"
+              className="flex-1 h-12 rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50"
             >
               <Pause size={18} className="me-2" />
               <span>{language === 'ar' ? 'تعليق' : 'Hold'}</span>
@@ -357,7 +357,7 @@ const POSCart: React.FC<POSCartProps> = ({
             <Button
               onClick={onPay}
               disabled={items.length === 0}
-              className="flex-1 h-12 bg-success hover:bg-success/90 text-success-foreground"
+              className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-900/10"
             >
               <CreditCard size={18} className="me-2" />
               <span>{language === 'ar' ? 'دفع' : 'Pay'}</span>

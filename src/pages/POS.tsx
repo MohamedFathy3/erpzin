@@ -1306,10 +1306,10 @@ const POS: React.FC = () => {
   // ==================== Render ====================
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <div className="pos-screen h-dvh flex flex-col bg-slate-50 overflow-hidden">
         {/* POS Header */}
-        <header className="h-14 bg-sidebar flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="min-h-[60px] bg-sidebar flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2 lg:px-5 flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
             <div className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-white" />
               <h1 className="text-xl font-bold text-white">
@@ -1355,7 +1355,7 @@ const POS: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-end gap-1 flex-wrap flex-1 min-w-0">
             <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
               {unsyncedCount > 0 && (
                 <Button
@@ -1572,9 +1572,12 @@ const POS: React.FC = () => {
         </header>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col gap-3 overflow-hidden p-3 lg:flex-row lg:p-4">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="space-y-3 mb-4 flex-shrink-0">
+        <div className={cn(
+          "flex-1 min-h-0 flex flex-col gap-3 overflow-hidden p-3 lg:p-4",
+          language === 'ar' ? "lg:flex-row" : "lg:flex-row-reverse"
+        )}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+            <div className="space-y-3 mb-3 flex-shrink-0 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm">
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
@@ -1589,7 +1592,7 @@ const POS: React.FC = () => {
                         setIsBarcodeScanning(true);
                       }
                     }}
-                    className="ps-10 pe-10 h-12 text-base"
+                    className="ps-10 pe-10 h-12 rounded-xl bg-slate-50 text-base placeholder:text-muted-foreground/80 focus-visible:bg-white"
                   />
                   <Barcode className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                 </div>
@@ -1628,20 +1631,24 @@ const POS: React.FC = () => {
                 </div>
               )}
 
-              <POSCategories
-                categories={transformedCategories}
-                selectedCategory={selectedCategory}
-                onSelectCategory={setSelectedCategory}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant={servicesOnly ? 'default' : 'outline'}
-                onClick={() => setServicesOnly(value => !value)}
-                className="mt-2 h-9"
-              >
-                {servicesOnly ? (language === 'ar' ? 'عرض كل الأصناف' : 'Show all items') : (language === 'ar' ? 'الخدمات فقط' : 'Services only')}
-              </Button>
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <POSCategories
+                    categories={transformedCategories}
+                    selectedCategory={selectedCategory}
+                    onSelectCategory={setSelectedCategory}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={servicesOnly ? 'default' : 'outline'}
+                  onClick={() => setServicesOnly(value => !value)}
+                  className="h-10 flex-shrink-0 rounded-xl px-3"
+                >
+                  {servicesOnly ? (language === 'ar' ? 'كل الأصناف' : 'All items') : (language === 'ar' ? 'الخدمات فقط' : 'Services only')}
+                </Button>
+              </div>
             </div>
 
             {showOfflineStats && offlineStats && (
@@ -1694,7 +1701,7 @@ const POS: React.FC = () => {
               </Card>
             )}
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -1719,7 +1726,7 @@ const POS: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-[42vh] w-full flex-shrink-0 lg:h-full lg:w-[360px] xl:w-[390px]">
+          <div className="h-[40vh] min-h-[260px] w-full flex-shrink-0 lg:h-full lg:w-[370px] xl:w-[400px]">
             <POSCart
               items={cartItems}
               onUpdateQuantity={updateQuantity}

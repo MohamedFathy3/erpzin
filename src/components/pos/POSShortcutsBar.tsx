@@ -65,7 +65,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <CreditCard size={16} />,
       action: onPay,
       disabled: cartItemsCount === 0,
-      colorClass: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30'
+      colorClass: 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-700 shadow-sm'
     },
     {
       key: 'F2',
@@ -74,7 +74,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <Pause size={16} />,
       action: onHold,
       disabled: cartItemsCount === 0,
-      colorClass: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30'
+      colorClass: 'bg-amber-50 text-amber-800 hover:bg-amber-100 border-amber-200'
     },
     {
       key: 'F3',
@@ -82,7 +82,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'المعلقة',
       icon: <Clock size={16} />,
       action: onShowHeldOrders,
-      colorClass: 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border-amber-500/30'
+      colorClass: 'bg-white text-amber-800 hover:bg-amber-50 border-slate-200'
     },
     {
       key: 'F4',
@@ -90,7 +90,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'العميل',
       icon: <User size={16} />,
       action: onShowCustomer,
-      colorClass: 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border-cyan-500/30'
+      colorClass: 'bg-white text-cyan-800 hover:bg-cyan-50 border-slate-200'
     },
     {
       key: 'F5',
@@ -98,7 +98,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'التوصيل',
       icon: <Truck size={16} />,
       action: onShowDelivery,
-      colorClass: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30'
+      colorClass: 'bg-white text-emerald-800 hover:bg-emerald-50 border-slate-200'
     },
     {
       key: 'F6',
@@ -106,7 +106,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'مرتجع',
       icon: <RotateCcw size={16} />,
       action: onShowReturns,
-      colorClass: 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border-rose-500/30'
+      colorClass: 'bg-white text-rose-700 hover:bg-rose-50 border-slate-200'
     },
     {
       key: 'F7',
@@ -114,7 +114,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'الوردية',
       icon: <DollarSign size={16} />,
       action: onShowShift,
-      colorClass: 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-violet-500/30'
+      colorClass: 'bg-white text-violet-800 hover:bg-violet-50 border-slate-200'
     },
     {
       key: 'F8',
@@ -123,7 +123,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       icon: <Trash2 size={16} />,
       action: onClearCart,
       disabled: cartItemsCount === 0,
-      colorClass: 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
+      colorClass: 'bg-white text-rose-700 hover:bg-rose-50 border-slate-200'
     },
     {
       key: 'F9',
@@ -131,7 +131,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'بحث',
       icon: <Search size={16} />,
       action: onFocusSearch,
-      colorClass: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30'
+      colorClass: 'bg-white text-blue-800 hover:bg-blue-50 border-slate-200'
     },
     {
       key: 'F12',
@@ -139,32 +139,32 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       labelAr: 'الرئيسية',
       icon: <Home size={16} />,
       action: onGoHome,
-      colorClass: 'bg-slate-500/20 text-slate-300 hover:bg-slate-500/30 border-slate-500/30'
+      colorClass: 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
     },
   ];
 
   const getButtonClasses = (colorClass: string, disabled?: boolean) => {
     if (disabled) {
-      return 'bg-muted/50 text-muted-foreground cursor-not-allowed opacity-50 border-muted';
+      return 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60 border-slate-200';
     }
     return colorClass;
   };
 
   return (
-    <div className="h-12 bg-sidebar/95 backdrop-blur-sm border-t border-border flex items-center justify-center px-2 gap-1 flex-shrink-0">
+    <div className="h-14 bg-white border-t border-slate-200 flex items-center justify-start md:justify-center px-3 gap-1.5 flex-shrink-0 overflow-x-auto shadow-[0_-6px_20px_rgba(15,23,42,0.04)]">
       {shortcuts.map((shortcut) => (
         <button
           key={shortcut.key}
           onClick={shortcut.action}
           disabled={shortcut.disabled}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-all duration-150",
-            "text-xs font-medium whitespace-nowrap",
+            "flex h-10 items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-150",
+            "text-xs font-semibold whitespace-nowrap",
             "focus:outline-none focus:ring-2 focus:ring-primary/50",
             getButtonClasses(shortcut.colorClass, shortcut.disabled)
           )}
         >
-          <span className="px-1.5 py-0.5 bg-black/30 rounded text-[10px] font-bold text-white/90">
+          <span className="px-1.5 py-0.5 bg-slate-100 rounded-md text-[10px] font-extrabold text-slate-600">
             {shortcut.key}
           </span>
           {shortcut.icon}
