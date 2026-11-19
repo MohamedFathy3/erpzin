@@ -677,3 +677,28 @@
 .module-tabs button { border-radius: .5rem .5rem 0 0; }
 .app-main .grid > .card, .app-main .space-y-6 > .card { border-radius: 1rem; }
 .app-main [data-state="active"] { transition: all .18s ease; }
+
+/* POS header: calm, consistent actions instead of a rainbow toolbar */
+.pos-header-actions { gap: .625rem; }
+.pos-header-actions > div:first-child { gap: .25rem; }
+.pos-header-actions button {
+  min-height: 2.25rem;
+  border-radius: .75rem;
+  padding-inline: .65rem;
+  color: rgb(226 232 240 / .82);
+  font-weight: 600;
+  transition: color .18s ease, background-color .18s ease;
+}
+.pos-header-actions button:hover:not(:disabled) {
+  color: #fff;
+  background: rgb(255 255 255 / .11);
+}
+.pos-header-actions button:focus-visible {
+  outline: 2px solid rgb(103 232 249 / .9);
+  outline-offset: 2px;
+}
+.pos-header-actions button svg { flex-shrink: 0; opacity: .88; }
+@media (max-width: 1023px) {
+  .pos-header-actions { justify-content: flex-start; }
+  .pos-header-actions > div:first-child { flex-wrap: wrap; }
+}

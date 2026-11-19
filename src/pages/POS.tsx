@@ -1308,25 +1308,27 @@ const POS: React.FC = () => {
     <TooltipProvider delayDuration={300}>
       <div className="pos-screen h-dvh flex flex-col bg-slate-50 overflow-hidden">
         {/* POS Header */}
-        <header className="min-h-[60px] bg-sidebar flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2 lg:px-5 flex-shrink-0 shadow-sm">
-          <div className="flex items-center gap-3 min-w-0 flex-wrap">
+        <header className="flex flex-col gap-2 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-3 py-2 lg:px-5 flex-shrink-0 shadow-sm">
+          <div className="flex w-full items-center justify-between gap-3 min-w-0 flex-wrap">
             <div className="flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5 text-white" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-cyan-200 ring-1 ring-white/10">
+                <ShoppingBag className="h-5 w-5" />
+              </span>
               <h1 className="text-xl font-bold text-white">
                 {language === 'ar' ? 'نقطة البيع' : 'Point of Sale'}
               </h1>
             </div>
 
             <div className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium",
-              isOffline ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset",
+              isOffline ? "bg-rose-400/10 text-rose-200 ring-rose-200/15" : "bg-emerald-400/10 text-emerald-200 ring-emerald-200/15"
             )}>
               {isOffline ? <WifiOff size={14} /> : <Wifi size={14} />}
               <span>{isOffline ? (language === 'ar' ? 'بدون نت' : 'Offline') : (language === 'ar' ? 'متصل' : 'Online')}</span>
             </div>
 
             {(userBranch || currentBranch) && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-medium">
+              <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 ring-1 ring-inset ring-white/10">
                 <Building2 size={14} />
                 <span>
                   {userBranch
@@ -1339,24 +1341,24 @@ const POS: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-xl shadow-sm">
-              <div className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500 text-white">
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-1.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-300/15 text-cyan-100">
                 <User size={18} />
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gray-800">{user?.name}</span>
+                <span className="text-sm font-semibold text-white/90">{user?.name}</span>
               </div>
             </div>
 
             {currentShift && (
-              <span className="px-2 py-1 bg-violet-500/20 text-violet-400 rounded text-xs font-medium">
+              <span className="rounded-full border border-violet-200/15 bg-violet-300/10 px-2.5 py-1 text-xs font-medium text-violet-100">
                 {language === 'ar' ? 'الوردية نشطة' : 'Shift Active'}
               </span>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-1 flex-wrap flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 me-2 border-e border-white/20 pe-3">
+          <div className="pos-header-actions flex w-full items-center justify-between gap-2 flex-wrap rounded-2xl border border-white/10 bg-white/[0.04] p-1.5">
+            <div className="flex items-center gap-1 flex-wrap">
               {unsyncedCount > 0 && (
                 <Button
                   variant="ghost"
@@ -1538,7 +1540,14 @@ const POS: React.FC = () => {
               </Tooltip>
             )}
 
-            <div className="flex items-center gap-1 border-s border-white/20 ps-2"><Button variant="ghost" size="sm" onClick={() => navigate('/automotive')} className="text-cyan-300 hover:bg-cyan-500/20">Automotive</Button><Button variant="ghost" size="sm" onClick={() => navigate('/POSRetrun')} className="text-rose-300 hover:bg-rose-500/20">مرتجعات POS</Button></div>
+            <div className="flex items-center gap-1 border-s border-white/10 ps-2">
+              <Button variant="ghost" size="sm" onClick={() => navigate('/automotive')}>
+                {language === 'ar' ? 'خدمات السيارات' : 'Automotive'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/POSRetrun')}>
+                {language === 'ar' ? 'مرتجعات POS' : 'POS Returns'}
+              </Button>
+            </div>
 
             <Tooltip>
               <TooltipTrigger asChild>
