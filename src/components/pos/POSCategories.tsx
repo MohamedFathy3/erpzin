@@ -156,7 +156,7 @@ const POSCategories: React.FC<POSCategoriesProps> = ({
   }
 
   return (
-    <div className="relative flex items-center gap-1">
+    <div className="relative flex items-center gap-1 py-1">
       {/* سهم اليسار */}
       {showLeftArrow && (
         <Button

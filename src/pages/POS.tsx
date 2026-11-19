@@ -76,6 +76,7 @@ interface CartItem {
   discount_percentage?: number;
   automotive_service_id?: number;
   itemType?: 'product' | 'service';
+  priceType?: 'retail' | 'wholesale' | 'credit';
   vehicle_size?: string;
   meter_quantity?: number;
 }
@@ -226,6 +227,9 @@ const POS: React.FC = () => {
   const [showSalesRepSelector, setShowSalesRepSelector] = useState(false);
   const [showDeliverySelector, setShowDeliverySelector] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null);
+  const [pendingCartOptions, setPendingCartOptions] = useState<
+    { quantity: number; priceType: 'retail' | 'wholesale' | 'credit'; price: number } | null
+  >(null);
   const [selectedAutomotiveProduct, setSelectedAutomotiveProduct] = useState<Product | null>(null);
   const [automotiveVehicleSize, setAutomotiveVehicleSize] = useState<string>('');
   const [automotiveMeterQuantity, setAutomotiveMeterQuantity] = useState('1');
@@ -611,6 +615,7 @@ const POS: React.FC = () => {
         image: prod.image,
         hasVariants: prod.has_variants,
         units: prod.units || [],
+        prices: (prod as any).prices || [],
         automotive_service: prod.automotive_service
           ? {
             ...prod.automotive_service,
@@ -635,7 +640,10 @@ const POS: React.FC = () => {
   }, [selectedCategory]);
 
   // ==================== Cart Operations ====================
-  const addToCart = (product: Product) => {
+  const addToCart = (
+    product: Product,
+    options?: { quantity: number; priceType: 'retail' | 'wholesale' | 'credit'; price: number }
+  ) => {
     if (product.automotive_service) {
       // ✅ نجيب الأحجام من الـ Map (لو مش موجودة في الـ product)
       let sizes = getVehicleSizes(product);
@@ -665,15 +673,19 @@ const POS: React.FC = () => {
     }
 
     if (product.units && product.units.length > 0) {
+      setPendingCartOptions(options || null);
       setSelectedProductForVariant(product);
       setShowVariantSelector(true);
       return;
     }
 
     setCartItems(prev => {
+      const requestedQuantity = Math.max(1, Number(options?.quantity || 1));
+      const selectedPrice = Number(options?.price ?? product.price);
       const existing = prev.find(item => item.id === product.id && !item.variantId);
       if (existing) {
-        if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+        const nextQuantity = existing.quantity + requestedQuantity;
+        if (existing.stock !== undefined && nextQuantity > existing.stock) {
           toast({
             title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
             description: language === 'ar'
@@ -685,7 +697,12 @@ const POS: React.FC = () => {
         }
         return prev.map(item =>
           item.id === product.id && !item.variantId
-            ? { ...item, quantity: item.quantity + 1 }
+            ? {
+                ...item,
+                quantity: nextQuantity,
+                price: selectedPrice,
+                priceType: options?.priceType || 'retail',
+              }
             : item
         );
       }
@@ -693,12 +710,13 @@ const POS: React.FC = () => {
         id: product.id,
         name: product.name,
         nameAr: product.name_ar || product.name,
-        price: product.price,
-        quantity: 1,
+        price: selectedPrice,
+        quantity: requestedQuantity,
         sku: product.sku,
         stock: product.stock,
         discount_percentage: 0,
         itemType: 'product',
+        priceType: options?.priceType || 'retail',
       }];
     });
   };
@@ -762,11 +780,20 @@ const POS: React.FC = () => {
     if (!selectedProductForVariant) return;
 
     const variantId = `${selectedProductForVariant.id}-${variant.unitId}-${variant.colorId}`;
+    const requestedQuantity = Math.max(1, Number(pendingCartOptions?.quantity || 1));
+    const priceType = pendingCartOptions?.priceType || 'retail';
+    const tiers = ((selectedProductForVariant as any).prices || [])
+      .filter((tier: any) => tier.price_type === priceType)
+      .filter((tier: any) => !tier.unit_id || Number(tier.unit_id) === Number(variant.unitId))
+      .filter((tier: any) => Number(tier.min_quantity) <= requestedQuantity)
+      .sort((a: any, b: any) => Number(b.min_quantity) - Number(a.min_quantity));
+    const selectedPrice = tiers.length > 0 ? Number(tiers[0].price) : variant.price;
 
     setCartItems(prev => {
       const existing = prev.find(item => item.variantId === variantId);
       if (existing) {
-        if (existing.stock !== undefined && existing.quantity >= existing.stock) {
+        const nextQuantity = existing.quantity + requestedQuantity;
+        if (existing.stock !== undefined && nextQuantity > existing.stock) {
           toast({
             title: language === 'ar' ? 'الكمية المطلوبة غير متوفرة' : 'Quantity not available',
             variant: 'destructive',
@@ -775,7 +802,7 @@ const POS: React.FC = () => {
         }
         return prev.map(item =>
           item.variantId === variantId
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: nextQuantity, price: selectedPrice, priceType }
             : item
         );
       }
@@ -784,8 +811,8 @@ const POS: React.FC = () => {
         variantId: variantId,
         name: selectedProductForVariant.name,
         nameAr: selectedProductForVariant.name_ar || selectedProductForVariant.name,
-        price: variant.price,
-        quantity: 1,
+        price: selectedPrice,
+        quantity: requestedQuantity,
         sku: variant.sku,
         sizeName: variant.size,
         colorName: variant.color,
@@ -794,11 +821,13 @@ const POS: React.FC = () => {
         stock: variant.stock,
         discount_percentage: 0,
         itemType: 'product',
+        priceType,
       }];
     });
 
     setShowVariantSelector(false);
     setSelectedProductForVariant(null);
+    setPendingCartOptions(null);
   };
 
   const updateQuantity = (itemKey: string, quantity: number, variantId?: string) => {
@@ -821,7 +850,17 @@ const POS: React.FC = () => {
               });
               return item;
             }
-            return { ...item, quantity };
+            const sourceProduct = transformedProducts.find((product: any) => product.id === item.id);
+            const priceType = item.priceType || 'retail';
+            const tiers = ((sourceProduct as any)?.prices || [])
+              .filter((tier: any) => tier.price_type === priceType)
+              .filter((tier: any) => !tier.unit_id || !item.unitId || Number(tier.unit_id) === Number(item.unitId))
+              .filter((tier: any) => Number(tier.min_quantity) <= quantity)
+              .sort((a: any, b: any) => Number(b.min_quantity) - Number(a.min_quantity));
+            const nextPrice = tiers.length > 0
+              ? Number(tiers[0].price)
+              : (sourceProduct?.price ?? item.price);
+            return { ...item, quantity, price: nextPrice };
           }
           return item;
         })
@@ -1533,8 +1572,8 @@ const POS: React.FC = () => {
         </header>
 
         {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 flex flex-col p-4 overflow-hidden">
+        <div className="flex-1 flex flex-col gap-3 overflow-hidden p-3 lg:flex-row lg:p-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="space-y-3 mb-4 flex-shrink-0">
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
@@ -1680,7 +1719,7 @@ const POS: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-[380px] p-4 ps-0 flex-shrink-0">
+          <div className="h-[42vh] w-full flex-shrink-0 lg:h-full lg:w-[360px] xl:w-[390px]">
             <POSCart
               items={cartItems}
               onUpdateQuantity={updateQuantity}
@@ -1957,6 +1996,7 @@ const POS: React.FC = () => {
             onClose={() => {
               setShowVariantSelector(false);
               setSelectedProductForVariant(null);
+              setPendingCartOptions(null);
             }}
             product={selectedProductForVariant}
             onSelectVariant={addVariantToCart}

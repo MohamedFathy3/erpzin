@@ -339,19 +339,28 @@ export default function ManufacturingSetup() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-3">
-              <select className="h-10 rounded-md border bg-background px-3 text-sm" value={bomForm.product_id} disabled={Boolean(editingBomId)} onChange={(event) => setBomForm({ ...bomForm, product_id: event.target.value, items: bomForm.items.map((item) => ({ ...item, output_product_unit_id: '', output_color_id: '' })) })}>
+              <div>
+                <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={bomForm.product_id} disabled={Boolean(editingBomId)} onChange={(event) => setBomForm({ ...bomForm, product_id: event.target.value, items: bomForm.items.map((item) => ({ ...item, output_product_unit_id: '', output_color_id: '' })) })}>
                 <option value="">المنتج النهائي *</option>{finishedProductOptions}
-              </select>
-              <Input placeholder="رقم الإصدار * (مثال: 1)" value={bomForm.version} onChange={(event) => setBomForm({ ...bomForm, version: event.target.value })} />
-              <select className="h-10 rounded-md border bg-background px-3 text-sm" value={bomForm.status} onChange={(event) => setBomForm({ ...bomForm, status: event.target.value })}>
-                <option value="draft">مسودة</option><option value="active">فعال</option><option value="obsolete">قديم</option>
-              </select>
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">المنتج الذي ستنتجه هذه الوصفة ويتحقق على المخزون.</p>
+              </div>
+              <div>
+                <Input placeholder="رقم الإصدار * (مثال: 1)" value={bomForm.version} onChange={(event) => setBomForm({ ...bomForm, version: event.target.value })} />
+                <p className="mt-1 text-xs text-muted-foreground">رقم مستقل لكل نسخة من الوصفة؛ الإصدار الجديد لا يستبدل القديم.</p>
+              </div>
+              <div>
+                <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={bomForm.status} onChange={(event) => setBomForm({ ...bomForm, status: event.target.value })}>
+                  <option value="draft">مسودة</option><option value="active">فعال</option><option value="obsolete">قديم</option>
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">مسودة للمراجعة، فعال للاستخدام، وقديم للإغلاق دون الحذف.</p>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
-              <Input type="number" min="0.000001" step="0.001" placeholder="كمية الناتج لكل إصدار" value={bomForm.yield_quantity} onChange={(event) => setBomForm({ ...bomForm, yield_quantity: event.target.value })} />
-              <Input type="date" value={bomForm.effective_from} onChange={(event) => setBomForm({ ...bomForm, effective_from: event.target.value })} />
-              <Input type="date" value={bomForm.effective_to} onChange={(event) => setBomForm({ ...bomForm, effective_to: event.target.value })} />
-              <Input placeholder="ملاحظات الإصدار" value={bomForm.notes} onChange={(event) => setBomForm({ ...bomForm, notes: event.target.value })} />
+              <div><Input type="number" min="0.000001" step="0.001" placeholder="كمية الناتج لكل إصدار" value={bomForm.yield_quantity} onChange={(event) => setBomForm({ ...bomForm, yield_quantity: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">عدد وحدات المنتج النهائي الناتجة عند استهلاك كميات المكونات الموضحة.</p></div>
+              <div><Input type="date" value={bomForm.effective_from} onChange={(event) => setBomForm({ ...bomForm, effective_from: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">تاريخ بدء اعتماد هذه الوصفة في أوامر التصنيع.</p></div>
+              <div><Input type="date" value={bomForm.effective_to} onChange={(event) => setBomForm({ ...bomForm, effective_to: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">تاريخ إيقاف الاعتماد اختياري؛ اتركه فارغًا إذا كانت الوصفة مستمرة.</p></div>
+              <div><Input placeholder="ملاحظات الإصدار" value={bomForm.notes} onChange={(event) => setBomForm({ ...bomForm, notes: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">تعليمات عامة أو سبب إنشاء هذا الإصدار؛ لا تؤثر في الحسابات.</p></div>
             </div>
 
             <div className="space-y-3 rounded-lg border p-3">
@@ -371,20 +380,23 @@ export default function ManufacturingSetup() {
                 const outputColors = outputUnit?.colors || [];
                 return (
                   <div key={index} className="grid gap-2 rounded-md bg-muted/30 p-2 md:grid-cols-[1.4fr_0.7fr_0.6fr_0.6fr_1.2fr_auto]">
-                    <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.component_product_id} onChange={(event) => setBomForm({
-                      ...bomForm,
-                      items: bomForm.items.map((row, rowIndex) => rowIndex === index
-                        ? { ...row, component_product_id: event.target.value, child_bom_version_id: '', unit: componentProducts.find((product) => product.id === Number(event.target.value))?.base_unit || componentProducts.find((product) => product.id === Number(event.target.value))?.stock_unit || '' }
-                        : row),
-                    })}>
-                      <option value="">خامة / نصف مصنع من المنتجات *</option>{componentOptions}
-                    </select>
-                    <Input type="number" min="0.000001" step="0.001" placeholder="الكمية *" value={item.quantity} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row) })} />
-                    <Input type="number" min="0" max="100" step="0.01" placeholder="هالك %" value={item.scrap_percent} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, scrap_percent: event.target.value } : row) })} />
-                    <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.unit || component?.base_unit || component?.stock_unit || ''} disabled={!componentUnits.length} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, unit: event.target.value } : row) })}>
+                    <div>
+                      <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={item.component_product_id} onChange={(event) => setBomForm({
+                        ...bomForm,
+                        items: bomForm.items.map((row, rowIndex) => rowIndex === index
+                          ? { ...row, component_product_id: event.target.value, child_bom_version_id: '', unit: componentProducts.find((product) => product.id === Number(event.target.value))?.base_unit || componentProducts.find((product) => product.id === Number(event.target.value))?.stock_unit || '' }
+                          : row),
+                      })}>
+                        <option value="">خامة / نصف مصنع من المنتجات *</option>{componentOptions}
+                      </select>
+                      <p className="mt-1 text-[11px] text-muted-foreground">المادة الخام أو المنتج النصف مصنع الذي يُستهلك في صناعة المنتج النهائي.</p>
+                    </div>
+                    <div><Input type="number" min="0.000001" step="0.001" placeholder="الكمية *" value={item.quantity} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row) })} /><p className="mt-1 text-[11px] text-muted-foreground">الكمية المطلوبة للوحدة المحددة لإنتاج الناتج بالمواصفات المختارة.</p></div>
+                    <div><Input type="number" min="0" max="100" step="0.01" placeholder="هالك %" value={item.scrap_percent} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, scrap_percent: event.target.value } : row) })} /><p className="mt-1 text-[11px] text-muted-foreground">نسبة زيادة الكمية المتوقعة كفاقد أو قص أو هالك أثناء التصنيع.</p></div>
+                    <div><select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={item.unit || component?.base_unit || component?.stock_unit || ''} disabled={!componentUnits.length} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, unit: event.target.value } : row) })}>
                       {componentUnits.map((unit) => <option key={unit} value={unit}>{unitName(unit)}</option>)}
                       {!componentUnits.length && <option value="">وحدة غير محددة</option>}
-                    </select>
+                    </select><p className="mt-1 text-[11px] text-muted-foreground">الوحدة المستخدمة في حساب واستهلاك هذا المكون.</p></div>
                     {(() => {
                       const dimensions = component?.dimensions;
                       const colors = [...new Set((component?.units || []).flatMap((unit) => unit.colors || []).map((entry) => entry.color?.name_ar || entry.color?.name).filter(Boolean))];
@@ -393,24 +405,34 @@ export default function ManufacturingSetup() {
                         <span>الألوان من بطاقة المنتج: {colors.length ? colors.join('، ') : 'غير محددة'}</span>
                         <span>وحدة المخزون: {unitName(component?.stock_unit)}</span>
                         <div className="grid w-full gap-2 sm:grid-cols-2">
-                          <select className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_product_unit_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_product_unit_id: event.target.value === 'all' ? '' : event.target.value, output_color_id: '' } : row) })}>
-                            <option value="all">ينطبق على كل المقاسات والألوان</option>
-                            {(outputProduct?.units || []).map((unit) => <option key={unit.id} value={unit.id}>{unit.unit?.name_ar || unit.unit?.name || unit.unit?.code || `خيار #${unit.id}`}</option>)}
-                          </select>
-                          {outputUnit && outputColors.length > 0 && <select className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_color_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_color_id: event.target.value === 'all' ? '' : event.target.value } : row) })}>
-                            <option value="all">كل الألوان لهذا المقاس</option>
-                            {outputColors.map((entry) => <option key={entry.color_id} value={entry.color_id}>{entry.color?.name_ar || entry.color?.name || `لون #${entry.color_id}`}</option>)}
-                          </select>}
+                          <div>
+                            <select className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_product_unit_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_product_unit_id: event.target.value === 'all' ? '' : event.target.value, output_color_id: '' } : row) })}>
+                              <option value="all">ينطبق على كل المقاسات والألوان</option>
+                              {(outputProduct?.units || []).map((unit) => <option key={unit.id} value={unit.id}>{unit.unit?.name_ar || unit.unit?.name || unit.unit?.code || `خيار #${unit.id}`}</option>)}
+                            </select>
+                            <p className="mt-1 text-[11px] text-muted-foreground">حدد مقاسًا فقط إذا كان المكون لا ينطبق على كل مقاسات المنتج النهائي.</p>
+                          </div>
+                          {outputUnit && outputColors.length > 0 && <div>
+                            <select className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={item.output_color_id || 'all'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, output_color_id: event.target.value === 'all' ? '' : event.target.value } : row) })}>
+                              <option value="all">كل الألوان لهذا المقاس</option>
+                              {outputColors.map((entry) => <option key={entry.color_id} value={entry.color_id}>{entry.color?.name_ar || entry.color?.name || `لون #${entry.color_id}`}</option>)}
+                            </select>
+                            <p className="mt-1 text-[11px] text-muted-foreground">حدد لونًا محددًا إذا كان هذا المكون لا ينطبق على كل ألوان المقاس.</p>
+                          </div>}
                         </div>
                       </div>;
                     })()}
-                    <select className="h-10 rounded-md border bg-background px-2 text-sm" value={item.child_bom_version_id || 'none'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, child_bom_version_id: event.target.value === 'none' ? '' : event.target.value } : row) })}>
-                      <option value="none">بدون BOM فرعي</option>{childVersions.map((child) => <option key={child.id} value={child.id}>{child.product?.name || 'نصف مصنع'} · {child.version}</option>)}
-                    </select>
+                    <div>
+                      <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={item.child_bom_version_id || 'none'} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, child_bom_version_id: event.target.value === 'none' ? '' : event.target.value } : row) })}>
+                        <option value="none">بدون BOM فرعي</option>{childVersions.map((child) => <option key={child.id} value={child.id}>{child.product?.name || 'نصف مصنع'} · {child.version}</option>)}
+                      </select>
+                      <p className="mt-1 text-[11px] text-muted-foreground">اربط إصدار BOM خاصًا إذا كان هذا المكون نصف مصنع له وصفة تصنيعية مستقلة.</p>
+                    </div>
                     <Button type="button" variant="ghost" size="icon" disabled={bomForm.items.length <= 1} onClick={() => setBomForm({ ...bomForm, items: bomForm.items.filter((_, rowIndex) => rowIndex !== index) })}><X size={15} /></Button>
                     <label className="flex items-center gap-2 text-xs md:col-span-6">
                       <input type="checkbox" checked={item.is_optional} onChange={(event) => setBomForm({ ...bomForm, items: bomForm.items.map((row, rowIndex) => rowIndex === index ? { ...row, is_optional: event.target.checked } : row) })} />
                       مكون اختياري
+                      <span className="text-muted-foreground">— يمكن تنفيذ الأمر بدون هذا المكون؛ لن يتم تحميله كمتطلب إلزامي.</span>
                     </label>
                   </div>
                 );

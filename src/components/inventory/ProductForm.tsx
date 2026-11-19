@@ -61,6 +61,7 @@
     isLoadingBranches?: boolean;
     isLoadingWarehouses?: boolean;
     isLoadingCategories?: boolean;
+    defaultProductType?: ProductFormData['product_type'];
   }
 
   export interface ProductFormData {
@@ -246,7 +247,6 @@
     });
 
     const { data: unitsData = [] } = useUnitsForm();
-    const { data: colorsData = [], isError: colorsError } = useColorsForm();
     const [formData, setFormData] = useState<ProductFormData>(getInitialFormData());
     const lastLoadedProductId = useRef<string | null>(null);
 
@@ -834,10 +834,11 @@
                   <Select value={formData.dimensions.unit || 'cm'} onValueChange={(value) => handleChange('dimensions', { ...formData.dimensions, unit: value })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mm">mm</SelectItem>
-                      <SelectItem value="cm">cm</SelectItem>
-                      <SelectItem value="m">m</SelectItem>
-                      <SelectItem value="in">in</SelectItem>
+                      {unitsData.map((unit: UnitOption) => (
+                        <SelectItem key={unit.id} value={unit.code}>
+                          {language === 'ar' ? unit.nameAr : unit.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -891,7 +892,7 @@
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-medium">{language === 'ar' ? 'شرائح الأسعار' : 'Price tiers'}</p>
-                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'يُطبق السعر على الكمية المحددة أو أكثر، ويمكن تخصيصه لوحدة أو لون.' : 'Each tier applies at its minimum quantity and can target a unit or color.'}</p>
+                      <p className="text-xs text-muted-foreground">{language === 'ar' ? 'يُطبق السعر على الكمية المحددة أو أكثر، ويمكن تخصيصه حسب وحدة المتغيرات المختارة.' : 'Each tier applies at its minimum quantity and can target a selected variant unit.'}</p>
                     </div>
                     <Button
                       type="button"
@@ -906,11 +907,6 @@
                       {language === 'ar' ? 'إضافة سعر' : 'Add price'}
                     </Button>
                   </div>
-                  {colorsError && (
-                    <p role="alert" className="text-sm text-destructive">
-                      {language === 'ar' ? 'تعذر تحميل الألوان؛ أعد المحاولة قبل اختيار لون.' : 'Colors could not be loaded. Retry before assigning a color.'}
-                    </p>
-                  )}
                   {formData.priceTiers.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
                       {language === 'ar' ? 'لا توجد أسعار إضافية. أضف سعر جملة أو آجل عند الحاجة.' : 'No additional prices. Add wholesale or credit pricing when needed.'}
@@ -918,7 +914,7 @@
                   ) : (
                     <div className="space-y-3">
                       {formData.priceTiers.map((tier, index) => (
-                        <div key={`${index}-${tier.price_type}`} className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+                        <div key={`${index}-${tier.price_type}`} className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:grid-cols-[1.1fr_1fr_1fr_1fr_auto]">
                           <div>
                             <Label>{language === 'ar' ? 'نوع السعر' : 'Price type'}</Label>
                             <Select
@@ -962,24 +958,21 @@
                             }}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="all">{language === 'ar' ? 'كل الوحدات' : 'All units'}</SelectItem>
-                                {unitsData.map((unit: UnitOption) => <SelectItem key={unit.id} value={unit.id}>{language === 'ar' ? unit.nameAr : unit.name}</SelectItem>)}
+                                <SelectItem value="all">{language === 'ar' ? 'كل وحدات المنتج' : 'All product units'}</SelectItem>
+                                {unitsData
+                                  .filter((unit: UnitOption) => formData.selectedSizes.includes(unit.id))
+                                  .map((unit: UnitOption) => (
+                                    <SelectItem key={unit.id} value={unit.id}>
+                                      {language === 'ar' ? unit.nameAr : unit.name}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
-                          </div>
-                          <div>
-                            <Label>{language === 'ar' ? 'اللون' : 'Color'}</Label>
-                            <Select value={tier.color_id || 'all'} onValueChange={(value) => {
-                              const priceTiers = [...formData.priceTiers];
-                              priceTiers[index] = { ...tier, color_id: value === 'all' ? '' : value };
-                              handleChange('priceTiers', priceTiers);
-                            }}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">{language === 'ar' ? 'كل الألوان' : 'All colors'}</SelectItem>
-                                {colorsData.map((color: { id: string; name: string }) => <SelectItem key={color.id} value={color.id}>{color.name}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            {formData.selectedSizes.length === 0 && (
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                {language === 'ar' ? 'اختر الوحدات في قسم المتغيرات أولًا.' : 'Select units in the variants section first.'}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-end">
                             <Button type="button" variant="ghost" size="icon" aria-label={language === 'ar' ? 'حذف السعر' : 'Remove price'} onClick={() => handleChange('priceTiers', formData.priceTiers.filter((_, tierIndex) => tierIndex !== index))}>

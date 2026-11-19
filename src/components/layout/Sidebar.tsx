@@ -1,5 +1,5 @@
 // components/layout/Sidebar.tsx
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSidebarContext } from '@/contexts/SidebarContext';
 import { useAuth } from '@/contexts/AuthContext'; // ✅ تأكد من استيراد useAuth فقط
@@ -9,17 +9,19 @@ import * as Icons from 'lucide-react';
 import logoIcon from '@/assets/logo-icon.png';
 import logoFull from '@/assets/logo-full.png';
 import { toast } from 'sonner'; // ✅ لإظهار رسالة عند تسجيل الخروج
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NavItemProps {
   icon: React.ReactNode;
   label: string;
+  description?: string;
   active?: boolean;
   collapsed?: boolean;
   onClick?: () => void;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, collapsed, onClick }) => {
-  return (
+const NavItem: React.FC<NavItemProps> = ({ icon, label, description, active, collapsed, onClick }) => {
+  const button = (
     <button
       onClick={onClick}
       className={cn(
@@ -27,11 +29,22 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, collapsed, onCli
         active && 'sidebar-item-active',
         collapsed && 'justify-center px-2'
       )}
-      title={collapsed ? label : undefined}
     >
       <span className="flex-shrink-0">{icon}</span>
       {!collapsed && <span className="truncate">{label}</span>}
     </button>
+  );
+
+  if (!description) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right" align="center" className="max-w-64 text-right leading-5">
+        <p className="font-semibold">{label}</p>
+        <p className="mt-1 text-xs text-popover-foreground/75">{description}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 };
 
@@ -67,6 +80,41 @@ const getIcon = (iconName: string) => {
   return <Icon size={20} />;
 };
 
+const navDescriptions: Record<string, { ar: string; en: string }> = {
+  dashboard: { ar: 'ملخص شامل للأعمال والإحصاءات والنتائج', en: 'Overall business summary, statistics and KPIs' },
+  pos: { ar: 'إصدار فواتير البيع والدفع والعملاء من نقطة البيع', en: 'Create sales, payments and customer transactions at POS' },
+  posreturn: { ar: 'إرجاع فواتير نقطة البيع والخصومات والفرد والمرتجعات', en: 'Process POS invoice returns and reversals' },
+  inventory: { ar: 'إدارة المنتجات والأرصدة والباركود والجرد والعروض', en: 'Manage products, stock, barcode, counts and promotions' },
+  'inventory-transfer-requests': { ar: 'اعتماد ورفض طلبات نقل المخزون بين الفروع والمخازن', en: 'Approve or reject stock transfers between branches' },
+  sales: { ar: 'إنشاء الفواتير ومتابعة المبيعات والمرتجعات والعملاء', en: 'Manage invoices, sales, returns and customers' },
+  purchasing: { ar: 'إدارة أوامر الشراء والموردين والفواتير المستلمة', en: 'Manage suppliers, purchase orders and received invoices' },
+  finance: { ar: 'القيود والإيرادات والمصروفات والخزائن والحسابات والتقارير', en: 'Journals, cash, expenses, revenues, accounts and reports' },
+  hr: { ar: 'الموظفون والحضور والرواتب والمستحقات والسلف', en: 'Employees, attendance, payroll, advances and bonuses' },
+  crm: { ar: 'إدارة العملاء والفرص والمتابعات والحملات', en: 'Manage customers, opportunities, follow-ups and campaigns' },
+  whatsapp: { ar: 'إدارة حساب واتساب والرسائل والردود الآلية والحجوزات', en: 'Manage WhatsApp account, messages, automation and appointments' },
+  'google-integrations': { ar: 'ربط تقويم Google والمزامنة والأحداث', en: 'Connect Google Calendar and synchronize events' },
+  calendar: { ar: 'عرض المهام والمواعيد والأحداث في تقويم واحد', en: 'View tasks, appointments and events in one calendar' },
+  tasks: { ar: 'إنشاء المهام والتذكيرات ومتابعة التنفيذ', en: 'Create tasks and reminders and track completion' },
+  reports: { ar: 'تقارير المبيعات والأداء والأرباح والملخصات التنفيذية', en: 'Sales, performance, profit and executive reports' },
+  'unified-financial-reports': { ar: 'تقرير مالي موحد للمبيعات والمشتريات والنتيجة', en: 'Unified report for sales, purchases and financial results' },
+  'employee-financial-reports': { ar: 'رواتب الموظفين والسلف والبونص وكشوف الحساب', en: 'Employee payroll, advances, bonuses and statements' },
+  'warehouse-reports': { ar: 'أرصدة المخازن وحركاتها والقيمة والربح المتوقع', en: 'Warehouse balances, movements, values and expected profit' },
+  industries: { ar: 'إدارة الصناعات والمنتجات والفئات والوحدات', en: 'Manage industries, products, categories and units' },
+  manufacturing: { ar: 'أوامر التصنيع والمراحل والمواد والإنتاج', en: 'Manufacturing orders, stages, materials and production' },
+  manufacturingSetup: { ar: 'إعداد الوصفات والمواد ومراحل التصنيع', en: 'Configure recipes, materials and manufacturing stages' },
+  productLedger: { ar: 'كشف كل حركة وعمليات شراء وبيع للمنتج', en: 'View every purchase, sale and movement of a product' },
+  representative: { ar: 'عمولات المندوب وفواتيره وأداؤه وبيانات عملائه', en: 'Representative invoices, performance, customers and commissions' },
+  projects: { ar: 'المشروعات والعقود والمراحل والمصروفات والاعتمادات', en: 'Projects, contracts, stages, expenses and approvals' },
+  workflow: { ar: 'تتبع ترابط المبيعات والمخزون والمالية وسجل الأحداث', en: 'Track sales, inventory, finance links and event history' },
+  automotive: { ar: 'أوامر صيانة السيارات والفنيين والحركة والمبيعات', en: 'Vehicle service orders, technicians, inventory and sales' },
+  aiAssistant: { ar: 'الإجابة عن بيانات النظام وتحليلها بلغة طبيعية', en: 'Answer and analyze ERP data using natural language' },
+  'access-control': { ar: 'إضافة الأدوار وتحديد صلاحيات كل قسم لكل مستخدم', en: 'Create roles and define section permissions for users' },
+  'my-access': { ar: 'عرض فرعك والصلاحيات والأقسام المتاحة لك', en: 'View your branch and available permissions' },
+  'super-admin': { ar: 'إدارة العملاء والمستأجرين والاشتراكات والوصول الشامل', en: 'Manage tenants, subscriptions and global administration' },
+  settings: { ar: 'إعدادات الشركة والفروع والخزائن والبيانات العامة', en: 'Company, branches, treasury and general settings' },
+  logout: { ar: 'الخروج من الحساب وإنهاء الجلسة الحالية', en: 'Sign out and end the current session' },
+};
+
 interface SidebarProps {
   activeItem?: string;
   onNavigate?: (item: string) => void;
@@ -78,6 +126,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
   const { t, direction, language } = useLanguage();
   const { collapsed, toggle } = useSidebarContext();
   const { user, signOut, enabledModules, modulesLoading, permissions, permissionsLoading } = useAuth(); // ✅ استخدم signOut من useAuth
+  const navScrollRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const savedPosition = Number(sessionStorage.getItem('sidebar-nav-scroll') || 0);
+    if (navScrollRef.current) {
+      navScrollRef.current.scrollTop = savedPosition;
+    }
+  }, []);
 
   // جلب الصفحات المسموحة للمستخدم
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,18 +198,32 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
   // تصفية وبناء عناصر القائمة
   const navItems = React.useMemo(() => {
     const items = allowedPages
-      .filter(page => page.id !== 'settings' && (page.id !== 'access-control' || user?.super_admin || user?.role?.toLowerCase() === 'admin') && moduleEnabled(page.id) && permissionEnabled(page.id))
+      .filter(page =>
+        ![
+          'dashboard',
+          'settings',
+          'inventory-transfer-requests',
+          'productLedger',
+          'warehouse-reports',
+        ].includes(page.id) &&
+        (page.id !== 'access-control' || user?.super_admin || user?.role?.toLowerCase() === 'admin') &&
+        moduleEnabled(page.id) &&
+        permissionEnabled(page.id)
+      )
       .map(page => ({
         id: page.id,
         icon: getIcon(page.icon),
         label: language === 'ar' ? page.labelAr : page.label,
+        description: navDescriptions[page.id]?.[language === 'ar' ? 'ar' : 'en'],
       }));
-    if (moduleEnabled('aiAssistant') && permissionEnabled('aiAssistant')) {
-      items.push({ id: 'aiAssistant', icon: <Icons.BrainCircuit size={20} />, label: language === 'ar' ? 'مساعد البيانات الذكي' : 'AI Data Assistant' });
-    }
-    if (user?.super_admin) items.push({ id: 'super-admin', icon: <Icons.ShieldCheck size={20} />, label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin' });
-    return items;
-  }, [allowedPages, enabledModules, language, modulesLoading, user?.super_admin]);
+    if (user?.super_admin) items.push({
+      id: 'super-admin',
+      icon: <Icons.ShieldCheck size={20} />,
+      label: language === 'ar' ? 'الإدارة العليا' : 'Super Admin',
+      description: navDescriptions['super-admin']?.[language === 'ar' ? 'ar' : 'en'],
+    });
+    return Array.from(new Map(items.map((item) => [item.id, item])).values());
+  }, [allowedPages, enabledModules, language, modulesLoading, permissions, permissionsLoading, user?.super_admin, user?.role]);
 
   // عناصر القائمة السفلية
   const bottomItems = React.useMemo(() => {
@@ -165,6 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
         id: 'settings',
         icon: getIcon(settingsPage.icon),
         label: language === 'ar' ? settingsPage.labelAr : settingsPage.label,
+        description: navDescriptions.settings?.[language === 'ar' ? 'ar' : 'en'],
       });
     }
 
@@ -172,6 +243,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
       id: 'logout',
       icon: <Icons.LogOut size={20} />,
       label: language === 'ar' ? 'تسجيل الخروج' : 'Logout',
+      description: navDescriptions.logout?.[language === 'ar' ? 'ar' : 'en'],
     });
 
     return items;
@@ -179,9 +251,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
 
   const navigationGroups = React.useMemo(() => {
     const groups = [
-      { key: 'operations', label: language === 'ar' ? 'التشغيل' : 'Operations', ids: ['pos', 'sales', 'purchasing', 'inventory', 'inventory-transfer-requests', 'productLedger', 'manufacturing', 'manufacturingSetup', 'automotive'] },
+      { key: 'operations', label: language === 'ar' ? 'التشغيل' : 'Operations', ids: ['pos', 'sales', 'purchasing', 'inventory', 'manufacturing', 'manufacturingSetup', 'automotive'] },
       { key: 'relationships', label: language === 'ar' ? 'العملاء والفريق' : 'Relationships', ids: ['crm', 'representative', 'projects', 'tasks', 'workflow', 'whatsapp'] },
-      { key: 'insights', label: language === 'ar' ? 'المال والتقارير' : 'Finance & Insights', ids: ['finance', 'reports', 'unified-financial-reports', 'employee-financial-reports', 'warehouse-reports'] },
+      { key: 'insights', label: language === 'ar' ? 'التقارير والعمليات المالية' : 'Finance & Reports', ids: ['finance', 'reports', 'unified-financial-reports', 'employee-financial-reports'] },
       { key: 'workspace', label: language === 'ar' ? 'مساحة العمل' : 'Workspace', ids: ['calendar', 'google-integrations', 'industries', 'aiAssistant'] },
     ];
     return groups.map((group) => ({ ...group, items: group.ids.map((id) => navItems.find((item) => item.id === id)).filter(Boolean) as typeof navItems }))
@@ -277,15 +349,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {!collapsed && <p className="mb-2 px-3 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/35">{language === 'ar' ? 'مساحة العمل' : 'Workspace'}</p>}
-        <NavItem icon={<Icons.LayoutDashboard size={20} />} label={language === 'ar' ? 'لوحة التحكم' : 'Dashboard'} active={activeItem === 'dashboard'} collapsed={collapsed} onClick={() => { onNavigate?.('dashboard'); onClose?.(); }} />
-        {navigationGroups.map((group) => <React.Fragment key={group.key}>
-          {!collapsed && <p className="mb-1 mt-5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/35">{group.label}</p>}
-          {group.items.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
-        </React.Fragment>)}
-        {ungroupedItems.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
-      </nav>
+      <TooltipProvider delayDuration={350}>
+        <nav
+          ref={navScrollRef}
+          onScroll={(event) => sessionStorage.setItem('sidebar-nav-scroll', String(event.currentTarget.scrollTop))}
+          className="flex-1 space-y-1 overflow-y-auto p-3"
+        >
+          {!collapsed && <p className="mb-2 px-3 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/35">{language === 'ar' ? 'مساحة العمل' : 'Workspace'}</p>}
+          <NavItem icon={<Icons.LayoutDashboard size={20} />} label={language === 'ar' ? 'لوحة التحكم' : 'Dashboard'} description={navDescriptions.dashboard?.[language === 'ar' ? 'ar' : 'en']} active={activeItem === 'dashboard'} collapsed={collapsed} onClick={() => { onNavigate?.('dashboard'); onClose?.(); }} />
+          {navigationGroups.map((group) => <React.Fragment key={group.key}>
+            {!collapsed && <p className="mb-1 mt-5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/35">{group.label}</p>}
+            {group.items.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} description={item.description} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
+          </React.Fragment>)}
+          {ungroupedItems.map((item) => <NavItem key={item.id} icon={item.icon} label={item.label} description={item.description} active={activeItem === item.id} collapsed={collapsed} onClick={() => { onNavigate?.(item.id); onClose?.(); }} />)}
+        </nav>
+      </TooltipProvider>
 
       {/* Bottom Items */}
       {bottomItems.length > 0 && (
@@ -295,6 +373,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
               key={item.id}
               icon={item.icon}
               label={item.label}
+              description={item.description}
               active={activeItem === item.id}
               collapsed={collapsed}
               onClick={() => {

@@ -17,7 +17,7 @@ interface LedgerData { product?: ProductOption & { stock?: number }; summary?: R
 
 const money = (value: number | undefined) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function ProductLedger() {
+export function ProductLedgerView() {
   const { language } = useLanguage();
   const isArabic = language === 'ar';
   const [productId, setProductId] = useState('');
@@ -46,7 +46,7 @@ export default function ProductLedger() {
   };
   const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString(isArabic ? 'ar-EG' : 'en-US') : '-';
 
-  return <MainLayout>
+  return (
     <div className="space-y-5 p-1" dir={isArabic ? 'rtl' : 'ltr'}>
       <div className="rounded-2xl bg-gradient-to-l from-slate-900 via-indigo-900 to-violet-800 p-5 text-white shadow-lg sm:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -69,7 +69,15 @@ export default function ProductLedger() {
         </Tabs></CardContent></Card>
       </>}
     </div>
-  </MainLayout>;
+  );
+}
+
+export default function ProductLedger() {
+  return (
+    <MainLayout activeItem="productLedger">
+      <ProductLedgerView />
+    </MainLayout>
+  );
 }
 
 function LedgerTable({ rows, kind, isArabic, label, formatDate }: { rows: LedgerRow[]; kind: 'sales' | 'purchases' | 'movements'; isArabic: boolean; label: (row: LedgerRow, field: 'customer' | 'supplier') => string; formatDate: (date?: string) => string }) {

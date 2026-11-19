@@ -16,6 +16,9 @@ import InventoryCount from '@/components/inventory/InventoryCount';
 import UnitsVariantsManager from '@/components/inventory/UnitsVariantsManager';
 import PromotionsManager from '@/components/inventory/PromotionsManager';
 import AutomotiveServicesInventory from '@/components/inventory/AutomotiveServicesInventory';
+import { InventoryTransferRequestsView } from '@/pages/InventoryTransferRequests';
+import { WarehouseReportsView } from '@/pages/WarehouseReports';
+import { ProductLedgerView } from '@/pages/ProductLedger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -411,6 +414,13 @@ const Inventory: React.FC = () => {
   /* ========== فلترة المنتجات ========== */
   const filteredProducts = useMemo(() => {
     let filtered = products.filter((product) => {
+      const raw = dbProducts.find((item: any) => String(item.id) === String(product.id));
+      const productType = raw?.product_type || 'good';
+      if (activeTab === 'materials') {
+        if (productType !== 'material') return false;
+      } else if (activeTab === 'products') {
+        if (productType === 'material') return false;
+      }
       const query = searchQuery.trim().toLocaleLowerCase();
       const matchesSearch =
         query === '' ||
@@ -463,7 +473,7 @@ const Inventory: React.FC = () => {
     });
 
     return filtered;
-  }, [products, searchQuery, stockFilter, sortBy, language]);
+  }, [products, dbProducts, activeTab, searchQuery, stockFilter, sortBy, language]);
 
   /* ========== Pagination ========== */
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
@@ -672,6 +682,45 @@ const Inventory: React.FC = () => {
     setShowProductForm(true);
   };
 
+  const handleAddMaterial = () => {
+    setEditProduct({
+      id: undefined,
+      name: '',
+      nameAr: '',
+      description: '',
+      descriptionAr: '',
+      sku: '',
+      barcode: '',
+      categoryId: '',
+      main_unit_id: '',
+      price: 0,
+      cost: 0,
+      hasVariants: false,
+      variants: [],
+      selectedSizes: [],
+      selectedColors: [],
+      stock: 0,
+      reorderPoint: 0,
+      status: 'active',
+      branchIds: [],
+      branchPrices: {},
+      warehouseIds: [],
+      warehouseStocks: {},
+      valuationMethod: 'fifo',
+      product_type: 'material',
+      package_size: 1,
+      package_unit: 'piece',
+      package_cost: 0,
+      stock_unit: 'piece',
+      base_unit: 'piece',
+      conversion_factor: 1,
+      tracking: 'none',
+      dimensions: { unit: 'cm' },
+      priceTiers: [],
+    });
+    setShowProductForm(true);
+  };
+
   /* ========== تعديل منتج ========== */
   const handleEditProduct = async (product: Product) => {
     try {
@@ -848,7 +897,6 @@ const Inventory: React.FC = () => {
           min_quantity: Number(tier.min_quantity) || 1,
           price: Number(tier.price) || 0,
           unit_id: tier.unit_id ? Number(tier.unit_id) : null,
-          color_id: tier.color_id ? Number(tier.color_id) : null,
         })),
         branch_prices: Object.entries(formData.branchPrices || {})
           .filter(([branchId]) => Number.isSafeInteger(Number(branchId)) && Number(branchId) > 0)
@@ -1017,9 +1065,11 @@ const Inventory: React.FC = () => {
           }
           icon={<Package className="h-5 w-5" />}
           actions={
-            <Button onClick={handleAddProduct} className="rounded-lg">
+            <Button onClick={activeTab === 'materials' ? handleAddMaterial : handleAddProduct} className="rounded-lg">
               <Plus size={16} className="me-2" />
-              {language === 'ar' ? 'إضافة منتج' : 'Add product'}
+              {language === 'ar'
+                ? activeTab === 'materials' ? 'إضافة خامة' : 'إضافة منتج'
+                : activeTab === 'materials' ? 'Add material' : 'Add product'}
             </Button>
           }
         />
@@ -1030,6 +1080,7 @@ const Inventory: React.FC = () => {
             onChange={setActiveTab}
             tabs={[
               { value: 'products', label: language === 'ar' ? 'المنتجات' : 'Products', icon: <Package size={14} /> },
+              { value: 'materials', label: language === 'ar' ? 'الخامات' : 'Materials', icon: <Palette size={14} /> },
               { value: 'transfers', label: language === 'ar' ? 'التحويلات' : 'Transfers', icon: <ArrowRightLeft size={14} /> },
               { value: 'count', label: language === 'ar' ? 'الجرد' : 'Stock count', icon: <ClipboardList size={14} /> },
               { value: 'alerts', label: language === 'ar' ? 'التنبيهات' : 'Alerts', icon: <Bell size={14} /> },
@@ -1037,8 +1088,45 @@ const Inventory: React.FC = () => {
               { value: 'barcode', label: language === 'ar' ? 'الباركود' : 'Barcode', icon: <Tag size={14} /> },
               { value: 'promotions', label: language === 'ar' ? 'العروض' : 'Promotions', icon: <Gift size={14} /> },
               { value: 'automotive-services', label: language === 'ar' ? 'خدمات السيارات' : 'Auto services', icon: <CarFront size={14} /> },
+              { value: 'transferRequests', label: language === 'ar' ? 'طلبات النقل' : 'Transfer requests', icon: <ArrowRightLeft size={14} /> },
+              { value: 'warehouseReports', label: language === 'ar' ? 'تقارير المخازن' : 'Warehouse reports', icon: <FileSpreadsheet size={14} /> },
+              { value: 'productLedger', label: language === 'ar' ? 'كشف حركات المنتج' : 'Product ledger', icon: <Search size={14} /> },
             ]}
           />
+
+          <TabsContent value="materials" className="flex-1 flex flex-col mt-2">
+            <Card className="flex-1 overflow-hidden border-border">
+              <CardContent className="h-full p-0">
+                {isLoading ? (
+                  <div className="flex h-64 items-center justify-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </div>
+                ) : (
+                  <ProductList
+                    products={paginatedProducts}
+                    onEdit={handleEditProduct}
+                    onDelete={handleDeleteProduct}
+                    onDuplicate={handleDuplicateProduct}
+                    onView={handleViewProduct}
+                    onPrintBarcode={handlePrintBarcode}
+                    onViewVariants={handleViewVariants}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    totalProducts={filteredProducts.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                  />
+                )}
+                {!isLoading && filteredProducts.length === 0 && (
+                  <div className="p-10 text-center text-sm text-muted-foreground">
+                    {language === 'ar'
+                      ? 'لا توجد خامات مسجلة بعد. اضغط «إضافة خامة» للبدء.'
+                      : 'No materials registered yet. Click "Add material" to start.'}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="products" className="flex-1 flex flex-col mt-2">
             <Card className="mb-4">
@@ -1290,6 +1378,18 @@ const Inventory: React.FC = () => {
 
           <TabsContent value="promotions" className="flex-1 mt-2">
             <PromotionsManager />
+          </TabsContent>
+
+          <TabsContent value="transferRequests" className="flex-1 mt-2">
+            <InventoryTransferRequestsView />
+          </TabsContent>
+
+          <TabsContent value="warehouseReports" className="flex-1 mt-2">
+            <WarehouseReportsView />
+          </TabsContent>
+
+          <TabsContent value="productLedger" className="flex-1 mt-2">
+            <ProductLedgerView />
           </TabsContent>
         </Tabs>
       </div>

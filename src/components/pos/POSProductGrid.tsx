@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
@@ -26,12 +26,13 @@ interface Product {
   category_id?: string | null;  // 👈 null مسموح به
   hasVariants?: boolean;
   units?: any[];
+  prices?: Array<{ price_type: 'retail' | 'wholesale' | 'credit'; min_quantity: number; price: number; unit_id?: number | null }>;
   automotive_service?: { id: number; item_type: 'service' | 'product'; unit?: string | null; small_vehicle_quantity?: number | null; large_vehicle_quantity?: number | null; small_vehicle_price?: number | null; large_vehicle_price?: number | null; stock_quantity?: number | null } | null;
 }
 
 interface POSProductGridProps {
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product, options?: { quantity: number; priceType: 'retail' | 'wholesale' | 'credit'; price: number }) => void;
   searchQuery: string;
   selectedCategory: string;
   servicesOnly?: boolean;
@@ -46,6 +47,22 @@ const POSProductGrid: React.FC<POSProductGridProps> = ({
 }) => {
   const { language } = useLanguage();
   const { formatCurrency } = useRegionalSettings();
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [priceTypes, setPriceTypes] = useState<Record<string, 'retail' | 'wholesale' | 'credit'>>({});
+
+  const getQuantity = (productId: string) => Math.max(1, Number(quantities[productId] || 1));
+  const getPriceType = (productId: string) => priceTypes[productId] || 'retail';
+
+  const getTierPrice = (product: Product) => {
+    const quantity = getQuantity(product.id);
+    const priceType = getPriceType(product.id);
+    const tiers = (product.prices || [])
+      .filter((tier) => tier.price_type === priceType)
+      .filter((tier) => !tier.unit_id)
+      .filter((tier) => Number(tier.min_quantity) <= quantity)
+      .sort((a, b) => Number(b.min_quantity) - Number(a.min_quantity));
+    return Number(tiers[0]?.price ?? product.price);
+  };
 
   const getProductImageUrl = (product: Product): string | null => {
     if (product.image?.fullUrl) {
@@ -133,22 +150,23 @@ const filteredProducts = useMemo(() => {
       </div>
 
       {/* Grid المنتجات */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 auto-rows-max">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const imageUrl = getProductImageUrl(product);
             
+            const quantity = getQuantity(product.id);
+            const priceType = getPriceType(product.id);
+            const displayPrice = getTierPrice(product);
             return (
-              <button
+              <article
                 key={product.id}
-                onClick={() => onAddToCart(product as any)}
-                disabled={product.stock === 0}
                 className={cn(
                   'relative flex flex-col rounded-lg overflow-hidden transition-all duration-200',
                   'bg-card border border-border hover:border-primary hover:shadow-md',
-                  'active:scale-95 touch-manipulation w-full',
+                  'touch-manipulation w-full',
+                  product.stock === 0 && 'opacity-60'
                 )}
-                style={{ minHeight: '180px' }}
               >
                 <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden relative w-full">
                   {imageUrl ? (
@@ -195,6 +213,13 @@ const filteredProducts = useMemo(() => {
                       </span>
                     </div>
                   )}
+                  {product.stock > 0 && product.stock < 10 && (
+                    <div className="absolute bottom-1 end-1">
+                      <span className="px-1.5 py-0.5 bg-amber-500/90 text-white text-[8px] rounded-md">
+                        {language === 'ar' ? 'كمية قليلة' : 'Low'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="p-2 text-start w-full bg-card">
@@ -202,7 +227,7 @@ const filteredProducts = useMemo(() => {
                     {language === 'ar' ? product.nameAr : product.name}
                   </p>
                   <p className="font-bold text-primary mt-1 text-sm">
-                    {formatCurrency(product.price)}
+                    {formatCurrency(displayPrice)}
                     
                   </p>
                   
@@ -212,7 +237,72 @@ const filteredProducts = useMemo(() => {
                     </p>
                   )}
                 </div>
-              </button>
+
+                <div className="mt-auto grid grid-cols-[1fr_92px] gap-2 border-t border-border p-2" onClick={(event) => event.stopPropagation()}>
+                  <select
+                    value={priceType}
+                    onChange={(event) => setPriceTypes((current) => ({
+                      ...current,
+                      [product.id]: event.target.value as 'retail' | 'wholesale' | 'credit',
+                    }))}
+                    className="h-8 min-w-0 rounded-md border border-border bg-background px-2 text-xs"
+                    disabled={product.stock === 0}
+                  >
+                    <option value="retail">{language === 'ar' ? 'قطاعي' : 'Retail'}</option>
+                    <option value="wholesale">{language === 'ar' ? 'جملة' : 'Wholesale'}</option>
+                    <option value="credit">{language === 'ar' ? 'آجل' : 'Credit'}</option>
+                  </select>
+                  <div className="flex h-8 items-center rounded-md border border-border bg-background">
+                    <button
+                      type="button"
+                      aria-label={language === 'ar' ? 'تقليل الكمية' : 'Decrease quantity'}
+                      className="h-full w-7 text-lg"
+                      onClick={() => setQuantities((current) => ({
+                        ...current,
+                        [product.id]: Math.max(1, getQuantity(product.id) - 1),
+                      }))}
+                      disabled={product.stock === 0}
+                    >
+                      -
+                    </button>
+                    <input
+                      aria-label={language === 'ar' ? 'الكمية' : 'Quantity'}
+                      type="number"
+                      min="1"
+                      max={product.stock || undefined}
+                      value={quantity}
+                      onChange={(event) => setQuantities((current) => ({
+                        ...current,
+                        [product.id]: Math.max(1, Number(event.target.value) || 1),
+                      }))}
+                      className="h-full w-10 border-x border-border bg-transparent text-center text-xs outline-none"
+                      disabled={product.stock === 0}
+                    />
+                    <button
+                      type="button"
+                      aria-label={language === 'ar' ? 'زيادة الكمية' : 'Increase quantity'}
+                      className="h-full w-7 text-lg"
+                      onClick={() => setQuantities((current) => ({
+                        ...current,
+                        [product.id]: product.stock > 0
+                          ? Math.min(product.stock, getQuantity(product.id) + 1)
+                          : getQuantity(product.id) + 1,
+                      }))}
+                      disabled={product.stock === 0}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onAddToCart(product as any, { quantity, priceType, price: displayPrice })}
+                    disabled={product.stock === 0}
+                    className="col-span-2 h-9 rounded-md bg-primary text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                  >
+                    {language === 'ar' ? 'إضافة للسلة' : 'Add to cart'}
+                  </button>
+                </div>
+              </article>
             );
           })
         ) : (

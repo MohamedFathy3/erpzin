@@ -21,6 +21,18 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
     const path = location.pathname;
     if (path === '/') return 'dashboard';
     if (path === '/manufacturing/setup') return 'manufacturingSetup';
+    if (path === '/ai-assistant') return 'aiAssistant';
+    if (path === '/POSRetrun') return 'posreturn';
+    if (path === '/inventory-transfer-requests') return 'inventory-transfer-requests';
+    if (path === '/product-ledger') return 'productLedger';
+    if (path === '/employee-financial-reports') return 'employee-financial-reports';
+    if (path === '/unified-financial-reports') return 'unified-financial-reports';
+    if (path === '/warehouse-reports') return 'warehouse-reports';
+    if (path === '/google-integrations') return 'google-integrations';
+    if (path === '/access-control') return 'access-control';
+    if (path === '/my-access') return 'my-access';
+    if (path === '/super-admin') return 'super-admin';
+    if (path === '/representative') return 'representative';
     return path.slice(1);
   };
 
@@ -28,9 +40,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
 
   useEffect(() => {
     setMobileNavOpen(false);
+    const main = document.querySelector('main.app-main');
+    if (main instanceof HTMLElement) {
+      main.scrollTop = 0;
+      main.scrollLeft = 0;
+    }
     // Route protection follows the same hierarchy as the Sidebar: a disabled
     // tenant module wins over tenant-admin role permissions.
-    if (!user || user.super_admin || modulesLoading) return;
+    if (!user || user.super_admin || user.role?.toLowerCase() === 'admin' || modulesLoading) return;
     const moduleByPath: Record<string, string> = {
       '/inventory': 'inventory',
       '/sales': 'sales',
@@ -86,6 +103,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       tasks: '/tasks',
       reports: '/reports',
       'employee-financial-reports': '/employee-financial-reports',
+      'unified-financial-reports': '/unified-financial-reports',
       'warehouse-reports': '/warehouse-reports',
       aiAssistant: '/ai-assistant',
       industries: '/industries',
@@ -93,6 +111,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, activeItem }) => {
       manufacturingSetup: '/manufacturing/setup',
       projects: '/projects',
       workflow: '/workflow',
+      representative: '/representative',
       automotive: '/automotive',
       settings: '/settings',
       'access-control': '/access-control',

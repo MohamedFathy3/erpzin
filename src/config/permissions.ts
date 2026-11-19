@@ -236,6 +236,14 @@ export const PAGES: PagePermission[] = [
     allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'viewer'],
   },
   {
+    id: 'aiAssistant',
+    path: '/ai-assistant',
+    label: 'AI Data Assistant',
+    labelAr: 'مساعد البيانات الذكي',
+    icon: 'BrainCircuit',
+    allowedRoles: ['admin', 'Manager', 'Accountant', 'Sales', 'purchasing', 'warehouse', 'HR', 'viewer'],
+  },
+  {
     id: 'settings',
     path: '/settings',
     label: 'Settings',

@@ -88,6 +88,7 @@ export interface Product {
   is_active: boolean | null;
   has_variants: boolean;
   units?: ProductUnit[];
+  prices?: Array<{ price_type: 'retail' | 'wholesale' | 'credit'; min_quantity: number; price: number; unit_id?: number | null }>;
   image?: ProductImage;
   category?: ProductCategory;
   created_at?: string;
@@ -250,7 +251,12 @@ export const useProducts = (categoryId?: string | null) => {
         const products = response.data?.data || response.data || [];
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const formatted = products.map((prod: any) => ({
+          const formatted = products
+            .filter((prod: any) => {
+              const productType = String(prod.product_type || 'good').toLowerCase();
+              return prod.automotive_service || ['good', 'finished'].includes(productType);
+            })
+            .map((prod: any) => ({
           id: prod.id?.toString() || '',
           name: prod.name || '',
           name_ar: prod.name_ar || prod.name || '',
@@ -267,6 +273,7 @@ export const useProducts = (categoryId?: string | null) => {
           is_active: prod.active ?? prod.is_active ?? true,
           has_variants: (prod.units && prod.units.length > 0) || false,
           units: prod.units || [],
+          prices: prod.prices || prod.price_tiers || [],
           image: prod.image || null,
           category: prod.category || null,
           automotive_service: prod.automotive_service
