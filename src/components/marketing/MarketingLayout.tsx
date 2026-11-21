@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Menu, MessageCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 const links = [
   ['/about', 'عن Fusion ERP'],
@@ -32,6 +33,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               <Link to="/signup" onClick={() => setOpen(false)}>ابدأ تجربة مجانية <ArrowLeft className="mr-2 h-4 w-4" /></Link>
             </Button>
           </nav>
+          <ThemeToggle compact />
           <button className="marketing-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

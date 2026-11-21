@@ -302,7 +302,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
         collapsed ? 'w-[72px]' : 'w-64',
         mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
       )}
-      style={{ background: '#ffffff' }}
     >
       {/* Logo */}
       <div className={cn(
