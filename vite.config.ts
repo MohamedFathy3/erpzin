@@ -12,14 +12,17 @@ export default defineConfig(({ mode }) => {
   return {
     server: {
       host: "0.0.0.0",
-      port: 7000,
+      port: 7750,
 
       allowedHosts: [
         "acsa.professionalacademyedu.com",
+        "fusionerp.systems",
+        ".fusionerp.systems",
         "localhost",
         "127.0.0.1",
         "192.168.0.132",
         ".professionalacademyedu.com",
+        "fusionerp.systems"
       ],
 
       proxy: {
@@ -66,9 +69,11 @@ export default defineConfig(({ mode }) => {
 
     preview: {
       host: "0.0.0.0",
-      port: 7000,
+      port: 7750,
 
       allowedHosts: [
+        "fusionerp.systems",
+        ".fusionerp.systems",
         "professionalacademyedu.com",
         "test.injazyemen.cloud",
         "localhost",
@@ -76,6 +81,7 @@ export default defineConfig(({ mode }) => {
         ".professionalacademyedu.com",
         "injazyemen.cloud",
         ".injazyemen.cloud",
+        "fusionerp.systems"
       ],
     },
 
