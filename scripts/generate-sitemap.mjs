@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const base = (process.env.VITE_SITE_URL || 'https://professionalacademyedu.com').replace(/\/$/, '');
+const base = (process.env.VITE_SITE_URL || 'https://fusionerp.systems').replace(/\/$/, '');
 const pages = [
   ['/', 1.0],
   ['/about', 0.7],

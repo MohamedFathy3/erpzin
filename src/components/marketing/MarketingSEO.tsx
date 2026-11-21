@@ -8,7 +8,7 @@ type Props = {
   schema?: Record<string, unknown>;
 };
 
-const SITE_ORIGIN = (import.meta.env.VITE_SITE_URL || 'https://professionalacademyedu.com').replace(/\/+$/, '');
+const SITE_ORIGIN = (import.meta.env.VITE_SITE_URL || 'https://fusionerp.systems').replace(/\/+$/, '');
 const BRAND_SCHEMA = {
   '@context': 'https://schema.org',
   '@type': 'Organization',

@@ -58,7 +58,7 @@ export function BlogArticlePage() {
     inLanguage: 'ar',
     author: { '@type': 'Organization', name: 'Fusion X.tech' },
     publisher: { '@type': 'Organization', name: 'Fusion X.tech' },
-    mainEntityOfPage: new URL(canonicalPath, `${(import.meta.env.VITE_SITE_URL || 'https://professionalacademyedu.com').replace(/\/+$/, '')}/`).toString()
+    mainEntityOfPage: new URL(canonicalPath, `${(import.meta.env.VITE_SITE_URL || 'https://fusionerp.systems').replace(/\/+$/, '')}/`).toString()
   };
 
   return (

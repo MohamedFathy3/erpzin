@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => {
 
       allowedHosts: [
         "acsa.professionalacademyedu.com",
+        "fusionerp.systems",
+        ".fusionerp.systems",
         "localhost",
         "127.0.0.1",
         "192.168.0.132",
@@ -69,6 +71,8 @@ export default defineConfig(({ mode }) => {
       port: 7000,
 
       allowedHosts: [
+        "fusionerp.systems",
+        ".fusionerp.systems",
         "professionalacademyedu.com",
         "test.injazyemen.cloud",
         "localhost",
