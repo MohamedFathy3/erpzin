@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   Loader2,
   CreditCard,
@@ -188,6 +190,8 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [selectedReturn, setSelectedReturn] = useState<ReturnInvoice | null>(null);
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesPerPage, setSalesPerPage] = useState(20);
   const [showFilters, setShowFilters] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeSection, setActiveSection] = useState<'sales' | 'returns' | 'transfers'>('sales');
@@ -365,15 +369,16 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
   });
 
   // ✅ جلب الفواتير
-  const { data: sales = [], isLoading: salesLoading, refetch: refetchSales } = useQuery({
-    queryKey: ['pos-sales', activeTab, selectedBranch, selectedCustomer, selectedProduct],
+  const { data: salesResponse, isLoading: salesLoading, refetch: refetchSales } = useQuery({
+    queryKey: ['pos-sales', selectedBranch, selectedCustomer, selectedProduct, salesPage, salesPerPage],
     queryFn: async () => {
       try {
         const payload: any = {
           orderBy: 'id',
           orderByDirection: 'desc',
-          perPage: 1000,
-          paginate: false,
+          perPage: salesPerPage,
+          paginate: true,
+          page: salesPage,
           filters: {},
         };
         if (selectedBranch !== 'all') payload.filters.branch_id = Number(selectedBranch);
@@ -383,15 +388,23 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
         const response = await api.post('/invoices/index', payload);
 
         if (response.data.result === 'Success') {
-          return response.data.data || [];
+          return response.data;
         }
-        return [];
+        return { data: [], meta: { total: 0, last_page: 1 } };
       } catch (error) {
         console.error('Error fetching POS sales:', error);
         throw error;
       }
     },
   });
+
+  const sales = Array.isArray(salesResponse?.data) ? salesResponse.data : [];
+  const salesTotal = Number(salesResponse?.meta?.total ?? sales.length);
+  const salesLastPage = Math.max(1, Number(salesResponse?.meta?.last_page ?? Math.ceil(salesTotal / salesPerPage)));
+
+  useEffect(() => {
+    setSalesPage(1);
+  }, [searchTerm, dateFrom, dateTo, selectedBranch, selectedCustomer, selectedProduct, selectedSalesRepresentative, selectedPaymentMethod, selectedStatus]);
 
   // ✅ جلب المرتجعات
   const { data: returns = [], isLoading: returnsLoading, refetch: refetchReturns } = useQuery({
@@ -1016,7 +1029,7 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
             <Receipt size={16} />
             {t.sales}
             <Badge variant="secondary" className="ms-1 text-xs">
-              {filteredSales.length}
+              {salesTotal}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="returns" className="gap-2">
@@ -1156,6 +1169,36 @@ const POSTransactionsList: React.FC<POSTransactionsListProps> = ({ onClose }) =>
                       )}
                     </TableBody>
                   </Table>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3">
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar'
+                    ? `صفحة ${salesPage} من ${salesLastPage} — إجمالي ${salesTotal} فاتورة`
+                    : `Page ${salesPage} of ${salesLastPage} — ${salesTotal} invoices total`}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={String(salesPerPage)}
+                    onValueChange={(value) => {
+                      setSalesPerPage(Number(value));
+                      setSalesPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-[110px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 / page</SelectItem>
+                      <SelectItem value="20">20 / page</SelectItem>
+                      <SelectItem value="50">50 / page</SelectItem>
+                      <SelectItem value="100">100 / page</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" disabled={salesPage <= 1 || salesLoading} onClick={() => setSalesPage((page) => Math.max(1, page - 1))}>
+                    <ChevronLeft className="h-4 w-4" />{language === 'ar' ? 'السابق' : 'Previous'}
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={salesPage >= salesLastPage || salesLoading} onClick={() => setSalesPage((page) => Math.min(salesLastPage, page + 1))}>
+                    {language === 'ar' ? 'التالي' : 'Next'}<ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </CardContent>
