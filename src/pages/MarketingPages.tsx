@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
+import { ArrowLeft, BarChart3, Boxes, CalendarDays, Check, CheckCircle2, CircleDollarSign, Factory, MessageCircle, Network, Play, ShieldCheck, ShoppingCart, Sparkles, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, BarChart3, CalendarDays, Check, CheckCircle2, Globe2, MessageCircle, Network, Send, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,13 +11,265 @@ import { toast } from 'sonner';
 import api from '@/lib/api';
 import MarketingLayout from '@/components/marketing/MarketingLayout';
 import MarketingSEO from '@/components/marketing/MarketingSEO';
+import { marketingArticles } from '@/data/marketingArticles';
 
-const features=[{icon:BarChart3,title:'CRM ومبيعات',text:'حوّل العملاء المحتملين إلى صفقات واضحة عبر Pipeline وKanban وتقارير دقيقة.'},{icon:Network,title:'Multi-tenant وفروع',text:'بيانات معزولة لكل شركة مع تحكم مركزي في الموديولات والفروع.'},{icon:MessageCircle,title:'Email وWhatsApp',text:'تابع محادثاتك ورسائلك وأنشطتك من مكان واحد.'},{icon:CalendarDays,title:'Calendar وTasks',text:'نظّم الاجتماعات والمهام والمواعيد بدون فقدان أي متابعة.'}];
-function Hero(){return <section className="relative overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,.2),_transparent_45%)]"/><div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 md:grid-cols-2 md:items-center lg:px-8 lg:py-28"><div><Badge className="mb-5 border-cyan-400/30 bg-cyan-400/10 text-cyan-300">منصة واحدة لإدارة نموك</Badge><h1 className="text-4xl font-black leading-tight md:text-6xl">شغّل الـ ERP والـ CRM <span className="text-cyan-300">بذكاء وبساطة</span></h1><p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">ERPFlow يجمع المبيعات والمخزون والفروع والعملاء والتواصل في مساحة عمل واحدة قابلة للنمو.</p><div className="mt-8 flex flex-wrap gap-3"><Button asChild size="lg" className="bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/signup">ابدأ تجربتك المجانية <ArrowLeft className="mr-2"/></Link></Button><Button asChild size="lg" variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10"><Link to="/services">اكتشف المميزات</Link></Button></div><p className="mt-4 text-sm text-slate-400">15 يومًا مجانًا · بدون بطاقة ائتمان · إعداد سريع</p></div><div className="rounded-3xl border border-cyan-300/20 bg-white/5 p-4 shadow-2xl shadow-cyan-500/10"><div className="rounded-2xl bg-slate-900 p-5"><div className="mb-5 flex items-center justify-between"><div><p className="text-sm text-slate-400">لوحة الأداء</p><p className="text-3xl font-bold">+42.8%</p></div><BarChart3 className="h-10 w-10 text-cyan-300"/></div><div className="grid grid-cols-3 gap-3">{['Leads','Deals','Revenue'].map((x,i)=><div key={x} className="rounded-xl bg-white/5 p-3"><p className="text-xs text-slate-400">{x}</p><p className="mt-2 font-bold">{[248,86,'1.2M'][i]}</p></div>)}</div><div className="mt-5 h-32 rounded-xl bg-gradient-to-t from-cyan-400/30 to-transparent"/></div></div></div></section>}
-export function Home(){return <MarketingLayout><MarketingSEO title="ERPFlow | منصة ERP وCRM لنمو أعمالك" description="منصة ERP وCRM متعددة المستأجرين لإدارة المبيعات والفروع والعملاء والتواصل." path="/" schema={{'@context':'https://schema.org','@type':'Product',name:'ERPFlow',description:'ERP and CRM platform'}}/><Hero/><section className="mx-auto max-w-7xl px-4 py-16 lg:px-8"><div className="mb-10 max-w-2xl"><p className="text-cyan-300">كل ما تحتاجه في مكان واحد</p><h2 className="mt-2 text-3xl font-bold">أدوات عملية لفريق أسرع</h2></div><div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">{features.map(item=><Card key={item.title} className="border-white/10 bg-white/5 text-white"><CardContent className="p-6"><item.icon className="mb-5 h-9 w-9 text-cyan-300"/><h3 className="font-bold">{item.title}</h3><p className="mt-3 text-sm leading-7 text-slate-400">{item.text}</p></CardContent></Card>)}</div></section><section className="border-y border-white/10 bg-white/[.03] bg-cyan-400/[.03]"><div className="mx-auto grid max-w-7xl gap-6 px-4 py-12 text-center sm:grid-cols-3 lg:px-8"><div><p className="text-3xl font-black text-cyan-300">+250</p><p className="mt-2 text-sm text-slate-400">شركة تبدأ معنا</p></div><div><p className="text-3xl font-black text-cyan-300">99.9%</p><p className="mt-2 text-sm text-slate-400">عزل وأمان للبيانات</p></div><div><p className="text-3xl font-black text-cyan-300">24/7</p><p className="mt-2 text-sm text-slate-400">وصول ومساحات عمل</p></div></div></section><section className="border-y border-white/10 bg-white/[.03]"><div className="mx-auto max-w-7xl px-4 py-16 text-center lg:px-8"><p className="text-slate-300">ثلاث خطوات فقط</p><h2 className="mt-2 text-3xl font-bold">ابدأ من اليوم</h2><div className="mt-10 grid gap-8 md:grid-cols-3">{[['01','سجّل شركتك','أنشئ مساحة عملك في دقائق.'],['02','فعّل موديولاتك','ابدأ بـ CRM والمبيعات أو كل المنصة.'],['03','انمِ بثقة','تابع التقارير والمهام والنتائج.']].map(([n,t,d])=><div key={n}><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-cyan-400 font-bold text-slate-950">{n}</div><h3 className="mt-4 font-bold">{t}</h3><p className="mt-2 text-sm text-slate-400">{d}</p></div>)}</div><Button asChild size="lg" className="mt-10 bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/signup">ابدأ الآن مجانًا</Link></Button></div></section></MarketingLayout>}
-export function About(){return <MarketingLayout><MarketingSEO title="عن ERPFlow" description="تعرف على رؤية ERPFlow لبناء عمليات أكثر وضوحًا للشركات العربية." path="/about" schema={{'@context':'https://schema.org','@type':'Organization',name:'ERPFlow'}}/><section className="mx-auto max-w-4xl px-4 py-20 text-center lg:py-28"><Badge className="bg-cyan-400/10 text-cyan-300">عن المنتج</Badge><h1 className="mt-5 text-4xl font-black md:text-6xl">نحو أعمال عربية أكثر وضوحًا</h1><p className="mt-6 text-lg leading-9 text-slate-300">نبني ERPFlow لمساعدة الشركات على الانتقال من جداول متفرقة وأدوات منفصلة إلى نظام واحد يفهم دورة العمل كاملة.</p><div className="mt-12 grid gap-5 text-right md:grid-cols-3">{[['الرؤية','أن تصبح إدارة العمليات والعميل قرارًا مبنيًا على البيانات.'],['القيم','البساطة، الأمان، والالتزام بنتيجة قابلة للقياس.'],['الطريقة','نبدأ من احتياج الفريق ونبني تجربة واضحة قابلة للتوسع.']].map(([t,d])=><Card key={t} className="border-white/10 bg-white/5 text-white"><CardContent className="p-6"><h3 className="font-bold text-cyan-300">{t}</h3><p className="mt-3 text-sm leading-7 text-slate-400">{d}</p></CardContent></Card>)}</div></section></MarketingLayout>}
-export function Services(){return <MarketingLayout><MarketingSEO title="خدمات ERPFlow وموديولاته" description="CRM، الفروع، المهام، البريد، WhatsApp وGoogle Calendar في منصة واحدة." path="/services"/><section className="mx-auto max-w-7xl px-4 py-20 lg:px-8"><div className="max-w-2xl"><p className="text-cyan-300">الموديولات</p><h1 className="mt-2 text-4xl font-black">كل عملية لها مساحة واضحة</h1><p className="mt-5 text-slate-300">ابدأ بما تحتاجه الآن، ثم أضف بقية الموديولات عندما يكبر فريقك.</p></div><div className="mt-12 grid gap-5 md:grid-cols-2">{[...features,{icon:Users,title:'صلاحيات متقدمة',text:'أدوار وصلاحيات دقيقة تحمي بياناتك وتوضح مسؤولية كل مستخدم.'},{icon:ShieldCheck,title:'تقارير وأمان',text:'عزل بيانات متعدد المستأجرين وتقارير تساعدك على اتخاذ القرار.'}].map(item=><Card key={item.title} className="border-white/10 bg-white/5 text-white"><CardContent className="flex gap-5 p-7"><item.icon className="h-10 w-10 shrink-0 text-cyan-300"/><div><h2 className="text-xl font-bold">{item.title}</h2><p className="mt-3 leading-8 text-slate-400">{item.text}</p></div></CardContent></Card>)}</div></section></MarketingLayout>}
-const plans=[['Starter','للفرق الصغيرة',['CRM أساسي','حتى 5 مستخدمين','فرع واحد','تقارير أساسية']],['Professional','للنمو المنظم',['كل مميزات Starter','حتى 25 مستخدمًا','5 فروع','Email وCalendar']],['Enterprise','للشركات متعددة الفروع',['كل المميزات','مستخدمون وفروع مخصصة','صلاحيات متقدمة','دعم أولوية']]];
-export function Pricing(){return <MarketingLayout><MarketingSEO title="أسعار ERPFlow والباقات" description="قارن باقات ERPFlow وابدأ تجربتك المجانية لمدة 15 يومًا بدون بطاقة ائتمان." path="/pricing" schema={{'@context':'https://schema.org','@type':'FAQPage',mainEntity:[{ '@type':'Question',name:'هل توجد تجربة مجانية؟',acceptedAnswer:{'@type':'Answer',text:'نعم، تجربة مجانية لمدة 15 يومًا بدون بطاقة ائتمان.'}}]}}/><section className="mx-auto max-w-7xl px-4 py-20 lg:px-8"><div className="text-center"><p className="text-cyan-300">باقات واضحة</p><h1 className="mt-2 text-4xl font-black">ابدأ مجانًا ثم اختر ما يناسبك</h1><p className="mt-5 text-slate-400">الأسعار المعروضة مبدئية ولا يوجد دفع إلكتروني في هذه المرحلة.</p></div><div className="mt-12 grid gap-5 lg:grid-cols-3">{plans.map(([name,sub,items],i)=><Card key={name} className={`border-white/10 bg-white/5 text-white ${i===1?'ring-2 ring-cyan-400':''}`}><CardHeader><CardTitle className="text-2xl">{name}</CardTitle><p className="text-sm text-slate-400">{sub}</p></CardHeader><CardContent><p className="mb-5 text-3xl font-black">{i===0?'مبدئي':i===1?'قريبًا':'حسب الاحتياج'}</p><div className="space-y-3">{(items as string[]).map(item=><p key={item} className="flex gap-2 text-sm"><Check className="h-5 w-5 text-cyan-300"/>{item}</p>)}</div><Button asChild className="mt-8 w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300"><Link to="/signup">ابدأ تجربتك</Link></Button></CardContent></Card>)}</div><div className="mx-auto mt-16 max-w-3xl"><h2 className="text-2xl font-bold">أسئلة شائعة</h2>{[['هل أحتاج بطاقة ائتمان؟','لا. التسجيل مجاني ولا نطلب بيانات دفع.'],['ماذا يحدث بعد 15 يومًا؟','تتوقف مساحة العمل مؤقتًا وتظل بياناتك محفوظة حتى الاشتراك.'],['هل توجد بوابة دفع الآن؟','لا، الأسعار للعرض فقط وسيتم ربط بوابة دفع في مرحلة لاحقة.']].map(([q,a])=><div key={q} className="border-b border-white/10 py-5"><h3 className="font-bold">{q}</h3><p className="mt-2 text-sm text-slate-400">{a}</p></div>)}</div></section></MarketingLayout>}
-export function Contact(){const [form,setForm]=useState({name:'',email:'',phone:'',message:''});const [loading,setLoading]=useState(false);const submit=async(e:React.FormEvent)=>{e.preventDefault();setLoading(true);try{await api.post('/public/contact',form);toast.success('تم إرسال رسالتك بنجاح');setForm({name:'',email:'',phone:'',message:''})}catch{toast.error('تعذر إرسال الرسالة')}finally{setLoading(false)}};return <MarketingLayout><MarketingSEO title="تواصل مع ERPFlow" description="تواصل مع فريق ERPFlow للحصول على إجابات عن المنصة والتجربة المجانية." path="/contact"/><section className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:grid-cols-2 lg:px-8"><div><p className="text-cyan-300">نحن هنا لمساعدتك</p><h1 className="mt-3 text-4xl font-black">خلّينا نتكلم عن شغلك</h1><p className="mt-5 leading-8 text-slate-400">أرسل رسالتك وسيقوم فريقنا بالرد عليك. رسائل التواصل تُرسل عبر Queue حتى لا تتعطل تجربتك.</p><div className="mt-8 space-y-4 text-slate-300"><p>البريد: info@example.com</p><p>الاستجابة: خلال يوم عمل</p></div></div><Card className="border-white/10 bg-white/5 text-white"><CardContent className="p-6"><form onSubmit={submit} className="space-y-4">{[['name','الاسم'],['email','البريد الإلكتروني'],['phone','رقم الموبايل']].map(([key,label])=><div key={key}><Label>{label}</Label><Input className="mt-1 border-white/10 bg-white/5 text-white" type={key==='email'?'email':'text'} required={key!=='phone'} value={form[key as keyof typeof form]} onChange={e=>setForm({...form,[key]:e.target.value})}/></div>)}<div><Label>الرسالة</Label><Textarea className="mt-1 border-white/10 bg-white/5 text-white" required value={form.message} onChange={e=>setForm({...form,message:e.target.value})}/></div><Button disabled={loading} className="w-full bg-cyan-400 text-slate-950 hover:bg-cyan-300">{loading?'جاري الإرسال':'إرسال الرسالة'}<Send className="mr-2 h-4 w-4"/></Button></form></CardContent></Card></section></MarketingLayout>}
-export function Signup(){const [form,setForm]=useState({company_name:'',full_name:'',email:'',phone:'',password:'',password_confirmation:''});const [loading,setLoading]=useState(false);const submit=async(e:React.FormEvent)=>{e.preventDefault();setLoading(true);try{const r=await api.post('/public/trial-signup',form);toast.success('تم إنشاء مساحة العمل وإرسال رسالة الترحيب');window.location.href=r.data.data.login_url}catch(error:any){toast.error(error?.response?.data?.message||'تعذر إنشاء التجربة')}finally{setLoading(false)}};return <MarketingLayout><MarketingSEO title="ابدأ تجربتك المجانية مع ERPFlow" description="أنشئ مساحة عمل ERPFlow مجانية لمدة 15 يومًا بدون بطاقة ائتمان." path="/signup"/><section className="mx-auto max-w-2xl px-4 py-16 lg:py-24"><div className="text-center"><Sparkles className="mx-auto h-10 w-10 text-cyan-300"/><h1 className="mt-4 text-4xl font-black">ابدأ تجربتك المجانية</h1><p className="mt-4 text-slate-400">15 يومًا كاملة، كل الموديولات مفعّلة، وبدون بطاقة ائتمان.</p></div><Card className="mt-10 border-white/10 bg-white/5 text-white"><CardContent className="p-6"><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">{[['company_name','اسم الشركة'],['full_name','الاسم الكامل'],['email','البريد الإلكتروني'],['phone','رقم الموبايل'],['password','كلمة المرور'],['password_confirmation','تأكيد كلمة المرور']].map(([key,label])=><div key={key} className={key==='company_name'||key==='full_name'?'sm:col-span-1':''}><Label>{label}</Label><Input className="mt-1 border-white/10 bg-white/5 text-white" required={key!=='phone'} type={key.includes('password')?'password':key==='email'?'email':'text'} value={form[key as keyof typeof form]} onChange={e=>setForm({...form,[key]:e.target.value})}/></div>)}<Button disabled={loading} className="mt-3 bg-cyan-400 text-slate-950 hover:bg-cyan-300 sm:col-span-2">{loading?'جاري إنشاء مساحة العمل...':'إنشاء حساب التجربة'}<ArrowLeft className="mr-2 h-4 w-4"/></Button></form><p className="mt-5 text-center text-xs text-slate-500">بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية.</p></CardContent></Card></section></MarketingLayout>}
+const whatsappLink = (message: string) => `https://wa.me/201064621943?text=${encodeURIComponent(message)}`;
+
+const features = [
+  { icon: ShoppingCart, title: 'المبيعات ونقاط البيع', text: 'تابع البيع من عرض السعر إلى الفاتورة، وخلي شاشة الكاشير واضحة وسريعة وقت الزحمة.' },
+  { icon: Boxes, title: 'المخزون والمشتريات', text: 'اربط الأصناف والمستودعات وحركة الشراء والبيع في صورة واحدة أسهل للمراجعة.' },
+  { icon: CircleDollarSign, title: 'الحسابات والتقارير', text: 'راجع المستندات والأرصدة والتقارير المالية ضمن دورة العمل نفسها.' },
+  { icon: Users, title: 'CRM والعملاء', text: 'اجمع بيانات العميل والفرص والأنشطة حتى يعرف الفريق الخطوة التالية.' },
+  { icon: Factory, title: 'التصنيع والإنتاج', text: 'نظّم أوامر الإنتاج ومكوّنات المنتج وتابع تقدم التشغيل.' },
+  { icon: CalendarDays, title: 'المهام والمواعيد', text: 'رتّب مسؤوليات الفريق ومواعيده حتى لا تضيع المتابعة بين المحادثات.' },
+  { icon: Network, title: 'الفروع والصلاحيات', text: 'إدارة أوضح للفروع والمستخدمين، مع صلاحيات تناسب دور كل عضو.' },
+  { icon: ShieldCheck, title: 'خدمات السيارات', text: 'تابع استقبال المركبات وأعمال الخدمة وارتباطها بالعميل والفاتورة.' }
+];
+
+const clientLogos = [
+  { name: 'TLG WSA Elite', src: '/client-logos/tlg-wsa-elite.png' },
+  { name: 'WSA Pay', src: '/client-logos/wsa-pay.png' },
+  { name: 'Cornerstone Marine', src: '/client-logos/cornerstone-marine.png' }
+];
+
+const plans = [
+  { name: 'انطلاقة', amount: '2,000', segment: 'للشركة التي تريد ترتيب الأساسيات من أول يوم', accent: false },
+  { name: 'نمو', amount: '4,000', segment: 'للفريق الذي يكبر وتزيد معه تفاصيل التشغيل', accent: true },
+  { name: 'توسع', amount: '6,000', segment: 'للأعمال متعددة الفرق والعمليات', accent: false }
+] as const;
+
+const includedInEveryPlan = [
+  'جميع موديولات Fusion ERP المتاحة',
+  'المبيعات والمخزون والحسابات والعملاء',
+  'لوحات وتقارير مترابطة لإدارة العمل'
+];
+
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <span className="marketing-eyebrow"><span className="marketing-eyebrow-dot" />{children}</span>;
+}
+
+function SectionTitle({ eyebrow, title, description, centered = false }: { eyebrow: string; title: string; description?: string; centered?: boolean }) {
+  return (
+    <div className={`marketing-section-heading ${centered ? 'text-center mx-auto' : ''}`}>
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2>{title}</h2>
+      {description && <p>{description}</p>}
+    </div>
+  );
+}
+
+function ClientStrip() {
+  return (
+    <section className="marketing-client-section" aria-labelledby="client-heading">
+      <div className="marketing-content-wrap">
+        <div className="marketing-client-intro">
+          <Eyebrow>علاقات مبنية على الثقة</Eyebrow>
+          <h2 id="client-heading">شركات تعامل معها فريق Fusion X.tech</h2>
+          <p>شعارات منشورة ضمن صفحة عملاء Fusion X.tech، ونشاركها هنا كخبرة للفريق لا كتقييمات أو توصيات مختلقة.</p>
+        </div>
+        <div className="marketing-client-logos">
+          {clientLogos.map((client) => (
+            <div className="marketing-client-logo" key={client.name}>
+              <img src={client.src} alt={client.name} loading="lazy" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PricingCards({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`marketing-pricing-grid ${compact ? 'marketing-pricing-grid-compact' : ''}`}>
+      {plans.map((plan) => (
+        <article className={`marketing-plan-card ${plan.accent ? 'marketing-plan-featured' : ''}`} key={plan.name}>
+          {plan.accent && <span className="marketing-plan-ribbon">اختيار مناسب للنمو</span>}
+          <div className="marketing-plan-topline"><span>{plan.name}</span><span className="marketing-plan-icon"><CheckCircle2 className="h-4 w-4" /></span></div>
+          <p className="marketing-plan-segment">{plan.segment}</p>
+          <p className="marketing-plan-price"><strong>{plan.amount}</strong><span>جنيه مصري <small>/ شهريًا</small></span></p>
+          <div className="marketing-plan-includes">
+            {includedInEveryPlan.map((item) => <p key={item}><Check className="h-4 w-4" />{item}</p>)}
+          </div>
+          <Button asChild className={plan.accent ? 'marketing-primary-button w-full' : 'marketing-secondary-button w-full'}>
+            <a href={whatsappLink(`مرحبًا، أريد معرفة تفاصيل باقة ${plan.name} الشهرية بقيمة ${plan.amount} جنيه من Fusion ERP.`)} target="_blank" rel="noreferrer">
+              اسأل عن الباقة <ArrowLeft className="mr-2 h-4 w-4" />
+            </a>
+          </Button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function HomeHero() {
+  return (
+    <section className="marketing-hero">
+      <div className="marketing-hero-glow marketing-hero-glow-one" />
+      <div className="marketing-hero-glow marketing-hero-glow-two" />
+      <div className="marketing-content-wrap marketing-hero-grid">
+        <div className="marketing-hero-copy">
+          <Badge className="marketing-hero-badge"><Sparkles className="ml-2 h-4 w-4" /> نظام ERP يفهم يومك</Badge>
+          <h1>شغلك يستحق <span>صورة أوضح</span></h1>
+          <p className="marketing-hero-lead">المبيعات، المخزون، الحسابات والعملاء… كلهم في مكان واحد. Fusion ERP يساعد فريقك يشتغل بهدوء، ويتابع التفاصيل من غير ما يضيع بين أنظمة وجداول متفرقة.</p>
+          <div className="marketing-hero-actions">
+            <Button asChild className="marketing-primary-button marketing-large-button"><Link to="/signup">ابدأ تجربتك المجانية <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button>
+            <a href="#product-video" className="marketing-watch-link"><span><Play className="h-4 w-4 fill-current" /></span>شاهد شرح النظام</a>
+          </div>
+          <div className="marketing-hero-points"><span><CheckCircle2 className="h-4 w-4" /> 15 يومًا للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> بدون بطاقة ائتمان</span></div>
+        </div>
+        <div className="marketing-hero-visual">
+          <div className="marketing-photo-frame"><img src="/fusion-erp-team.jpg" alt="فريق عمل يتعاون حول نظام Fusion ERP في مكتب مصري" width="1408" height="792" fetchPriority="high" /></div>
+          <div className="marketing-hero-floating-card"><span className="marketing-live-dot" /><div><strong>شغل مترابط</strong><small>من أول طلب لحد التقرير</small></div><div className="marketing-floating-bars" aria-hidden="true"><i /><i /><i /><i /><i /></div></div>
+          <div className="marketing-hero-sticker"><span>ببساطة</span><strong>كل فريق<br />عارف دوره</strong></div>
+        </div>
+      </div>
+      <div className="marketing-hero-bottomline"><span>نظام عملي لفرق حقيقية</span><span>إدارة أوضح. نمو أهدأ.</span></div>
+    </section>
+  );
+}
+
+export function Home() {
+  return (
+    <MarketingLayout>
+      <MarketingSEO title="Fusion ERP | نظام ERP متكامل لإدارة الشركات" description="نظّم المبيعات والمخزون والحسابات والعملاء في نظام ERP عربي واحد. جرّب Fusion ERP مجانًا لمدة 15 يومًا." path="/" keywords={['نظام ERP في مصر', 'برنامج إدارة الشركات', 'نظام مخازن ومبيعات', 'Fusion ERP', 'نظام ERP عربي']} schema={{ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Fusion ERP', applicationCategory: 'BusinessApplication', operatingSystem: 'Web', description: 'نظام ERP لإدارة المبيعات والمخزون والحسابات والعملاء.' }} />
+      <main>
+        <HomeHero />
+        <ClientStrip />
+        <section className="marketing-section marketing-section-light">
+          <div className="marketing-content-wrap">
+            <SectionTitle eyebrow="كل التفاصيل تتكلم مع بعض" title="موديولات تخلي الشغل أوضح" description="ابدأ من أول عملية في يومك، وشوف أثرها في بقية النظام من غير نقل البيانات يدويًا بين أدوات متفرقة." />
+            <div className="marketing-feature-grid">
+              {features.map((item, index) => {
+                const Icon = item.icon;
+                return <article className="marketing-feature-card" key={item.title} style={{ animationDelay: `${index * 55}ms` }}><span className="marketing-feature-icon"><Icon className="h-5 w-5" /></span><h3>{item.title}</h3><p>{item.text}</p></article>;
+              })}
+            </div>
+            <div className="marketing-inline-link-wrap"><Link className="marketing-text-link" to="/services">استكشف كل الموديولات <ArrowLeft className="h-4 w-4" /></Link></div>
+          </div>
+        </section>
+        <section className="marketing-video-section" id="product-video">
+          <div className="marketing-content-wrap marketing-video-grid">
+            <div className="marketing-video-copy"><Eyebrow>شوف النظام على طبيعته</Eyebrow><h2>خد جولة سريعة قبل ما تبدأ</h2><p>فيديو يشرح طريقة العمل على Fusion ERP، من متابعة العمليات اليومية إلى رؤية التفاصيل في لوحة واحدة.</p><Button asChild className="marketing-secondary-button"><Link to="/signup">جرّب بنفسك <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button></div>
+            <div className="marketing-video-frame"><iframe src="https://www.youtube-nocookie.com/embed/ZwEeCs5D5KA" title="شرح Fusion ERP" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div>
+          </div>
+        </section>
+        <section className="marketing-section">
+          <div className="marketing-content-wrap">
+            <SectionTitle eyebrow="خطوات بسيطة" title="ابدأ على مقاس فريقك" description="ما تحتاج تغير طريقة شغلك كلها مرة واحدة. ابدأ بالمعلومة الأهم، وبعدها وسّع الاستخدام بالتدريج." centered />
+            <div className="marketing-steps-grid">{[
+              ['01', 'احكيلنا عن شغلك', 'نفهم نشاطك وأهم نقطة تريد ترتيبها.'],
+              ['02', 'شوف النظام على حالتك', 'نربط احتياجك بالموديولات المناسبة ونوضح طريقة التشغيل.'],
+              ['03', 'ابدأ التجربة', 'أنشئ حسابك وجرّب النظام لمدة 15 يومًا.']
+            ].map(([number, title, text]) => <article className="marketing-step" key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
+          </div>
+        </section>
+        <section className="marketing-section marketing-section-light">
+          <div className="marketing-content-wrap">
+            <div className="marketing-pricing-heading"><SectionTitle eyebrow="واضحة ومن غير لف" title="اختار الباقة اللي تناسب حجم شغلك" description="كل باقة شهرية تشمل موديولات Fusion ERP المتاحة. ونراجع معك تفاصيل التشغيل حسب طبيعة النشاط." /><Link className="marketing-text-link" to="/pricing">تفاصيل الباقات <ArrowLeft className="h-4 w-4" /></Link></div>
+            <PricingCards compact />
+            <div className="marketing-lifetime-note"><div><CircleDollarSign className="h-5 w-5" /><span>تفضّل شراء دائم؟</span><small>تواصل معنا ونوضح لك خيارات الترخيص.</small></div><a href={whatsappLink('مرحبًا، أريد معرفة تفاصيل شراء Fusion ERP بشكل دائم.')} target="_blank" rel="noreferrer">تواصل عبر واتساب <ArrowLeft className="h-4 w-4" /></a></div>
+          </div>
+        </section>
+        <section className="marketing-section">
+          <div className="marketing-content-wrap">
+            <div className="marketing-pricing-heading"><SectionTitle eyebrow="اقرأ وتعلّم" title="مقالات تساعدك تختار بوعي" description="أدلة مبسطة عن الموديولات والعمليات اللي تعتمد عليها شركتك كل يوم." /><Link className="marketing-text-link" to="/blog">كل المقالات <ArrowLeft className="h-4 w-4" /></Link></div>
+            <div className="marketing-article-grid marketing-home-articles">{marketingArticles.slice(0, 3).map((article) => <article key={article.slug} className="marketing-article-card"><span className="marketing-tag">{article.category}</span><h3>{article.title}</h3><p>{article.excerpt}</p><Link to={`/blog/${article.slug}`} className="marketing-text-link">اقرأ المقال <ArrowLeft className="h-4 w-4" /></Link></article>)}</div>
+          </div>
+        </section>
+        <section className="marketing-final-cta"><div className="marketing-content-wrap"><span className="marketing-final-cta-icon"><Sparkles className="h-6 w-6" /></span><h2>خلّي إدارة شغلك أخف على فريقك.</h2><p>ابدأ بتجربة مجانية، ولو عندك سؤال إحنا قريبين على واتساب.</p><div><Button asChild className="marketing-primary-button marketing-large-button"><Link to="/signup">ابدأ التجربة المجانية <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button><a href={whatsappLink('مرحبًا، أرغب في تجربة Fusion ERP ومعرفة التفاصيل.')} target="_blank" rel="noreferrer" className="marketing-light-link"><MessageCircle className="h-4 w-4" />اسألنا على واتساب</a></div></div></section>
+      </main>
+    </MarketingLayout>
+  );
+}
+
+export function About() {
+  return <MarketingLayout>
+    <MarketingSEO title="عن Fusion ERP | نظام عملي لإدارة الأعمال" description="تعرف على Fusion ERP، النظام الذي يربط تفاصيل العمل اليومية ويساعد فرق الشركات العربية على العمل بوضوح." path="/about" keywords={['عن Fusion ERP', 'نظام إدارة الأعمال', 'برنامج ERP للشركات']} schema={{ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'عن Fusion ERP' }} />
+    <main className="marketing-page-shell">
+      <section className="marketing-page-hero"><Eyebrow>عن Fusion ERP</Eyebrow><h1>وراء كل شركة شغل ناس،<br /><span className="marketing-gradient-text">مش أرقام وبس.</span></h1><p>بنينا Fusion ERP عشان التفاصيل اليومية تبقى أسهل للفريق، والإدارة تقدر تشوف الصورة من غير ما تدور عليها في أكتر من مكان.</p></section>
+      <section className="marketing-about-grid"><article><span className="marketing-tag">رؤيتنا</span><h2>نخلّي التقنية تخدم يومك.</h2><p>النظام الجيد مش اللي يزود خطوات على الفريق. هو اللي يرتبها، يوضح المسؤوليات، ويربط المعلومة بالقرار المناسب.</p></article><article><span className="marketing-tag">طريقتنا</span><h2>نبدأ من احتياجك الحقيقي.</h2><p>كل نشاط له تفاصيله. لذلك نركز على فهم طريقة العمل، ثم نساعدك تختار الموديولات والخطوات التي تناسب فريقك.</p></article><article><span className="marketing-tag">وعدنا</span><h2>وضوح من أول يوم.</h2><p>معلوماتك وعملياتك في مساحة منظمة، مع متابعة أوضح بين المبيعات والمخزون والحسابات والعملاء.</p></article></section>
+      <section className="marketing-about-visual"><img src="/fusion-erp-team.jpg" alt="فريق يعمل معًا في مكتب ويستعرض بيانات العمل" loading="lazy" /><div><Eyebrow>مساحة واحدة للفريق كله</Eyebrow><h2>لما كل فريق يشوف اللي يخصه، الشغل يمشي بسلاسة أكتر.</h2><p>من الكاشير والمستودع إلى الإدارة، كل شخص يقدر يتابع دوره ضمن دورة عمل مفهومة.</p><Button asChild className="marketing-primary-button"><Link to="/signup">ابدأ تجربتك <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button></div></section>
+    </main>
+  </MarketingLayout>;
+}
+
+export function Services() {
+  return <MarketingLayout>
+    <MarketingSEO title="موديولات Fusion ERP | نظام متكامل لإدارة الشركات" description="تعرف على موديولات Fusion ERP للمبيعات والمخزون والحسابات والعملاء والتصنيع والفروع ونقاط البيع." path="/services" keywords={['موديولات ERP', 'مخزون ومبيعات', 'نظام POS', 'برنامج محاسبة ERP', 'CRM عربي']} />
+    <main className="marketing-page-shell"><section className="marketing-page-hero"><Eyebrow>موديولات متصلة</Eyebrow><h1>كل عملية لها مكان،<br /><span className="marketing-gradient-text">وكل معلومة لها سياق.</span></h1><p>اختار من موديولات Fusion ERP ما يناسب نشاطك، وخلي العمليات اليومية تشتغل ضمن نظام واحد.</p></section><div className="marketing-feature-grid marketing-services-grid">{features.map((item) => { const Icon = item.icon; return <article className="marketing-feature-card" key={item.title}><span className="marketing-feature-icon"><Icon className="h-5 w-5" /></span><h2>{item.title}</h2><p>{item.text}</p></article>; })}</div><section className="marketing-services-article"><div><Eyebrow>دليل عملي</Eyebrow><h2>قبل اختيار أي نظام، ابدأ من طريقة شغلك.</h2><p>اطلع على مقالاتنا عن المخزون ونقاط البيع والحسابات وCRM، وخذ معك أسئلة واضحة قبل بدء التجربة.</p></div><Button asChild className="marketing-secondary-button"><Link to="/blog">اقرأ المقالات <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button></section></main>
+  </MarketingLayout>;
+}
+
+export function Pricing() {
+  const faq = [
+    ['هل كل الموديولات مشمولة في الباقات؟', 'نعم، الباقات الشهرية تشمل موديولات Fusion ERP المتاحة. نراجع معك تفاصيل التشغيل التي تناسب نشاطك قبل البدء.'],
+    ['هل يمكن تجربة النظام قبل الاشتراك؟', 'نعم، تقدر تبدأ تجربة مجانية لمدة 15 يومًا بدون بطاقة ائتمان.'],
+    ['هل يوجد شراء دائم؟', 'نعم، تواصل معنا على واتساب لمعرفة تفاصيل الترخيص الدائم.'],
+    ['هل يوجد دفع إلكتروني من الموقع؟', 'الاشتراك يتم بالتواصل مع فريقنا مباشرة. اضغط على زر واتساب لبدء المحادثة.']
+  ];
+  return <MarketingLayout>
+    <MarketingSEO title="أسعار وباقات Fusion ERP | باقات شهرية بالجنيه المصري" description="قارن باقات Fusion ERP الشهرية: 2,000 أو 4,000 أو 6,000 جنيه مصري، وجميعها تشمل موديولات النظام المتاحة." path="/pricing" keywords={['أسعار ERP في مصر', 'باقات ERP شهرية', 'سعر نظام ERP', 'Fusion ERP']} schema={{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([name, text]) => ({ '@type': 'Question', name, acceptedAnswer: { '@type': 'Answer', text } })) }} />
+    <main className="marketing-page-shell">
+      <section className="marketing-page-hero marketing-pricing-hero"><Eyebrow>أسعار واضحة بالجنيه المصري</Eyebrow><h1>نظام كامل،<br /><span className="marketing-gradient-text">وباقة على قدّ شغلك.</span></h1><p>كل باقة شهرية تشمل موديولات Fusion ERP المتاحة. اختار مستوى يناسب حجم فريقك، وتواصل معنا لنرتب طريقة التشغيل المناسبة.</p></section>
+      <PricingCards />
+      <p className="marketing-pricing-note">الأسعار شهرية بالجنيه المصري. يتم تأكيد نطاق الإعداد والتفاصيل مع فريقنا قبل الاشتراك.</p>
+      <section className="marketing-lifetime-panel"><div><span className="marketing-tag">ترخيص دائم</span><h2>تفضّل تدفع مرة واحدة؟</h2><p>خيارات الشراء الدائم تختلف حسب طريقة التشغيل واحتياج شركتك. كلمنا ونوضح لك التفاصيل قبل القرار.</p></div><Button asChild className="marketing-primary-button"><a href={whatsappLink('مرحبًا، أريد معرفة تفاصيل شراء Fusion ERP بشكل دائم.')} target="_blank" rel="noreferrer"><MessageCircle className="ml-2 h-4 w-4" />تواصل على واتساب</a></Button></section>
+      <section className="marketing-faq"><SectionTitle eyebrow="إجابات مباشرة" title="أسئلة تتكرر قبل الاشتراك" /><div>{faq.map(([question, answer]) => <details key={question}><summary>{question}<span>+</span></summary><p>{answer}</p></details>)}</div></section>
+    </main>
+  </MarketingLayout>;
+}
+
+export function Contact() {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
+  const [loading, setLoading] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      await api.post('/public/contact', form);
+      toast.success('وصلتنا رسالتك، شكرًا لتواصلك');
+      setForm({ name: '', email: '', phone: '', message: '' });
+    } catch {
+      toast.error('تعذر إرسال الرسالة. تواصل معنا مباشرة عبر واتساب.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return <MarketingLayout>
+    <MarketingSEO title="تواصل مع Fusion ERP | اسأل فريقنا" description="تواصل مع فريق Fusion ERP عبر واتساب أو أرسل سؤالك عن النظام والتجربة والباقات الشهرية." path="/contact" />
+    <main className="marketing-page-shell marketing-contact-grid"><section className="marketing-contact-copy"><Eyebrow>إحنا قريبين</Eyebrow><h1>احكيلنا عن شغلك،<br /><span className="marketing-gradient-text">ونبدأ من هناك.</span></h1><p>مش لازم تكون عارف كل التفاصيل. ابعت سؤالك أو كلمنا على واتساب، وفريقنا يساعدك تحدد الخطوة المناسبة.</p><a className="marketing-contact-whatsapp" href={whatsappLink('مرحبًا، أريد التواصل مع فريق Fusion ERP.')} target="_blank" rel="noreferrer"><MessageCircle className="h-5 w-5" /><span><small>واتساب المبيعات</small><strong>+20 106 462 1943</strong></span><ArrowLeft className="mr-auto h-4 w-4" /></a></section><Card className="marketing-contact-card"><CardHeader><CardTitle>اكتب لنا رسالة</CardTitle><p className="text-sm text-slate-400">هنرجع لك للرد على استفسارك.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><Label htmlFor="contact-name">الاسم</Label><Input id="contact-name" className="mt-1" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div><div><Label htmlFor="contact-email">البريد الإلكتروني</Label><Input id="contact-email" className="mt-1" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div><div><Label htmlFor="contact-phone">رقم الموبايل</Label><Input id="contact-phone" className="mt-1" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div><div><Label htmlFor="contact-message">كيف نقدر نساعدك؟</Label><Textarea id="contact-message" className="mt-1 min-h-28" required value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></div><Button disabled={loading} className="marketing-primary-button w-full">{loading ? 'جاري الإرسال...' : 'إرسال الرسالة'}<ArrowLeft className="mr-2 h-4 w-4" /></Button></form></CardContent></Card></main>
+  </MarketingLayout>;
+}
+
+export function Signup() {
+  const [form, setForm] = useState({ company_name: '', full_name: '', email: '', phone: '', password: '', password_confirmation: '' });
+  const [loading, setLoading] = useState(false);
+  const updateField = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const response = await api.post('/public/trial-signup', form);
+      toast.success('تم إنشاء مساحة العمل وإرسال رسالة الترحيب');
+      window.location.href = response.data.data.login_url;
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message || 'تعذر إنشاء التجربة');
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fields: Array<{ key: keyof typeof form; label: string; type: string; required?: boolean }> = [
+    { key: 'company_name', label: 'اسم الشركة', type: 'text', required: true },
+    { key: 'full_name', label: 'الاسم بالكامل', type: 'text', required: true },
+    { key: 'email', label: 'البريد الإلكتروني', type: 'email', required: true },
+    { key: 'phone', label: 'رقم الموبايل', type: 'tel' },
+    { key: 'password', label: 'كلمة المرور', type: 'password', required: true },
+    { key: 'password_confirmation', label: 'تأكيد كلمة المرور', type: 'password', required: true }
+  ];
+  return <MarketingLayout>
+    <MarketingSEO title="ابدأ تجربة Fusion ERP المجانية | سجّل شركتك" description="أنشئ حسابك وجرّب Fusion ERP مجانًا لمدة 15 يومًا بدون بطاقة ائتمان." path="/signup" keywords={['تجربة ERP مجانية', 'تجربة Fusion ERP', 'تسجيل نظام ERP']} schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'التسجيل في Fusion ERP' }} />
+    <main className="marketing-page-shell marketing-signup-grid"><section className="marketing-signup-copy"><span className="marketing-signup-icon"><Sparkles className="h-6 w-6" /></span><Eyebrow>ابدأ على راحتك</Eyebrow><h1>جرّب النظام،<br /><span className="marketing-gradient-text">قبل ما تقرر.</span></h1><p>15 يومًا لتشوف كيف تتصل المبيعات والمخزون والحسابات والعملاء في مساحة واحدة. ما فيش بطاقة ائتمان مطلوبة.</p><div className="marketing-signup-points"><span><CheckCircle2 className="h-4 w-4" /> كل الموديولات متاحة للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> تسجيل بسيط وواضح</span><span><CheckCircle2 className="h-4 w-4" /> فريقنا قريب لو احتجت مساعدة</span></div></section><Card className="marketing-signup-card"><CardHeader><CardTitle>أنشئ مساحة عملك</CardTitle><p className="text-sm text-slate-400">املأ البيانات الأساسية ونبدأ.</p></CardHeader><CardContent><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <div key={field.key}><Label htmlFor={`signup-${field.key}`}>{field.label}</Label><Input id={`signup-${field.key}`} className="mt-1" type={field.type} autoComplete={field.key.includes('password') ? field.key : field.key === 'full_name' ? 'name' : field.key === 'company_name' ? 'organization' : field.key} required={field.required} value={form[field.key]} onChange={(event) => updateField(field.key, event.target.value)} /></div>)}<Button disabled={loading} className="marketing-primary-button mt-2 sm:col-span-2">{loading ? 'جاري إنشاء المساحة...' : 'إنشاء حساب التجربة'}<ArrowLeft className="mr-2 h-4 w-4" /></Button></form><p className="mt-5 text-center text-xs leading-6 text-slate-500">بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية.</p></CardContent></Card></main>
+  </MarketingLayout>;
+}
