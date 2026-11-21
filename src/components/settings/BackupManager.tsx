@@ -32,6 +32,29 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
+// All application tables in the public schema. Supabase/PostgREST normally
+// limits a response to 1,000 rows, so handleExport below reads each table in
+// pages to ensure large tables are not silently truncated.
+const BACKUP_TABLES = [
+  'attendance', 'audit_logs', 'backup_logs', 'backup_settings',
+  'bank_transactions', 'banks', 'branch_warehouses', 'branches',
+  'categories', 'chart_of_accounts', 'colors', 'company_settings',
+  'currencies', 'custom_roles', 'customers', 'delivery_persons',
+  'employees', 'expenses', 'inventory_count_items', 'inventory_counts',
+  'inventory_movements', 'journal_entries', 'journal_entry_lines',
+  'low_stock_alerts', 'module_settings', 'notifications', 'opening_balances',
+  'payment_methods', 'permissions', 'pos_return_items', 'pos_returns',
+  'pos_shifts', 'product_imports', 'product_variants', 'products', 'profiles',
+  'promotion_products', 'promotions', 'purchase_invoice_items',
+  'purchase_invoices', 'purchase_order_items', 'purchase_orders',
+  'purchase_return_items', 'purchase_returns', 'revenues', 'role_permissions',
+  'sale_items', 'sales', 'sales_invoice_items', 'sales_invoices',
+  'sales_return_items', 'sales_returns', 'salesmen', 'sizes',
+  'stock_transfer_items', 'stock_transfers', 'supplier_payments',
+  'supplier_transactions', 'suppliers', 'tax_rates', 'treasuries',
+  'treasury_transactions', 'user_roles', 'warehouse_stock', 'warehouses',
+] as const;
+
 const BackupManager = () => {
   const { language, direction } = useLanguage();
   const queryClient = useQueryClient();
@@ -133,31 +156,40 @@ const BackupManager = () => {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      // Tables to export
-      const tables = [
-        'products', 'product_variants', 'categories', 'customers', 'suppliers',
-        'sales', 'sale_items', 'purchase_invoices', 'purchase_invoice_items',
-        'inventory_movements', 'expenses', 'employees', 'banks', 'bank_transactions',
-        'promotions', 'branches', 'warehouses', 'colors', 'sizes'
-      ];
-
       const backupData: Record<string, any[]> = {};
-      
-      for (const tableName of tables) {
-        const { data, error } = await supabase.from(tableName as any).select('*');
-        if (!error && data) {
-          backupData[tableName] = data;
+      const tableStats: Record<string, number> = {};
+      const pageSize = 1000;
+
+      // Fetch every row from every application table. A failure is fatal: a
+      // partial backup must never be reported as a successful full backup.
+      for (const tableName of BACKUP_TABLES) {
+        const rows: any[] = [];
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from(tableName as any)
+            .select('*')
+            .range(from, from + pageSize - 1);
+
+          if (error) {
+            throw new Error(`Failed to export table ${tableName}: ${error.message}`);
+          }
+
+          rows.push(...(data ?? []));
+          if (!data || data.length < pageSize) break;
         }
+
+        backupData[tableName] = rows;
+        tableStats[tableName] = rows.length;
       }
 
       // Create backup metadata
       const backup = {
-        version: '1.0',
+        version: '2.0',
         createdAt: new Date().toISOString(),
         tables: Object.keys(backupData),
-        recordCounts: Object.fromEntries(
-          Object.entries(backupData).map(([table, records]) => [table, records.length])
-        ),
+        tableCount: Object.keys(backupData).length,
+        totalRecordCount: Object.values(tableStats).reduce((sum, count) => sum + count, 0),
+        recordCounts: tableStats,
         data: backupData
       };
 
@@ -178,7 +210,7 @@ const BackupManager = () => {
         status: 'completed',
         file_name: a.download,
         file_size: blob.size,
-        tables_backed_up: tables,
+        tables_backed_up: Object.keys(backupData),
         completed_at: new Date().toISOString()
       });
 
