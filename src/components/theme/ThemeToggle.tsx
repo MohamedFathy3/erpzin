@@ -9,20 +9,22 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
     const isDark = stored ? stored === 'dark' : prefersDark;
     document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
     setDark(isDark);
   }, []);
 
   const toggle = () => {
     const next = !dark;
     document.documentElement.classList.toggle('dark', next);
+    document.documentElement.dataset.theme = next ? 'dark' : 'light';
     localStorage.setItem(STORAGE_KEY, next ? 'dark' : 'light');
     setDark(next);
   };
 
-  return <Button type="button" variant="outline" size={compact ? 'icon' : 'sm'} onClick={toggle} aria-label={dark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'} className={compact ? 'h-9 w-9' : 'gap-2'}>
+  return <Button type="button" variant="outline" size={compact ? 'icon' : 'sm'} onClick={toggle} aria-label={dark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'} title={dark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'} className={compact ? 'h-9 w-9 shrink-0' : 'gap-2'}>
     {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     {!compact && <span>{dark ? 'الوضع الفاتح' : 'الوضع الداكن'}</span>}
   </Button>;

@@ -37,6 +37,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -720,7 +721,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           </DropdownMenu>
         ) : null}
 
-        {/* Language Toggle */}
+        {/* Theme and language controls */}
+        <ThemeToggle compact />
         <Button
           variant="ghost"
           size="icon"
@@ -746,7 +748,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
                   {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col items-start">
+              <div className="app-user-label flex flex-col items-start">
                 <span className="text-sm font-medium">
                   {user?.email?.split('@')[0] || 'User'}
                 </span>

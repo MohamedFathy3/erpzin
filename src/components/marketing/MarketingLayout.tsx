@@ -21,8 +21,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <header className="marketing-header">
         <div className="marketing-nav-wrap">
           <Link to="/" className="marketing-brand" aria-label="Fusion ERP الرئيسية" onClick={() => setOpen(false)}>
-            <span className="marketing-brand-mark" aria-hidden="true">F</span>
-            <span><strong>Fusion <em>ERP</em></strong><small>إدارة أوضح. نمو أهدأ.</small></span>
+            <img className="marketing-brand-image" src="/fusionx-tech-logo.png" alt="Fusion X.tech" />
           </Link>
           <nav className={`${open ? 'marketing-nav-open' : ''} marketing-nav`} aria-label="التنقل الرئيسي">
             {links.map(([url, label]) => (
@@ -43,8 +42,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <div className="marketing-footer-main">
           <div className="max-w-sm">
             <Link to="/" className="marketing-brand" aria-label="Fusion ERP الرئيسية">
-              <span className="marketing-brand-mark" aria-hidden="true">F</span>
-              <span><strong>Fusion <em>ERP</em></strong><small>إدارة أوضح. نمو أهدأ.</small></span>
+              <img className="marketing-brand-image" src="/fusionx-tech-logo.png" alt="Fusion X.tech" />
             </Link>
             <p className="mt-4 text-sm leading-7 text-slate-400">نظام واحد يجمع تفاصيل العمل اليومية، عشان فريقك يركز على اللي يفرق فعلًا.</p>
           </div>
