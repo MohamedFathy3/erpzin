@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { toast } from '@/hooks/use-toast';
 import { 
@@ -84,52 +83,6 @@ const BackupManager = () => {
     runNow: language === 'ar' ? 'تشغيل الآن' : 'Run Now',
   };
 
-  // Fetch backup settings
-  const { data: backupSettings, isLoading: loadingSettings } = useQuery({
-    queryKey: ['backup-settings'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('backup_settings')
-        .select('*')
-        .single();
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Fetch backup logs
-  const { data: backupLogs = [], isLoading: loadingLogs } = useQuery({
-    queryKey: ['backup-logs'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('backup_logs')
-        .select('*')
-        .order('started_at', { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  // Update backup settings mutation
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (updates: Partial<typeof backupSettings>) => {
-      if (!backupSettings?.id) return;
-      const { error } = await supabase
-        .from('backup_settings')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', backupSettings.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backup-settings'] });
-      toast({ title: language === 'ar' ? 'تم حفظ الإعدادات' : 'Settings saved' });
-    },
-    onError: () => {
-      toast({ title: language === 'ar' ? 'خطأ في الحفظ' : 'Error saving', variant: 'destructive' });
-    }
-  });
-
   // Export backup
   const handleExport = async () => {
     setIsExporting(true);
@@ -165,46 +118,11 @@ const BackupManager = () => {
     
     setIsImporting(true);
     try {
-      const content = await importFile.text();
-      const backup = JSON.parse(content);
-
-      if (!backup.version || !backup.data) {
-        throw new Error(language === 'ar' ? 'ملف غير صالح' : 'Invalid backup file');
-      }
-
-      // Import data table by table
-      for (const [tableName, records] of Object.entries(backup.data)) {
-        if (Array.isArray(records) && records.length > 0) {
-          // Delete existing data using raw RPC or handle carefully
-          const { error: deleteError } = await supabase
-            .from(tableName as any)
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000');
-          
-          if (deleteError) {
-            console.warn(`Could not delete from ${tableName}:`, deleteError.message);
-          }
-          
-          // Insert new data in batches
-          const batchSize = 100;
-          for (let i = 0; i < records.length; i += batchSize) {
-            const batch = records.slice(i, i + batchSize);
-            await supabase.from(tableName as any).insert(batch);
-          }
-        }
-      }
-
-      // Log the restore
-      await supabase.from('backup_logs').insert({
-        backup_type: 'restore',
-        status: 'completed',
-        file_name: importFile.name,
-        file_size: importFile.size,
-        tables_backed_up: Object.keys(backup.data),
-        completed_at: new Date().toISOString()
+      const formData = new FormData();
+      formData.append('backup', importFile);
+      await api.post('/backup/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-
-      queryClient.invalidateQueries({ queryKey: ['backup-logs'] });
       toast({ title: language === 'ar' ? 'تم استيراد النسخة بنجاح' : 'Backup imported successfully' });
       setIsImportDialogOpen(false);
       setImportFile(null);
@@ -243,14 +161,6 @@ const BackupManager = () => {
     }
   };
 
-  if (loadingSettings) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6" dir={direction}>
       {/* Header */}
@@ -265,123 +175,18 @@ const BackupManager = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Scheduled Backup Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock size={20} />
-              {t.scheduledBackup}
+              <Database size={20} />
+              {language === 'ar' ? 'نسخة قاعدة الباك إند' : 'Backend Database Backup'}
             </CardTitle>
-            <CardDescription>
-              {language === 'ar' ? 'ضبط النسخ الاحتياطي التلقائي' : 'Configure automatic backups'}
-            </CardDescription>
+            <CardDescription>{language === 'ar' ? 'التصدير والاستيراد يتمان من Laravel والـ tenant الحالي' : 'Export and import use Laravel and the current tenant'}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Enable Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
-              <div className="flex items-center gap-3">
-                <Settings size={20} className="text-primary" />
-                <div>
-                  <p className="font-medium">{t.enableSchedule}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ar' ? 'تفعيل النسخ التلقائي' : 'Enable automatic backup'}
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={backupSettings?.is_enabled || false}
-                onCheckedChange={(checked) => updateSettingsMutation.mutate({ is_enabled: checked })}
-              />
-            </div>
-
-            {/* Frequency */}
-            <div className="space-y-2">
-              <Label>{t.frequency}</Label>
-              <Select
-                value={backupSettings?.frequency || 'daily'}
-                onValueChange={(value) => updateSettingsMutation.mutate({ frequency: value })}
-                disabled={!backupSettings?.is_enabled}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">{t.daily}</SelectItem>
-                  <SelectItem value="weekly">{t.weekly}</SelectItem>
-                  <SelectItem value="monthly">{t.monthly}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Backup Time */}
-            <div className="space-y-2">
-              <Label>{t.backupTime}</Label>
-              <Input
-                type="time"
-                value={backupSettings?.backup_time?.substring(0, 5) || '03:00'}
-                onChange={(e) => updateSettingsMutation.mutate({ backup_time: e.target.value + ':00' })}
-                disabled={!backupSettings?.is_enabled}
-                dir="ltr"
-              />
-            </div>
-
-            {/* Retention Days */}
-            <div className="space-y-2">
-              <Label>{t.retentionDays}</Label>
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                value={backupSettings?.retention_days || 30}
-                onChange={(e) => updateSettingsMutation.mutate({ retention_days: parseInt(e.target.value) })}
-                disabled={!backupSettings?.is_enabled}
-                dir="ltr"
-              />
-            </div>
-
-            {/* Email Notification */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={backupSettings?.email_notifications || false}
-                  onCheckedChange={(checked) => updateSettingsMutation.mutate({ email_notifications: checked })}
-                  disabled={!backupSettings?.is_enabled}
-                />
-                <Label>{t.emailNotification}</Label>
-              </div>
-              {backupSettings?.email_notifications && (
-                <Input
-                  type="email"
-                  placeholder={t.notificationEmail}
-                  value={backupSettings?.notification_email || ''}
-                  onChange={(e) => updateSettingsMutation.mutate({ notification_email: e.target.value })}
-                  disabled={!backupSettings?.is_enabled}
-                  dir="ltr"
-                />
-              )}
-            </div>
-
-            {/* Status Info */}
-            {backupSettings?.is_enabled && (
-              <div className="p-3 rounded-lg bg-accent/10 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t.lastBackup}:</span>
-                  <span className="font-medium">
-                    {backupSettings.last_backup_at 
-                      ? format(new Date(backupSettings.last_backup_at), 'dd/MM/yyyy HH:mm')
-                      : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{t.nextBackup}:</span>
-                  <span className="font-medium">
-                    {backupSettings.next_backup_at 
-                      ? format(new Date(backupSettings.next_backup_at), 'dd/MM/yyyy HH:mm')
-                      : '-'}
-                  </span>
-                </div>
-              </div>
-            )}
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {language === 'ar' ? 'لم تعد هذه الشاشة تستخدم Supabase. يتم تحديد الـ tenant من تسجيل الدخول، وتُحفظ النسخة على جهازك.' : 'This screen no longer uses Supabase. The tenant is resolved from the login and the backup is downloaded to your device.'}
+            </p>
           </CardContent>
         </Card>
 
@@ -446,56 +251,6 @@ const BackupManager = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Backup History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History size={20} />
-            {t.backupHistory}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loadingLogs ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="animate-spin" size={24} />
-            </div>
-          ) : backupLogs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <FileJson size={48} className="mx-auto mb-3 opacity-50" />
-              <p>{t.noBackups}</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t.date}</TableHead>
-                  <TableHead>{t.type}</TableHead>
-                  <TableHead>{t.status}</TableHead>
-                  <TableHead>{t.size}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {backupLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-medium">
-                      {format(new Date(log.started_at), 'dd/MM/yyyy HH:mm')}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {log.backup_type === 'manual' ? t.manual : 
-                         log.backup_type === 'restore' ? (language === 'ar' ? 'استعادة' : 'Restore') : t.scheduled}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(log.status)}</TableCell>
-                    <TableCell>{formatFileSize(log.file_size)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Import Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
