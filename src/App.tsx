@@ -45,6 +45,7 @@ import MyAccess from "./pages/MyAccess";
 import AutomotiveService from "./pages/AutomotiveService";
 import { CustomerPortal, TechnicianPortal } from "./pages/AutomotivePortals";
 import { About, Contact, Home as MarketingHome, Pricing, Services, Signup } from "./pages/MarketingPages";
+import { BlogArticlePage, BlogIndex } from "./pages/MarketingBlog";
 import { Privacy, Terms, CookiesPolicy } from "./pages/LegalPages";
 
 const queryClient = new QueryClient({
@@ -73,6 +74,8 @@ const App = () => (
                 <Route path="/marketing" element={<MarketingHome />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/services" element={<Services />} />
+                <Route path="/blog" element={<BlogIndex />} />
+                <Route path="/blog/:slug" element={<BlogArticlePage />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/signup" element={<Signup />} />

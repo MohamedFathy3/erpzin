@@ -63,16 +63,29 @@ const getDefaultRoute = (role: UserRole): string => {
 
 const getTenantWorkspaceUrl = (slug?: string | null): string | null => {
   if (!slug || typeof window === 'undefined') return null;
-  const configuredRootDomain = import.meta.env.VITE_TENANT_ROOT_DOMAIN?.trim().toLowerCase();
-  // injazyemen.cloud is the central-login/API domain, never a tenant workspace domain.
-  const rootDomain = configuredRootDomain && configuredRootDomain !== 'injazyemen.cloud'
-    ? configuredRootDomain
-    : 'professionalacademyedu.com';
+  const rootDomain = import.meta.env.VITE_PRIMARY_TENANT_ROOT_DOMAIN?.trim().toLowerCase() || 'fusionerp.systems';
+  const configuredRootDomains = (import.meta.env.VITE_TENANT_ROOT_DOMAINS || '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+  const legacyRootDomain = import.meta.env.VITE_TENANT_ROOT_DOMAIN?.trim().toLowerCase();
+  const rootDomains = Array.from(new Set([
+    rootDomain,
+    'fusionerp.systems',
+    'professionalacademyedu.com',
+    ...configuredRootDomains,
+    ...(legacyRootDomain && legacyRootDomain !== 'injazyemen.cloud' ? [legacyRootDomain] : [])
+  ]));
   const workspaceHost = `${slug.trim().toLowerCase()}.${rootDomain}`;
   const currentHost = window.location.hostname.toLowerCase();
-  // A tenant alias such as acsa.professionalacademyedu.com is already a
-  // workspace host. Stay on it so the host-only auth cookie remains available.
-  if (currentHost === workspaceHost || currentHost.endsWith(`.${rootDomain}`)) return null;
+  const isExistingTenantHost = rootDomains.some((domain) => {
+    if (!currentHost.endsWith(`.${domain}`)) return false;
+    const subdomain = currentHost.slice(0, -(domain.length + 1));
+    return Boolean(subdomain) && !subdomain.includes('.') && !['www', 'admin'].includes(subdomain);
+  });
+  // Preserve an existing tenant alias and its host-only session cookie, but send
+  // central-domain logins to the new primary root for future workspace access.
+  if (currentHost === workspaceHost || isExistingTenantHost) return null;
   return `${window.location.protocol}//${workspaceHost}/auth`;
 };
 

@@ -6,8 +6,6 @@ import { useAuth } from '@/contexts/AuthContext'; // ✅ تأكد من استي�
 import { getAllowedPages, PAGES } from '@/config/permissions';
 import { cn } from '@/lib/utils';
 import * as Icons from 'lucide-react';
-import logoIcon from '@/assets/logo-icon.png';
-import logoFull from '@/assets/logo-full.png';
 import { toast } from 'sonner'; // ✅ لإظهار رسالة عند تسجيل الخروج
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -304,7 +302,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
         collapsed ? 'w-[72px]' : 'w-64',
         mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
       )}
-      style={{ background: '#ffffff' }}
     >
       {/* Logo */}
       <div className={cn(
@@ -312,10 +309,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
         collapsed ? 'justify-center p-3' : 'justify-center p-4'
       )}>
         <div className="relative w-full h-12 flex items-center justify-center">
-          {!collapsed && <div className="text-center leading-none"><div className="text-xl font-extrabold tracking-tight text-[#18255a]">Fusion <span className="text-cyan-600">X</span></div><div className="mt-1 text-[9px] font-semibold tracking-[0.18em] text-slate-500">TECH SOLUTIONS</div></div>}
-          <img 
-            src={logoIcon} 
-            alt="Fusion X"
+          <img
+            src="/fusionx-tech-logo.png"
+            alt="Fusion X.tech"
             className={cn(
               'absolute object-contain transition-all duration-300 ease-in-out',
               collapsed 
@@ -323,9 +319,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeItem = 'dashboard', onNavigate,
                 : 'w-0 h-0 opacity-0 scale-50 rotate-180'
             )}
           />
-          <img 
-            src={logoFull} 
-            alt="Fusion X ERP"
+          <img
+            src="/fusionx-tech-logo.png"
+            alt="Fusion X.tech"
             className={cn(
               'object-contain transition-all duration-300 ease-in-out',
               collapsed 

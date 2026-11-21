@@ -151,7 +151,7 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
   };
 
   return (
-    <div className="h-14 bg-white border-t border-slate-200 flex items-center justify-start md:justify-center px-3 gap-1.5 flex-shrink-0 overflow-x-auto shadow-[0_-6px_20px_rgba(15,23,42,0.04)]">
+    <div className="pos-shortcuts h-14 bg-white border-t border-slate-200 flex items-center justify-start md:justify-center px-3 gap-1.5 flex-shrink-0 overflow-x-auto shadow-[0_-6px_20px_rgba(15,23,42,0.04)]">
       {shortcuts.map((shortcut) => (
         <button
           key={shortcut.key}

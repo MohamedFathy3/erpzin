@@ -1583,12 +1583,12 @@ const POS: React.FC = () => {
         {/* Main Content */}
         <div className={cn(
           "flex-1 min-h-0 flex flex-col gap-3 overflow-hidden p-3 lg:p-4",
-          language === 'ar' ? "lg:flex-row" : "lg:flex-row-reverse"
+          language === 'ar' ? "lg:flex-row-reverse" : "lg:flex-row"
         )}>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="space-y-3 mb-3 flex-shrink-0 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm">
-              <div className="relative flex gap-2">
-                <div className="relative flex-1">
+              <div className="relative flex flex-wrap gap-2">
+                <div className="relative min-w-0 flex-1 basis-full sm:basis-auto">
                   <Search className="absolute start-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                   <Input
                     ref={searchInputRef}
@@ -1619,7 +1619,7 @@ const POS: React.FC = () => {
                   </Button>
                 )}
                 {enabledModules.includes('inventory') && (
-                  <Button type="button" variant="outline" className="h-12 px-3" onClick={() => setShowBranchTransfers(true)}>
+                <Button type="button" variant="outline" className="h-12 min-w-0 flex-1 px-3 sm:flex-none" onClick={() => setShowBranchTransfers(true)}>
                     <Building2 size={18} className="me-1" />
                     {language === 'ar' ? 'منتجات الفروع' : 'Branch products'}
                   </Button>
@@ -1640,7 +1640,7 @@ const POS: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <POSCategories
                     categories={transformedCategories}
@@ -1735,7 +1735,7 @@ const POS: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-[40vh] min-h-[260px] w-full flex-shrink-0 lg:h-full lg:w-[370px] xl:w-[400px]">
+          <div className="h-[42vh] min-h-[240px] max-h-[48vh] w-full flex-shrink-0 lg:h-full lg:max-h-none lg:min-h-0 lg:w-[clamp(320px,31vw,400px)]">
             <POSCart
               items={cartItems}
               onUpdateQuantity={updateQuantity}

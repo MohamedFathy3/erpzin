@@ -25,7 +25,7 @@ interface Product {
   stock: number;
   category_id?: string | null;  // 👈 null مسموح به
   hasVariants?: boolean;
-  units?: any[];
+  units?: unknown[];
   prices?: Array<{ price_type: 'retail' | 'wholesale' | 'credit'; min_quantity: number; price: number; unit_id?: number | null }>;
   automotive_service?: { id: number; item_type: 'service' | 'product'; unit?: string | null; small_vehicle_quantity?: number | null; large_vehicle_quantity?: number | null; small_vehicle_price?: number | null; large_vehicle_price?: number | null; stock_quantity?: number | null } | null;
 }
@@ -96,9 +96,6 @@ const filteredProducts = useMemo(() => {
     return [];
   }
 
-  console.log('All products:', products);
-  console.log('Selected category:', selectedCategory);
-
   // فلترة حسب البحث
   let filtered = products;
 
@@ -122,7 +119,6 @@ const filteredProducts = useMemo(() => {
       ? filtered.filter(product => Boolean(product.automotive_service))
       : filtered.filter(product => {
       const productCatId = product.category_id?.toString() || '';
-      console.log(`Product ${product.id} category_id:`, productCatId, 'vs selected:', selectedCategory);
       return productCatId === selectedCategory;
     });
   }
@@ -150,7 +146,7 @@ const filteredProducts = useMemo(() => {
       </div>
 
       {/* Grid المنتجات */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product) => {
             const imageUrl = getProductImageUrl(product);
@@ -190,9 +186,12 @@ const filteredProducts = useMemo(() => {
                     "fallback-icon absolute inset-0 flex items-center justify-center",
                     imageUrl ? "hidden" : "flex"
                   )}>
-                    <span className="text-4xl sm:text-5xl text-muted-foreground/30">
-                      {product.automotive_service ? '🚗' : product.hasVariants ? '🔄' : '👕'}
-                    </span>
+                    <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-slate-950/5 px-4 py-3 dark:bg-white/5">
+                      <img src="/fusionx-default.webp" alt="" aria-hidden="true" className="h-14 w-14 rounded-xl object-contain shadow-sm" />
+                      <span className="text-[10px] font-bold tracking-[0.16em] text-muted-foreground">
+                        FUSION X
+                      </span>
+                    </div>
                   </div>
                   
                   {product.automotive_service && (
@@ -308,7 +307,7 @@ const filteredProducts = useMemo(() => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => onAddToCart(product as any, { quantity, priceType, price: displayPrice })}
+                    onClick={() => onAddToCart(product, { quantity, priceType, price: displayPrice })}
                     disabled={product.stock === 0}
                     className="col-span-2 h-11 rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:shadow-md disabled:opacity-50"
                   >

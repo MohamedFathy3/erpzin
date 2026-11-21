@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://professionalacademyedu.com/sitemap.xml
+Sitemap: https://fusionerp.systems/sitemap.xml
