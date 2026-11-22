@@ -113,6 +113,18 @@ const Auth = () => {
 
   // توجيه المستخدم بعد تسجيل الدخول بناءً على دوره
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google') === 'error') {
+      toast({
+        title: language === 'ar' ? 'تعذر تسجيل الدخول باستخدام Google' : 'Google sign-in failed',
+        description: language === 'ar' ? 'تأكد من الحساب أو جرّب مساحة العمل الصحيحة.' : 'Check your Google account or open the correct workspace and try again.',
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [language]);
+
+  useEffect(() => {
     if (user) {
       const workspaceUrl = getTenantWorkspaceUrl(user.tenant_slug);
       if (workspaceUrl) {
@@ -325,7 +337,7 @@ const Auth = () => {
                   <Button type="submit" className="h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-base font-bold shadow-lg shadow-cyan-500/20 transition hover:from-cyan-600 hover:to-blue-700" disabled={loading}>{loading ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ArrowRight size={17} className="me-2" />}{t.login}</Button>
                 </form>
                 <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200" /><span>{language === 'ar' ? 'أو' : 'OR'}</span><span className="h-px flex-1 bg-slate-200" /></div>
-                <Button type="button" variant="outline" onClick={handleGoogleLogin} disabled={loading} className="h-12 w-full rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"><span className="me-3 grid h-6 w-6 place-items-center rounded-full bg-white text-sm font-black text-blue-600 shadow-sm">G</span>{language === 'ar' ? 'تسجيل الدخول باستخدام Google' : 'Continue with Google'}</Button>
+                <Button type="button" variant="outline" onClick={handleGoogleLogin} disabled={loading} className="h-12 w-full rounded-xl border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"><span className="me-3 grid h-6 w-6 place-items-center rounded-full bg-white text-sm font-black text-blue-600 shadow-sm">G</span>{language === 'ar' ? 'الدخول أو إنشاء حساب باستخدام Google' : 'Continue or sign up with Google'}</Button>
               </TabsContent>
             </Tabs>
             <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400"><ShieldCheck size={15} className="text-emerald-500" /> {language === 'ar' ? 'بياناتك محمية ومشفرة' : 'Your data is protected and encrypted'}</div>

@@ -116,7 +116,7 @@ function HomeHero() {
             <Button asChild className="marketing-primary-button marketing-large-button"><Link to="/signup">ابدأ تجربتك المجانية <ArrowLeft className="mr-2 h-4 w-4" /></Link></Button>
             <a href="#product-video" className="marketing-watch-link"><span><Play className="h-4 w-4 fill-current" /></span>شاهد شرح النظام</a>
           </div>
-          <div className="marketing-hero-points"><span><CheckCircle2 className="h-4 w-4" /> 15 يومًا للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> بدون بطاقة ائتمان</span></div>
+          <div className="marketing-hero-points"><span><CheckCircle2 className="h-4 w-4" /> 5 أيام للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> بدون بطاقة ائتمان</span></div>
         </div>
         <div className="marketing-hero-visual">
           <div className="marketing-photo-frame"><img src="/fusion-erp-team.jpg" alt="فريق عمل يتعاون حول نظام Fusion ERP في مكتب مصري" width="1408" height="792" fetchPriority="high" /></div>
@@ -132,7 +132,7 @@ function HomeHero() {
 export function Home() {
   return (
     <MarketingLayout>
-      <MarketingSEO title="Fusion ERP | نظام ERP متكامل لإدارة الشركات" description="نظّم المبيعات والمخزون والحسابات والعملاء في نظام ERP عربي واحد. جرّب Fusion ERP مجانًا لمدة 15 يومًا." path="/" keywords={['نظام ERP في مصر', 'برنامج إدارة الشركات', 'نظام مخازن ومبيعات', 'Fusion ERP', 'نظام ERP عربي']} schema={{ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Fusion ERP', applicationCategory: 'BusinessApplication', operatingSystem: 'Web', description: 'نظام ERP لإدارة المبيعات والمخزون والحسابات والعملاء.' }} />
+      <MarketingSEO title="Fusion ERP | نظام ERP متكامل لإدارة الشركات" description="نظّم المبيعات والمخزون والحسابات والعملاء في نظام ERP عربي واحد. جرّب Fusion ERP مجانًا لمدة 5 أيام." path="/" keywords={['نظام ERP في مصر', 'برنامج إدارة الشركات', 'نظام مخازن ومبيعات', 'Fusion ERP', 'نظام ERP عربي']} schema={{ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Fusion ERP', applicationCategory: 'BusinessApplication', operatingSystem: 'Web', description: 'نظام ERP لإدارة المبيعات والمخزون والحسابات والعملاء.' }} />
       <main>
         <HomeHero />
         <ClientStrip />
@@ -160,17 +160,11 @@ export function Home() {
             <div className="marketing-steps-grid">{[
               ['01', 'احكيلنا عن شغلك', 'نفهم نشاطك وأهم نقطة تريد ترتيبها.'],
               ['02', 'شوف النظام على حالتك', 'نربط احتياجك بالموديولات المناسبة ونوضح طريقة التشغيل.'],
-              ['03', 'ابدأ التجربة', 'أنشئ حسابك وجرّب النظام لمدة 15 يومًا.']
+              ['03', 'ابدأ التجربة', 'أنشئ حسابك وجرّب النظام لمدة 5 أيام.']
             ].map(([number, title, text]) => <article className="marketing-step" key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
           </div>
         </section>
-        <section className="marketing-section marketing-section-light">
-          <div className="marketing-content-wrap">
-            <div className="marketing-pricing-heading"><SectionTitle eyebrow="واضحة ومن غير لف" title="اختار الباقة اللي تناسب حجم شغلك" description="كل باقة شهرية تشمل موديولات Fusion ERP المتاحة. ونراجع معك تفاصيل التشغيل حسب طبيعة النشاط." /><Link className="marketing-text-link" to="/pricing">تفاصيل الباقات <ArrowLeft className="h-4 w-4" /></Link></div>
-            <PricingCards compact />
-            <div className="marketing-lifetime-note"><div><CircleDollarSign className="h-5 w-5" /><span>تفضّل شراء دائم؟</span><small>تواصل معنا ونوضح لك خيارات الترخيص.</small></div><a href={whatsappLink('مرحبًا، أريد معرفة تفاصيل شراء Fusion ERP بشكل دائم.')} target="_blank" rel="noreferrer">تواصل عبر واتساب <ArrowLeft className="h-4 w-4" /></a></div>
-          </div>
-        </section>
+
         <section className="marketing-section">
           <div className="marketing-content-wrap">
             <div className="marketing-pricing-heading"><SectionTitle eyebrow="اقرأ وتعلّم" title="مقالات تساعدك تختار بوعي" description="أدلة مبسطة عن الموديولات والعمليات اللي تعتمد عليها شركتك كل يوم." /><Link className="marketing-text-link" to="/blog">كل المقالات <ArrowLeft className="h-4 w-4" /></Link></div>
@@ -204,7 +198,7 @@ export function Services() {
 export function Pricing() {
   const faq = [
     ['هل كل الموديولات مشمولة في الباقات؟', 'نعم، الباقات الشهرية تشمل موديولات Fusion ERP المتاحة. نراجع معك تفاصيل التشغيل التي تناسب نشاطك قبل البدء.'],
-    ['هل يمكن تجربة النظام قبل الاشتراك؟', 'نعم، تقدر تبدأ تجربة مجانية لمدة 15 يومًا بدون بطاقة ائتمان.'],
+    ['هل يمكن تجربة النظام قبل الاشتراك؟', 'نعم، تقدر تبدأ تجربة مجانية لمدة 5 أيام بدون بطاقة ائتمان.'],
     ['هل يوجد شراء دائم؟', 'نعم، تواصل معنا على واتساب لمعرفة تفاصيل الترخيص الدائم.'],
     ['هل يوجد دفع إلكتروني من الموقع؟', 'الاشتراك يتم بالتواصل مع فريقنا مباشرة. اضغط على زر واتساب لبدء المحادثة.']
   ];
@@ -269,7 +263,7 @@ export function Signup() {
     { key: 'password_confirmation', label: 'تأكيد كلمة المرور', type: 'password', required: true }
   ];
   return <MarketingLayout>
-    <MarketingSEO title="ابدأ تجربة Fusion ERP المجانية | سجّل شركتك" description="أنشئ حسابك وجرّب Fusion ERP مجانًا لمدة 15 يومًا بدون بطاقة ائتمان." path="/signup" keywords={['تجربة ERP مجانية', 'تجربة Fusion ERP', 'تسجيل نظام ERP']} schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'التسجيل في Fusion ERP' }} />
-    <main className="marketing-page-shell marketing-signup-grid"><section className="marketing-signup-copy"><span className="marketing-signup-icon"><Sparkles className="h-6 w-6" /></span><Eyebrow>ابدأ على راحتك</Eyebrow><h1>جرّب النظام،<br /><span className="marketing-gradient-text">قبل ما تقرر.</span></h1><p>15 يومًا لتشوف كيف تتصل المبيعات والمخزون والحسابات والعملاء في مساحة واحدة. ما فيش بطاقة ائتمان مطلوبة.</p><div className="marketing-signup-points"><span><CheckCircle2 className="h-4 w-4" /> كل الموديولات متاحة للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> تسجيل بسيط وواضح</span><span><CheckCircle2 className="h-4 w-4" /> فريقنا قريب لو احتجت مساعدة</span></div></section><Card className="marketing-signup-card"><CardHeader><CardTitle>أنشئ مساحة عملك</CardTitle><p className="text-sm text-slate-400">املأ البيانات الأساسية ونبدأ.</p></CardHeader><CardContent><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <div key={field.key}><Label htmlFor={`signup-${field.key}`}>{field.label}</Label><Input id={`signup-${field.key}`} className="mt-1" type={field.type} autoComplete={field.key.includes('password') ? field.key : field.key === 'full_name' ? 'name' : field.key === 'company_name' ? 'organization' : field.key} required={field.required} value={form[field.key]} onChange={(event) => updateField(field.key, event.target.value)} /></div>)}<Button disabled={loading} className="marketing-primary-button mt-2 sm:col-span-2">{loading ? 'جاري إنشاء المساحة...' : 'إنشاء حساب التجربة'}<ArrowLeft className="mr-2 h-4 w-4" /></Button></form><p className="mt-5 text-center text-xs leading-6 text-slate-500">بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية.</p></CardContent></Card></main>
+    <MarketingSEO title="ابدأ تجربة Fusion ERP المجانية | سجّل شركتك" description="أنشئ حسابك وجرّب Fusion ERP مجانًا لمدة 5 أيام بدون بطاقة ائتمان." path="/signup" keywords={['تجربة ERP مجانية', 'تجربة Fusion ERP', 'تسجيل نظام ERP']} schema={{ '@context': 'https://schema.org', '@type': 'WebPage', name: 'التسجيل في Fusion ERP' }} />
+    <main className="marketing-page-shell marketing-signup-grid"><section className="marketing-signup-copy"><span className="marketing-signup-icon"><Sparkles className="h-6 w-6" /></span><Eyebrow>ابدأ على راحتك</Eyebrow><h1>جرّب النظام،<br /><span className="marketing-gradient-text">قبل ما تقرر.</span></h1><p>5 أيام لتشوف كيف تتصل المبيعات والمخزون والحسابات والعملاء في مساحة واحدة. ما فيش بطاقة ائتمان مطلوبة.</p><div className="marketing-signup-points"><span><CheckCircle2 className="h-4 w-4" /> كل الموديولات متاحة للتجربة</span><span><CheckCircle2 className="h-4 w-4" /> تسجيل بسيط وواضح</span><span><CheckCircle2 className="h-4 w-4" /> فريقنا قريب لو احتجت مساعدة</span></div></section><Card className="marketing-signup-card"><CardHeader><CardTitle>أنشئ مساحة عملك</CardTitle><p className="text-sm text-slate-400">املأ البيانات الأساسية ونبدأ.</p></CardHeader><CardContent><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">{fields.map((field) => <div key={field.key}><Label htmlFor={`signup-${field.key}`}>{field.label}</Label><Input id={`signup-${field.key}`} className="mt-1" type={field.type} autoComplete={field.key.includes('password') ? field.key : field.key === 'full_name' ? 'name' : field.key === 'company_name' ? 'organization' : field.key} required={field.required} value={form[field.key]} onChange={(event) => updateField(field.key, event.target.value)} /></div>)}<Button disabled={loading} className="marketing-primary-button mt-2 sm:col-span-2">{loading ? 'جاري إنشاء المساحة...' : 'إنشاء حساب التجربة'}<ArrowLeft className="mr-2 h-4 w-4" /></Button></form><p className="mt-5 text-center text-xs leading-6 text-slate-500">بالتسجيل، أنت توافق على شروط الاستخدام وسياسة الخصوصية.</p></CardContent></Card></main>
   </MarketingLayout>;
 }

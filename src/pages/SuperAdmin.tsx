@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, BarChart3, Building2, ChevronDown, Clock3,
-  FileSearch, LogIn, Package, Printer, RefreshCw, ShieldCheck, ToggleLeft,
+  FileSearch, LogIn, Package, Printer, RefreshCw, ShieldCheck, ToggleLeft, Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
@@ -146,6 +146,27 @@ export default function SuperAdmin() {
     }
   };
 
+  const deleteTenant = async (tenant: Tenant) => {
+    const confirmation = window.prompt(
+      `حذف نهائي لا يمكن التراجع عنه. سيتم حذف الشركة وكل المستخدمين والبيانات التابعة لها.\nاكتب اسم المساحة للتأكيد: ${tenant.slug}`,
+    );
+    if (confirmation === null) return;
+    if (confirmation !== tenant.slug) {
+      toast.error('اسم المساحة غير مطابق؛ لم يتم حذف أي شيء.');
+      return;
+    }
+    try {
+      await api.delete(`/super-admin/tenants/${tenant.id}`, { data: { confirmation } });
+      if (selected?.id === tenant.id) {
+        setSelected(null);
+        setModules([]);
+      }
+      toast.success('تم حذف الشركة وجميع بياناتها نهائيًا');
+      await load();
+    } catch (error: unknown) {
+      toast.error(apiErrorMessage(error, 'تعذر حذف الشركة وبياناتها'));
+    }
+  };
   const toggle = async (module: Module) => {
     if (!selected) return;
     const next = !module.is_enabled;
@@ -246,7 +267,7 @@ export default function SuperAdmin() {
     </>}
 
     {tab === 'tenants' && <Card><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle>كل العملاء ومساحات العمل ({tenants.length})</CardTitle><Button size="sm" onClick={createTenant}><Building2 className="ml-2 h-4 w-4" />إنشاء شركة</Button></div></CardHeader><CardContent className="space-y-3">
-      {tenants.map((tenant) => <div key={tenant.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><div><p className="font-semibold">{tenant.name}</p><p className="text-xs text-muted-foreground">{tenant.slug} · {tenant.admins_count} مستخدم · {tenant.products_count ?? 0} منتج · الخطة {tenant.plan}</p></div><div className="flex items-center gap-2"><Badge>{tenant.status}</Badge><select className="h-9 rounded-md border bg-background px-2 text-sm" value={tenant.status} onChange={(event) => updateTenantStatus(tenant.id, event.target.value)} aria-label={`حالة ${tenant.name}`}><option value="active">نشطة</option><option value="suspended">موقوفة</option><option value="trial">تجريبية</option><option value="expired">منتهية</option></select><Button size="sm" variant="outline" onClick={() => loadModules(tenant)}>إدارة الموديولات <ChevronDown className="mr-1 h-4 w-4" /></Button></div></div>)}
+      {tenants.map((tenant) => <div key={tenant.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"><div><p className="font-semibold">{tenant.name}</p><p className="text-xs text-muted-foreground">{tenant.slug} · {tenant.admins_count} مستخدم · {tenant.products_count ?? 0} منتج · الخطة {tenant.plan}</p></div><div className="flex items-center gap-2"><Badge>{tenant.status}</Badge><select className="h-9 rounded-md border bg-background px-2 text-sm" value={tenant.status} onChange={(event) => updateTenantStatus(tenant.id, event.target.value)} aria-label={`حالة ${tenant.name}`}><option value="active">نشطة</option><option value="suspended">موقوفة</option><option value="trial">تجريبية</option><option value="expired">منتهية</option></select><Button size="sm" variant="outline" onClick={() => loadModules(tenant)}>إدارة الموديولات <ChevronDown className="mr-1 h-4 w-4" /></Button><Button size="sm" variant="destructive" onClick={() => deleteTenant(tenant)}><Trash2 className="ml-1 h-4 w-4" />حذف نهائي</Button></div></div>)}
     </CardContent></Card>}
 
     {tab === 'modules' && selected && <Card><CardHeader><CardTitle>الموديولات الظاهرة للعميل: {selected.name}</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

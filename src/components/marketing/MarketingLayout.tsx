@@ -7,7 +7,6 @@ import ThemeToggle from '@/components/theme/ThemeToggle';
 const links = [
   ['/about', 'عن Fusion ERP'],
   ['/services', 'الموديولات'],
-  ['/pricing', 'الباقات'],
   ['/blog', 'المقالات'],
   ['/contact', 'تواصل معنا']
 ] as const;
@@ -51,7 +50,6 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <div className="marketing-footer-links">
             <Link to="/about">عن النظام</Link>
             <Link to="/services">الموديولات</Link>
-            <Link to="/pricing">الباقات</Link>
             <Link to="/blog">المقالات</Link>
             <Link to="/contact">تواصل معنا</Link>
           </div>
