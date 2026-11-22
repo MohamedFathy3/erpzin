@@ -12,7 +12,7 @@ const articleSlugs = [
 const routes = [
   '/', '/about', '/services', '/pricing', '/contact', '/signup', '/blog',
   ...articleSlugs.map((slug) => `/blog/${slug}`),
-  '/privacy', '/terms', '/cookies'
+  '/privacy-policy', '/terms-of-service', '/cookies'
 ];
 const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173'], { stdio: 'ignore' });
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

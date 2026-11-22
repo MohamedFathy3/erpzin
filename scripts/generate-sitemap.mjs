@@ -9,8 +9,8 @@ const pages = [
   ['/contact', 0.6],
   ['/signup', 0.8],
   ['/blog', 0.8],
-  ['/privacy', 0.3],
-  ['/terms', 0.3],
+  ['/privacy-policy', 0.3],
+  ['/terms-of-service', 0.3],
   ['/cookies', 0.3]
 ];
 const articles = [

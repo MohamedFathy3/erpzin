@@ -61,7 +61,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
         <div className="marketing-footer-bottom">
           <span>© {new Date().getFullYear()} Fusion ERP. جميع الحقوق محفوظة.</span>
-          <div><Link to="/privacy">الخصوصية</Link><Link to="/terms">الشروط</Link><Link to="/cookies">ملفات الارتباط</Link></div>
+          <div><Link to="/privacy-policy">الخصوصية</Link><Link to="/terms-of-service">الشروط</Link><Link to="/cookies">ملفات الارتباط</Link></div>
         </div>
       </footer>
       <a className="marketing-whatsapp-float" href={whatsappHref} target="_blank" rel="noreferrer" aria-label="تواصل مع Fusion ERP عبر واتساب">

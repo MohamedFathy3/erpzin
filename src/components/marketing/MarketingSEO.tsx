@@ -4,6 +4,7 @@ type Props = {
   title: string;
   description: string;
   path: string;
+  language?: 'ar' | 'en';
   keywords?: string[];
   schema?: Record<string, unknown>;
 };
@@ -28,7 +29,7 @@ const keywordMap: Record<string, string[]> = {
   '/blog': ['مقالات ERP', 'إدارة المخزون', 'نظام نقاط البيع', 'CRM عربي']
 };
 
-export default function MarketingSEO({ title, description, path, keywords = [], schema }: Props) {
+export default function MarketingSEO({ title, description, path, language = 'ar', keywords = [], schema }: Props) {
   const pageKeywords = keywords.length ? keywords : keywordMap[path] || ['Fusion ERP', 'نظام ERP', 'إدارة الأعمال'];
   const keywordsContent = pageKeywords.join(', ');
 
@@ -36,8 +37,8 @@ export default function MarketingSEO({ title, description, path, keywords = [], 
     const canonicalUrl = new URL(path, `${SITE_ORIGIN}/`).toString();
     const imageUrl = `${SITE_ORIGIN}/fusionx-logo.png`;
     document.title = title;
-    document.documentElement.lang = 'ar';
-    document.documentElement.dir = 'rtl';
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
 
     const values: Array<[string, string, string]> = [
       ['name', 'description', description],
@@ -104,7 +105,7 @@ export default function MarketingSEO({ title, description, path, keywords = [], 
     script.type = 'application/ld+json';
     script.textContent = JSON.stringify(schema ? { ...BRAND_SCHEMA, ...schema } : BRAND_SCHEMA);
     document.head.appendChild(script);
-  }, [title, description, path, keywordsContent, schema]);
+  }, [title, description, path, language, keywordsContent, schema]);
 
   return null;
 }
