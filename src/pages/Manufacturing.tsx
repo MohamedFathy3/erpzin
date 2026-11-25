@@ -39,6 +39,8 @@ type Material = {
 type Inspection = { id: number; result: string; quantity: number; reason?: string; created_at: string };
 type StatusChange = { id: number; from_status?: string | null; to_status: string; reason?: string | null; created_at: string };
 type RequirementPreview = { bom_item_id: number; product_id: number; required_quantity: number; unit_cost: number };
+type InvoiceItem = { id: number; product_id?: number | null; product_name?: string | null; item_type?: string | null; quantity?: number | null; meter_quantity?: number | null };
+type InvoiceLookup = { id: number; invoice_number?: string; items?: InvoiceItem[] };
 type ManufacturingOrder = {
   id: number;
   order_number: string;
@@ -122,6 +124,7 @@ export default function Manufacturing() {
   const [orderSearch, setOrderSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
+  const [invoiceLookupRequested, setInvoiceLookupRequested] = useState(false);
   const [orderForm, setOrderForm] = useState(emptyOrder);
   const [operationsForm, setOperationsForm] = useState<OrderOperation[]>([]);
   const [actualMinutes, setActualMinutes] = useState<Record<number, string>>({});
@@ -164,6 +167,12 @@ export default function Manufacturing() {
     queryKey: ['manufacturing-v2-equipment'],
     queryFn: async () => (await api.get('/manufacturing/v2/equipment', { params: { per_page: 100 } })).data.data,
   });
+  const invoiceQuery = useQuery<InvoiceLookup>({
+    queryKey: ['manufacturing-invoice-lookup', orderForm.source_invoice_id],
+    enabled: showCreate && invoiceLookupRequested && Number(orderForm.source_invoice_id) > 0,
+    queryFn: async () => (await api.get(`/invoices/${Number(orderForm.source_invoice_id)}`)).data.data,
+    staleTime: 60_000,
+  });
 
 
   const orders = ordersQuery.data ?? emptyOrders;
@@ -184,6 +193,8 @@ export default function Manufacturing() {
   const warehouses = warehousesQuery.data || [];
   const equipment = equipmentQuery.data || [];
   const order = orderQuery.data;
+  const invoiceItems = (invoiceQuery.data?.items || []).filter((item) => (item.item_type || 'product') === 'product' && Boolean(item.product_id));
+  const selectedInvoiceItem = invoiceItems.find((item) => item.id === Number(orderForm.invoice_item_id));
   const activeBoms = useMemo(
     () => boms.filter((bom) => bom.product_id === Number(orderForm.product_id) && bom.status === 'active'),
     [boms, orderForm.product_id],
@@ -312,13 +323,18 @@ export default function Manufacturing() {
     });
   };
 
-  const fromInvoice = Boolean(orderForm.source_invoice_id && orderForm.invoice_item_id);
+  const fromInvoice = Boolean(
+    orderForm.source_invoice_id
+    && invoiceQuery.data?.id === Number(orderForm.source_invoice_id)
+    && selectedInvoiceItem,
+  );
   const createOrderDisabled = createMutation.isPending
     || (!fromInvoice && (!orderForm.product_id || !orderForm.bom_version_id))
     || (!fromInvoice && !variantReady)
     || !orderForm.warehouse_id
     || (!fromInvoice && Number(orderForm.planned_quantity) <= 0)
-    || Boolean(orderForm.source_invoice_id) !== Boolean(orderForm.invoice_item_id);
+    || (Boolean(orderForm.source_invoice_id) && !fromInvoice)
+    || (!orderForm.source_invoice_id && Boolean(orderForm.invoice_item_id));
 
   const latestInspection = order?.quality_inspections?.at(-1);
   const remainingProduction = Math.max(0, Number(order?.planned_quantity || 0) - Number(order?.produced_quantity || 0));
@@ -417,9 +433,33 @@ export default function Manufacturing() {
               {!fromInvoice && orderForm.product_id && !variantReady && <p className="text-sm text-destructive">اختر المقاس واللون قبل إنشاء أمر الإنتاج؛ سيُخزَّن الناتج منفصلًا لهذا الخيار.</p>}
               <div className="grid gap-3 md:grid-cols-3">
                 <Input type="date" value={orderForm.planned_at} onChange={(event) => setOrderForm({ ...orderForm, planned_at: event.target.value })} />
-                <Input type="number" min="1" placeholder="رقم فاتورة (اختياري)" value={orderForm.source_invoice_id} onChange={(event) => setOrderForm({ ...orderForm, source_invoice_id: event.target.value })} />
-                <Input type="number" min="1" placeholder="رقم بند الفاتورة" value={orderForm.invoice_item_id} onChange={(event) => setOrderForm({ ...orderForm, invoice_item_id: event.target.value })} />
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Input type="number" min="1" aria-label="معرّف الفاتورة" placeholder="معرّف الفاتورة (اختياري)" value={orderForm.source_invoice_id} onChange={(event) => {
+                    setOrderForm({ ...orderForm, source_invoice_id: event.target.value, invoice_item_id: '' });
+                    setInvoiceLookupRequested(false);
+                  }} />
+                  <Button type="button" variant="outline" disabled={!orderForm.source_invoice_id || invoiceQuery.isFetching} onClick={() => {
+                    if (invoiceLookupRequested) void invoiceQuery.refetch();
+                    else setInvoiceLookupRequested(true);
+                  }}>
+                    {invoiceQuery.isFetching ? 'جارٍ التحميل...' : invoiceLookupRequested ? 'إعادة تحميل البنود' : 'تحميل البنود'}
+                  </Button>
+                </div>
+                <Select value={orderForm.invoice_item_id || 'none'} disabled={!invoiceQuery.data || invoiceItems.length === 0} onValueChange={(value) => setOrderForm({ ...orderForm, invoice_item_id: value === 'none' ? '' : value })}>
+                  <SelectTrigger aria-label="اختر بند منتج من الفاتورة"><SelectValue placeholder={invoiceQuery.isLoading ? 'جارٍ جلب البنود...' : 'اختر بند منتج من الفاتورة'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">اختر بندًا من الفاتورة</SelectItem>
+                    {invoiceItems.map((item) => {
+                      const quantity = item.meter_quantity ?? item.quantity;
+                      return <SelectItem key={item.id} value={String(item.id)}>{item.product_name || `منتج #${item.product_id}`} · بند #{item.id} · كمية {quantity ?? '—'}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
+              {orderForm.source_invoice_id && !invoiceLookupRequested && <p className="text-xs text-muted-foreground">اضغط «تحميل البنود» لعرض البنود التابعة لهذه الفاتورة واختيار المنتج المراد تصنيعه.</p>}
+              {orderForm.source_invoice_id && invoiceQuery.isError && <p role="alert" className="text-sm text-destructive">تعذر تحميل الفاتورة. تأكد من المعرّف وأنها ضمن الفرع ومساحة العمل المصرح بها.</p>}
+              {invoiceQuery.data && invoiceItems.length === 0 && <p className="text-sm text-amber-700">هذه الفاتورة لا تحتوي بنود منتجات مخزنية قابلة للتصنيع.</p>}
+              {selectedInvoiceItem && <p className="text-xs text-emerald-700">تم التحقق من البند #{selectedInvoiceItem.id} ضمن الفاتورة {invoiceQuery.data?.invoice_number || `#${invoiceQuery.data?.id}`}.</p>}
               <Input placeholder="ملاحظات أمر الإنتاج" value={orderForm.notes} onChange={(event) => setOrderForm({ ...orderForm, notes: event.target.value })} />
               {orderForm.bom_version_id && Number(orderForm.planned_quantity) > 0 && (
                 <section className="space-y-2 rounded-lg border p-3">
@@ -456,7 +496,7 @@ export default function Manufacturing() {
               <Button onClick={() => createMutation.mutate()} disabled={createOrderDisabled}>
                 {createMutation.isPending ? 'جارٍ الحفظ...' : 'حفظ أمر الإنتاج'}
               </Button>
-              {orderForm.source_invoice_id && !orderForm.invoice_item_id && <p className="text-sm text-destructive">أدخل رقم بند الفاتورة أو أزل رقم الفاتورة.</p>}
+              {orderForm.source_invoice_id && invoiceQuery.data && invoiceItems.length > 0 && !orderForm.invoice_item_id && <p className="text-sm text-destructive">اختر بندًا من القائمة أعلاه قبل حفظ أمر الإنتاج.</p>}
             </CardContent>
           </Card>
         )}
