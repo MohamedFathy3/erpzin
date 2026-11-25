@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Boxes, CheckCircle2, Factory, Plus, Settings2, X } from 'lucide-react';
+import { Boxes, CheckCircle2, ClipboardList, Clock3, Factory, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +71,7 @@ type AvailabilityItem = {
 type OrderOperation = { name: string; equipment_id: string; planned_minutes: string };
 const emptyProducts: Product[] = [];
 const emptyBoms: Bom[] = [];
+const emptyOrders: ManufacturingOrder[] = [];
 
 const emptyOrder = {
   product_id: '',
@@ -106,9 +107,20 @@ function makeIdempotencyKey(action: string, orderId: number): string {
   return `${action}:${orderId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
+function statusTone(status: string): string {
+  if (status === 'completed' || status === 'closed') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'in_progress') return 'border-sky-200 bg-sky-50 text-sky-700';
+  if (status === 'paused' || status === 'quality_hold') return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (status === 'cancelled') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (status === 'planned' || status === 'reserved') return 'border-violet-200 bg-violet-50 text-violet-700';
+  return 'border-slate-200 bg-slate-50 text-slate-700';
+}
+
 export default function Manufacturing() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [orderForm, setOrderForm] = useState(emptyOrder);
   const [operationsForm, setOperationsForm] = useState<OrderOperation[]>([]);
@@ -154,7 +166,19 @@ export default function Manufacturing() {
   });
 
 
-  const orders = ordersQuery.data || [];
+  const orders = ordersQuery.data ?? emptyOrders;
+  const filteredOrders = useMemo(() => {
+    const query = orderSearch.trim().toLocaleLowerCase();
+    return orders.filter((row) => {
+      const statusMatches = statusFilter === 'all'
+        || (statusFilter === 'active' && ['planned', 'reserved', 'in_progress', 'paused', 'quality_hold'].includes(row.status))
+        || (statusFilter === 'completed' && ['completed', 'closed'].includes(row.status))
+        || row.status === statusFilter;
+      const searchableText = [row.order_number, row.product?.name, row.product?.sku, row.color?.name, row.color?.name_ar]
+        .filter(Boolean).join(' ').toLocaleLowerCase();
+      return statusMatches && (!query || searchableText.includes(query));
+    });
+  }, [orderSearch, orders, statusFilter]);
   const products = productsQuery.data ?? emptyProducts;
   const boms = bomsQuery.data ?? emptyBoms;
   const warehouses = warehousesQuery.data || [];
@@ -333,9 +357,10 @@ export default function Manufacturing() {
               ['بنود خامات ناقصة', overview?.material_shortage ?? 0],
               ['معدل الهالك', `${overview?.scrap_rate ?? 0}%`],
             ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-xl bg-white/10 p-3">
+              <div key={String(label)} className="rounded-xl border border-white/10 bg-white/[0.09] p-3 shadow-sm backdrop-blur-sm">
                 <p className="text-xs text-violet-100">{label}</p>
-                <p className="text-2xl font-bold">{value}</p>
+                <p className="mt-1 text-2xl font-bold">{overviewQuery.isLoading || overviewQuery.isError ? '—' : value}</p>
+                <p className="mt-1 text-[10px] text-violet-200">{overviewQuery.isError ? 'تعذر تحميل المؤشر' : overviewQuery.isLoading ? 'جارٍ التحميل' : 'من بيانات التصنيع'}</p>
               </div>
             ))}
           </div>
@@ -436,63 +461,149 @@ export default function Manufacturing() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Boxes size={20} /> أوامر الإنتاج</CardTitle></CardHeader>
-          <CardContent>
-            {ordersQuery.isLoading ? <p>جارٍ تحميل الأوامر...</p> : ordersQuery.isError ? <p className="text-destructive">تعذر تحميل أوامر الإنتاج.</p> : orders.length === 0 ? (
-              <p className="py-8 text-center text-muted-foreground">لا توجد أوامر إنتاج حتى الآن.</p>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-muted/20 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2"><span className="rounded-lg bg-violet-100 p-2 text-violet-700"><Boxes size={19} /></span> أوامر الإنتاج</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => void ordersQuery.refetch()} disabled={ordersQuery.isFetching}>
+                <RefreshCw size={15} className={ordersQuery.isFetching ? 'animate-spin' : ''} /> <span className="mr-2">تحديث القائمة</span>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 md:p-5">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center">
+              <div className="relative">
+                <Search aria-hidden="true" size={17} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input aria-label="ابحث في أوامر الإنتاج" className="pr-10" placeholder="ابحث برقم الأمر أو اسم المنتج أو SKU" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger aria-label="تصفية حسب حالة أمر الإنتاج"><SlidersHorizontal size={15} className="ml-2 text-muted-foreground" /><SelectValue placeholder="كل الحالات" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  <SelectItem value="active">الأوامر النشطة</SelectItem>
+                  <SelectItem value="draft">مسودة</SelectItem>
+                  <SelectItem value="planned">مخطط</SelectItem>
+                  <SelectItem value="reserved">تم حجز الخامات</SelectItem>
+                  <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+                  <SelectItem value="paused">متوقف</SelectItem>
+                  <SelectItem value="quality_hold">موقوف للجودة</SelectItem>
+                  <SelectItem value="completed">مكتمل / مغلق</SelectItem>
+                  <SelectItem value="cancelled">ملغي</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground md:text-left">عرض {filteredOrders.length} من {orders.length} أمر محمّل</p>
+            </div>
+            <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <ClipboardList size={15} className="mt-0.5 shrink-0" /> البحث والفلاتر على أحدث 100 أمر يعيدها النظام حاليًا.
+            </p>
+            {ordersQuery.isLoading ? (
+              <div className="space-y-3" aria-label="جارٍ تحميل أوامر الإنتاج">
+                {[1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl border bg-muted/40" />)}
+              </div>
+            ) : ordersQuery.isError ? (
+              <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+                <p className="font-semibold text-destructive">تعذر تحميل أوامر الإنتاج.</p>
+                <p className="mt-1 text-sm text-muted-foreground">تحقق من الاتصال ثم أعد المحاولة.</p>
+                <Button className="mt-3" variant="outline" onClick={() => void ordersQuery.refetch()}>إعادة المحاولة</Button>
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="rounded-xl border border-dashed bg-muted/10 px-4 py-10 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 text-violet-700"><Factory size={22} /></div>
+                <p className="font-semibold">لا توجد أوامر إنتاج حتى الآن</p>
+                <p className="mt-1 text-sm text-muted-foreground">أنشئ أول أمر لتبدأ متابعة الخامات ومراحل التشغيل والجودة.</p>
+                <Button className="mt-4" onClick={() => setShowCreate(true)}><Plus size={16} className="ml-2" /> إنشاء أمر إنتاج</Button>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="rounded-xl border border-dashed px-4 py-9 text-center">
+                <Search className="mx-auto mb-2 text-muted-foreground" size={22} />
+                <p className="font-semibold">لا توجد نتائج مطابقة</p>
+                <p className="mt-1 text-sm text-muted-foreground">جرّب كلمة بحث أخرى أو غيّر تصفية الحالة.</p>
+                <Button className="mt-3" variant="ghost" onClick={() => { setOrderSearch(''); setStatusFilter('all'); }}>مسح البحث والفلاتر</Button>
+              </div>
             ) : (
               <div className="space-y-3">
-                {orders.map((row) => (
-                  <div key={row.id} className="grid gap-3 rounded-xl border p-4 md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-center">
-                    <div>
-                      <p className="font-bold">{row.order_number}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {row.product?.name || 'منتج'}
-                        {row.product_unit?.unit && ` · ${row.product_unit.unit.name_ar || row.product_unit.unit.name || row.product_unit.unit.code}`}
-                        {row.color && ` · ${row.color.name_ar || row.color.name}`}
-                        {' · '}المخطط {row.planned_quantity} · المستلم {row.produced_quantity}
-                      </p>
-                    </div>
-                    <div><Badge variant={row.status === 'completed' || row.status === 'closed' ? 'default' : 'secondary'}>{statusLabels[row.status] || row.status}</Badge></div>
-                    <div className="text-sm text-muted-foreground">التكلفة الفعلية: {Number(row.actual_cost || 0).toFixed(2)}</div>
-                    <Button variant={selectedId === row.id ? 'default' : 'outline'} onClick={() => setSelectedId(selectedId === row.id ? null : row.id)}>
-                      {selectedId === row.id ? 'إخفاء التفاصيل' : 'تفاصيل وإجراءات'}
-                    </Button>
-                  </div>
-                ))}
+                {filteredOrders.map((row) => {
+                  const planned = Number(row.planned_quantity || 0);
+                  const produced = Number(row.produced_quantity || 0);
+                  const progress = planned > 0 ? Math.min(100, Math.max(0, (produced / planned) * 100)) : 0;
+                  return (
+                    <article key={row.id} className={`rounded-xl border p-4 transition-all hover:border-violet-200 hover:shadow-sm ${selectedId === row.id ? 'border-violet-300 bg-violet-50/30 ring-1 ring-violet-100' : 'bg-card'}`}>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-slate-900">{row.order_number}</p>
+                            <Badge variant="outline" className={statusTone(row.status)}>{statusLabels[row.status] || row.status}</Badge>
+                          </div>
+                          <p className="mt-1 truncate text-sm font-medium text-slate-700">{row.product?.name || 'منتج'}{row.product?.sku ? ` · ${row.product.sku}` : ''}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {row.product_unit?.unit && `${row.product_unit.unit.name_ar || row.product_unit.unit.name || row.product_unit.unit.code}`}
+                            {row.product_unit?.unit && row.color ? ' · ' : ''}{row.color && (row.color.name_ar || row.color.name)}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm lg:min-w-[260px]">
+                          <div><p className="text-xs text-muted-foreground">المخطط</p><p className="font-semibold">{planned.toLocaleString()}</p></div>
+                          <div><p className="text-xs text-muted-foreground">المستلم</p><p className="font-semibold">{produced.toLocaleString()}</p></div>
+                          <div className="col-span-2 flex items-center justify-between gap-3">
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`تقدم أمر ${row.order_number}`} aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
+                              <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground">{Math.round(progress)}%</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 lg:min-w-[215px] lg:flex-col lg:items-end lg:border-0 lg:pt-0">
+                          <p className="text-sm text-muted-foreground">التكلفة الفعلية <span className="font-semibold text-slate-800">{Number(row.actual_cost || 0).toFixed(2)}</span></p>
+                          <Button size="sm" variant={selectedId === row.id ? 'default' : 'outline'} onClick={() => setSelectedId(selectedId === row.id ? null : row.id)}>
+                            {selectedId === row.id ? 'إخفاء التفاصيل' : 'تفاصيل وإجراءات'}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
         {selectedId && (
-          <Card>
-            <CardHeader>
+          <Card className="overflow-hidden border-violet-100 shadow-sm">
+            <CardHeader className="border-b bg-gradient-to-l from-violet-50/80 to-background">
               <CardTitle className="flex flex-wrap items-center justify-between gap-3">
-                <span>تفاصيل أمر الإنتاج {order?.order_number || ''}</span>
-                {order && <Badge>{statusLabels[order.status] || order.status}</Badge>}
+                <span className="flex items-center gap-2"><span className="rounded-lg bg-violet-100 p-2 text-violet-700"><ClipboardList size={18} /></span> تفاصيل أمر الإنتاج {order?.order_number || ''}</span>
+                <div className="flex items-center gap-2">
+                  {order && <Badge variant="outline" className={statusTone(order.status)}>{statusLabels[order.status] || order.status}</Badge>}
+                  <Button size="sm" variant="ghost" onClick={() => void orderQuery.refetch()} disabled={orderQuery.isFetching} aria-label="تحديث تفاصيل الأمر"><RefreshCw size={15} className={orderQuery.isFetching ? 'animate-spin' : ''} /></Button>
+                </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {orderQuery.isLoading ? <p>جارٍ تحميل التفاصيل...</p> : orderQuery.isError || !order ? (
-                <p className="text-destructive">تعذر تحميل تفاصيل الأمر.</p>
+            <CardContent className="space-y-5 p-4 md:p-5">
+              {orderQuery.isLoading ? <div className="space-y-3" aria-label="جارٍ تحميل التفاصيل"><div className="h-24 animate-pulse rounded-xl bg-muted/50" /><div className="h-40 animate-pulse rounded-xl bg-muted/50" /></div> : orderQuery.isError || !order ? (
+                <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+                  <p className="font-semibold text-destructive">تعذر تحميل تفاصيل الأمر.</p>
+                  <Button className="mt-3" variant="outline" onClick={() => void orderQuery.refetch()}>إعادة المحاولة</Button>
+                </div>
               ) : (
                 <>
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المخطط</p><p className="font-semibold">{order.planned_quantity} {order.product?.stock_unit}</p></div>
-                    <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المستلم</p><p className="font-semibold">{order.produced_quantity}</p></div>
-                    <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">المتبقي</p><p className="font-semibold">{remainingProduction}</p></div>
-                    {order.dimensions && <div className="rounded-lg bg-muted p-3 md:col-span-2"><p className="text-xs text-muted-foreground">مقاسات أمر التشغيل (عرض × ارتفاع × عمق)</p><p className="font-semibold">{[order.dimensions.width, order.dimensions.height, order.dimensions.depth].map((value) => value ?? '—').join(' × ')} {order.dimensions.unit || ''}</p></div>}
-                    <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">التكلفة الفعلية</p><p className="font-semibold">{Number(order.actual_cost || 0).toFixed(2)}</p></div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">الكمية المخططة</p><p className="mt-1 text-xl font-bold">{Number(order.planned_quantity).toLocaleString()} <span className="text-sm font-medium text-muted-foreground">{order.product?.stock_unit || ''}</span></p></div>
+                    <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">الكمية المستلمة</p><p className="mt-1 text-xl font-bold text-emerald-700">{Number(order.produced_quantity).toLocaleString()}</p></div>
+                    <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">المتبقي للإنتاج</p><p className="mt-1 text-xl font-bold">{remainingProduction.toLocaleString()}</p></div>
+                    <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">التكلفة الفعلية</p><p className="mt-1 text-xl font-bold">{Number(order.actual_cost || 0).toFixed(2)}</p></div>
                   </div>
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <div className="mb-2 flex items-center justify-between text-sm"><span className="font-semibold">تقدم الإنتاج</span><span className="text-muted-foreground">{order.planned_quantity ? Math.round(Math.min(100, Number(order.produced_quantity || 0) / Number(order.planned_quantity) * 100)) : 0}%</span></div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="نسبة إنجاز أمر الإنتاج" aria-valuenow={order.planned_quantity ? Math.round(Math.min(100, Number(order.produced_quantity || 0) / Number(order.planned_quantity) * 100)) : 0} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="h-full rounded-full bg-gradient-to-l from-violet-600 to-sky-500 transition-all" style={{ width: `${order.planned_quantity ? Math.min(100, Math.max(0, Number(order.produced_quantity || 0) / Number(order.planned_quantity) * 100)) : 0}%` }} />
+                    </div>
+                  </div>
+                  {order.dimensions && <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">مقاسات أمر التشغيل (عرض × ارتفاع × عمق)</p><p className="mt-1 font-semibold">{[order.dimensions.width, order.dimensions.height, order.dimensions.depth].map((value) => value ?? '—').join(' × ')} {order.dimensions.unit || ''}</p></div>}
                   {(order.product_unit || order.color) && <p className="rounded-md border bg-muted/30 p-3 text-sm">
                     خيار المنتج المصنّع:
                     {order.product_unit?.unit && ` ${order.product_unit.unit.name_ar || order.product_unit.unit.name || order.product_unit.unit.code}`}
                     {order.color && ` · ${order.color.name_ar || order.color.name}`}
                   </p>}
-                  <section className="space-y-2">
-                    <h3 className="font-bold">سجل حالات أمر الإنتاج</h3>
+                  <section className="space-y-3 rounded-xl border p-4 md:p-5">
+                    <h3 className="flex items-center gap-2 border-b pb-3 font-bold"><Clock3 size={17} className="text-violet-700" /> سجل حالات أمر الإنتاج</h3>
                     {order.status_history?.length ? <ol className="space-y-2 border-r-2 pr-4">
                       {order.status_history.map((event) => <li key={event.id} className="relative rounded-md border p-2 text-sm">
                         <span className="font-semibold">{event.from_status ? `${statusLabels[event.from_status] || event.from_status} ← ` : ''}{statusLabels[event.to_status] || event.to_status}</span>
@@ -502,10 +613,10 @@ export default function Manufacturing() {
                     </ol> : <p className="text-sm text-muted-foreground">لا يوجد سجل حالات مسجل لهذا الأمر.</p>}
                   </section>
 
-                  <section className="space-y-3">
-                    <h3 className="font-bold">توافر وحجز الخامات</h3>
+                  <section className="space-y-3 rounded-xl border p-4 md:p-5">
+                    <h3 className="border-b pb-3 font-bold">توافر وحجز الخامات</h3>
                     {!order.materials?.some((material) => Boolean(material.product && material.product.product_type !== 'service')) && <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">هذا الأمر القديم لا يحتوي خامات من BOM؛ لا يمكن حجز خاماته. أنشئ أمرًا جديدًا بعد تفعيل BOM صحيح.</p>}
-                    {availabilityQuery.data?.items?.length ? (
+                    {availabilityQuery.isLoading ? <p className="text-sm text-muted-foreground">جارٍ حساب توافر الخامات...</p> : availabilityQuery.isError ? <div className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>تعذر تحميل توافر الخامات.</span><Button size="sm" variant="outline" onClick={() => void availabilityQuery.refetch()}>إعادة المحاولة</Button></div> : availabilityQuery.data?.items?.length ? (
                       <div className="space-y-2">
                         {availabilityQuery.data.items.map((item) => (
                           <div key={item.product_id} className="grid grid-cols-2 gap-2 rounded-lg border p-3 text-sm md:grid-cols-5">
@@ -558,8 +669,8 @@ export default function Manufacturing() {
                     ) : null}
                   </section>
 
-                  <section className="space-y-3">
-                    <h3 className="font-bold">مراحل التشغيل</h3>
+                  <section className="space-y-3 rounded-xl border p-4 md:p-5">
+                    <h3 className="border-b pb-3 font-bold">مراحل التشغيل</h3>
                     {order.operations?.length ? order.operations.map((operation) => (
                       <div key={operation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
                         <div>
@@ -583,8 +694,8 @@ export default function Manufacturing() {
                     )) : <p className="text-sm text-muted-foreground">لا توجد مراحل معرفة لهذا الأمر.</p>}
                   </section>
 
-                  <section className="space-y-3">
-                    <h3 className="font-bold">فحص الجودة والاستلام</h3>
+                  <section className="space-y-3 rounded-xl border p-4 md:p-5">
+                    <h3 className="border-b pb-3 font-bold">فحص الجودة والاستلام</h3>
                     {latestInspection && <p className={`text-sm ${latestInspectionExceedsPlan ? 'text-destructive' : ''}`}>آخر فحص: {latestInspection.result === 'pass' ? 'مقبول' : latestInspection.result === 'reject' ? 'مرفوض' : 'إعادة تشغيل'} · الكمية {latestInspection.quantity}{latestInspection.reason ? ` · ${latestInspection.reason}` : ''}{latestInspectionExceedsPlan ? ' — الكمية أكبر من خطة الأمر؛ أعد الفحص بالكمية المتبقية.' : ''}</p>}
                     {['in_progress', 'quality_hold'].includes(order.status) && (
                       <div className="grid gap-2 md:grid-cols-[1fr_0.8fr_1fr_1.5fr_auto]">
@@ -612,8 +723,8 @@ export default function Manufacturing() {
                   </section>
 
                   {order.costs?.length ? (
-                    <section className="space-y-2">
-                      <h3 className="font-bold">تفاصيل التكلفة</h3>
+                    <section className="space-y-2 rounded-xl border p-4 md:p-5">
+                      <h3 className="border-b pb-3 font-bold">تفاصيل التكلفة</h3>
                       {order.costs.map((cost) => <div key={cost.id} className="flex justify-between rounded border p-2 text-sm"><span>{cost.notes || cost.cost_type}</span><span>{Number(cost.amount).toFixed(2)}</span></div>)}
                     </section>
                   ) : null}
