@@ -17,6 +17,9 @@ type ApiError = { response?: { data?: { message?: string } } };
 type ProjectRow = { id: number; project_code: string; name: string; status: string; contract_value?: number; actual_cost?: number; budget_cost?: number; customer?: { name?: string } };
 type WbsItem = { id: number; code: string; name: string; unit?: string; planned_quantity: number; unit_price: number; planned_cost: number; completed_quantity: number; completion_percent: number };
 type ClaimLine = { wbs_item_id: number; quantity: number };
+type CustomerOption = { id: number; name: string; phone?: string | null };
+type UnitOption = { id: number; name?: string | null; name_ar?: string | null };
+type AccountOption = { id: number; code: string | number; name: string };
 
 export default function Projects() {
   const queryClient = useQueryClient();
@@ -31,9 +34,9 @@ export default function Projects() {
   const [cost, setCost] = useState({ cost_type: 'material', amount: '', debit_account_id: '', credit_account_id: '' });
   const [claim, setClaim] = useState({ gross_amount: '', advance_deduction: '0', retention_amount: '0' });
   const { data, isLoading } = useQuery({ queryKey: ['projects-dashboard'], queryFn: async () => (await api.get('/projects/dashboard')).data.data });
-  const { data: customers = [] } = useQuery<any[]>({ queryKey: ['projects-customers'], queryFn: async () => (await api.post('/customer/index', { paginate: false, perPage: 500 })).data.data || [] });
-  const { data: units = [] } = useQuery<any[]>({ queryKey: ['projects-units'], queryFn: async () => (await api.post('/unit/index', { paginate: false, perPage: 500 })).data.data || [] });
-  const { data: accounts = [] } = useQuery<any[]>({ queryKey: ['projects-accounts'], queryFn: async () => (await api.get('/accounts/flat/tree')).then(r => r.data.data || []) });
+  const { data: customers = [] } = useQuery<CustomerOption[]>({ queryKey: ['projects-customers'], queryFn: async () => (await api.post('/customer/index', { paginate: false, perPage: 500 })).data.data || [] });
+  const { data: units = [] } = useQuery<UnitOption[]>({ queryKey: ['projects-units'], queryFn: async () => (await api.post('/unit/index', { paginate: false, perPage: 500 })).data.data || [] });
+  const { data: accounts = [] } = useQuery<AccountOption[]>({ queryKey: ['projects-accounts'], queryFn: async () => (await api.get('/accounts/flat/tree')).data.data || [] });
   const { data: wbsItems = [], isLoading: loadingWbs } = useQuery<WbsItem[]>({ queryKey: ['project-wbs', wbsProjectId], enabled: Boolean(wbsProjectId), queryFn: async () => (await api.get(`/projects/${wbsProjectId}/wbs`)).data.data || [] });
   const refresh = () => { queryClient.invalidateQueries({ queryKey: ['projects-dashboard'] }); queryClient.invalidateQueries({ queryKey: ['project-wbs'] }); };
   const createMutation = useMutation({ mutationFn: () => api.post('/projects', { ...project, customer_id: project.customer_id ? Number(project.customer_id) : null, contract_value: Number(project.contract_value || 0), budget_cost: Number(project.budget_cost || 0), retention_percent: Number(project.retention_percent || 0) }), onSuccess: () => { toast.success('تم إنشاء المشروع'); setProject(emptyProject); setShowCreate(false); refresh(); }, onError: (e: ApiError) => toast.error(e.response?.data?.message || 'تعذر إنشاء المشروع') });

@@ -1071,7 +1071,10 @@ const POS: React.FC = () => {
                   )}
                   <POSProductGrid
                     products={transformedProducts}
-                    onAddToCart={addToCart}
+                    onAddToCart={(product) => {
+                      const sourceProduct = products?.find((item) => item.id.toString() === product.id);
+                      if (sourceProduct) addToCart(sourceProduct);
+                    }}
                     searchQuery={searchQuery}
                     selectedCategory={selectedCategory}
                   />
@@ -1193,7 +1196,7 @@ const POS: React.FC = () => {
           onClose={() => setShowCustomerSelector(false)}
           onSelectCustomer={setSelectedCustomer}
           selectedCustomer={selectedCustomer}
-          branchId={userBranch?.id || currentBranch?.id}
+          branchId={Number(userBranch?.id || currentBranch?.id) || undefined}
         />
 
         {showSalesRepSelector && (
@@ -1202,7 +1205,7 @@ const POS: React.FC = () => {
             onClose={() => setShowSalesRepSelector(false)}
             onSelectRep={setSelectedSalesRep}
             selectedRep={selectedSalesRep}
-            branchId={userBranch?.id || currentBranch?.id}
+            branchId={Number(userBranch?.id || currentBranch?.id) || undefined}
           />
         )}
 
@@ -1223,7 +1226,6 @@ const POS: React.FC = () => {
         <Dialog open={showShiftPanel} onOpenChange={setShowShiftPanel}>
           <DialogContent className="sm:max-w-md">
             <POSShiftManagement
-              currentShift={currentShift}
               onShiftChange={handleShiftChange}
             />
           </DialogContent>

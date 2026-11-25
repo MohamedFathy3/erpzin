@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRegionalSettings } from '@/contexts/RegionalSettingsContext';
 import MainLayout from '@/components/layout/MainLayout';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -302,6 +303,9 @@ interface Bank {
   id: number;
   name: string;
   code: string;
+  account_number?: string | null;
+  iban?: string | null;
+  contact_person?: string | null;
   branch_id: number;
   branch: Branch;
   balance: number;

@@ -31,7 +31,7 @@ interface POSShortcutsBarProps {
   onShowHeldOrders: () => void;
   onShowCustomer: () => void;
   onShowDelivery: () => void;
-  onShowReturns: () => void;
+  onShowReturns?: () => void;
   onShowShift: () => void;
   onFocusSearch: () => void;
   onGoHome: () => void;
@@ -100,14 +100,14 @@ const POSShortcutsBar: React.FC<POSShortcutsBarProps> = ({
       action: onShowDelivery,
       colorClass: 'bg-white text-emerald-800 hover:bg-emerald-50 border-slate-200'
     },
-    {
+    ...(onShowReturns ? [{
       key: 'F6',
       label: 'Returns',
       labelAr: 'مرتجع',
       icon: <RotateCcw size={16} />,
       action: onShowReturns,
       colorClass: 'bg-white text-rose-700 hover:bg-rose-50 border-slate-200'
-    },
+    }] : []),
     {
       key: 'F7',
       label: 'Shift',
